@@ -29,12 +29,12 @@
 </div>
 <div id="helpContainer" class="editor-panel" style="display: none;">
 </div>
-            <div style="display: flex; align-items: center; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 0px;">
                 <div style="flex: 1;">
-                <div class="hint">Status:</div>
+                
                     <div id="errorDisplay" class="info"></div>
             </div>
-                <button id="saveShaderBtn" title="Save current shader">💾 Save</button>
+                <button id="saveShaderBtn" title="Save current shader">💾</button>
         </div>
         </div>
         
@@ -90,7 +90,7 @@
         
         <div id="galleryPanel">
             <div class="gallery-header">
-                <h2 style="margin: 0; font-size: 16px; color: var(--text-primary);">Examples</h2>
+                <h2 style="margin: 0; font-size: 16px; color: var(--text-primary);">Gallery</h2>
             </div>
             <div id="galleryContent">
                 <!-- Gallery items will be populated here -->
@@ -2029,10 +2029,10 @@ return { init, enterframe };
         if (!btn) return;
         
         if (state.isDirty) {
-            btn.textContent = '💾 Save*';
+            btn.textContent = '💾*';
             btn.title = 'Save current shader (unsaved changes)';
         } else {
-            btn.textContent = '💾 Save';
+            btn.textContent = '💾';
             btn.title = 'Save current shader';
         }
     }

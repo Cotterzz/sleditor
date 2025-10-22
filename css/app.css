@@ -201,7 +201,7 @@ body {
 
 /* Gallery panel */
 .gallery-header {
-    padding: 10px;
+    padding: 5px;
     border-bottom: 1px solid var(--border-color);
     background: var(--bg-secondary);
 }
@@ -401,10 +401,10 @@ button.paused:hover {
 #errorDisplay {
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
-    padding: 10px;
+    padding: 5px;
     font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
     font-size: 12px;
-    min-height: 60px;
+    min-height: 20px;
     max-height: 120px;
     overflow-y: auto;
     transition: background 0.3s, border 0.3s;
