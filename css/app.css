@@ -1,0 +1,558 @@
+:root {
+    /* Dark mode colors (default) */
+    --bg-primary: #1e1e1e;
+    --bg-secondary: #2d2d2d;
+    --bg-tertiary: #3c3c3c;
+    --text-primary: #d4d4d4;
+    --text-secondary: #858585;
+    --border-color: #111111;
+    --shadow-color: #1e1e1e;
+}
+
+body.light-mode {
+    /* Light mode colors */
+    --bg-primary: #eeeeff;
+    --bg-secondary:#ccccee;
+    --bg-tertiary: #bbbbee;
+    --text-primary: #182247;
+    --text-secondary: #6e6e6e;
+    --border-color: #8888cc;
+    --shadow-color: #8888cc;
+}
+
+body {
+    margin: 0;
+    padding: 0px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+    transition: background 0.3s, color 0.3s;
+}
+
+#editorTabs {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 5px;
+}
+
+.editorTab {
+    background:var(--bg-secondary);
+    color: var(--text-secondary);
+    border: none;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.3s, color 0.3s;
+}
+
+.editorTab.active {
+    background:var(--bg-primary);
+    color: var(--text-primary);
+    box-shadow: 2px 2px 2px var(--shadow-color);
+    border-top: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
+        border-left: 1px solid var(--border-color);
+}
+
+/* Shared editor container styles */
+.editor-panel {
+    flex: 1;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    box-shadow: 2px 2px 2px var(--shadow-color);
+}
+
+
+#container {
+    display: flex;
+    height: 100vh;
+    gap: 0;
+    position: relative;
+}
+
+/* Three main panels with default 50/30/20 split */
+#devPanel {
+    width: 50%;
+    min-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 0px;
+    overflow: hidden;
+    transition: width 0.3s ease;
+}
+
+#displayPanel {
+    width: 30%;
+    min-width: 250px;
+    display: flex;
+    flex-direction: column;
+    gap: 0px;
+    overflow: hidden;
+    transition: width 0.3s ease;
+}
+
+#galleryPanel {
+    width: 20%;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-primary);
+    transition: width 0.3s ease;
+}
+
+/* Collapsed panel state */
+#devPanel.collapsed,
+#galleryPanel.collapsed {
+    min-width: 0;
+    max-width: 0;
+    width: 0 !important;
+}
+
+#devPanel.collapsed > *:not(.panel-content-hidden),
+#galleryPanel.collapsed > *:not(.panel-content-hidden) {
+    display: none;
+}
+
+/* Canvas container - default to fill space, but can be explicitly sized */
+#displayPanel #canvasContainer {
+    flex: 1 1 auto;
+    min-height: 256px;
+}
+
+/* When user sets explicit height via divider, disable flex growth */
+#displayPanel #canvasContainer.explicit-height {
+    flex: 0 0 auto;
+}
+
+#displayPanel #controls {
+    flex-shrink: 0;
+    padding: 10px;
+}
+
+/* Panel dividers */
+.panel-divider {
+    width: 8px;
+    background: var(--bg-secondary);
+    cursor: ew-resize;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    user-select: none;
+}
+
+.panel-divider:hover {
+    background: var(--bg-tertiary);
+}
+
+.panel-divider.dragging {
+    background: #0e639c;
+}
+
+.divider-handle {
+    font-size: 20px;
+    color: var(--text-secondary);
+    pointer-events: none;
+    opacity: 0.6;
+    transition: opacity 0.2s, transform 0.2s;
+    padding: 4px;
+    border-radius: 4px;
+    background: transparent;
+}
+
+.panel-divider:hover .divider-handle {
+    opacity: 1;
+    color: var(--text-primary);
+    background: rgba(14, 99, 156, 0.2);
+}
+
+.panel-divider:active .divider-handle {
+    transform: scale(0.95);
+}
+
+/* Horizontal divider for canvas resizing */
+.horizontal-divider {
+    height: 8px;
+    background: var(--bg-secondary);
+    cursor: ns-resize;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    user-select: none;
+}
+
+.horizontal-divider:hover {
+    background: var(--bg-tertiary);
+}
+
+.horizontal-divider.dragging {
+    background: #0e639c;
+}
+
+.divider-handle.horizontal {
+    font-size: 20px;
+    transform: rotate(90deg);
+}
+
+/* Gallery panel */
+.gallery-header {
+    padding: 10px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+#galleryContent {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    grid-auto-rows: min-content;
+    gap: 10px;
+}
+
+/* Custom scrollbar for gallery */
+#galleryContent::-webkit-scrollbar {
+    width: 8px;
+}
+
+#galleryContent::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+#galleryContent::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+
+#galleryContent::-webkit-scrollbar-thumb:hover {
+    background: #0e639c;
+}
+
+.gallery-item {
+    cursor: pointer;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    background: var(--bg-secondary);
+}
+
+.gallery-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px var(--shadow-color);
+    border-color: #0e639c;
+}
+
+.gallery-item-thumbnail {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background: var(--bg-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+    position: relative;
+}
+
+.gallery-item-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.gallery-item-icons {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    display: flex;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.gallery-item-icon {
+    font-size: 10px;
+    opacity: 0.9;
+}
+
+.gallery-item-info {
+    padding: 4px 6px;
+}
+
+.gallery-item-title {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+}
+
+.gallery-delete-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s, background 0.2s;
+    padding: 0;
+}
+
+.gallery-item:hover .gallery-delete-btn {
+    opacity: 1;
+}
+
+.gallery-delete-btn:hover {
+    background: rgba(220, 50, 50, 0.9);
+}
+
+#editorContainer {
+    flex: 1;
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    position: relative;
+    
+}
+
+#loadingMessage {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+#controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+button {
+    background: #0e639c;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+button:hover {
+    background: #1177bb;
+}
+
+button.playing {
+    background: #16825d;
+}
+
+button.playing:hover {
+    background: #1a9870;
+}
+
+button.paused {
+    background: #c5a332;
+}
+
+button.paused:hover {
+    background: #d4b547;
+}
+
+.verticalSlider {
+    writing-mode: bt-lr; /* IE */
+    -webkit-appearance: slider-vertical; /* WebKit */
+    appearance: slider-vertical; /* Standard */
+    width: 8px;
+    height: 80px;
+    padding: 0;
+    margin: 0;
+}
+
+.sliderContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+#errorDisplay {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    padding: 10px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
+    min-height: 60px;
+    max-height: 120px;
+    overflow-y: auto;
+    transition: background 0.3s, border 0.3s;
+}
+
+.error { color: #f48771; }
+.success { color: #4ec9b0; }
+.info { color: #9cdcfe; }
+
+#canvasContainer {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /*border: 1px solid var(--border-color);*/
+    background: var(--bg-tertiary);
+    overflow: hidden;
+}
+
+#canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    /* image-rendering set dynamically via JS */
+}
+
+/* Old resize handle removed - using panel dividers now */
+
+.hint {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.statusBadge {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.statusBadge.playing {
+    background: #16825d;
+    color: white;
+}
+
+.statusBadge.paused {
+    background: #c5a332;
+    color: white;
+}
+
+/* Save Modal */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.modal-content {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 24px;
+    min-width: 400px;
+    max-width: 500px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content h2 {
+    margin: 0 0 20px 0;
+    color: var(--text-primary);
+    font-size: 20px;
+}
+
+.modal-field {
+    margin-bottom: 16px;
+}
+
+.modal-field label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.modal-field input,
+.modal-field textarea {
+    width: 100%;
+    padding: 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 13px;
+    box-sizing: border-box;
+}
+
+.modal-field input:focus,
+.modal-field textarea:focus {
+    outline: none;
+    border-color: var(--accent-color);
+}
+
+.modal-field textarea {
+    resize: vertical;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.modal-buttons button {
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.modal-buttons button:hover {
+    background: var(--bg-tertiary);
+}
+
+.modal-buttons button.primary {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: white;
+}
+
+.modal-buttons button.primary:hover {
+    filter: brightness(1.1);
+}
+
+#saveShaderBtn {
+    padding: 6px 12px;
+    white-space: nowrap;
+}
+
