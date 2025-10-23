@@ -17,6 +17,7 @@
 <div id="editorTabs" style="display: flex; margin-bottom: 0px; gap: 5px; align-items: center;">
     <!-- Tabs will be dynamically added here -->
     <button id="addPassBtn" style="padding: 6px 12px; font-size: 13px; margin-left: auto;">+ Add Pass</button>
+    <button id="optionsBtn" style="padding: 6px 12px; font-size: 13px;">⚙ Options</button>
 </div>
 <div id="boilerplateContainer" class="editor-panel" style="display: none;">
 </div>
@@ -29,13 +30,24 @@
 </div>
 <div id="helpContainer" class="editor-panel" style="display: none;">
 </div>
-            <div style="display: flex; align-items: center; gap: 0px;">
+            <div style="display: flex; align-items: center; gap: 5px;">
                 <div style="flex: 1;">
-                
                     <div id="errorDisplay" class="info"></div>
-            </div>
+                </div>
+                <button id="reloadBtn" title="Reload shaders (F5 / Ctrl+S)">⚙</button>
                 <button id="saveShaderBtn" title="Save current shader">💾</button>
-        </div>
+            </div>
+            
+            <!-- Vim status bar (inside dev panel) -->
+            <div id="vim-status" style="
+                background: var(--bg-tertiary);
+                border-top: 1px solid var(--border-color);
+                padding: 4px 10px;
+                font-family: monospace;
+                font-size: 11px;
+                color: var(--text-secondary);
+                display: none;
+            "></div>
         </div>
         
         <!-- Divider between Dev and Display -->
@@ -57,8 +69,6 @@
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
                 <button id="playPauseBtn" class="playing">⏸</button>
                 <button id="restartBtn" title="Restart from beginning">⟳</button>
-                <button id="reloadBtn" title="Reload shaders">⚙</button>
-                    <button id="themeToggleBtn" title="Toggle light/dark mode">💡</button>
             </div>
                 <div class="sliderContainer">
                     <input type="range" id="volumeSlider" class="verticalSlider" min="0" max="100" value="50" orient="vertical">
@@ -348,6 +358,10 @@
         // Theme
         isDarkMode: false,
         
+        // Editor settings
+        isVimMode: false,
+        vimStatusNodes: [],  // Store vim mode handlers for each editor
+        
         readbackIndex: 0,
         pendingAudio: false,
         isRunning: false,      // System initialized and ready
@@ -611,6 +625,59 @@
                 // Help is read-only, no need to track
             }
             
+            // Load monaco-vim library after Monaco is ready
+            // Temporarily disable AMD/require to force global export
+            const tempRequire = window.require;
+            const tempDefine = window.define;
+            window.require = undefined;
+            window.define = undefined;
+            
+            fetch('https://unpkg.com/monaco-vim@0.4.1/dist/monaco-vim.js')
+                .then(response => response.text())
+                .then(scriptContent => {
+                    // Execute the script with AMD disabled
+                    const scriptEl = document.createElement('script');
+                    scriptEl.textContent = scriptContent;
+                    document.head.appendChild(scriptEl);
+                    
+                    // Restore AMD/require
+                    window.require = tempRequire;
+                    window.define = tempDefine;
+                    
+                    // Check if MonacoVim exists as an ES6 module
+                    if (window.MonacoVim && typeof window.MonacoVim === 'object') {
+                        // Try to get initVimMode from default export or named export
+                        const vimExport = window.MonacoVim.default || window.MonacoVim;
+                        
+                        if (typeof vimExport.initVimMode === 'function') {
+                            window.MonacoVim = vimExport;
+                            
+                            // Apply vim mode if enabled
+                            if (state.isVimMode) {
+                                applyVimMode();
+                            }
+                        } else {
+                            console.error('MonacoVim module found but initVimMode not available');
+                        }
+                    } else if (typeof window.initVimMode === 'function') {
+                        // Fallback: global initVimMode
+                        window.MonacoVim = { initVimMode: window.initVimMode };
+                        
+                        // Apply vim mode if enabled
+                        if (state.isVimMode) {
+                            applyVimMode();
+                        }
+                    } else {
+                        console.error('MonacoVim not found - vim mode will not be available');
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to load monaco-vim:', err);
+                    // Restore AMD/require even on error
+                    window.require = tempRequire;
+                    window.define = tempDefine;
+                });
+            
             callback();
         });
     }
@@ -645,8 +712,9 @@ function getTabLabel(tabName) {
 function renderTabs() {
     const tabsContainer = document.getElementById('editorTabs');
     
-    // Remove all tab buttons but keep the "+ Add Pass" button
+    // Remove all tab buttons but keep the action buttons
     const addPassBtn = document.getElementById('addPassBtn');
+    const optionsBtn = document.getElementById('optionsBtn');
     tabsContainer.innerHTML = '';
     
     // Add tab buttons
@@ -672,9 +740,12 @@ function renderTabs() {
         tabsContainer.appendChild(button);
     });
     
-    // Re-add the "+ Add Pass" button at the end
+    // Re-add the action buttons at the end
     if (addPassBtn) {
         tabsContainer.appendChild(addPassBtn);
+    }
+    if (optionsBtn) {
+        tabsContainer.appendChild(optionsBtn);
     }
 }
 
@@ -1317,10 +1388,13 @@ return { init, enterframe };
     async function init() {
         setupErrorHandling();
         
-        // Load theme from localStorage
+        // Load settings from localStorage
         const settings = loadSettings();
         if (settings.isDarkMode !== undefined) {
             state.isDarkMode = settings.isDarkMode;
+        }
+        if (settings.isVimMode !== undefined) {
+            state.isVimMode = settings.isVimMode;
         }
         applyTheme();
         
@@ -1436,6 +1510,152 @@ return { init, enterframe };
             const theme = state.isDarkMode ? 'sleditor-dark' : 'sleditor-light';
             monaco.editor.setTheme(theme);
         }
+    }
+    
+    // ===== VIM MODE =====
+    
+    function toggleVimMode() {
+        state.isVimMode = !state.isVimMode;
+        saveSettings({ isVimMode: state.isVimMode });
+        applyVimMode();
+    }
+    
+    function applyVimMode() {
+        if (!window.MonacoVim) {
+            console.warn('MonacoVim not loaded yet');
+            logStatus('⚠ Vim library not loaded yet, please try again in a moment');
+            return;
+        }
+        
+        const vimStatusBar = document.getElementById('vim-status');
+        
+        // Remove existing vim mode from all editors
+        state.vimStatusNodes.forEach(statusNode => {
+            if (statusNode && statusNode.dispose) {
+                statusNode.dispose();
+            }
+        });
+        state.vimStatusNodes = [];
+        
+        if (state.isVimMode) {
+            // Enable vim mode on all editors (except read-only ones)
+            const editors = [
+                state.graphicsEditor,
+                state.audioEditor,
+                state.jsEditor
+            ];
+            
+            editors.forEach(editor => {
+                if (editor) {
+                    try {
+                        const statusNode = MonacoVim.initVimMode(editor, vimStatusBar);
+                        state.vimStatusNodes.push(statusNode);
+                    } catch (e) {
+                        console.error('Failed to init vim mode:', e);
+                    }
+                }
+            });
+            
+            // Show vim status bar
+            if (vimStatusBar) vimStatusBar.style.display = 'block';
+            
+            logStatus('✓ Vim mode enabled - Press ESC for normal mode, i for insert mode');
+        } else {
+            // Hide vim status bar
+            if (vimStatusBar) vimStatusBar.style.display = 'none';
+            
+            logStatus('✓ Vim mode disabled');
+        }
+    }
+    
+    // ===== OPTIONS MENU =====
+    
+    function showOptionsMenu() {
+        // Remove any existing menu
+        const existingMenu = document.getElementById('optionsMenu');
+        if (existingMenu) {
+            existingMenu.remove();
+            return; // Toggle off if already open
+        }
+        
+        const optionsBtn = document.getElementById('optionsBtn');
+        const rect = optionsBtn.getBoundingClientRect();
+        
+        const menu = document.createElement('div');
+        menu.id = 'optionsMenu';
+        menu.style.cssText = `
+            position: fixed;
+            top: ${rect.bottom + 5}px;
+            left: ${rect.left}px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 8px 0;
+            min-width: 200px;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        `;
+        
+        // Theme toggle
+        const themeItem = document.createElement('div');
+        themeItem.style.cssText = `
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+            font-size: 13px;
+        `;
+        themeItem.innerHTML = `
+            <span style="width: 20px;">${state.isDarkMode ? '💡' : '🕯'}</span>
+            <span style="flex: 1;">${state.isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>
+            <span style="color: var(--text-secondary);">${state.isDarkMode ? '' : '✓'}</span>
+        `;
+        themeItem.onmouseenter = () => themeItem.style.background = 'var(--bg-primary)';
+        themeItem.onmouseleave = () => themeItem.style.background = '';
+        themeItem.onclick = () => {
+            toggleTheme();
+            menu.remove();
+        };
+        
+        // Vim mode toggle
+        const vimItem = document.createElement('div');
+        vimItem.style.cssText = `
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+            font-size: 13px;
+        `;
+        vimItem.innerHTML = `
+            <span style="width: 20px;">⌨</span>
+            <span style="flex: 1;">Vim Mode</span>
+            <span style="color: var(--text-secondary);">${state.isVimMode ? '✓' : ''}</span>
+        `;
+        vimItem.onmouseenter = () => vimItem.style.background = 'var(--bg-primary)';
+        vimItem.onmouseleave = () => vimItem.style.background = '';
+        vimItem.onclick = () => {
+            toggleVimMode();
+            menu.remove();
+        };
+        
+        menu.appendChild(themeItem);
+        menu.appendChild(vimItem);
+        
+        document.body.appendChild(menu);
+        
+        // Close menu when clicking outside
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu(e) {
+                if (!menu.contains(e.target) && e.target !== optionsBtn) {
+                    menu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            });
+        }, 0);
     }
     
     function updateRenderMode() {
@@ -2179,10 +2399,11 @@ return { init, enterframe };
         document.getElementById('reloadBtn').addEventListener('click', reloadShader);
         
         // Theme toggle button
-        document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
-        
         // Add Pass button
         document.getElementById('addPassBtn').addEventListener('click', showAddPassMenu);
+        
+        // Options button
+        document.getElementById('optionsBtn').addEventListener('click', showOptionsMenu);
 
         // Volume control
         const volumeSlider = document.getElementById('volumeSlider');

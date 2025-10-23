@@ -551,7 +551,7 @@ button.paused:hover {
     filter: brightness(1.1);
 }
 
-#saveShaderBtn {
+.uiBtn {
     padding: 6px 12px;
     white-space: nowrap;
 }
