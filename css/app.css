@@ -409,6 +409,23 @@ button.paused:hover {
     overflow-y: auto;
     transition: background 0.3s, border 0.3s;
 }
+.uiBtn {
+    padding: 5px;
+    min-width: 60px;
+    min-height: 20px;
+
+}
+#vim-status {
+    background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        padding: 5px;
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 12px;
+        min-height: 20px;
+        max-height: 120px;
+        overflow-y: auto;
+        transition: background 0.3s, border 0.3s;
+}
 
 .error { color: #f48771; }
 .success { color: #4ec9b0; }
@@ -551,8 +568,5 @@ button.paused:hover {
     filter: brightness(1.1);
 }
 
-.uiBtn {
-    padding: 6px 12px;
-    white-space: nowrap;
-}
+
 

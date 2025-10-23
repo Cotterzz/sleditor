@@ -30,24 +30,16 @@
 </div>
 <div id="helpContainer" class="editor-panel" style="display: none;">
 </div>
-            <div style="display: flex; align-items: center; gap: 5px;">
+            <div style="display: flex; align-items: center; gap: 1px;">
                 <div style="flex: 1;">
                     <div id="errorDisplay" class="info"></div>
                 </div>
-                <button id="reloadBtn" title="Reload shaders (F5 / Ctrl+S)">⚙</button>
-                <button id="saveShaderBtn" title="Save current shader">💾</button>
+                <button id="reloadBtn" class="uiBtn" title="Reload shaders (F5 / Ctrl+S)">⌬</button>
+                <button id="saveShaderBtn" class="uiBtn" title="Save current shader">💾</button>
             </div>
             
             <!-- Vim status bar (inside dev panel) -->
-            <div id="vim-status" style="
-                background: var(--bg-tertiary);
-                border-top: 1px solid var(--border-color);
-                padding: 4px 10px;
-                font-family: monospace;
-                font-size: 11px;
-                color: var(--text-secondary);
-                display: none;
-            "></div>
+            <div id="vim-status"></div>
         </div>
         
         <!-- Divider between Dev and Display -->
@@ -1559,7 +1551,7 @@ return { init, enterframe };
             // Show vim status bar
             if (vimStatusBar) vimStatusBar.style.display = 'block';
             
-            logStatus('✓ Vim mode enabled - Press ESC for normal mode, i for insert mode');
+            logStatus('✓ Vim mode enabled');
         } else {
             // Hide vim status bar
             if (vimStatusBar) vimStatusBar.style.display = 'none';
