@@ -1411,6 +1411,7 @@ return { init, enterframe };
                 
                 if (!webgpuAvailable) {
                     // WebGPU not available - switch to audioworklet demo and show message
+                    state.isRunning = true;  // Enable playback before loading example
                     loadExample('audioworklet_demo');
                     showWebGPUUnavailableMessage();
                     logStatus('⚠ WebGPU unavailable - JavaScript and AudioWorklet examples only');
