@@ -619,23 +619,28 @@
             }
             
             // Load monaco-vim library after Monaco is ready
-            // Temporarily disable AMD/require to force global export
-            const tempRequire = window.require;
-            const tempDefine = window.define;
-            window.require = undefined;
-            window.define = undefined;
-            
-            fetch('https://unpkg.com/monaco-vim@0.4.1/dist/monaco-vim.js')
-                .then(response => response.text())
-                .then(scriptContent => {
-                    // Execute the script with AMD disabled
-                    const scriptEl = document.createElement('script');
-                    scriptEl.textContent = scriptContent;
-                    document.head.appendChild(scriptEl);
+            // Use async IIFE to avoid disabling AMD during network fetch
+            (async () => {
+                try {
+                    const response = await fetch('https://unpkg.com/monaco-vim@0.4.1/dist/monaco-vim.js');
+                    const scriptContent = await response.text();
                     
-                    // Restore AMD/require
-                    window.require = tempRequire;
-                    window.define = tempDefine;
+                    // Now that we have the script, BRIEFLY disable AMD to execute it
+                    const tempRequire = window.require;
+                    const tempDefine = window.define;
+                    window.require = undefined;
+                    window.define = undefined;
+                    
+                    try {
+                        // Execute the script with AMD disabled
+                        const scriptEl = document.createElement('script');
+                        scriptEl.textContent = scriptContent;
+                        document.head.appendChild(scriptEl);
+                    } finally {
+                        // IMMEDIATELY restore AMD/require (in finally block to ensure it happens)
+                        window.require = tempRequire;
+                        window.define = tempDefine;
+                    }
                     
                     // Check if MonacoVim exists as an ES6 module
                     if (window.MonacoVim && typeof window.MonacoVim === 'object') {
@@ -663,13 +668,10 @@
                     } else {
                         console.error('MonacoVim not found - vim mode will not be available');
                     }
-                })
-                .catch(err => {
+                } catch (err) {
                     console.error('Failed to load monaco-vim:', err);
-                    // Restore AMD/require even on error
-                    window.require = tempRequire;
-                    window.define = tempDefine;
-                });
+                }
+            })();
             
             callback();
         });
