@@ -1415,6 +1415,9 @@ return { init, enterframe };
                     loadExample('audioworklet_demo');
                     showWebGPUUnavailableMessage();
                     logStatus('⚠ WebGPU unavailable - JavaScript and AudioWorklet examples only');
+                    
+                    // Start render loop for enterframe() even without WebGPU
+                    requestAnimationFrame(render);
                     return; // loadExample() will handle the rest
                 }
                 
@@ -3206,6 +3209,84 @@ function restart(showMessage = false) {
 
         const device = state.gpuDevice;
         const ctx = state.audioContext;
+        
+        // Non-GPU mode: just call enterframe and loop
+        if (!device || !state.hasWebGPU) {
+            // Calculate elapsed time
+            const elapsedMs = rawTime - state.startTime - state.pausedTime;
+            const elapsedSec = elapsedMs * 0.001;
+            
+            // Update counters
+            state.visualFrame++;
+            state.fpsFrameCount++;
+            if (rawTime - state.fpsLastTime >= 1000) {
+                state.fps = Math.round(state.fpsFrameCount * 1000 / (rawTime - state.fpsLastTime));
+                state.fpsFrameCount = 0;
+                state.fpsLastTime = rawTime;
+                document.getElementById('fpsCounter').textContent = state.fps;
+            }
+            document.getElementById('frameCounter').textContent = state.visualFrame;
+            document.getElementById('timeCounter').textContent = elapsedSec.toFixed(2) + 's';
+            
+            // Call user's enterframe
+            if (state.userEnterframe) {
+                try {
+                    const api = {
+                        time: elapsedSec,
+                        deltaTime: 0.016,
+                        mouse: { x: state.mouseX, y: state.mouseY },
+                        sampleRate: DERIVED.sampleRate,
+                        samplesPerBlock: DERIVED.samplesPerBlock,
+                        audioFrame: state.audioFrame,
+                        audioMode: state.audioMode,
+                        audioBlockGenerated: false,
+                        uniforms: {
+                            setFloat: () => {},  // No-op without GPU
+                            setInt: () => {}     // No-op without GPU
+                        },
+                        audio: {
+                            send: (data) => {
+                                if (state.audioWorkletNode && state.audioWorkletNode.port) {
+                                    state.audioWorkletNode.port.postMessage(data);
+                                }
+                            },
+                            setParam: (name, value) => {
+                                if (state.audioWorkletNode && state.audioWorkletNode.parameters && state.audioWorkletNode.parameters.has(name)) {
+                                    state.audioWorkletNode.parameters.get(name).value = value;
+                                }
+                            }
+                        }
+                    };
+                    state.userEnterframe(state.userState, api);
+                } catch (err) {
+                    // Pause playback on runtime error
+                    state.isPlaying = false;
+                    state.audioContext.suspend();
+                    updatePlayPauseButton();
+                    
+                    if (state.activeTabs.includes('js')) {
+                        const code = state.jsEditor.getValue();
+                        const codeLines = code.split('\n').length;
+                        const errorInfo = parseJSError(err, codeLines);
+                        
+                        setJSErrors([{
+                            lineNum: errorInfo.lineNum,
+                            column: errorInfo.column,
+                            endColumn: errorInfo.endColumn,
+                            message: `Runtime error in enterframe(): ${errorInfo.message}`
+                        }]);
+                        
+                        logStatus(`✗ JS enterframe() error (line ${errorInfo.lineNum}): ${err.message}`, 'error');
+                    } else {
+                        logStatus(`✗ JS enterframe() error: ${err.message}`, 'error');
+                    }
+                    console.error('enterframe error:', err);
+                }
+            }
+            
+            requestAnimationFrame(render);
+            return;
+        }
         
         // Calculate elapsed time (accounting for pauses)
         const elapsedMs = rawTime - state.startTime - state.pausedTime;
