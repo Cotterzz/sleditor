@@ -306,6 +306,7 @@
     // Application State
 
     const state = {
+        hasWebGPU: false,  // Capability detection
         gpuDevice: null,
         audioContext: null,
         gainNode: null,
@@ -367,7 +368,7 @@
         helpEditor: null,
         
         // Active tabs and current example
-        activeTabs: ['graphics', 'help'],  // Start with just these
+        activeTabs: ['graphics', 'help'],  // hello_world tabs
         currentTab: 'graphics',
         currentExample: 'hello_world',
         currentAudioType: null,  // 'gpu' or 'worklet' - tracks which audio tab is active
@@ -716,18 +717,16 @@ function renderTabs() {
         button.textContent = `${getTabIcon(tabName)} ${getTabLabel(tabName)}`;
         button.onclick = () => switchTab(tabName);
         
-        // Add close button for removable tabs (only graphics is mandatory)
-        if (tabName !== 'graphics') {
-            const closeBtn = document.createElement('span');
-            closeBtn.textContent = ' ×';
-            closeBtn.style.marginLeft = '6px';
-            closeBtn.style.cursor = 'pointer';
-            closeBtn.onclick = (e) => {
-                e.stopPropagation();
-                removeTab(tabName);
-            };
-            button.appendChild(closeBtn);
-        }
+        // All tabs are now closeable (graphics is no longer mandatory)
+        const closeBtn = document.createElement('span');
+        closeBtn.textContent = ' ×';
+        closeBtn.style.marginLeft = '6px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.onclick = (e) => {
+            e.stopPropagation();
+            removeTab(tabName);
+        };
+        button.appendChild(closeBtn);
         
         tabsContainer.appendChild(button);
     });
@@ -1058,6 +1057,11 @@ function populateGallery() {
     // Create gallery items for each example
     Object.keys(EXAMPLES).forEach(exampleId => {
         const example = EXAMPLES[exampleId];
+        
+        // Skip examples that require WebGPU if it's not available
+        if (!state.hasWebGPU && example.webgpuRequired) {
+            return;
+        }
         
         const item = document.createElement('div');
         item.className = 'gallery-item';
@@ -1399,8 +1403,23 @@ return { init, enterframe };
         // Then initialize Monaco with correct shader values
         initMonaco(async () => {
             try {
-                await initWebGPU();
+                // Try to initialize WebGPU (will return false if not available)
+                const webgpuAvailable = await initWebGPU();
+                
+                // Refresh gallery now that we know WebGPU status
+                populateGallery();
+                
+                if (!webgpuAvailable) {
+                    // WebGPU not available - switch to audioworklet demo and show message
+                    loadExample('audioworklet_demo');
+                    showWebGPUUnavailableMessage();
+                    logStatus('⚠ WebGPU unavailable - JavaScript and AudioWorklet examples only');
+                    return; // loadExample() will handle the rest
+                }
+                
+                // WebGPU is available, proceed with normal initialization
                 await reloadShader();
+                
                 state.isRunning = true;
                 
                 // Auto-play from beginning
@@ -1413,8 +1432,40 @@ return { init, enterframe };
                 // Compile time message already shown by reloadShader() above
             } catch (err) {
                 logStatus('Initialization failed: ' + err.message, 'error');
+                console.error('Init error:', err);
             }
         });
+    }
+
+    function showWebGPUUnavailableMessage() {
+        const canvasContainer = document.getElementById('canvasContainer');
+        const overlay = document.createElement('div');
+        overlay.id = 'webgpu-unavailable-overlay';
+        overlay.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            text-align: center;
+            padding: 40px;
+            z-index: 10;
+        `;
+        overlay.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+            <div style="font-size: 18px; font-weight: 500; margin-bottom: 12px;">WebGPU Unavailable</div>
+            <div style="font-size: 14px; color: var(--text-secondary); max-width: 400px; line-height: 1.6;">
+                GLSL support is still in development.<br>
+                Try the <strong>AudioWorklet</strong> examples!
+            </div>
+        `;
+        canvasContainer.appendChild(overlay);
     }
 
     function updateCanvasSize(width, height, recompile = true) {
@@ -2563,25 +2614,46 @@ function restart(showMessage = false) {
 }
 
     async function initWebGPU() {
-        const adapter = await navigator.gpu?.requestAdapter();
-        if (!adapter) throw new Error('WebGPU not supported');
-
-        state.gpuDevice = await adapter.requestDevice({
-            requiredFeatures: ['bgra8unorm-storage'],
-            requiredLimits: {
-                maxBufferSize: Math.pow(2, 30),
-                maxStorageBufferBindingSize: Math.pow(2, 30),
+        try {
+            // Check if WebGPU is available
+            if (!navigator.gpu) {
+                console.warn('WebGPU not available in this browser');
+                state.hasWebGPU = false;
+                return false;
             }
-        });
 
-        state.gpuContext = state.canvas.getContext('webgpu');
-        state.gpuContext.configure({
-            device: state.gpuDevice,
-            format: navigator.gpu.getPreferredCanvasFormat(),
-            usage: GPUTextureUsage.STORAGE_BINDING,
-        });
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) {
+                console.warn('WebGPU adapter not available');
+                state.hasWebGPU = false;
+                return false;
+            }
 
-        createGPUResources();
+            state.gpuDevice = await adapter.requestDevice({
+                requiredFeatures: ['bgra8unorm-storage'],
+                requiredLimits: {
+                    maxBufferSize: Math.pow(2, 30),
+                    maxStorageBufferBindingSize: Math.pow(2, 30),
+                }
+            });
+
+            state.gpuContext = state.canvas.getContext('webgpu');
+            state.gpuContext.configure({
+                device: state.gpuDevice,
+                format: navigator.gpu.getPreferredCanvasFormat(),
+                usage: GPUTextureUsage.STORAGE_BINDING,
+            });
+
+            createGPUResources();
+            
+            state.hasWebGPU = true;
+            console.log('✓ WebGPU initialized successfully');
+            return true;
+        } catch (err) {
+            console.warn('WebGPU initialization failed:', err.message);
+            state.hasWebGPU = false;
+            return false;
+        }
     }
 
     function createGPUResources() {
@@ -2818,9 +2890,11 @@ function restart(showMessage = false) {
 
     // Live Shader Reload - no time reset, no init() call
     async function reloadShader(isResizeOnly = false) {
+    const hasGraphics = state.activeTabs.includes('graphics');
     const hasAudioGpu = state.activeTabs.includes('audio_gpu');
     const hasAudioWorklet = state.activeTabs.includes('audio_worklet');
     const hasAudio = hasAudioGpu || hasAudioWorklet;
+    const hasGPUTabs = hasGraphics || hasAudioGpu;
     
     // CRITICAL: Stop old audio before loading new audio
     // This prevents both audio modes from playing simultaneously
@@ -2830,6 +2904,32 @@ function restart(showMessage = false) {
     
     if (!skipAudioWorkletReload) {
         stopAudio();
+    }
+    
+    // Skip WebGPU compilation if no GPU tabs are present
+    if (!hasGPUTabs || !state.hasWebGPU) {
+        // Only handle JS and AudioWorklet if present
+        if (hasAudioWorklet && !skipAudioWorkletReload) {
+            const workletLoaded = await loadAudioWorklet();
+            if (workletLoaded) {
+                state.audioMode = AUDIO_MODES.WORKLET;
+                state.currentAudioType = 'worklet';
+            }
+        }
+        
+        // Compile JS
+        if (state.activeTabs.includes('js')) {
+            try {
+                const startJS = performance.now();
+                await compileJS();
+                const timeJS = performance.now() - startJS;
+                logStatus(`✓ Compiled JS in ${timeJS.toFixed(1)}ms`);
+            } catch (err) {
+                // Error already handled by compileJS
+            }
+        }
+        
+        return; // Skip GPU compilation
     }
     
     // Compile graphics shader

@@ -282,11 +282,84 @@ function enterframe(state, api) {
 // ============================================================================
 
 const EXAMPLES = {
-        grey_blob: {
+    audioworklet_demo: {
+        name: "AudioWorklet Demo",
+        description: "JavaScript-based audio synthesis without WebGPU - works on all browsers",
+        thumbnail: "thumbnails/default.png",
+        tabs: ["audio", "js"],
+        webgpuRequired: false,
+        graphics: null,
+        audio: `// AudioWorklet beep synthesizer
+class AudioProcessor extends AudioWorkletProcessor {
+    constructor() {
+        super();
+        this.phase = 0;
+        this.frequency = 440;
+        this.gain = 0.3;
+        
+        // Listen for updates from JS
+        this.port.onmessage = (e) => {
+            if (e.data.frequency !== undefined) {
+                this.frequency = e.data.frequency;
+            }
+            if (e.data.gain !== undefined) {
+                this.gain = e.data.gain;
+            }
+        };
+    }
+    
+    process(inputs, outputs, parameters) {
+        const output = outputs[0];
+        
+        for (let channel = 0; channel < output.length; channel++) {
+            const outputChannel = output[channel];
+            
+            for (let i = 0; i < outputChannel.length; i++) {
+                // Generate sine wave with envelope
+                const envelope = Math.sin(this.phase * 0.05) * 0.5 + 0.5;
+                outputChannel[i] = Math.sin(this.phase) * this.gain * envelope;
+                
+                // Increment phase
+                this.phase += (this.frequency * Math.PI * 2) / sampleRate;
+                if (this.phase > Math.PI * 2) {
+                    this.phase -= Math.PI * 2;
+                }
+            }
+        }
+        
+        return true; // Keep processor alive
+    }
+}
+
+registerProcessor('user-audio', AudioProcessor);`,
+        js: `function init() {
+    return {
+        time: 0,
+        frequency: 440,
+        gain: 0.3,
+    };
+}
+
+function enterframe(state, api) {
+    state.time += 1/60;
+    
+    // Modulate frequency over time
+    state.frequency = 440 + Math.sin(state.time * 0.5) * 110;
+    state.gain = 0.2 + Math.sin(state.time * 0.3) * 0.1;
+    
+    // Send to AudioWorklet
+    api.audio.send({ 
+        frequency: state.frequency,
+        gain: state.gain 
+    });
+}`
+    },
+    grey_blob: {
         name: "Grey Blob",
         description: "Imported GLSL raymarching shader with mesmerizing organic motion",
         thumbnail: "thumbnails/greyblob.png",
         tabs: ["graphics", "help"],
+        webgpuRequired: true,
         graphics: `/*
 //port of this shadertoy by diatribes:
 void mainImage(out vec4 o, vec2 u) {
@@ -343,6 +416,7 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
         description: "A simple gradient - perfect first shader to understand coordinates and colors",
         thumbnail: "thumbnails/new.png",
         tabs: ["graphics", "help"],
+        webgpuRequired: true,
         graphics: `// Simple gradient - your first shader!
 @compute @workgroup_size(8, 8, 1)
 fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -364,6 +438,7 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
         description: "Time-based animation with sine waves creating dynamic patterns",
         thumbnail: "thumbnails/animatedpattern.png",
         tabs: ["graphics"],
+        webgpuRequired: true,
         graphics: `// Animated pattern using time
 @compute @workgroup_size(8, 8, 1)
 fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -396,6 +471,7 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
         description: "Mouse creates ripple effects - move your cursor to interact!",
         thumbnail: "thumbnails/mouseinteractive.png",
         tabs: ["graphics", "js"],
+        webgpuRequired: true,
         graphics: `// Mouse-controlled visuals
 @compute @workgroup_size(8, 8, 1)
 fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -445,6 +521,7 @@ function enterframe(state, api) {
         description: "Basic audio synthesis with AudioWorklet - pure sine wave generation",
         thumbnail: "thumbnails/audioworklet.png",
         tabs: ["graphics", "audio", "js"],
+        webgpuRequired: true,
         graphics: `// Visualize the frequency
 @compute @workgroup_size(8, 8, 1)
 fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
@@ -540,6 +617,7 @@ function enterframe(state, api) {
         description: "Multi-scale audio visualization with GPU-based waveform analysis",
         thumbnail: "thumbnails/audiowgsl.png",
         tabs: ["graphics", "audio", "js", "boilerplate"],
+        webgpuRequired: true,
         graphics: getDefaultGraphicsShader(),
         audio: getDefaultAudioShader(),
         js: DEFAULT_JS
