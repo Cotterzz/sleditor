@@ -2440,7 +2440,7 @@ return { init, enterframe };
         document.getElementById('restartBtn').addEventListener('click', () => restart(true));
 
         // Reload button
-        document.getElementById('reloadBtn').addEventListener('click', reloadShader);
+        document.getElementById('reloadBtn').addEventListener('click', () => reloadShader());
         
         // Theme toggle button
         // Add Pass button
@@ -2909,28 +2909,61 @@ function restart(showMessage = false) {
     
     // Skip WebGPU compilation if no GPU tabs are present
     if (!hasGPUTabs || !state.hasWebGPU) {
-        // Only handle JS and AudioWorklet if present
-        if (hasAudioWorklet && !skipAudioWorkletReload) {
-            const workletLoaded = await loadAudioWorklet();
-            if (workletLoaded) {
-                state.audioMode = AUDIO_MODES.WORKLET;
-                state.currentAudioType = 'worklet';
+        try {
+            logStatus('Compiling...', 'info');
+            clearMonacoErrors();
+            
+            const startTotal = performance.now();
+            let timeAudio = 0;
+            let timeJS = 0;
+            let audioCompileSuccess = true;
+            let jsCompileSuccess = true;
+            
+            // Load AudioWorklet if present
+            if (hasAudioWorklet && !skipAudioWorkletReload) {
+                const startAudio = performance.now();
+                const workletLoaded = await loadAudioWorklet();
+                timeAudio = performance.now() - startAudio;
+                
+                if (workletLoaded) {
+                    state.audioMode = AUDIO_MODES.WORKLET;
+                    state.currentAudioType = 'worklet';
+                } else {
+                    audioCompileSuccess = false;
+                }
             }
-        }
-        
-        // Compile JS
-        if (state.activeTabs.includes('js')) {
-            try {
+            
+            // Compile JS
+            if (state.activeTabs.includes('js')) {
                 const startJS = performance.now();
-                await compileJS();
-                const timeJS = performance.now() - startJS;
-                logStatus(`✓ Compiled JS in ${timeJS.toFixed(1)}ms`);
-            } catch (err) {
-                // Error already handled by compileJS
+                jsCompileSuccess = compileUserJS();
+                timeJS = performance.now() - startJS;
             }
+            
+            // Show appropriate status message
+            if (audioCompileSuccess && jsCompileSuccess) {
+                const totalTime = performance.now() - startTotal;
+                
+                // Build timing info string
+                let timingParts = [];
+                if (hasAudioWorklet && timeAudio > 0.1) {
+                    timingParts.push(`Worklet: ${timeAudio.toFixed(1)}ms`);
+                }
+                if (state.activeTabs.includes('js')) {
+                    timingParts.push(`JS: ${timeJS.toFixed(1)}ms`);
+                }
+                
+                const timingStr = timingParts.length > 0 ? ` (${timingParts.join(', ')})` : '';
+                logStatus(`✓ Compiled in ${totalTime.toFixed(1)}ms${timingStr}`, 'success');
+                return true;
+            } else {
+                // Errors already logged by loadAudioWorklet or compileUserJS
+                return false;
+            }
+        } catch (err) {
+            logStatus('✗ ' + err.message, 'error');
+            return false;
         }
-        
-        return; // Skip GPU compilation
     }
     
     // Compile graphics shader
@@ -2990,14 +3023,14 @@ function restart(showMessage = false) {
                 audioCompileSuccess = true;
             } else {
                 // Load AudioWorklet - this will always reload the code
-            const workletLoaded = await loadAudioWorklet();
-            if (workletLoaded) {
-                state.audioMode = AUDIO_MODES.WORKLET;
+                const workletLoaded = await loadAudioWorklet();
+                if (workletLoaded) {
+                    state.audioMode = AUDIO_MODES.WORKLET;
                     state.currentAudioType = 'worklet';
                 } else {
                     // AudioWorklet failed to load - error already logged by loadAudioWorklet
                     audioCompileSuccess = false;
-            }
+                }
             }
         } else if (hasAudioGpu) {
             // Create GPU audio pipeline
