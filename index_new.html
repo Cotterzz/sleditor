@@ -1,0 +1,680 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>EDITOR</title>
+    <link rel="stylesheet" href="css/app.css">
+    <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
+    <script src="js/examples.js"></script>
+</head>
+<body>
+    <div id="container">
+        <div id="devPanel">
+<div id="editorTabs" style="display: flex; margin-bottom: 0px; gap: 5px; align-items: center;">
+    <!-- Tabs will be dynamically added here -->
+    <button id="addPassBtn" style="padding: 6px 12px; font-size: 13px; margin-left: auto;">+ Add Pass</button>
+    <button id="optionsBtn" style="padding: 6px 12px; font-size: 13px;">⚙ Options</button>
+</div>
+<div id="boilerplateContainer" class="editor-panel" style="display: none;">
+</div>
+<div id="graphicsContainer" class="editor-panel">
+    <div id="loadingMessage">Loading Monaco Editor...</div>
+</div>
+<div id="audioContainer" class="editor-panel" style="display: none;">
+</div>
+<div id="jsEditorContainer" class="editor-panel" style="display: none;">
+</div>
+<div id="helpContainer" class="editor-panel" style="display: none;">
+</div>
+            <div style="display: flex; align-items: center; gap: 1px;">
+                <div style="flex: 1;">
+                    <div id="errorDisplay" class="info"></div>
+                </div>
+                <button id="reloadBtn" class="uiBtn" title="Reload shaders (F5 / Ctrl+S)">⌬</button>
+                <button id="saveShaderBtn" class="uiBtn" title="Save current shader">💾</button>
+            </div>
+            
+            <!-- Vim status bar (inside dev panel) -->
+            <div id="vim-status"></div>
+        </div>
+        
+        <!-- Divider between Dev and Display -->
+        <div class="panel-divider" id="divider1" data-divider="dev-display">
+            <div class="divider-handle">⋮</div>
+        </div>
+        
+        <div id="displayPanel">
+            <div id="canvasContainer">
+            <canvas id="canvas"></canvas>
+            </div>
+            
+            <!-- Horizontal divider for vertical canvas resizing -->
+            <div class="horizontal-divider" id="canvasResizeDivider">
+                <div class="divider-handle horizontal">⋯</div>
+            </div>
+            
+            <div id="controls">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                <button id="playPauseBtn" class="playing">⏸</button>
+                <button id="restartBtn" title="Restart from beginning">⟳</button>
+            </div>
+                <div class="sliderContainer">
+                    <input type="range" id="volumeSlider" class="verticalSlider" min="0" max="100" value="50" orient="vertical">
+                    <div style="font-size: 16px;">🔊</div>
+            </div>
+                <div class="sliderContainer">
+                    <input type="range" id="pixelScaleSlider" class="verticalSlider" min="0" max="5" value="0" step="1" orient="vertical">
+                    <div id="renderModeIcon" style="font-size: 16px; cursor: pointer; user-select: none;" title="Click to cycle render modes">▦</div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 3px; color: var(--text-secondary); font-size: 12px;">
+                    <div id="resolutionDisplay">512 × 512 × 1</div>
+                    <div>FPS: <span id="fpsCounter">0</span></div>
+                    <div>Frame: <span id="frameCounter">0</span></div>
+                    <div>Time: <span id="timeCounter">0.00s</span></div>
+                </div>
+            </div>
+            
+            <!-- Shader Info -->
+            <div id="shaderInfo" style="padding: 10px; border-top: 1px solid var(--border-color);">
+                <div id="shaderTitle" style="font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px;">Hello World</div>
+                <div id="shaderDescription" style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">A simple gradient - perfect first shader to understand coordinates and colors</div>
+            </div>
+        </div>
+        
+        <!-- Divider between Display and Gallery -->
+        <div class="panel-divider" id="divider2" data-divider="display-gallery">
+            <div class="divider-handle">⋮</div>
+        </div>
+        
+        <div id="galleryPanel">
+            <div class="gallery-header">
+                <h2 style="margin: 0; font-size: 16px; color: var(--text-primary);">Gallery</h2>
+            </div>
+            <div id="galleryContent">
+                <!-- Gallery items will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Shader Modal -->
+    <div id="saveModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Save Shader</h2>
+            <div class="modal-field">
+                <label for="saveModalTitle">Title (required):</label>
+                <input type="text" id="saveModalTitle" placeholder="My Amazing Shader" maxlength="50" />
+            </div>
+            <div class="modal-field">
+                <label for="saveModalDescription">Description (optional):</label>
+                <textarea id="saveModalDescription" placeholder="What does this shader do?" maxlength="200" rows="3"></textarea>
+            </div>
+            <div class="modal-field">
+                <label for="saveModalTags">Tags (optional, comma-separated):</label>
+                <input type="text" id="saveModalTags" placeholder="graphics, fractal, audio" maxlength="50" />
+            </div>
+            <div class="modal-buttons">
+                <button id="saveCancelBtn">Cancel</button>
+                <button id="saveConfirmBtn" class="primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Monaco from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    
+    <!-- Configure Monaco loader -->
+    <script>
+    require.config({ 
+        paths: { 
+            'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' 
+        }
+    });
+    </script>
+    
+    <!-- Main Application (ES6 Modules) -->
+    <script type="module">
+    'use strict';
+
+    // Import all modules
+    import { state, CONFIG, DERIVED, AUDIO_MODES, loadSettings, saveSettings, logStatus, updateDerived } from './js/core.js';
+    import * as webgpu from './js/backends/webgpu.js';
+    import * as audioWorklet from './js/backends/audio-worklet.js';
+    import * as render from './js/render.js';
+    import * as editor from './js/editor.js';
+    import * as jsRuntime from './js/js-runtime.js';
+    import * as tabs from './js/tabs.js';
+    import * as save from './js/save.js';
+    import * as vim from './js/vim.js';
+
+    // ============================================================================
+    // Audio Initialization
+    // ============================================================================
+
+    function initWebAudio() {
+        state.audioContext = new AudioContext();
+        state.gainNode = state.audioContext.createGain();
+        state.gainNode.gain.value = CONFIG.volume;
+        state.gainNode.connect(state.audioContext.destination);
+        
+        // Update DERIVED values
+        updateDerived(state.audioContext);
+        
+        console.log(`Audio initialized: ${DERIVED.sampleRate}Hz, ${DERIVED.samplesPerBlock} samples/block`);
+    }
+
+    // ============================================================================
+    // Theme Management
+    // ============================================================================
+
+    function applyTheme() {
+        if (state.isDarkMode) {
+            document.body.classList.remove('light-mode');
+        } else {
+            document.body.classList.add('light-mode');
+        }
+        
+        // Update Monaco theme if editors exist
+        if (state.graphicsEditor) {
+            editor.setTheme(state.isDarkMode);
+        }
+    }
+
+    function toggleTheme() {
+        state.isDarkMode = !state.isDarkMode;
+        saveSettings({ isDarkMode: state.isDarkMode });
+        applyTheme();
+    }
+
+    // ============================================================================
+    // Shader Compilation
+    // ============================================================================
+
+    async function reloadShader(isResizeOnly = false) {
+        const hasGraphics = state.activeTabs.includes('graphics');
+        const hasAudioGpu = state.activeTabs.includes('audio_gpu');
+        const hasAudioWorklet = state.activeTabs.includes('audio_worklet');
+        const hasGPUTabs = hasGraphics || hasAudioGpu;
+        
+        // Stop old audio
+        const isWorkletActive = state.audioMode === AUDIO_MODES.WORKLET && state.audioWorkletNode;
+        const skipAudioWorkletReload = isResizeOnly && isWorkletActive && hasAudioWorklet;
+        
+        if (!skipAudioWorkletReload) {
+            stopAudio();
+        }
+        
+        // Non-GPU mode (JS + AudioWorklet only)
+        if (!hasGPUTabs || !state.hasWebGPU) {
+            try {
+                logStatus('Compiling...', 'info');
+                editor.clearAllErrors();
+                
+                const startTotal = performance.now();
+                let audioSuccess = true;
+                let jsSuccess = true;
+                
+                // Load AudioWorklet if present
+                if (hasAudioWorklet && !skipAudioWorkletReload) {
+                    const audioCode = state.audioEditor.getValue();
+                    const result = await audioWorklet.load(audioCode);
+                    if (!result.success) {
+                        editor.setAudioWorkletErrors(result.errors);
+                        logStatus(`✗ AudioWorklet error: ${result.errors[0].message}`, 'error');
+                        audioSuccess = false;
+                    }
+                }
+                
+                // Compile JS
+                if (state.activeTabs.includes('js')) {
+                    const code = state.jsEditor.getValue();
+                    const result = jsRuntime.compile(code, false);
+                    if (!result.success) {
+                        editor.setJSErrors(result.errors);
+                        logStatus(`✗ JS error: ${result.errors[0].message}`, 'error');
+                        jsSuccess = false;
+                    }
+                }
+                
+                if (audioSuccess && jsSuccess) {
+                    const totalTime = performance.now() - startTotal;
+                    logStatus(`✓ Compiled in ${totalTime.toFixed(1)}ms`, 'success');
+                    return true;
+                }
+                return false;
+            } catch (err) {
+                logStatus('✗ ' + err.message, 'error');
+                return false;
+            }
+        }
+        
+        // GPU mode (WebGPU + optional audio)
+        const boilerplate = getBoilerplate();
+        const graphics = state.graphicsEditor.getValue();
+        const audio = hasAudioGpu ? state.audioEditor.getValue() : '';
+        const code = boilerplate + '\n' + graphics + '\n' + audio;
+        
+        state.boilerplateEditor.setValue(boilerplate);
+        
+        try {
+            logStatus('Compiling...', 'info');
+            editor.clearAllErrors();
+            
+            const startTotal = performance.now();
+            
+            // Compile WGSL
+            const compileResult = await webgpu.compile(code, hasGraphics, hasAudioGpu);
+            if (!compileResult.success) {
+                editor.setWGSLErrors(compileResult.errors);
+                const errorMsg = compileResult.errors.map(e => 
+                    `Line ${e.lineNum}: ${e.message}`
+                ).join('\n');
+                logStatus('✗ Shader compilation failed', 'error');
+                return false;
+            }
+            
+            // Load AudioWorklet if present
+            if (hasAudioWorklet && !skipAudioWorkletReload) {
+                const audioCode = state.audioEditor.getValue();
+                const result = await audioWorklet.load(audioCode);
+                if (!result.success) {
+                    editor.setAudioWorkletErrors(result.errors);
+                    logStatus(`✗ AudioWorklet error`, 'error');
+                    return false;
+                }
+            }
+            
+            // Compile JS
+            if (state.activeTabs.includes('js')) {
+                const jsCode = state.jsEditor.getValue();
+                const result = jsRuntime.compile(jsCode, false);
+                if (!result.success) {
+                    editor.setJSErrors(result.errors);
+                    logStatus(`✗ JS error`, 'error');
+                    return false;
+                }
+            }
+            
+            const totalTime = performance.now() - startTotal;
+            logStatus(`✓ Compiled in ${totalTime.toFixed(1)}ms`, 'success');
+            
+            // Call user init
+            jsRuntime.callInit();
+            
+            return true;
+        } catch (err) {
+            logStatus('✗ ' + err.message, 'error');
+            console.error('Compilation error:', err);
+            return false;
+        }
+    }
+
+    function stopAudio() {
+        state.audioPipeline = null;
+        state.pendingAudio = false;
+        audioWorklet.cleanup();
+        state.audioMode = AUDIO_MODES.NONE;
+    }
+
+    // ============================================================================
+    // Play/Pause/Restart
+    // ============================================================================
+
+    function togglePlayPause() {
+        state.isPlaying = !state.isPlaying;
+        
+        if (state.isPlaying) {
+            state.audioContext.resume();
+            state.lastPauseTime = performance.now();
+            const pauseDuration = state.lastPauseTime - (state.lastPauseTime || 0);
+            state.pausedTime += pauseDuration;
+        } else {
+            state.audioContext.suspend();
+            state.lastPauseTime = performance.now();
+        }
+        
+        updatePlayPauseButton();
+    }
+
+    function updatePlayPauseButton() {
+        const btn = document.getElementById('playPauseBtn');
+        if (state.isPlaying) {
+            btn.textContent = '⏸';
+            btn.className = 'playing';
+        } else {
+            btn.textContent = '▶';
+            btn.className = 'paused';
+        }
+    }
+
+    function restart(userInitiated = false) {
+        const now = performance.now();
+        state.startTime = now;
+        state.pausedTime = 0;
+        state.lastPauseTime = 0;
+        state.visualFrame = 0;
+        state.audioFrame = 0;
+        state.nextAudioTime = state.audioContext.currentTime + 0.1;
+        state.fpsLastTime = now;
+        state.fpsFrameCount = 0;
+        
+        // Call user init
+        jsRuntime.callInit();
+        
+        if (userInitiated) {
+            logStatus('✓ Restarted from beginning');
+        }
+    }
+
+    // ============================================================================
+    // Load Example
+    // ============================================================================
+
+    function loadExample(exampleId) {
+        const example = EXAMPLES[exampleId];
+        if (!example) return;
+        
+        state.currentExample = exampleId;
+        state.currentSavedShader = null;
+        state.isDirty = false;
+        
+        // Convert old 'audio' tab to new format
+        const updatedTabs = example.tabs.map(tab => {
+            if (tab === 'audio') {
+                const isWorklet = example.audio && (example.audio.includes('AudioWorkletProcessor') || 
+                                 example.audio.includes('registerProcessor'));
+                return isWorklet ? 'audio_worklet' : 'audio_gpu';
+            }
+            return tab;
+        });
+        
+        state.activeTabs = [...updatedTabs];
+        
+        // Determine audio type
+        if (state.activeTabs.includes('audio_gpu')) {
+            state.currentAudioType = 'gpu';
+        } else if (state.activeTabs.includes('audio_worklet')) {
+            state.currentAudioType = 'worklet';
+        } else {
+            state.currentAudioType = null;
+        }
+        
+        // Load code into editors
+        if (state.graphicsEditor) {
+            state.graphicsEditor.setValue(example.graphics || '');
+        }
+        if (state.audioEditor && example.audio) {
+            state.audioEditor.setValue(example.audio);
+        }
+        if (state.jsEditor) {
+            state.jsEditor.setValue(example.js || MINIMAL_JS);
+        }
+        
+        // Update UI
+        tabs.renderTabs();
+        tabs.switchTab(updatedTabs[0] || 'graphics');
+        
+        // Update shader info
+        document.getElementById('shaderTitle').textContent = example.name;
+        document.getElementById('shaderDescription').textContent = example.description || '';
+        
+        // Reload shader
+        reloadShader();
+    }
+
+    // ============================================================================
+    // Setup UI
+    // ============================================================================
+
+    function setupUI() {
+        // Canvas
+        state.canvas = document.getElementById('canvas');
+        const canvasContainer = document.getElementById('canvasContainer');
+        canvasContainer.classList.add('explicit-height');
+        canvasContainer.style.height = state.canvasHeight + 'px';
+        
+        // Event listeners
+        document.getElementById('playPauseBtn').addEventListener('click', togglePlayPause);
+        document.getElementById('restartBtn').addEventListener('click', () => restart(true));
+        document.getElementById('reloadBtn').addEventListener('click', () => reloadShader());
+        document.getElementById('addPassBtn').addEventListener('click', tabs.showAddPassMenu);
+        document.getElementById('optionsBtn').addEventListener('click', tabs.showOptionsMenu);
+        
+        // Volume control
+        document.getElementById('volumeSlider').addEventListener('input', (e) => {
+            const vol = e.target.value / 100;
+            CONFIG.volume = vol;
+            if (state.gainNode) state.gainNode.gain.value = vol;
+        });
+        
+        // Pixel scale control
+        document.getElementById('pixelScaleSlider').addEventListener('input', (e) => {
+            const scaleIndex = parseInt(e.target.value);
+            const scales = [1, 2, 3, 4, 6, 8];
+            state.pixelScale = scales[scaleIndex];
+            updateCanvasSize(state.canvasWidth, state.canvasHeight, true);
+        });
+        
+        // Render mode cycling
+        document.getElementById('renderModeIcon').addEventListener('click', () => {
+            state.renderMode = (state.renderMode + 1) % 3;
+            updateRenderMode();
+        });
+        
+        // Mouse tracking
+        state.canvas.addEventListener('mousemove', (e) => {
+            const rect = state.canvas.getBoundingClientRect();
+            state.mouseX = (e.clientX - rect.left) / rect.width;
+            state.mouseY = 1 - ((e.clientY - rect.top) / rect.height);
+        });
+        
+        // Custom events
+        window.addEventListener('toggle-theme', toggleTheme);
+        window.addEventListener('toggle-vim', vim.toggleVimMode);
+        window.addEventListener('load-example', (e) => loadExample(e.detail));
+        window.addEventListener('stop-audio', stopAudio);
+    }
+
+    function updateCanvasSize(width, height, recompile = true) {
+        state.canvasWidth = width;
+        state.canvasHeight = height;
+        
+        const renderWidth = Math.floor(width / state.pixelScale);
+        const renderHeight = Math.floor(height / state.pixelScale);
+        
+        state.canvas.width = renderWidth;
+        state.canvas.height = renderHeight;
+        
+        document.getElementById('resolutionDisplay').textContent = 
+            `${renderWidth} × ${renderHeight} × ${state.pixelScale}`;
+        
+        if (recompile && state.isRunning) {
+            reloadShader(true);
+        }
+    }
+
+    function updateRenderMode() {
+        const modes = [
+            { css: 'pixelated', icon: '▦', name: 'Pixelated (Sharp)' },
+            { css: 'auto', icon: '▩', name: 'Smooth (Bilinear)' },
+            { css: 'crisp-edges', icon: '■', name: 'Crisp Edges' }
+        ];
+        
+        const mode = modes[state.renderMode];
+        state.canvas.style.imageRendering = mode.css;
+        
+        const icon = document.getElementById('renderModeIcon');
+        if (icon) {
+            icon.textContent = mode.icon;
+            icon.title = `Render mode: ${mode.name} (click to cycle)`;
+        }
+    }
+
+    // ============================================================================
+    // Setup Save System
+    // ============================================================================
+
+    function setupSaveSystem() {
+        document.getElementById('saveShaderBtn').addEventListener('click', showSaveModal);
+        document.getElementById('saveCancelBtn').addEventListener('click', hideSaveModal);
+        document.getElementById('saveConfirmBtn').addEventListener('click', () => {
+            const title = document.getElementById('saveModalTitle').value.trim();
+            const description = document.getElementById('saveModalDescription').value;
+            const tags = document.getElementById('saveModalTags').value;
+            
+            if (!title) {
+                logStatus('⚠ Title is required');
+                document.getElementById('saveModalTitle').focus();
+                return;
+            }
+            
+            const result = save.saveShaderToStorage(title, description, tags);
+            if (result.success) {
+                hideSaveModal();
+                save.populateGallery(EXAMPLES);
+                logStatus('✓ Shader saved');
+            }
+        });
+        
+        // Custom events
+        window.addEventListener('shader-saved', () => {
+            save.populateGallery(EXAMPLES);
+        });
+        window.addEventListener('shader-loaded', () => {
+            tabs.renderTabs();
+            tabs.switchTab(state.activeTabs[0]);
+            reloadShader();
+        });
+    }
+
+    function showSaveModal() {
+        document.getElementById('saveModal').style.display = 'flex';
+        document.getElementById('saveModalTitle').focus();
+    }
+
+    function hideSaveModal() {
+        document.getElementById('saveModal').style.display = 'none';
+        document.getElementById('saveModalTitle').value = '';
+        document.getElementById('saveModalDescription').value = '';
+        document.getElementById('saveModalTags').value = '';
+    }
+
+    // ============================================================================
+    // Initialization
+    // ============================================================================
+
+    async function init() {
+        // Load settings
+        const settings = loadSettings();
+        if (settings.isDarkMode !== undefined) {
+            state.isDarkMode = settings.isDarkMode;
+        }
+        if (settings.isVimMode !== undefined) {
+            state.isVimMode = settings.isVimMode;
+        }
+        applyTheme();
+        
+        setupUI();
+        setupSaveSystem();
+        
+        // Initialize audio FIRST
+        initWebAudio();
+        
+        // Load help content
+        const helpContent = await getHelpContent();
+        
+        // Initialize Monaco with initial code
+        const initialCode = {
+            boilerplate: getBoilerplate(),
+            graphics: EXAMPLES.hello_world.graphics || '',
+            audio: EXAMPLES.hello_world.audio || '',
+            audioLanguage: 'wgsl',
+            js: EXAMPLES.hello_world.js || MINIMAL_JS
+        };
+        
+        await editor.initMonaco(null, initialCode, helpContent);
+        
+        // Load vim library asynchronously
+        vim.loadVimLibrary().then((success) => {
+            if (success && state.isVimMode) {
+                vim.applyVimMode();
+            }
+        });
+        
+        // Try to initialize WebGPU
+        const webgpuResult = await webgpu.init(state.canvas);
+        state.hasWebGPU = webgpuResult.success;
+        
+        // Populate gallery
+        save.populateGallery(EXAMPLES);
+        
+        // Initialize tabs
+        tabs.renderTabs();
+        tabs.switchTab('graphics');
+        
+        if (!state.hasWebGPU) {
+            // WebGPU not available
+            state.isRunning = true;
+            loadExample('audioworklet_demo');
+            showWebGPUUnavailableMessage();
+            logStatus('⚠ WebGPU unavailable - JavaScript and AudioWorklet examples only');
+            render.start();
+            return;
+        }
+        
+        // WebGPU available - proceed normally
+        await reloadShader();
+        
+        state.isRunning = true;
+        restart();
+        state.isPlaying = true;
+        state.audioContext.resume();
+        updatePlayPauseButton();
+        
+        render.start();
+    }
+
+    function showWebGPUUnavailableMessage() {
+        const canvasContainer = document.getElementById('canvasContainer');
+        const overlay = document.createElement('div');
+        overlay.id = 'webgpu-unavailable-overlay';
+        overlay.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            text-align: center;
+            padding: 40px;
+            z-index: 10;
+        `;
+        overlay.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+            <div style="font-size: 18px; font-weight: 500; margin-bottom: 12px;">WebGPU Unavailable</div>
+            <div style="font-size: 14px; color: var(--text-secondary); max-width: 400px; line-height: 1.6;">
+                GLSL support is still in development.<br>
+                Try the <strong>AudioWorklet</strong> examples!
+            </div>
+        `;
+        canvasContainer.appendChild(overlay);
+    }
+
+    // Make some functions global for Monaco keyboard shortcuts
+    window.reloadShader = reloadShader;
+    window.togglePlayPause = togglePlayPause;
+
+    // Start application
+    window.addEventListener('load', init);
+    </script>
+</body>
+</html>
+

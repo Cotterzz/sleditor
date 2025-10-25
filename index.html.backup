@@ -1,0 +1,3496 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>EDITOR</title>
+    <link rel="stylesheet" href="css/app.css">
+    <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
+    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
+    <link rel="manifest" href="/favicon/site.webmanifest" />
+    <script src="js/examples.js"></script>
+</head>
+<body>
+    <div id="container">
+        <div id="devPanel">
+<div id="editorTabs" style="display: flex; margin-bottom: 0px; gap: 5px; align-items: center;">
+    <!-- Tabs will be dynamically added here -->
+    <button id="addPassBtn" style="padding: 6px 12px; font-size: 13px; margin-left: auto;">+ Add Pass</button>
+    <button id="optionsBtn" style="padding: 6px 12px; font-size: 13px;">⚙ Options</button>
+</div>
+<div id="boilerplateContainer" class="editor-panel" style="display: none;">
+</div>
+<div id="graphicsContainer" class="editor-panel">
+    <div id="loadingMessage">Loading Monaco Editor...</div>
+</div>
+<div id="audioContainer" class="editor-panel" style="display: none;">
+</div>
+<div id="jsEditorContainer" class="editor-panel" style="display: none;">
+</div>
+<div id="helpContainer" class="editor-panel" style="display: none;">
+</div>
+            <div style="display: flex; align-items: center; gap: 1px;">
+                <div style="flex: 1;">
+                    <div id="errorDisplay" class="info"></div>
+                </div>
+                <button id="reloadBtn" class="uiBtn" title="Reload shaders (F5 / Ctrl+S)">⌬</button>
+                <button id="saveShaderBtn" class="uiBtn" title="Save current shader">💾</button>
+            </div>
+            
+            <!-- Vim status bar (inside dev panel) -->
+            <div id="vim-status"></div>
+        </div>
+        
+        <!-- Divider between Dev and Display -->
+        <div class="panel-divider" id="divider1" data-divider="dev-display">
+            <div class="divider-handle">⋮</div>
+        </div>
+        
+        <div id="displayPanel">
+            <div id="canvasContainer">
+            <canvas id="canvas"></canvas>
+            </div>
+            
+            <!-- Horizontal divider for vertical canvas resizing -->
+            <div class="horizontal-divider" id="canvasResizeDivider">
+                <div class="divider-handle horizontal">⋯</div>
+            </div>
+            
+            <div id="controls">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                <button id="playPauseBtn" class="playing">⏸</button>
+                <button id="restartBtn" title="Restart from beginning">⟳</button>
+            </div>
+                <div class="sliderContainer">
+                    <input type="range" id="volumeSlider" class="verticalSlider" min="0" max="100" value="50" orient="vertical">
+                    <div style="font-size: 16px;">🔊</div>
+            </div>
+                <div class="sliderContainer">
+                    <input type="range" id="pixelScaleSlider" class="verticalSlider" min="0" max="5" value="0" step="1" orient="vertical">
+                    <div id="renderModeIcon" style="font-size: 16px; cursor: pointer; user-select: none;" title="Click to cycle render modes">▦</div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 3px; color: var(--text-secondary); font-size: 12px;">
+                    <div id="resolutionDisplay">512 × 512 × 1</div>
+                    <div>FPS: <span id="fpsCounter">0</span></div>
+                    <div>Frame: <span id="frameCounter">0</span></div>
+                    <div>Time: <span id="timeCounter">0.00s</span></div>
+                </div>
+            </div>
+            
+            <!-- Shader Info -->
+            <div id="shaderInfo" style="padding: 10px; border-top: 1px solid var(--border-color);">
+                <div id="shaderTitle" style="font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px;">Hello World</div>
+                <div id="shaderDescription" style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">A simple gradient - perfect first shader to understand coordinates and colors</div>
+            </div>
+        </div>
+        
+        <!-- Divider between Display and Gallery -->
+        <div class="panel-divider" id="divider2" data-divider="display-gallery">
+            <div class="divider-handle">⋮</div>
+        </div>
+        
+        <div id="galleryPanel">
+            <div class="gallery-header">
+                <h2 style="margin: 0; font-size: 16px; color: var(--text-primary);">Gallery</h2>
+            </div>
+            <div id="galleryContent">
+                <!-- Gallery items will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Shader Modal -->
+    <div id="saveModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Save Shader</h2>
+            <div class="modal-field">
+                <label for="saveModalTitle">Title (required):</label>
+                <input type="text" id="saveModalTitle" placeholder="My Amazing Shader" maxlength="50" />
+            </div>
+            <div class="modal-field">
+                <label for="saveModalDescription">Description (optional):</label>
+                <textarea id="saveModalDescription" placeholder="What does this shader do?" maxlength="200" rows="3"></textarea>
+            </div>
+            <div class="modal-field">
+                <label for="saveModalTags">Tags (optional, comma-separated):</label>
+                <input type="text" id="saveModalTags" placeholder="graphics, fractal, audio" maxlength="50" />
+            </div>
+            <div class="modal-buttons">
+                <button id="saveCancelBtn">Cancel</button>
+                <button id="saveConfirmBtn" class="primary">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    
+    <script>
+    'use strict';
+
+    // Monaco Editor Setup
+
+    let monacoEditor = null;
+
+    // Configure Monaco loader
+    require.config({ 
+        paths: { 
+            'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' 
+        }
+    });
+
+    // Define WGSL language configuration
+    const WGSL_LANGUAGE_CONFIG = {
+        comments: {
+            lineComment: '//',
+            blockComment: ['/*', '*/']
+        },
+        brackets: [
+            ['{', '}'],
+            ['[', ']'],
+            ['(', ')']
+        ],
+        autoClosingPairs: [
+            { open: '{', close: '}' },
+            { open: '[', close: ']' },
+            { open: '(', close: ')' },
+            { open: '"', close: '"', notIn: ['string'] },
+        ],
+        surroundingPairs: [
+            { open: '{', close: '}' },
+            { open: '[', close: ']' },
+            { open: '(', close: ')' },
+            { open: '"', close: '"' },
+        ]
+    };
+
+    // WGSL syntax highlighting
+    const WGSL_MONARCH_TOKENS = {
+        keywords: [
+            'const', 'let', 'var', 'fn', 'return', 'if', 'else', 'for', 'while',
+            'break', 'continue', 'discard', 'struct', 'type', 'alias'
+        ],
+        typeKeywords: [
+            'f32', 'f16', 'i32', 'u32', 'bool',
+            'vec2f', 'vec3f', 'vec4f', 'vec2i', 'vec3i', 'vec4i', 'vec2u', 'vec3u', 'vec4u',
+            'vec2', 'vec3', 'vec4',
+            'mat2x2', 'mat2x3', 'mat2x4', 'mat3x2', 'mat3x3', 'mat3x4', 'mat4x2', 'mat4x3', 'mat4x4',
+            'mat2x2f', 'mat2x3f', 'mat2x4f', 'mat3x2f', 'mat3x3f', 'mat3x4f', 'mat4x2f', 'mat4x3f', 'mat4x4f',
+            'array', 'ptr', 'sampler', 'texture_2d', 'texture_storage_2d'
+        ],
+        builtins: [
+            'position', 'vertex_index', 'instance_index', 'front_facing', 'frag_depth',
+            'local_invocation_id', 'local_invocation_index', 'global_invocation_id',
+            'workgroup_id', 'num_workgroups', 'sample_index', 'sample_mask'
+        ],
+        operators: [
+            '=', '>', '<', '!', '~', '?', ':', '==', '<=', '>=', '!=',
+            '&&', '||', '++', '--', '+', '-', '*', '/', '&', '|', '^', '%',
+            '<<', '>>', '+=', '-=', '*=', '/=', '&=', '|=', '^=',
+            '%=', '<<=', '>>=', '->'
+        ],
+        functions: [
+            'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'atan2',
+            'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
+            'pow', 'exp', 'log', 'exp2', 'log2', 'sqrt', 'inverseSqrt',
+            'abs', 'sign', 'floor', 'ceil', 'fract', 'trunc', 'round',
+            'min', 'max', 'clamp', 'saturate', 'mix', 'step', 'smoothstep',
+            'length', 'distance', 'dot', 'cross', 'normalize', 'reflect', 'refract',
+            'select', 'all', 'any', 'arrayLength', 'textureStore', 'textureLoad'
+        ],
+        tokenizer: {
+            root: [
+                // Attributes
+                [/@[a-zA-Z_]\w*/, 'annotation'],
+                
+                // Keywords
+                [/\b(fn|let|const|var|return|if|else|for|while|break|continue|struct)\b/, 'keyword'],
+                
+                // Type keywords
+                [/\b(f32|f16|i32|u32|bool|vec2f|vec3f|vec4f|vec2i|vec3i|vec4i|vec2u|vec3u|vec4u|vec2|vec3|vec4|mat2x2|mat3x3|mat4x4|array|ptr|sampler|texture_2d|texture_storage_2d)\b/, 'type'],
+                
+                // Built-in functions
+                [/\b(sin|cos|tan|abs|min|max|clamp|mix|length|dot|normalize|cross|select|textureStore|textureLoad)\b/, 'support.function'],
+                
+                // Numbers
+                [/\b\d+\.?\d*[fu]?\b/, 'number'],
+                [/0[xX][0-9a-fA-F]+[ul]?/, 'number'],
+                
+                // Strings
+                [/"([^"\\]|\\.)*$/, 'string.invalid'],
+                [/"/, { token: 'string.quote', bracket: '@open', next: '@string' }],
+                
+                // Comments
+                [/\/\/.*$/, 'comment'],
+                [/\/\*/, { token: 'comment', next: '@comment' }],
+                
+                // Operators
+                [/[<>]=?/, 'operator'],
+                [/[+\-*\/%=&|^!~]/, 'operator'],
+                
+                // Delimiters
+                [/[{}()\[\]]/, '@brackets'],
+                [/[;,.]/, 'delimiter'],
+            ],
+            comment: [
+                [/[^\/*]+/, 'comment'],
+                [/\/\*/, 'comment', '@push'],
+                ['\\*/', 'comment', '@pop'],
+                [/[\/*]/, 'comment']
+            ],
+            string: [
+                [/[^\\"]+/, 'string'],
+                [/"/, { token: 'string.quote', bracket: '@close', next: '@pop' }]
+            ],
+        }
+    };
+
+    // Configuration & Constants
+
+    const AUDIO_MODES = {
+        GPU: 'gpu',
+        WORKLET: 'worklet',
+        NONE: 'none'
+    };
+    
+    // LocalStorage management
+    const STORAGE_KEY = 'sleditor_settings';
+    
+    function loadSettings() {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            return stored ? JSON.parse(stored) : {};
+        } catch (e) {
+            console.warn('Failed to load settings from localStorage:', e);
+            return {};
+        }
+    }
+    
+    function saveSettings(settings) {
+        try {
+            const current = loadSettings();
+            const merged = { ...current, ...settings };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        } catch (e) {
+            console.warn('Failed to save settings to localStorage:', e);
+        }
+    }
+
+    const CONFIG = {
+        audioBlockDuration: 0.1,
+        channels: 2,
+        volume: 0.5,
+        screenSize: 512,
+        computeThreads: 64,
+        computeBufferSize: 65536,  // 64 KB (was 2 MB) - for data sharing between passes
+    };
+
+    // These will be set after AudioContext is created
+    const DERIVED = {
+        sampleRate: 0,              // Read from AudioContext
+        samplesPerBlock: 0,         // Calculated from actual sample rate
+        audioBufferSize: 0,         // Calculated from samplesPerBlock
+        audioWorkgroups: 0,         // Ceil(samplesPerBlock / computeThreads)
+    };
+
+    const UNIFORM_STRUCT = {
+        time: 0,
+        audioCurrentTime: 1,
+        audioPlayTime: 2,
+        audioFractTime: 3,
+        audioFrame: 4,
+        SIZE: 5,
+    };
+
+    // Application State
+
+    const state = {
+        hasWebGPU: false,  // Capability detection
+        gpuDevice: null,
+        audioContext: null,
+        gainNode: null,
+        audioMode: AUDIO_MODES.NONE,
+        audioWorkletNode: null,
+        
+        canvas: null,
+        canvasWidth: 512,
+        canvasHeight: 512,
+        pixelScale: 1,  // 1=high, 2=medium, 4=low resolution
+        renderMode: 0,  // 0=pixelated, 1=smooth, 2=crisp-edges
+        gpuContext: null,
+        bindGroupLayout: null,
+        graphicsPipeline: null,
+        audioPipeline: null,
+        uniformBuffer: null,
+        computeBuffer: null,
+        phaseStateBuffer: null,
+        audioBufferGPU: null,
+        audioBuffersReadback: [null, null],
+        
+        // Canvas resizing
+        isResizing: false,
+        resizeStartX: 0,
+        resizeStartY: 0,
+        resizeStartWidth: 0,
+        resizeStartHeight: 0,
+        
+        lastFrameTime: 0,
+        visualFrame: 0,        // Visual frame counter (increments every render)
+        audioFrame: 0,         // Audio frame counter (increments when audio generated)
+        nextAudioTime: 0,
+        startTime: 0,          // When animation started (for time offset)
+        pausedTime: 0,         // Total time spent paused
+        lastPauseTime: 0,      // When we last paused
+        
+        // FPS tracking
+        fps: 0,
+        fpsFrameCount: 0,
+        fpsLastTime: 0,
+        
+        // Theme
+        isDarkMode: false,
+        
+        // Editor settings
+        isVimMode: false,
+        vimStatusNodes: [],  // Store vim mode handlers for each editor
+        
+        readbackIndex: 0,
+        pendingAudio: false,
+        isRunning: false,      // System initialized and ready
+        isPlaying: true,       // Currently playing (default true)
+    
+        // Monaco editors
+        boilerplateEditor: null,
+        graphicsEditor: null,
+        audioEditor: null,
+        jsEditor: null,
+        helpEditor: null,
+        
+        // Active tabs and current example
+        activeTabs: ['graphics', 'help'],  // hello_world tabs
+        currentTab: 'graphics',
+        currentExample: 'hello_world',
+        currentAudioType: null,  // 'gpu' or 'worklet' - tracks which audio tab is active
+        
+        // Save/Load tracking
+        isDirty: false,  // Track unsaved changes
+        currentSavedShader: null,  // Currently loaded saved shader (if any)
+        
+        userState: null,
+        userInit: null,
+        userEnterframe: null,
+        mouseX: 0.5,
+        mouseY: 0.5,
+};
+
+// ============================================================================
+    // EXAMPLES, TEMPLATES & HELP - Now loaded from external files
+    // See: js/examples.js and content/help.txt
+// ============================================================================
+    
+    // Note: getBoilerplate(), getDefaultGraphicsShader(), getDefaultAudioShader(),
+    // MINIMAL_*, DEFAULT_JS, EXAMPLES, and getHelpContent() are all loaded from js/examples.js
+    
+// (Examples code removed - now in js/examples.js)
+
+    // Monaco Initialization
+
+    function initMonaco(callback) {
+    require(['vs/editor/editor.main'], async function() {
+        // Register WGSL language
+        monaco.languages.register({ id: 'wgsl' });
+        monaco.languages.setLanguageConfiguration('wgsl', WGSL_LANGUAGE_CONFIG);
+        monaco.languages.setMonarchTokensProvider('wgsl', WGSL_MONARCH_TOKENS);
+        
+        // Define custom themes to match our CSS
+        monaco.editor.defineTheme('sleditor-dark', {
+            base: 'vs-dark',
+            inherit: true,
+            rules: [],
+            colors: {
+                'editor.background': '#1e1e1e',
+            }
+        });
+        
+        monaco.editor.defineTheme('sleditor-light', {
+            base: 'vs',
+            inherit: true,
+            rules: [],
+            colors: {
+                'editor.background': '#eeeeff',
+    
+                //'editor.foreground': '#182247',           // Text color
+                //'editor.lineHighlightBackground': '#f0f0f0',  // Current line
+                //'editorLineNumber.foreground': '#6e6e6e', // Line numbers
+                //'editorCursor.foreground': '#182247',     // Cursor color
+                //'editor.selectionBackground': '#a2a0f6',  // Selected text
+                
+            }
+        });
+        
+        // Common editor options
+        const editorOptions = {
+            theme: state.isDarkMode ? 'sleditor-dark' : 'sleditor-light',
+            fontSize: 13,
+            minimap: { enabled: false },
+            automaticLayout: true,
+            scrollBeyondLastLine: false,
+            wordWrap: 'on',
+            tabSize: 4,
+            insertSpaces: true,
+            formatOnPaste: true,
+            formatOnType: true,
+            suggestOnTriggerCharacters: true,
+            acceptSuggestionOnEnter: 'on',
+            folding: true,
+            foldingStrategy: 'indentation',
+            renderWhitespace: 'selection',
+            renderControlCharacters: false,
+            scrollbar: {
+                vertical: 'visible',
+                horizontal: 'visible',
+                useShadows: false,
+                verticalHasArrows: false,
+                horizontalHasArrows: false
+            }
+        };
+        
+        // Create Boilerplate editor (read-only)
+        const boilerplateContainer = document.getElementById('boilerplateContainer');
+        boilerplateContainer.innerHTML = '';
+        state.boilerplateEditor = monaco.editor.create(boilerplateContainer, {
+            ...editorOptions,
+            value: getBoilerplate(),
+            language: 'wgsl',
+            readOnly: true,  // Read-only!
+        });
+        
+        // Create Graphics editor
+        const graphicsContainer = document.getElementById('graphicsContainer');
+        graphicsContainer.innerHTML = '';  // Clear loading message
+        state.graphicsEditor = monaco.editor.create(graphicsContainer, {
+            ...editorOptions,
+            value: EXAMPLES[state.currentExample].graphics || '',
+            language: 'wgsl',
+        });
+        
+        // Create Audio editor
+        const audioContainer = document.getElementById('audioContainer');
+        // Determine initial audio type from example tabs
+        const exampleTabs = EXAMPLES[state.currentExample].tabs || [];
+        const hasAudioTab = exampleTabs.includes('audio');
+        let initialAudioCode = '';
+        let initialAudioLanguage = 'wgsl';
+        
+        if (hasAudioTab && EXAMPLES[state.currentExample].audio) {
+            initialAudioCode = EXAMPLES[state.currentExample].audio;
+            initialAudioLanguage = initialAudioCode.includes('AudioWorkletProcessor') ? 'javascript' : 'wgsl';
+        }
+        
+        state.audioEditor = monaco.editor.create(audioContainer, {
+            ...editorOptions,
+            value: initialAudioCode,
+            language: initialAudioLanguage,
+        });
+        
+        // Create JavaScript editor 
+        const jsContainer = document.getElementById('jsEditorContainer');
+        state.jsEditor = monaco.editor.create(jsContainer, {
+            ...editorOptions,
+            value: EXAMPLES[state.currentExample].js || MINIMAL_JS,
+            language: 'javascript',
+        });
+        
+        // Create Help editor (read-only) - Load help content from external file
+        const helpContainer = document.getElementById('helpContainer');
+        const helpContent = await getHelpContent();
+        state.helpEditor = monaco.editor.create(helpContainer, {
+            ...editorOptions,
+            value: helpContent,
+            language: 'plaintext',
+            readOnly: true,
+            wordWrap: 'on',
+            lineNumbers: 'off',
+        });
+        
+        // Keyboard shortcuts for all editors
+        const addShortcuts = (editor) => {
+            editor.addCommand(monaco.KeyCode.F5, () => reloadShader());
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => reloadShader());
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => togglePlayPause());
+        };
+        addShortcuts(state.boilerplateEditor);
+        addShortcuts(state.graphicsEditor);
+        addShortcuts(state.audioEditor);
+        addShortcuts(state.jsEditor);
+        addShortcuts(state.helpEditor);
+            
+            // Set up error markers when shader compilation fails
+            window.setMonacoErrors = function(errors) {
+                // Calculate line offsets for each section
+                // Code structure: boilerplate + '\n' + graphics + '\n' + audio
+                const boilerplateLines = state.boilerplateEditor.getValue().split('\n').length;
+                const graphicsLines = state.graphicsEditor.getValue().split('\n').length;
+                
+                // +1 for each '\n' separator
+                const graphicsStartLine = boilerplateLines + 1;
+                const audioStartLine = boilerplateLines + 1 + graphicsLines + 1;
+                
+                // Separate errors by which editor they belong to
+                const boilerplateErrors = [];
+                const graphicsErrors = [];
+                const audioErrors = [];
+                
+                errors.forEach(err => {
+                    const lineNum = err.lineNum || 1;
+                    
+                    if (lineNum < graphicsStartLine) {
+                        // Error is in boilerplate
+                        boilerplateErrors.push({
+                    severity: monaco.MarkerSeverity.Error,
+                            startLineNumber: lineNum,
+                    startColumn: err.linePos || 1,
+                            endLineNumber: lineNum,
+                    endColumn: 1000,
+                    message: err.message
+                        });
+                    } else if (lineNum < audioStartLine) {
+                        // Error is in graphics - adjust line number
+                        graphicsErrors.push({
+                            severity: monaco.MarkerSeverity.Error,
+                            startLineNumber: lineNum - graphicsStartLine + 1,
+                            startColumn: err.linePos || 1,
+                            endLineNumber: lineNum - graphicsStartLine + 1,
+                            endColumn: 1000,
+                            message: err.message
+                        });
+                    } else {
+                        // Error is in audio - adjust line number
+                        audioErrors.push({
+                            severity: monaco.MarkerSeverity.Error,
+                            startLineNumber: lineNum - audioStartLine + 2,
+                            startColumn: err.linePos || 1,
+                            endLineNumber: lineNum - audioStartLine + 2,
+                            endColumn: 1000,
+                            message: err.message
+                        });
+                    }
+                });
+                
+                // Set markers in the appropriate editors
+                monaco.editor.setModelMarkers(state.boilerplateEditor.getModel(), 'wgsl', boilerplateErrors);
+                monaco.editor.setModelMarkers(state.graphicsEditor.getModel(), 'wgsl', graphicsErrors);
+                monaco.editor.setModelMarkers(state.audioEditor.getModel(), 'wgsl', audioErrors);
+            };
+            
+            window.clearMonacoErrors = function() {
+                monaco.editor.setModelMarkers(state.boilerplateEditor.getModel(), 'wgsl', []);
+                monaco.editor.setModelMarkers(state.graphicsEditor.getModel(), 'wgsl', []);
+                monaco.editor.setModelMarkers(state.audioEditor.getModel(), 'wgsl', []);
+                // Also clear JavaScript errors in audio editor (for AudioWorklet)
+                monaco.editor.setModelMarkers(state.audioEditor.getModel(), 'javascript', []);
+            };
+            
+            // JS error markers
+            window.setJSErrors = function(errors) {
+                const markers = errors.map(err => ({
+                    severity: monaco.MarkerSeverity.Error,
+                    startLineNumber: err.lineNum || 1,
+                    startColumn: err.column || 1,
+                    endLineNumber: err.lineNum || 1,
+                    endColumn: err.endColumn || 1000,
+                    message: err.message
+                }));
+                monaco.editor.setModelMarkers(state.jsEditor.getModel(), 'javascript', markers);
+            };
+            
+            window.clearJSErrors = function() {
+                monaco.editor.setModelMarkers(state.jsEditor.getModel(), 'javascript', []);
+            };
+            
+            // Set up dirty tracking for all editors
+            if (window.setupEditorDirtyTracking) {
+                window.setupEditorDirtyTracking(state.graphicsEditor);
+                window.setupEditorDirtyTracking(state.audioEditor);
+                window.setupEditorDirtyTracking(state.jsEditor);
+                window.setupEditorDirtyTracking(state.boilerplateEditor);
+                // Help is read-only, no need to track
+            }
+            
+            // Load monaco-vim library after Monaco is ready
+            // Use async IIFE to avoid disabling AMD during network fetch
+            (async () => {
+                try {
+                    const response = await fetch('https://unpkg.com/monaco-vim@0.4.1/dist/monaco-vim.js');
+                    const scriptContent = await response.text();
+                    
+                    // Now that we have the script, BRIEFLY disable AMD to execute it
+                    const tempRequire = window.require;
+                    const tempDefine = window.define;
+                    window.require = undefined;
+                    window.define = undefined;
+                    
+                    try {
+                        // Execute the script with AMD disabled
+                        const scriptEl = document.createElement('script');
+                        scriptEl.textContent = scriptContent;
+                        document.head.appendChild(scriptEl);
+                    } finally {
+                        // IMMEDIATELY restore AMD/require (in finally block to ensure it happens)
+                        window.require = tempRequire;
+                        window.define = tempDefine;
+                    }
+                    
+                    // Check if MonacoVim exists as an ES6 module
+                    if (window.MonacoVim && typeof window.MonacoVim === 'object') {
+                        // Try to get initVimMode from default export or named export
+                        const vimExport = window.MonacoVim.default || window.MonacoVim;
+                        
+                        if (typeof vimExport.initVimMode === 'function') {
+                            window.MonacoVim = vimExport;
+                            
+                            // Apply vim mode if enabled
+                            if (state.isVimMode) {
+                                applyVimMode();
+                            }
+                        } else {
+                            console.error('MonacoVim module found but initVimMode not available');
+                        }
+                    } else if (typeof window.initVimMode === 'function') {
+                        // Fallback: global initVimMode
+                        window.MonacoVim = { initVimMode: window.initVimMode };
+                        
+                        // Apply vim mode if enabled
+                        if (state.isVimMode) {
+                            applyVimMode();
+                        }
+                    } else {
+                        console.error('MonacoVim not found - vim mode will not be available');
+                    }
+                } catch (err) {
+                    console.error('Failed to load monaco-vim:', err);
+                }
+            })();
+            
+            callback();
+        });
+    }
+// ============================================================================
+// TAB MANAGEMENT
+// ============================================================================
+
+function getTabIcon(tabName) {
+    const icons = {
+        boilerplate: '📄',
+        graphics: '🎨',
+        audio_gpu: '🔊',
+        audio_worklet: '🎵',
+        js: '⚡',
+        help: '❓'
+    };
+    return icons[tabName] || '📝';
+}
+
+function getTabLabel(tabName) {
+    const labels = {
+        boilerplate: 'Boilerplate',
+        graphics: 'Graphics',
+        audio_gpu: 'Audio (WGSL)',
+        audio_worklet: 'Audio (Worklet)',
+        js: 'JavaScript',
+        help: 'Help'
+    };
+    return labels[tabName] || tabName;
+}
+
+function renderTabs() {
+    const tabsContainer = document.getElementById('editorTabs');
+    
+    // Remove all tab buttons but keep the action buttons
+    const addPassBtn = document.getElementById('addPassBtn');
+    const optionsBtn = document.getElementById('optionsBtn');
+    tabsContainer.innerHTML = '';
+    
+    // Add tab buttons
+    state.activeTabs.forEach(tabName => {
+        const button = document.createElement('button');
+        button.className = 'editorTab' + (state.currentTab === tabName ? ' active' : '');
+        button.textContent = `${getTabIcon(tabName)} ${getTabLabel(tabName)}`;
+        button.onclick = () => switchTab(tabName);
+        
+        // All tabs are now closeable (graphics is no longer mandatory)
+        const closeBtn = document.createElement('span');
+        closeBtn.textContent = ' ×';
+        closeBtn.style.marginLeft = '6px';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.onclick = (e) => {
+            e.stopPropagation();
+            removeTab(tabName);
+        };
+        button.appendChild(closeBtn);
+        
+        tabsContainer.appendChild(button);
+    });
+    
+    // Re-add the action buttons at the end
+    if (addPassBtn) {
+        tabsContainer.appendChild(addPassBtn);
+    }
+    if (optionsBtn) {
+        tabsContainer.appendChild(optionsBtn);
+    }
+}
+
+function switchTab(tabName) {
+    if (!state.activeTabs.includes(tabName)) {
+        return;
+    }
+    
+    state.currentTab = tabName;
+    
+    const containers = {
+        boilerplate: document.getElementById('boilerplateContainer'),
+        graphics: document.getElementById('graphicsContainer'),
+        audio_gpu: document.getElementById('audioContainer'),
+        audio_worklet: document.getElementById('audioContainer'),  // Both audio tabs use same container
+        js: document.getElementById('jsEditorContainer'),
+        help: document.getElementById('helpContainer')
+    };
+    
+    const editors = {
+        boilerplate: state.boilerplateEditor,
+        graphics: state.graphicsEditor,
+        audio_gpu: state.audioEditor,
+        audio_worklet: state.audioEditor,  // Both audio tabs use same editor
+        js: state.jsEditor,
+        help: state.helpEditor
+    };
+    
+    // Hide all containers (use unique set to avoid hiding/showing same container twice)
+    const uniqueContainers = [...new Set(Object.values(containers))];
+    uniqueContainers.forEach(c => c.style.display = 'none');
+    
+    // Show selected container
+    if (containers[tabName]) {
+        containers[tabName].style.display = 'block';
+    }
+    
+    // Update editor language mode for audio tabs
+    if (tabName === 'audio_gpu' && state.audioEditor) {
+        monaco.editor.setModelLanguage(state.audioEditor.getModel(), 'wgsl');
+    } else if (tabName === 'audio_worklet' && state.audioEditor) {
+        monaco.editor.setModelLanguage(state.audioEditor.getModel(), 'javascript');
+    }
+    
+    // Force layout update
+    if (editors[tabName]) {
+        editors[tabName].layout();
+    }
+    
+    // Update tab buttons
+    renderTabs();
+}
+
+function addTab(tabName) {
+    if (state.activeTabs.includes(tabName)) {
+        switchTab(tabName);
+        return;
+    }
+    
+    // Audio tabs are mutually exclusive - remove the other if adding one
+    if (tabName === 'audio_gpu' || tabName === 'audio_worklet') {
+        const otherAudioTab = tabName === 'audio_gpu' ? 'audio_worklet' : 'audio_gpu';
+        const otherIndex = state.activeTabs.indexOf(otherAudioTab);
+        if (otherIndex !== -1) {
+            state.activeTabs.splice(otherIndex, 1);
+        }
+        
+        // Set the appropriate content based on which audio tab
+        if (state.audioEditor) {
+            if (tabName === 'audio_gpu') {
+                state.audioEditor.setValue(MINIMAL_AUDIO_GPU);
+                state.currentAudioType = 'gpu';
+            } else {
+                state.audioEditor.setValue(MINIMAL_AUDIO_WORKLET);
+                state.currentAudioType = 'worklet';
+            }
+        }
+    }
+    
+    state.activeTabs.push(tabName);
+    
+    // If adding a tab that the current example doesn't have, populate with minimal starter code
+    const currentExample = EXAMPLES[state.currentExample];
+    
+    if (tabName === 'js' && !currentExample.js && state.jsEditor) {
+        state.jsEditor.setValue(MINIMAL_JS);
+    }
+    
+    renderTabs();
+    switchTab(tabName);
+    
+    // If we just added audio or js, reload the shader/script
+    if ((tabName === 'audio_gpu' || tabName === 'audio_worklet' || tabName === 'js') && state.isRunning) {
+        reloadShader();
+    }
+}
+
+function removeTab(tabName) {
+    // Can't remove graphics (it's mandatory)
+    if (tabName === 'graphics') {
+        return;
+    }
+    
+    const index = state.activeTabs.indexOf(tabName);
+    if (index === -1) return;
+    
+    state.activeTabs.splice(index, 1);
+    
+    // If removing an audio tab, clear audio type and stop audio
+    if (tabName === 'audio_gpu' || tabName === 'audio_worklet') {
+        state.currentAudioType = null;
+        if (state.isRunning) {
+            stopAudio();
+        }
+    }
+    
+    // If we removed the current tab, switch to another
+    if (state.currentTab === tabName) {
+        switchTab(state.activeTabs[Math.max(0, index - 1)]);
+    }
+    
+    renderTabs();
+}
+
+function showAddPassMenu() {
+    const btn = document.getElementById('addPassBtn');
+    
+    // Create menu if it doesn't exist
+    let menu = document.getElementById('addPassMenu');
+    if (!menu) {
+        menu = document.createElement('div');
+        menu.id = 'addPassMenu';
+        menu.style.cssText = `
+            position: absolute;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: 4px;
+            z-index: 1000;
+            display: none;
+        `;
+        document.body.appendChild(menu);
+    }
+    
+    // Build menu options - all available tabs except graphics (always present)
+    const availableTabs = [
+        { name: 'boilerplate', label: '📄 Boilerplate' },
+        { name: 'audio_gpu', label: '🔊 Audio (WGSL)' },
+        { name: 'audio_worklet', label: '🎵 Audio (Worklet)' },
+        { name: 'js', label: '⚡ JavaScript' },
+        { name: 'help', label: '❓ Help' }
+    ];
+    
+    menu.innerHTML = '';
+    
+    // Check if any audio tab is active for mutual exclusion
+    const hasAudioGpu = state.activeTabs.includes('audio_gpu');
+    const hasAudioWorklet = state.activeTabs.includes('audio_worklet');
+    
+    availableTabs.forEach(tab => {
+        const isActive = state.activeTabs.includes(tab.name);
+        
+        // Grey out the other audio tab if one is active
+        const isDisabled = (tab.name === 'audio_gpu' && hasAudioWorklet) || 
+                          (tab.name === 'audio_worklet' && hasAudioGpu);
+        
+        const option = document.createElement('div');
+        option.textContent = tab.label + (isActive ? ' ✓' : '');
+        option.style.cssText = `
+            padding: 6px 12px;
+            cursor: ${(isActive || isDisabled) ? 'default' : 'pointer'};
+            color: ${(isActive || isDisabled) ? 'var(--text-secondary)' : 'var(--text-primary)'};
+            pointer-events: ${(isActive || isDisabled) ? 'none' : 'auto'};
+        `;
+        option.onmouseenter = () => {
+            if (!isActive && !isDisabled) {
+                option.style.background = 'var(--bg-primary)';
+            }
+        };
+        option.onmouseleave = () => {
+            option.style.background = 'transparent';
+        };
+        option.onclick = () => {
+            addTab(tab.name);
+            menu.style.display = 'none';
+        };
+        menu.appendChild(option);
+    });
+    
+    // Position menu below button
+    const rect = btn.getBoundingClientRect();
+    menu.style.left = rect.left + 'px';
+    menu.style.top = (rect.bottom + 2) + 'px';
+    menu.style.display = 'block';
+    
+    // Close menu when clicking outside
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target) && e.target !== btn) {
+            menu.style.display = 'none';
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu), 0);
+}
+// ============================================================================
+// EXAMPLE MANAGEMENT
+// ============================================================================
+
+function populateExampleSelector() {
+    const selector = document.getElementById('exampleSelector');
+    selector.innerHTML = '';
+    
+    Object.keys(EXAMPLES).forEach(exampleId => {
+        const example = EXAMPLES[exampleId];
+        const option = document.createElement('option');
+        option.value = exampleId;
+        option.textContent = example.name;
+        option.title = example.description;
+        selector.appendChild(option);
+    });
+    
+    selector.value = state.currentExample;
+    selector.addEventListener('change', (e) => {
+        loadExample(e.target.value);
+    });
+}
+
+function populateGallery() {
+    const galleryContent = document.getElementById('galleryContent');
+    if (!galleryContent) return;
+    
+    galleryContent.innerHTML = '';
+    
+    // ===== MY SHADERS SECTION =====
+    const savedShaders = getAllSavedShaders();
+    if (savedShaders.length > 0) {
+        const myShadersHeader = document.createElement('h3');
+        myShadersHeader.textContent = 'My Shaders';
+        myShadersHeader.style.cssText = 'grid-column: 1 / -1; margin: 10px 0 5px 0; padding-bottom: 5px; border-bottom: 1px solid var(--border-color); color: var(--text-primary); font-size: 14px;';
+        galleryContent.appendChild(myShadersHeader);
+        
+        savedShaders.forEach(shader => {
+            const item = document.createElement('div');
+            item.className = 'gallery-item';
+            item.style.position = 'relative';
+            
+            // Thumbnail
+            const thumbnail = document.createElement('div');
+            thumbnail.className = 'gallery-item-thumbnail';
+            
+            if (shader.thumbnail) {
+                const img = document.createElement('img');
+                img.src = shader.thumbnail;
+                img.alt = shader.title;
+                thumbnail.appendChild(img);
+            } else {
+                thumbnail.innerHTML = '<div>No Preview</div>';
+            }
+            
+            // Tech icons overlay
+            const icons = document.createElement('div');
+            icons.className = 'gallery-item-icons';
+            shader.tabs.forEach(tab => {
+                if (tab !== 'help' && tab !== 'boilerplate') {
+                    const icon = document.createElement('span');
+                    icon.className = 'gallery-item-icon';
+                    icon.textContent = getTabIcon(tab);
+                    icon.title = getTabLabel(tab);
+                    icons.appendChild(icon);
+                }
+            });
+            if (icons.children.length > 0) {
+                thumbnail.appendChild(icons);
+            }
+            
+            // Delete button
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = '🗑️';
+            deleteBtn.title = 'Delete shader';
+            deleteBtn.className = 'gallery-delete-btn';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteSavedShader(shader.id);
+            };
+            thumbnail.appendChild(deleteBtn);
+            
+            // Click to load
+            item.onclick = () => loadSavedShader(shader.id);
+            
+            // Info
+            const info = document.createElement('div');
+            info.className = 'gallery-item-info';
+            
+            const title = document.createElement('div');
+            title.className = 'gallery-item-title';
+            title.textContent = shader.title;
+            title.title = shader.title;
+            
+            info.appendChild(title);
+            
+            item.appendChild(thumbnail);
+            item.appendChild(info);
+            
+            galleryContent.appendChild(item);
+        });
+        
+        // Divider before examples
+        const divider = document.createElement('hr');
+        divider.style.cssText = 'grid-column: 1 / -1; margin: 15px 0 10px 0; border: none; border-top: 1px solid var(--border-color);';
+        galleryContent.appendChild(divider);
+    }
+    
+    // ===== EXAMPLES SECTION =====
+    const examplesHeader = document.createElement('h3');
+    examplesHeader.textContent = 'Examples';
+    examplesHeader.style.cssText = 'grid-column: 1 / -1; margin: 10px 0 5px 0; padding-bottom: 5px; border-bottom: 1px solid var(--border-color); color: var(--text-primary); font-size: 14px;';
+    galleryContent.appendChild(examplesHeader);
+    
+    // Create gallery items for each example
+    Object.keys(EXAMPLES).forEach(exampleId => {
+        const example = EXAMPLES[exampleId];
+        
+        // Skip examples that require WebGPU if it's not available
+        if (!state.hasWebGPU && example.webgpuRequired) {
+            return;
+        }
+        
+        const item = document.createElement('div');
+        item.className = 'gallery-item';
+        item.onclick = () => loadExample(exampleId);
+        
+        // Thumbnail
+        const thumbnail = document.createElement('div');
+        thumbnail.className = 'gallery-item-thumbnail';
+        
+        if (example.thumbnail) {
+            const img = document.createElement('img');
+            img.src = example.thumbnail;
+            img.alt = example.name;
+            img.onerror = () => {
+                // Fallback if image doesn't load
+                thumbnail.innerHTML = '<div>No Preview</div>';
+            };
+            thumbnail.appendChild(img);
+        } else {
+            thumbnail.innerHTML = '<div>No Preview</div>';
+        }
+        
+        // Tech icons overlay
+        const icons = document.createElement('div');
+        icons.className = 'gallery-item-icons';
+        example.tabs.forEach(tab => {
+            if (tab !== 'help' && tab !== 'boilerplate') {
+                const icon = document.createElement('span');
+                icon.className = 'gallery-item-icon';
+                icon.textContent = getTabIcon(tab);
+                icon.title = getTabLabel(tab);
+                icons.appendChild(icon);
+            }
+        });
+        if (icons.children.length > 0) {
+            thumbnail.appendChild(icons);
+        }
+        
+        // Info - title only, no description
+        const info = document.createElement('div');
+        info.className = 'gallery-item-info';
+        
+        const title = document.createElement('div');
+        title.className = 'gallery-item-title';
+        title.textContent = example.name;
+        title.title = example.name; // Full name on hover
+        
+        info.appendChild(title);
+        
+        item.appendChild(thumbnail);
+        item.appendChild(info);
+        
+        galleryContent.appendChild(item);
+    });
+}
+
+function loadExample(exampleId) {
+    const example = EXAMPLES[exampleId];
+    if (!example) return;
+    
+    state.currentExample = exampleId;
+    
+    // Clear saved shader reference (we're loading an example now)
+    state.currentSavedShader = null;
+    state.isDirty = false;
+    updateSaveButton();
+    
+    // Convert old 'audio' tab references to new audio_gpu or audio_worklet
+    const updatedTabs = example.tabs.map(tab => {
+        if (tab === 'audio') {
+            // Detect which type of audio based on content
+            if (example.audio) {
+                const isWorklet = example.audio.includes('AudioWorkletProcessor') || 
+                                 example.audio.includes('registerProcessor');
+                return isWorklet ? 'audio_worklet' : 'audio_gpu';
+            }
+            // Default to worklet if no audio code provided
+            return 'audio_worklet';
+        }
+        return tab;
+    });
+    
+    // Update active tabs to match example
+    state.activeTabs = [...updatedTabs];
+    
+    // Determine current audio type from tabs
+    if (state.activeTabs.includes('audio_gpu')) {
+        state.currentAudioType = 'gpu';
+    } else if (state.activeTabs.includes('audio_worklet')) {
+        state.currentAudioType = 'worklet';
+    } else {
+        state.currentAudioType = null;
+    }
+    
+    // Load code into editors
+    if (state.graphicsEditor) {
+        state.graphicsEditor.setValue(example.graphics || '');
+    }
+    if (state.audioEditor && example.audio) {
+        state.audioEditor.setValue(example.audio);
+    }
+    if (state.jsEditor) {
+        state.jsEditor.setValue(example.js || MINIMAL_JS);
+    }
+    
+    // Update UI
+    renderTabs();
+    
+    // Update shader info display
+    updateShaderInfo(example.name, example.description || '');
+    
+    // Switch to graphics tab by default
+    if (state.activeTabs.includes('graphics')) {
+        switchTab('graphics');
+    } else if (state.activeTabs.length > 0) {
+        switchTab(state.activeTabs[0]);
+    }
+    
+    // Reload shader with new code, then restart and auto-play
+    if (state.isRunning) {
+        reloadShader().then((success) => {
+            // Restart regardless (to reset state)
+            restart();
+            if (!state.isPlaying) {
+                state.isPlaying = true;
+                state.audioContext.resume();
+                updatePlayPauseButton();
+            }
+            // Compile time message already shown by reloadShader()
+            // Example name shown in shader info display
+        }).catch((err) => {
+            // Error already logged in reloadShader, just don't show success message
+            console.error('Failed to load example (caught):', err);
+        });
+    }
+}
+
+function updateShaderInfo(title, description) {
+    const titleEl = document.getElementById('shaderTitle');
+    const descEl = document.getElementById('shaderDescription');
+    
+    if (titleEl) titleEl.textContent = title;
+    if (descEl) descEl.textContent = description;
+}
+
+function parseJSError(err, codeLines) {
+    // Extract line number from error message or stack
+    let lineNum = 1;
+    let column = 1;
+    let endColumn = 1000; // Default to end of line
+    
+    // Try to parse from stack trace
+    const stackMatch = err.stack?.match(/<anonymous>:(\d+):(\d+)/);
+    if (stackMatch) {
+        // Line numbers from Function() wrapper need adjustment
+        // Testing shows we need to subtract 3 to get the correct line
+        const rawLineNum = parseInt(stackMatch[1]);
+        lineNum = Math.max(1, rawLineNum - 3);
+        column = parseInt(stackMatch[2]) || 1;
+        
+        // Try to determine end column by looking at the error type
+        // For syntax errors, highlight a reasonable amount
+        if (err instanceof SyntaxError) {
+            endColumn = column + 10; // Highlight ~10 chars for syntax errors
+        } else {
+            // For runtime errors, try to highlight the problematic token
+            endColumn = column + 20; // Highlight more for runtime errors
+        }
+    } else {
+        // Try parsing from error message (some syntax errors include line info)
+        const msgMatch = err.message?.match(/line (\d+)/i);
+        if (msgMatch) {
+            lineNum = parseInt(msgMatch[1]);
+        }
+    }
+    
+    // Clamp to valid range
+    lineNum = Math.min(lineNum, codeLines);
+    
+    return { lineNum, column, endColumn, message: err.message };
+}
+
+// Default JS that runs when JS tab is not visible
+const INVISIBLE_DEFAULT_JS = `
+function init() {
+    return { mouseX: 0.5, mouseY: 0.5 };
+}
+
+function enterframe(state, api) {
+    // Smooth mouse tracking
+    state.mouseX += (api.mouse.x - state.mouseX) * 0.1;
+    state.mouseY += (api.mouse.y - state.mouseY) * 0.1;
+    
+    // Pass to uniforms
+    api.uniforms.setFloat(5, state.mouseX);
+    api.uniforms.setFloat(6, state.mouseY);
+}
+`;
+
+function compileUserJS() {
+    // If JS tab is not active, use invisible default
+    const useDefault = !state.activeTabs.includes('js');
+    const code = useDefault ? INVISIBLE_DEFAULT_JS : state.jsEditor.getValue();
+    const codeLines = code.split('\n').length;
+    
+    try {
+        if (!useDefault) clearJSErrors();
+        
+        // Create a safe scope and eval the user's code
+        // We add one newline before user code to make line numbers match
+        const wrappedCode = `
+${code}
+return { init, enterframe };
+`;
+        const factory = new Function(wrappedCode);
+        const userFunctions = factory();
+        
+        state.userInit = userFunctions.init;
+        state.userEnterframe = userFunctions.enterframe;
+        
+        // Success - no message needed (compile time report shown by reloadShader)
+        return true;
+    } catch (err) {
+        if (useDefault) {
+            // Default JS should never fail, but if it does, log and continue
+            console.error('Default JS compilation failed:', err);
+            return false;
+        }
+        
+        const errorInfo = parseJSError(err, codeLines);
+        
+        setJSErrors([{
+            lineNum: errorInfo.lineNum,
+            column: errorInfo.column,
+            endColumn: errorInfo.endColumn,
+            message: errorInfo.message
+        }]);
+        
+        // Show error with line number if available
+        if (errorInfo.lineNum > 1) {
+            // We have a valid line number (runtime error)
+        logStatus(`✗ JS Error (line ${errorInfo.lineNum}): ${errorInfo.message}`, 'error');
+        } else {
+            // No line number (syntax error - browser limitation)
+            // Monaco's built-in linter should show these in real-time
+            logStatus(`✗ JS Syntax Error: ${errorInfo.message} (check editor for red underlines)`, 'error');
+        }
+        return false;
+    }
+}
+    // Global error handler to catch uncaught errors from user code
+    function setupErrorHandling() {
+        // Store original handlers
+        const originalErrorHandler = window.onerror;
+        const originalConsoleError = console.error;
+        const originalConsoleWarn = console.warn;
+        
+        // Intercept console.error to detect user code issues
+        console.error = function(...args) {
+            // Check if called from user code
+            const stack = new Error().stack;
+            if (stack && stack.includes('<anonymous>') && state.jsEditor) {
+                logStatus(`⚠ Console error from user code: ${args[0]}`, 'error');
+            }
+            // Always call original console.error
+            originalConsoleError.apply(console, args);
+        };
+        
+        console.warn = function(...args) {
+            const stack = new Error().stack;
+            if (stack && stack.includes('<anonymous>') && state.jsEditor) {
+                logStatus(`⚠ Console warning from user code: ${args[0]}`, 'info');
+            }
+            originalConsoleWarn.apply(console, args);
+        };
+        
+        // Global error handler
+        window.onerror = function(message, source, lineno, colno, error) {
+            // Check if this is from user code (anonymous function)
+            if (error && error.stack && error.stack.includes('<anonymous>')) {
+                const code = state.jsEditor?.getValue();
+                if (code) {
+                    const codeLines = code.split('\n').length;
+                    const errorInfo = parseJSError(error, codeLines);
+                    
+                    setJSErrors([{
+                        lineNum: errorInfo.lineNum,
+                        column: errorInfo.column,
+                        endColumn: errorInfo.endColumn,
+                        message: `Uncaught error: ${errorInfo.message}`
+                    }]);
+                    
+                    logStatus(`✗ Uncaught JS error (line ${errorInfo.lineNum}): ${error.message}`, 'error');
+                    
+                    // Pause if playing
+                    if (state.isPlaying) {
+                        state.isPlaying = false;
+                        state.audioContext?.suspend();
+                        
+                        const btn = document.getElementById('playPauseBtn');
+                        if (btn) {
+                            btn.textContent = '▶';
+                            btn.className = 'paused';
+                        }
+                    }
+                    
+                    return true; // Prevent default error handling
+                }
+            }
+            
+            // Let editor errors through to console
+            if (originalErrorHandler) {
+                return originalErrorHandler(message, source, lineno, colno, error);
+            }
+            return false;
+        };
+    }
+
+    // Initialization
+    async function init() {
+        setupErrorHandling();
+        
+        // Load settings from localStorage
+        const settings = loadSettings();
+        if (settings.isDarkMode !== undefined) {
+            state.isDarkMode = settings.isDarkMode;
+        }
+        if (settings.isVimMode !== undefined) {
+            state.isVimMode = settings.isVimMode;
+        }
+        applyTheme();
+        
+        setupUI();
+        setupSaveSystem();
+        
+        // Initialize audio FIRST to get actual sample rate
+        initWebAudio();
+        
+        // Then initialize Monaco with correct shader values
+        initMonaco(async () => {
+            try {
+                // Try to initialize WebGPU (will return false if not available)
+                const webgpuAvailable = await initWebGPU();
+                
+                // Refresh gallery now that we know WebGPU status
+                populateGallery();
+                
+                if (!webgpuAvailable) {
+                    // WebGPU not available - switch to audioworklet demo and show message
+                    state.isRunning = true;  // Enable playback before loading example
+                    loadExample('audioworklet_demo');
+                    showWebGPUUnavailableMessage();
+                    logStatus('⚠ WebGPU unavailable - JavaScript and AudioWorklet examples only');
+                    
+                    // Start render loop for enterframe() even without WebGPU
+                    requestAnimationFrame(render);
+                    return; // loadExample() will handle the rest
+                }
+                
+                // WebGPU is available, proceed with normal initialization
+                await reloadShader();
+                
+                state.isRunning = true;
+                
+                // Auto-play from beginning
+                restart();
+                state.isPlaying = true;
+                state.audioContext.resume();
+                updatePlayPauseButton();
+                
+                requestAnimationFrame(render);
+                // Compile time message already shown by reloadShader() above
+            } catch (err) {
+                logStatus('Initialization failed: ' + err.message, 'error');
+                console.error('Init error:', err);
+            }
+        });
+    }
+
+    function showWebGPUUnavailableMessage() {
+        const canvasContainer = document.getElementById('canvasContainer');
+        const overlay = document.createElement('div');
+        overlay.id = 'webgpu-unavailable-overlay';
+        overlay.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            text-align: center;
+            padding: 40px;
+            z-index: 10;
+        `;
+        overlay.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+            <div style="font-size: 18px; font-weight: 500; margin-bottom: 12px;">WebGPU Unavailable</div>
+            <div style="font-size: 14px; color: var(--text-secondary); max-width: 400px; line-height: 1.6;">
+                GLSL support is still in development.<br>
+                Try the <strong>AudioWorklet</strong> examples!
+            </div>
+        `;
+        canvasContainer.appendChild(overlay);
+    }
+
+    function updateCanvasSize(width, height, recompile = true) {
+        state.canvasWidth = width;
+        state.canvasHeight = height;
+        
+        // Apply pixel scaling to actual render resolution
+        const renderWidth = Math.floor(width / state.pixelScale);
+        const renderHeight = Math.floor(height / state.pixelScale);
+        
+        // Note: CSS now handles display size (canvas fills container)
+        // We only need to update the render resolution (canvas.width/height)
+        
+        // Update resolution display
+        updateResolutionDisplay();
+        
+        // Recompile shader with new dimensions
+        if (recompile && state.isRunning) {
+            reloadShader(true).then(() => {  // Pass true to skip AudioWorklet reload
+                // NOW update canvas RENDER resolution (this clears canvas, but we render immediately after)
+                state.canvas.width = renderWidth;
+                state.canvas.height = renderHeight;
+                
+                // Reconfigure GPU context with new size
+                if (state.gpuContext && state.gpuDevice) {
+                    state.gpuContext.configure({
+                        device: state.gpuDevice,
+                        format: navigator.gpu.getPreferredCanvasFormat(),
+                        usage: GPUTextureUsage.STORAGE_BINDING,
+                    });
+                }
+                
+                // Canvas resized - no status message needed
+                
+                // Always render immediately to fill the canvas (paused or playing)
+                if (!state.isPlaying && state.isRunning) {
+                    renderSingleFrame();
+                }
+                // If playing, next frame will render immediately anyway
+            });
+        } else {
+            // If not recompiling, update render size immediately
+            state.canvas.width = renderWidth;
+            state.canvas.height = renderHeight;
+            
+            if (state.gpuContext && state.gpuDevice) {
+                state.gpuContext.configure({
+                    device: state.gpuDevice,
+                    format: navigator.gpu.getPreferredCanvasFormat(),
+                    usage: GPUTextureUsage.STORAGE_BINDING,
+                });
+            }
+        }
+    }
+    
+    function updateResolutionDisplay() {
+        const resDisplay = document.getElementById('resolutionDisplay');
+        if (resDisplay) {
+            const renderWidth = Math.floor(state.canvasWidth / state.pixelScale);
+            const renderHeight = Math.floor(state.canvasHeight / state.pixelScale);
+            resDisplay.textContent = `${renderWidth} × ${renderHeight} × ${state.pixelScale}`;
+        }
+    }
+    
+    function toggleTheme() {
+        state.isDarkMode = !state.isDarkMode;
+        saveSettings({ isDarkMode: state.isDarkMode });
+        applyTheme();
+    }
+    
+    function applyTheme() {
+        const body = document.body;
+        const btn = document.getElementById('themeToggleBtn');
+        
+        if (state.isDarkMode) {
+            body.classList.remove('light-mode');
+            if (btn) btn.textContent = '💡';
+        } else {
+            body.classList.add('light-mode');
+            if (btn) btn.textContent = '🕯';
+        }
+        
+        // Update Monaco editors theme
+        if (window.monaco && state.graphicsEditor) {
+            const theme = state.isDarkMode ? 'sleditor-dark' : 'sleditor-light';
+            monaco.editor.setTheme(theme);
+        }
+    }
+    
+    // ===== VIM MODE =====
+    
+    function toggleVimMode() {
+        state.isVimMode = !state.isVimMode;
+        saveSettings({ isVimMode: state.isVimMode });
+        applyVimMode();
+    }
+    
+    function applyVimMode() {
+        if (!window.MonacoVim) {
+            console.warn('MonacoVim not loaded yet');
+            logStatus('⚠ Vim library not loaded yet, please try again in a moment');
+            return;
+        }
+        
+        const vimStatusBar = document.getElementById('vim-status');
+        
+        // Remove existing vim mode from all editors
+        state.vimStatusNodes.forEach(statusNode => {
+            if (statusNode && statusNode.dispose) {
+                statusNode.dispose();
+            }
+        });
+        state.vimStatusNodes = [];
+        
+        if (state.isVimMode) {
+            // Enable vim mode on all editors (except read-only ones)
+            const editors = [
+                state.graphicsEditor,
+                state.audioEditor,
+                state.jsEditor
+            ];
+            
+            editors.forEach(editor => {
+                if (editor) {
+                    try {
+                        const statusNode = MonacoVim.initVimMode(editor, vimStatusBar);
+                        state.vimStatusNodes.push(statusNode);
+                    } catch (e) {
+                        console.error('Failed to init vim mode:', e);
+                    }
+                }
+            });
+            
+            // Show vim status bar
+            if (vimStatusBar) vimStatusBar.style.display = 'block';
+            
+            logStatus('✓ Vim mode enabled');
+        } else {
+            // Hide vim status bar
+            if (vimStatusBar) vimStatusBar.style.display = 'none';
+            
+            logStatus('✓ Vim mode disabled');
+        }
+    }
+    
+    // ===== OPTIONS MENU =====
+    
+    function showOptionsMenu() {
+        // Remove any existing menu
+        const existingMenu = document.getElementById('optionsMenu');
+        if (existingMenu) {
+            existingMenu.remove();
+            return; // Toggle off if already open
+        }
+        
+        const optionsBtn = document.getElementById('optionsBtn');
+        const rect = optionsBtn.getBoundingClientRect();
+        
+        const menu = document.createElement('div');
+        menu.id = 'optionsMenu';
+        menu.style.cssText = `
+            position: fixed;
+            top: ${rect.bottom + 5}px;
+            left: ${rect.left}px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 8px 0;
+            min-width: 200px;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        `;
+        
+        // Theme toggle
+        const themeItem = document.createElement('div');
+        themeItem.style.cssText = `
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+            font-size: 13px;
+        `;
+        themeItem.innerHTML = `
+            <span style="width: 20px;">${state.isDarkMode ? '💡' : '🕯'}</span>
+            <span style="flex: 1;">${state.isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>
+            <span style="color: var(--text-secondary);">${state.isDarkMode ? '' : '✓'}</span>
+        `;
+        themeItem.onmouseenter = () => themeItem.style.background = 'var(--bg-primary)';
+        themeItem.onmouseleave = () => themeItem.style.background = '';
+        themeItem.onclick = () => {
+            toggleTheme();
+            menu.remove();
+        };
+        
+        // Vim mode toggle
+        const vimItem = document.createElement('div');
+        vimItem.style.cssText = `
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+            font-size: 13px;
+        `;
+        vimItem.innerHTML = `
+            <span style="width: 20px;">⌨</span>
+            <span style="flex: 1;">Vim Mode</span>
+            <span style="color: var(--text-secondary);">${state.isVimMode ? '✓' : ''}</span>
+        `;
+        vimItem.onmouseenter = () => vimItem.style.background = 'var(--bg-primary)';
+        vimItem.onmouseleave = () => vimItem.style.background = '';
+        vimItem.onclick = () => {
+            toggleVimMode();
+            menu.remove();
+        };
+        
+        menu.appendChild(themeItem);
+        menu.appendChild(vimItem);
+        
+        document.body.appendChild(menu);
+        
+        // Close menu when clicking outside
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu(e) {
+                if (!menu.contains(e.target) && e.target !== optionsBtn) {
+                    menu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            });
+        }, 0);
+    }
+    
+    function updateRenderMode() {
+        const modes = [
+            { 
+                css: 'pixelated', 
+                icon: '▦', 
+                name: 'Pixelated (Sharp)' 
+            },
+            { 
+                css: 'auto', 
+                icon: '▩', 
+                name: 'Smooth (Bilinear)' 
+            },
+            { 
+                css: 'crisp-edges', 
+                icon: '■', 
+                name: 'Crisp Edges' 
+            }
+        ];
+        
+        const mode = modes[state.renderMode];
+        
+        // Update canvas image-rendering CSS
+        // Set multiple times with different vendor prefixes for compatibility
+        state.canvas.style.imageRendering = mode.css;
+        state.canvas.style.imageRendering = '-moz-' + mode.css;  // Firefox
+        state.canvas.style.imageRendering = '-webkit-' + mode.css;  // Safari
+        state.canvas.style.imageRendering = mode.css;  // Standard (last wins)
+        
+        // Update icon
+        const icon = document.getElementById('renderModeIcon');
+        if (icon) {
+            icon.textContent = mode.icon;
+            icon.title = `Render mode: ${mode.name} (click to cycle)`;
+        }
+        
+        // Force a frame render if paused to show the change immediately
+        if (!state.isPlaying && state.isRunning) {
+            renderSingleFrame();
+        }
+    }
+    
+    function setupPanelDividers() {
+        const container = document.getElementById('container');
+        const devPanel = document.getElementById('devPanel');
+        const displayPanel = document.getElementById('displayPanel');
+        const galleryPanel = document.getElementById('galleryPanel');
+        const divider1 = document.getElementById('divider1');
+        const divider2 = document.getElementById('divider2');
+        
+        let activeDivider = null;
+        let startX = 0;
+        let startDevWidth = 0;
+        let startDisplayWidth = 0;
+        let startGalleryWidth = 0;
+        let hasMoved = false;
+        let clickTimeout = null;
+        
+        // Collapsed state
+        const panelState = {
+            devCollapsed: false,
+            galleryCollapsed: false
+        };
+        
+        const COLLAPSED_WIDTH = 0; // Width in pixels when collapsed (fully hidden)
+        
+        function startDrag(divider, e) {
+            e.preventDefault();
+            
+            activeDivider = divider;
+            startX = e.clientX;
+            hasMoved = false;
+            
+            const containerWidth = container.offsetWidth;
+            startDevWidth = (devPanel.offsetWidth / containerWidth) * 100;
+            startDisplayWidth = (displayPanel.offsetWidth / containerWidth) * 100;
+            startGalleryWidth = (galleryPanel.offsetWidth / containerWidth) * 100;
+            
+            // Disable transitions during drag for instant feedback
+            devPanel.style.transition = 'none';
+            displayPanel.style.transition = 'none';
+            galleryPanel.style.transition = 'none';
+            
+            divider.classList.add('dragging');
+            document.body.style.cursor = 'ew-resize';
+            document.body.style.userSelect = 'none';
+        }
+        
+        function onDrag(e) {
+            if (!activeDivider) return;
+            
+            // Don't allow dragging if adjacent panel is collapsed
+            if (activeDivider === divider1 && panelState.devCollapsed) return;
+            if (activeDivider === divider2 && panelState.galleryCollapsed) return;
+            
+            const containerWidth = container.offsetWidth;
+            const deltaX = e.clientX - startX;
+            const deltaPercent = (deltaX / containerWidth) * 100;
+            
+            // Track if mouse has moved (to distinguish click from drag)
+            if (Math.abs(deltaX) > 3) {
+                hasMoved = true;
+            }
+            
+            if (activeDivider === divider1) {
+                // Dragging between dev and display
+                let newDevWidth = startDevWidth + deltaPercent;
+                let newDisplayWidth = startDisplayWidth - deltaPercent;
+                
+                // Min widths in pixels (convert from CSS min-width)
+                const minDevPx = 300;
+                const minDisplayPx = 250;
+                const minDevPercent = (minDevPx / containerWidth) * 100;
+                const minDisplayPercent = (minDisplayPx / containerWidth) * 100;
+                
+                // Apply constraints
+                if (newDevWidth < minDevPercent) {
+                    newDevWidth = minDevPercent;
+                    newDisplayWidth = startDisplayWidth + (startDevWidth - minDevPercent);
+                } else if (newDisplayWidth < minDisplayPercent) {
+                    newDisplayWidth = minDisplayPercent;
+                    newDevWidth = startDevWidth + (startDisplayWidth - minDisplayPercent);
+                }
+                
+                devPanel.style.width = newDevWidth + '%';
+                displayPanel.style.width = newDisplayWidth + '%';
+                
+            } else if (activeDivider === divider2) {
+                // Dragging between display and gallery
+                let newDisplayWidth = startDisplayWidth + deltaPercent;
+                let newGalleryWidth = startGalleryWidth - deltaPercent;
+                
+                const minDisplayPx = 250;
+                const minGalleryPx = 200;
+                const minDisplayPercent = (minDisplayPx / containerWidth) * 100;
+                const minGalleryPercent = (minGalleryPx / containerWidth) * 100;
+                
+                // Apply constraints
+                if (newDisplayWidth < minDisplayPercent) {
+                    newDisplayWidth = minDisplayPercent;
+                    newGalleryWidth = startGalleryWidth + (startDisplayWidth - minDisplayPercent);
+                } else if (newGalleryWidth < minGalleryPercent) {
+                    newGalleryWidth = minGalleryPercent;
+                    newDisplayWidth = startDisplayWidth + (startGalleryWidth - minGalleryPercent);
+                }
+                
+                displayPanel.style.width = newDisplayWidth + '%';
+                galleryPanel.style.width = newGalleryWidth + '%';
+            }
+        }
+        
+        function stopDrag() {
+            if (!activeDivider) return;
+            
+            const divider = activeDivider;
+            activeDivider.classList.remove('dragging');
+            activeDivider = null;
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            
+            // Re-enable transitions after drag
+            devPanel.style.transition = '';
+            displayPanel.style.transition = '';
+            galleryPanel.style.transition = '';
+            
+            // If didn't move, it was a click - toggle collapse
+            if (!hasMoved) {
+                if (divider === divider1) {
+                    togglePanelCollapse('dev');
+                } else if (divider === divider2) {
+                    togglePanelCollapse('gallery');
+                }
+            } else {
+                // Save panel widths after drag
+                savePanelWidths();
+            }
+        }
+        
+        function togglePanelCollapse(panel) {
+            const containerWidth = container.offsetWidth;
+            const collapsedPercent = (COLLAPSED_WIDTH / containerWidth) * 100;
+            
+            // Get current widths as percentages
+            const currentDevWidth = (devPanel.offsetWidth / containerWidth) * 100;
+            const currentDisplayWidth = (displayPanel.offsetWidth / containerWidth) * 100;
+            const currentGalleryWidth = (galleryPanel.offsetWidth / containerWidth) * 100;
+            
+            if (panel === 'dev') {
+                panelState.devCollapsed = !panelState.devCollapsed;
+                
+                if (panelState.devCollapsed) {
+                    // Collapse dev panel - give space to display
+                    const freedSpace = currentDevWidth - collapsedPercent;
+                    devPanel.style.width = collapsedPercent + '%';
+                    displayPanel.style.width = (currentDisplayWidth + freedSpace) + '%';
+                    devPanel.classList.add('collapsed');
+                } else {
+                    // Expand dev panel - take space from display
+                    const targetDevWidth = 50;
+                    const spaceNeeded = targetDevWidth - collapsedPercent;
+                    devPanel.style.width = targetDevWidth + '%';
+                    displayPanel.style.width = (currentDisplayWidth - spaceNeeded) + '%';
+                    devPanel.classList.remove('collapsed');
+                }
+            } else if (panel === 'gallery') {
+                panelState.galleryCollapsed = !panelState.galleryCollapsed;
+                
+                if (panelState.galleryCollapsed) {
+                    // Collapse gallery panel - give space to display
+                    const freedSpace = currentGalleryWidth - collapsedPercent;
+                    galleryPanel.style.width = collapsedPercent + '%';
+                    displayPanel.style.width = (currentDisplayWidth + freedSpace) + '%';
+                    galleryPanel.classList.add('collapsed');
+                } else {
+                    // Expand gallery panel - take space from display
+                    const targetGalleryWidth = 20;
+                    const spaceNeeded = targetGalleryWidth - collapsedPercent;
+                    galleryPanel.style.width = targetGalleryWidth + '%';
+                    displayPanel.style.width = (currentDisplayWidth - spaceNeeded) + '%';
+                    galleryPanel.classList.remove('collapsed');
+                }
+            }
+            
+            // Save collapsed state
+            savePanelState();
+        }
+        
+        function savePanelState() {
+            // TEMPORARILY DISABLED
+            // localStorage.setItem('sleditor_panel_state', JSON.stringify(panelState));
+        }
+        
+        function loadPanelState() {
+            const stored = localStorage.getItem('sleditor_panel_state');
+            if (stored) {
+                try {
+                    const state = JSON.parse(stored);
+                    if (state.devCollapsed) togglePanelCollapse('dev');
+                    if (state.galleryCollapsed) togglePanelCollapse('gallery');
+                } catch (e) {
+                    console.error('Failed to load panel state:', e);
+                }
+            }
+        }
+        
+        divider1.addEventListener('mousedown', (e) => startDrag(divider1, e));
+        divider2.addEventListener('mousedown', (e) => startDrag(divider2, e));
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', stopDrag);
+        
+        // TEMPORARILY DISABLED - Load saved collapse state
+        // loadPanelState();
+        
+        // Clear any corrupted localStorage data on first load
+        console.log('Panel localStorage cleared for fresh start');
+        localStorage.removeItem('sleditor_panel_widths');
+        localStorage.removeItem('sleditor_panel_state');
+        
+        // Setup horizontal canvas resize divider
+        setupCanvasVerticalResize();
+    }
+    
+    function setupCanvasVerticalResize() {
+        const divider = document.getElementById('canvasResizeDivider');
+        const canvasContainer = document.getElementById('canvasContainer');
+        
+        let isDragging = false;
+        let startY = 0;
+        let startHeight = 0;
+        
+        function startDrag(e) {
+            e.preventDefault();
+            isDragging = true;
+            startY = e.clientY;
+            startHeight = canvasContainer.offsetHeight;
+            
+            divider.classList.add('dragging');
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+        }
+        
+        function onDrag(e) {
+            if (!isDragging) return;
+            
+            const deltaY = e.clientY - startY;
+            let newHeight = startHeight + deltaY;
+            
+            // Get browser constraints
+            const maxHeight = window.innerHeight * 0.75;
+            
+            // Apply constraints
+            newHeight = Math.max(256, Math.min(newHeight, maxHeight));
+            
+            // Snap to 16px grid
+            newHeight = Math.round(newHeight / 16) * 16;
+            
+            // Add class to disable flex and set explicit height
+            canvasContainer.classList.add('explicit-height');
+            canvasContainer.style.height = newHeight + 'px';
+        }
+        
+        function stopDrag() {
+            if (!isDragging) return;
+            
+            isDragging = false;
+            divider.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            
+            // Canvas will auto-resize via ResizeObserver
+        }
+        
+        divider.addEventListener('mousedown', startDrag);
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', stopDrag);
+    }
+    
+    function setupCanvasResizeObserver() {
+        const canvasContainer = document.getElementById('canvasContainer');
+        const canvas = state.canvas;
+        
+        const resizeObserver = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                const { width, height } = entry.contentRect;
+                
+                // Snap to 16px grid
+                const newWidth = Math.round(width / 16) * 16;
+                const newHeight = Math.round(height / 16) * 16;
+                
+                // Only update if size actually changed (already snapped to 16px grid)
+                if (newWidth !== state.canvasWidth || newHeight !== state.canvasHeight) {
+                    updateCanvasSize(newWidth, newHeight, true);
+                }
+            }
+        });
+        
+        resizeObserver.observe(canvasContainer);
+    }
+    
+    function savePanelWidths() {
+        // TEMPORARILY DISABLED
+        // const devPanel = document.getElementById('devPanel');
+        // const displayPanel = document.getElementById('displayPanel');
+        // const galleryPanel = document.getElementById('galleryPanel');
+        // 
+        // const widths = {
+        //     dev: devPanel.style.width || '50%',
+        //     display: displayPanel.style.width || '30%',
+        //     gallery: galleryPanel.style.width || '20%'
+        // };
+        // 
+        // localStorage.setItem('sleditor_panel_widths', JSON.stringify(widths));
+    }
+    
+    function loadPanelWidths() {
+        // TEMPORARILY DISABLED
+        // const stored = localStorage.getItem('sleditor_panel_widths');
+        // if (!stored) return;
+        // 
+        // try {
+        //     const widths = JSON.parse(stored);
+        //     const devPanel = document.getElementById('devPanel');
+        //     const displayPanel = document.getElementById('displayPanel');
+        //     const galleryPanel = document.getElementById('galleryPanel');
+        //     
+        //     if (devPanel) devPanel.style.width = widths.dev;
+        //     if (displayPanel) displayPanel.style.width = widths.display;
+        //     if (galleryPanel) galleryPanel.style.width = widths.gallery;
+        // } catch (e) {
+        //     console.error('Failed to load panel widths:', e);
+        // }
+    }
+
+    // ===== SAVE/LOAD SYSTEM =====
+    
+    const MAX_SAVED_SHADERS = 10;
+    
+    function captureThumbnail() {
+        try {
+            // Capture canvas as data URL
+            return state.canvas.toDataURL('image/png', 0.8);
+        } catch (e) {
+            console.error('Failed to capture thumbnail:', e);
+            return null;
+        }
+    }
+    
+    function getAllSavedShaders() {
+        try {
+            const saved = localStorage.getItem('savedShaders');
+            return saved ? JSON.parse(saved) : [];
+        } catch (e) {
+            console.error('Failed to load saved shaders:', e);
+            return [];
+        }
+    }
+    
+    function saveShaderToStorage(title, description, tags) {
+        const thumbnail = captureThumbnail();
+        
+        const shaderData = {
+            id: Date.now(),
+            title: title.trim(),
+            description: description.trim(),
+            tags: tags.split(',').map(t => t.trim()).filter(t => t),
+            thumbnail: thumbnail,
+            code: {
+                boilerplate: state.boilerplateEditor ? state.boilerplateEditor.getValue() : '',
+                graphics: state.graphicsEditor ? state.graphicsEditor.getValue() : '',
+                audio_gpu: state.activeTabs.includes('audio_gpu') && state.audioEditor ? state.audioEditor.getValue() : '',
+                audio_worklet: state.activeTabs.includes('audio_worklet') && state.audioEditor ? state.audioEditor.getValue() : '',
+                js: state.jsEditor ? state.jsEditor.getValue() : ''
+            },
+            tabs: [...state.activeTabs],
+            currentTab: state.currentTab,
+            canvasWidth: state.canvasWidth,
+            canvasHeight: state.canvasHeight,
+            pixelScale: state.pixelScale,
+            created: new Date().toISOString(),
+            modified: new Date().toISOString()
+        };
+        
+        let savedShaders = getAllSavedShaders();
+        
+        // If editing an existing saved shader, update it
+        if (state.currentSavedShader) {
+            const index = savedShaders.findIndex(s => s.id === state.currentSavedShader.id);
+            if (index !== -1) {
+                shaderData.id = state.currentSavedShader.id;
+                shaderData.created = state.currentSavedShader.created;
+                savedShaders[index] = shaderData;
+            } else {
+                savedShaders.push(shaderData);
+            }
+        } else {
+            savedShaders.push(shaderData);
+        }
+        
+        // Enforce limit
+        if (savedShaders.length > MAX_SAVED_SHADERS) {
+            // Sort by modified date, keep most recent
+            savedShaders.sort((a, b) => new Date(b.modified) - new Date(a.modified));
+            savedShaders = savedShaders.slice(0, MAX_SAVED_SHADERS);
+        }
+        
+        try {
+            localStorage.setItem('savedShaders', JSON.stringify(savedShaders));
+            state.currentSavedShader = shaderData;
+            state.isDirty = false;
+            updateSaveButton();
+            populateGallery();  // Refresh gallery
+            logStatus(`✓ Saved "${title}"`);
+            return true;
+        } catch (e) {
+            console.error('Failed to save shader:', e);
+            if (e.name === 'QuotaExceededError') {
+                logStatus('✗ Storage quota exceeded. Try deleting some saved shaders.');
+            } else {
+                logStatus('✗ Failed to save shader: ' + e.message);
+            }
+            return false;
+        }
+    }
+    
+    function loadSavedShader(shaderId) {
+        const savedShaders = getAllSavedShaders();
+        const shader = savedShaders.find(s => s.id === shaderId);
+        
+        if (!shader) {
+            console.error('Shader not found:', shaderId);
+            return;
+        }
+        
+        // Clear example reference (we're loading a saved shader now)
+        state.currentExample = null;
+        state.currentSavedShader = shader;
+        state.isDirty = false;
+        updateSaveButton();
+        
+        // Set canvas dimensions and pixel scale
+        state.canvasWidth = shader.canvasWidth || 512;
+        state.canvasHeight = shader.canvasHeight || 512;
+        state.pixelScale = shader.pixelScale || 1;
+        
+        // Update pixel scale slider UI to match loaded value
+        const scales = [1, 2, 3, 4, 6, 8];
+        const scaleIndex = scales.indexOf(state.pixelScale);
+        const pixelScaleSlider = document.getElementById('pixelScaleSlider');
+        if (pixelScaleSlider && scaleIndex !== -1) {
+            pixelScaleSlider.value = scaleIndex;
+        }
+        
+        // Update canvas size and resolution display (but don't recompile yet)
+        updateCanvasSize(state.canvasWidth, state.canvasHeight, false);
+        
+        // Restore tabs
+        state.activeTabs = [...shader.tabs];
+        
+        // Determine current audio type from tabs
+        if (state.activeTabs.includes('audio_gpu')) {
+            state.currentAudioType = 'gpu';
+        } else if (state.activeTabs.includes('audio_worklet')) {
+            state.currentAudioType = 'worklet';
+        } else {
+            state.currentAudioType = null;
+        }
+        
+        // Restore code to editors
+        if (state.boilerplateEditor && shader.code.boilerplate) {
+            state.boilerplateEditor.setValue(shader.code.boilerplate);
+        }
+        if (state.graphicsEditor && shader.code.graphics) {
+            state.graphicsEditor.setValue(shader.code.graphics);
+        }
+        if (shader.code.audio_gpu && state.activeTabs.includes('audio_gpu')) {
+            if (state.audioEditor) {
+                state.audioEditor.setValue(shader.code.audio_gpu);
+            }
+        }
+        if (shader.code.audio_worklet && state.activeTabs.includes('audio_worklet')) {
+            if (state.audioEditor) {
+                state.audioEditor.setValue(shader.code.audio_worklet);
+            }
+        }
+        if (state.jsEditor && shader.code.js) {
+            state.jsEditor.setValue(shader.code.js);
+        }
+        
+        // Update UI
+        renderTabs();
+        updateShaderInfo(shader.title, shader.description);
+        
+        // Switch to saved tab
+        if (shader.currentTab && state.activeTabs.includes(shader.currentTab)) {
+            switchTab(shader.currentTab);
+        } else if (state.activeTabs.includes('graphics')) {
+            switchTab('graphics');
+        } else if (state.activeTabs.length > 0) {
+            switchTab(state.activeTabs[0]);
+        }
+        
+        // Reload shader with new code, then restart and auto-play
+        if (state.isRunning) {
+            reloadShader().then((success) => {
+                // Restart regardless (to reset state)
+                restart();
+                if (!state.isPlaying) {
+                    state.isPlaying = true;
+                    state.audioContext.resume();
+                    updatePlayPauseButton();
+                }
+            }).catch((err) => {
+                console.error('Failed to load saved shader (caught):', err);
+            });
+        }
+    }
+    
+    function deleteSavedShader(shaderId) {
+        if (!confirm('Delete this saved shader?')) return;
+        
+        let savedShaders = getAllSavedShaders();
+        savedShaders = savedShaders.filter(s => s.id !== shaderId);
+        
+        try {
+            localStorage.setItem('savedShaders', JSON.stringify(savedShaders));
+            
+            // If we deleted the currently loaded shader, clear the reference
+            if (state.currentSavedShader && state.currentSavedShader.id === shaderId) {
+                state.currentSavedShader = null;
+                updateSaveButton();
+            }
+            
+            populateGallery();  // Refresh gallery
+            logStatus('✓ Shader deleted');
+        } catch (e) {
+            console.error('Failed to delete shader:', e);
+            logStatus('✗ Failed to delete shader');
+        }
+    }
+    
+    function markDirty() {
+        if (!state.isDirty) {
+            state.isDirty = true;
+            updateSaveButton();
+        }
+    }
+    
+    function updateSaveButton() {
+        const btn = document.getElementById('saveShaderBtn');
+        if (!btn) return;
+        
+        if (state.isDirty) {
+            btn.textContent = '💾*';
+            btn.title = 'Save current shader (unsaved changes)';
+        } else {
+            btn.textContent = '💾';
+            btn.title = 'Save current shader';
+        }
+    }
+    
+    function showSaveModal() {
+        const modal = document.getElementById('saveModal');
+        const titleInput = document.getElementById('saveModalTitle');
+        const descInput = document.getElementById('saveModalDescription');
+        const tagsInput = document.getElementById('saveModalTags');
+        
+        // Pre-fill if editing existing saved shader
+        if (state.currentSavedShader) {
+            titleInput.value = state.currentSavedShader.title;
+            descInput.value = state.currentSavedShader.description;
+            tagsInput.value = state.currentSavedShader.tags.join(', ');
+        } else {
+            titleInput.value = '';
+            descInput.value = '';
+            tagsInput.value = '';
+        }
+        
+        modal.style.display = 'flex';
+        titleInput.focus();
+    }
+    
+    function hideSaveModal() {
+        document.getElementById('saveModal').style.display = 'none';
+    }
+    
+    function setupSaveSystem() {
+        const saveBtn = document.getElementById('saveShaderBtn');
+        const saveCancelBtn = document.getElementById('saveCancelBtn');
+        const saveConfirmBtn = document.getElementById('saveConfirmBtn');
+        const titleInput = document.getElementById('saveModalTitle');
+        
+        if (!saveBtn) {
+            console.error('Save button not found!');
+            return;
+        }
+        
+        saveBtn.addEventListener('click', () => {
+            showSaveModal();
+        });
+        
+        saveCancelBtn.addEventListener('click', () => {
+            hideSaveModal();
+        });
+        
+        saveConfirmBtn.addEventListener('click', () => {
+            // Get fresh references to the input fields
+            const titleInputFresh = document.getElementById('saveModalTitle');
+            const descInputFresh = document.getElementById('saveModalDescription');
+            const tagsInputFresh = document.getElementById('saveModalTags');
+            
+            if (!titleInputFresh) {
+                console.error('Title input element not found!');
+                logStatus('✗ Error: Title input not found');
+                return;
+            }
+            
+            const title = titleInputFresh.value.trim();
+            const description = descInputFresh ? descInputFresh.value : '';
+            const tags = tagsInputFresh ? tagsInputFresh.value : '';
+            
+            if (!title) {
+                logStatus('⚠ Title is required');
+                titleInputFresh.focus();
+                titleInputFresh.style.borderColor = 'red';
+                return;
+            }
+            
+            titleInputFresh.style.borderColor = '';
+            
+            if (saveShaderToStorage(title, description, tags)) {
+                hideSaveModal();
+            }
+        });
+        
+        // Enter to save in title field
+        titleInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                saveConfirmBtn.click();
+            }
+        });
+        
+        // Close modal on background click
+        document.getElementById('saveModal').addEventListener('click', (e) => {
+            if (e.target.id === 'saveModal') {
+                hideSaveModal();
+            }
+        });
+        
+        // Track changes in editors
+        function setupDirtyTracking(editor) {
+            if (!editor) return;
+            editor.onDidChangeModelContent(() => {
+                markDirty();
+            });
+        }
+        
+        // Will be set up after monaco initializes
+        window.setupEditorDirtyTracking = setupDirtyTracking;
+        
+        // Warn before leaving with unsaved changes
+        window.addEventListener('beforeunload', (e) => {
+            if (state.isDirty) {
+                e.preventDefault();
+                e.returnValue = ''; // Chrome requires returnValue to be set
+                return ''; // Some browsers need a return value
+            }
+        });
+    }
+
+    function setupUI() {
+        // Canvas and container
+        state.canvas = document.getElementById('canvas');
+        const canvasContainer = document.getElementById('canvasContainer');
+        
+        // Set initial container size with explicit height
+        canvasContainer.classList.add('explicit-height');
+        canvasContainer.style.height = state.canvasHeight + 'px';
+        
+        updateCanvasSize(state.canvasWidth, state.canvasHeight, false);
+        
+        // Load saved panel widths
+        loadPanelWidths();
+        
+        // Setup panel dividers for resizing
+        setupPanelDividers();
+        
+        // Setup canvas resize observer
+        setupCanvasResizeObserver();
+        
+        // Populate gallery with examples
+        populateGallery();
+
+        // Play/Pause button
+        document.getElementById('playPauseBtn').addEventListener('click', togglePlayPause);
+        
+        // Restart button
+        document.getElementById('restartBtn').addEventListener('click', () => restart(true));
+
+        // Reload button
+        document.getElementById('reloadBtn').addEventListener('click', () => reloadShader());
+        
+        // Theme toggle button
+        // Add Pass button
+        document.getElementById('addPassBtn').addEventListener('click', showAddPassMenu);
+        
+        // Options button
+        document.getElementById('optionsBtn').addEventListener('click', showOptionsMenu);
+
+        // Volume control
+        const volumeSlider = document.getElementById('volumeSlider');
+        volumeSlider.addEventListener('input', (e) => {
+            const vol = e.target.value / 100;
+            CONFIG.volume = vol;
+            if (state.gainNode) state.gainNode.gain.value = vol;
+        });
+        
+        // Pixel scale control
+        const pixelScaleSlider = document.getElementById('pixelScaleSlider');
+        pixelScaleSlider.addEventListener('input', (e) => {
+            const scaleIndex = parseInt(e.target.value);
+            const scales = [1, 2, 3, 4, 6, 8];  // 1x, 2x, 3x, 4x, 6x, 8x
+            
+            state.pixelScale = scales[scaleIndex];
+            
+            // Update canvas with new pixel scale
+            updateCanvasSize(state.canvasWidth, state.canvasHeight, true);
+        });
+        
+        // Render mode toggle (click icon to cycle through modes)
+        const renderModeIcon = document.getElementById('renderModeIcon');
+        renderModeIcon.addEventListener('click', () => {
+            state.renderMode = (state.renderMode + 1) % 3;
+            updateRenderMode();
+        });
+        
+        // Initialize render mode
+        updateRenderMode();
+        
+        // Track mouse position
+        document.addEventListener('mousemove', (e) => {
+            const rect = state.canvas.getBoundingClientRect();
+            state.mouseX = (e.clientX - rect.left) / rect.width;
+            state.mouseY = 1.0 - (e.clientY - rect.top) / rect.height; // Flip Y
+        });
+        
+        // Handle visibility change - resync audio timing when tab becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && state.audioContext && state.isPlaying) {
+                const ctx = state.audioContext;
+                state.nextAudioTime = Math.ceil(ctx.currentTime / CONFIG.audioBlockDuration) 
+                                     * CONFIG.audioBlockDuration;
+                state.pendingAudio = false;
+                // Silent resync - no status message needed
+            }
+        });
+        
+        // Initialize tab display
+        renderTabs();
+    }
+
+function togglePlayPause() {
+    if (!state.audioContext || !state.isRunning) return;
+    
+    if (state.isPlaying) {
+        // PAUSE everything
+        state.audioContext.suspend();
+        state.isPlaying = false;
+        state.lastPauseTime = performance.now();
+    } else {
+        // RESUME everything
+        state.audioContext.resume();
+        state.isPlaying = true;
+        
+        // Account for time spent paused
+        if (state.lastPauseTime > 0) {
+            state.pausedTime += performance.now() - state.lastPauseTime;
+        }
+        
+        // Resync audio timing
+        const ctx = state.audioContext;
+        state.nextAudioTime = Math.ceil(ctx.currentTime / CONFIG.audioBlockDuration) 
+                             * CONFIG.audioBlockDuration;
+        state.pendingAudio = false;
+    }
+    
+    updatePlayPauseButton();
+}
+
+function updatePlayPauseButton() {
+    const btn = document.getElementById('playPauseBtn');
+    if (state.isPlaying) {
+        btn.textContent = '⏸';
+        btn.className = 'playing';
+    } else {
+        btn.textContent = '▶';
+        btn.className = 'paused';
+    }
+}
+
+function restart(showMessage = false) {
+    // Reset time tracking
+    const now = performance.now();
+    state.startTime = now;
+    state.pausedTime = 0;
+    state.visualFrame = 0;
+    state.audioFrame = 0;
+    
+    // Reset FPS tracking
+    state.fps = 0;
+    state.fpsFrameCount = 0;
+    state.fpsLastTime = now;
+    
+    // If currently paused, set lastPauseTime to now so time doesn't accumulate while paused
+    if (!state.isPlaying) {
+        state.lastPauseTime = now;
+    } else {
+        state.lastPauseTime = 0;
+    }
+    
+    // Reset GPU phase for clean audio start
+    if (state.gpuDevice && state.phaseStateBuffer) {
+        state.gpuDevice.queue.writeBuffer(state.phaseStateBuffer, 0, new Float32Array([0.0]));
+    }
+    
+    // Resync audio timing
+    if (state.audioContext) {
+        const ctx = state.audioContext;
+        state.nextAudioTime = Math.ceil(ctx.currentTime / CONFIG.audioBlockDuration) 
+                             * CONFIG.audioBlockDuration;
+        state.pendingAudio = false;
+    }
+    
+    // Compile and initialize JS
+    if (compileUserJS()) {
+        try {
+            state.userState = state.userInit ? state.userInit() : {};
+            clearJSErrors();
+            // Only show "Restarted" message if explicitly requested (user clicked restart button)
+            if (showMessage) {
+                const statusDisplay = document.getElementById('errorDisplay');
+                if (!statusDisplay.classList.contains('error')) {
+            logStatus('Restarted from beginning', 'success');
+                }
+            }
+        } catch (err) {
+            const code = state.jsEditor?.getValue() || INVISIBLE_DEFAULT_JS;
+            const codeLines = code.split('\n').length;
+            const errorInfo = parseJSError(err, codeLines);
+            
+            if (state.jsEditor && state.activeTabs.includes('js')) {
+                setJSErrors([{
+                    lineNum: errorInfo.lineNum,
+                    column: errorInfo.column,
+                    endColumn: errorInfo.endColumn,
+                    message: `Runtime error in init(): ${errorInfo.message}`
+                }]);
+            }
+            
+            logStatus(`✗ JS init() error (line ${errorInfo.lineNum}): ${err.message}`, 'error');
+        }
+    }
+    
+    // Update display immediately to show t=0
+    document.getElementById('frameCounter').textContent = '0';
+    document.getElementById('timeCounter').textContent = '0.00s';
+    document.getElementById('fpsCounter').textContent = '0';
+    
+    // If paused, render one frame to show the restart visually
+    if (!state.isPlaying && state.isRunning) {
+        renderSingleFrame();
+    }
+}
+
+    async function initWebGPU() {
+        try {
+            // Check if WebGPU is available
+            if (!navigator.gpu) {
+                console.warn('WebGPU not available in this browser');
+                state.hasWebGPU = false;
+                return false;
+            }
+
+            const adapter = await navigator.gpu.requestAdapter();
+            if (!adapter) {
+                console.warn('WebGPU adapter not available');
+                state.hasWebGPU = false;
+                return false;
+            }
+
+            state.gpuDevice = await adapter.requestDevice({
+                requiredFeatures: ['bgra8unorm-storage'],
+                requiredLimits: {
+                    maxBufferSize: Math.pow(2, 30),
+                    maxStorageBufferBindingSize: Math.pow(2, 30),
+                }
+            });
+
+            state.gpuContext = state.canvas.getContext('webgpu');
+            state.gpuContext.configure({
+                device: state.gpuDevice,
+                format: navigator.gpu.getPreferredCanvasFormat(),
+                usage: GPUTextureUsage.STORAGE_BINDING,
+            });
+
+            createGPUResources();
+            
+            state.hasWebGPU = true;
+            console.log('✓ WebGPU initialized successfully');
+            return true;
+        } catch (err) {
+            console.warn('WebGPU initialization failed:', err.message);
+            state.hasWebGPU = false;
+            return false;
+        }
+    }
+
+    function createGPUResources() {
+        const device = state.gpuDevice;
+
+        state.uniformBuffer = device.createBuffer({
+            size: 256,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+
+        state.computeBuffer = device.createBuffer({
+            size: CONFIG.computeBufferSize,
+            usage: GPUBufferUsage.STORAGE,
+        });
+
+        state.audioBufferGPU = device.createBuffer({
+            size: DERIVED.audioBufferSize,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        
+        // Phase state buffer - persistent GPU-side phase for perfect timing
+        state.phaseStateBuffer = device.createBuffer({
+            size: 4,  // Single f32
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        
+        // Initialize phase to 0
+        device.queue.writeBuffer(state.phaseStateBuffer, 0, new Float32Array([0.0]));
+
+        for (let i = 0; i < 2; i++) {
+            state.audioBuffersReadback[i] = device.createBuffer({
+                size: DERIVED.audioBufferSize,
+                usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+            });
+        }
+
+        state.bindGroupLayout = device.createBindGroupLayout({
+            entries: [
+                { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+                { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+                { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+                { binding: 3, visibility: GPUShaderStage.COMPUTE, storageTexture: { 
+                    format: 'bgra8unorm', access: 'write-only', viewDimension: '2d' 
+                }},
+                { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+            ],
+        });
+    }
+
+    function initWebAudio() {
+        state.audioContext = new AudioContext();
+        
+        // Read actual sample rate from AudioContext
+        DERIVED.sampleRate = state.audioContext.sampleRate;
+        DERIVED.samplesPerBlock = Math.floor(CONFIG.audioBlockDuration * DERIVED.sampleRate);
+        DERIVED.audioBufferSize = 4 * CONFIG.channels * DERIVED.samplesPerBlock;
+        DERIVED.audioWorkgroups = Math.ceil(DERIVED.samplesPerBlock / 128);  // 128 threads per workgroup for audio
+        
+        console.log(`Audio initialized: ${DERIVED.sampleRate}Hz, ${DERIVED.samplesPerBlock} samples/block`);
+        console.log(`Dispatch: Graphics 64×64 workgroups (8×8 threads), Audio ${DERIVED.audioWorkgroups}×1 workgroups (128 threads)`);
+        
+        state.gainNode = state.audioContext.createGain();
+        state.gainNode.gain.value = CONFIG.volume;
+        state.gainNode.connect(state.audioContext.destination);
+        
+        state.nextAudioTime = Math.ceil(state.audioContext.currentTime / CONFIG.audioBlockDuration) 
+                             * CONFIG.audioBlockDuration;
+        
+        state.audioContext.suspend();
+    }
+
+    // Parse AudioWorklet errors to extract line numbers
+    function parseAudioWorkletError(err, codeLines) {
+        let lineNum = null;
+        let column = 1;
+        let endColumn = 1000;
+        
+        // Try multiple patterns for line number extraction
+        // Pattern 1: "blob:http://localhost:5500/xxx:5:10" format (most common)
+        let match = err.stack?.match(/blob:[^:]+:(\d+):(\d+)/);
+        if (match) {
+            lineNum = parseInt(match[1]);
+            column = parseInt(match[2]);
+            endColumn = column + 10;
+        }
+        
+        // Pattern 2: Simple ":line:col" format
+        if (!match) {
+            match = err.stack?.match(/:(\d+):(\d+)/);
+            if (match) {
+                lineNum = parseInt(match[1]);
+                column = parseInt(match[2]);
+                endColumn = column + 10;
+            }
+        }
+        
+        // Pattern 3: "line X" in the message
+        if (!lineNum) {
+            match = err.message?.match(/line (\d+)/i);
+            if (match) {
+                lineNum = parseInt(match[1]);
+            }
+        }
+        
+        // If we still don't have a line number, return null to signal no error marker
+        if (!lineNum || lineNum < 1) {
+            console.warn('Could not parse line number from AudioWorklet error');
+            return null;
+        }
+        
+        // Clamp to valid range
+        lineNum = Math.min(Math.max(1, lineNum), codeLines);
+        
+        return { lineNum, column, endColumn, message: err.message };
+    }
+    
+    // Set AudioWorklet error markers in Monaco
+    function setAudioWorkletErrors(errors) {
+        const markers = errors.map(err => ({
+            severity: monaco.MarkerSeverity.Error,
+            startLineNumber: err.lineNum || 1,
+            startColumn: err.column || 1,
+            endLineNumber: err.lineNum || 1,
+            endColumn: err.endColumn || 1000,
+            message: err.message
+        }));
+        monaco.editor.setModelMarkers(state.audioEditor.getModel(), 'javascript', markers);
+    }
+    
+    function clearAudioWorkletErrors() {
+        monaco.editor.setModelMarkers(state.audioEditor.getModel(), 'javascript', []);
+    }
+
+    // AudioWorklet Management
+    async function loadAudioWorklet() {
+        if (!state.audioContext) return false;
+        
+        const audioCode = state.audioEditor.getValue();
+        const codeLines = audioCode.split('\n').length;
+        
+        try {
+            clearAudioWorkletErrors();
+            
+            // Note: We can't pre-validate AudioWorklet code because AudioWorkletProcessor
+            // and other AudioWorklet APIs only exist in the AudioWorklet scope.
+            // We'll catch errors during the actual addModule() call instead.
+            
+            // Disconnect and remove old worklet if exists
+            if (state.audioWorkletNode) {
+                state.audioWorkletNode.disconnect();
+                state.audioWorkletNode = null;
+            }
+            
+            // Generate unique processor name for each reload to avoid registration conflicts
+            const processorName = 'user-audio-' + Date.now();
+            
+            // Replace the registerProcessor call in user's code with our unique name
+            const modifiedCode = audioCode.replace(
+                /registerProcessor\s*\(\s*['"]user-audio['"]\s*,/,
+                `registerProcessor('${processorName}',`
+            );
+            
+            // Create blob URL with the modified audio code
+            const blob = new Blob([modifiedCode], { type: 'application/javascript' });
+            const url = URL.createObjectURL(blob);
+            
+            // Load the module
+            await state.audioContext.audioWorklet.addModule(url);
+            URL.revokeObjectURL(url);
+            
+            // Create the worklet node with our unique processor name
+            state.audioWorkletNode = new AudioWorkletNode(state.audioContext, processorName);
+            state.audioWorkletNode.connect(state.gainNode);
+            
+            // Listen for errors from the worklet
+            state.audioWorkletNode.port.onmessageerror = (event) => {
+                console.error('AudioWorklet message error:', event);
+                logStatus(`✗ AudioWorklet runtime error`, 'error');
+            };
+            
+            state.audioMode = AUDIO_MODES.WORKLET;
+            return true;
+        } catch (err) {
+            console.error('AudioWorklet loading error:', err);
+            
+            // Try to parse line numbers from the error
+            let lineNum = null;
+            let column = 1;
+            let endColumn = 1000;
+            
+            // Try to parse from stack trace
+            // AudioWorklet errors from addModule often have format like ":30:10"
+            const stackMatch = err.stack?.match(/:(\d+):(\d+)/);
+            if (stackMatch) {
+                lineNum = parseInt(stackMatch[1]);
+                column = parseInt(stackMatch[2]);
+                endColumn = column + 10;
+            }
+            
+            if (lineNum && lineNum > 0 && lineNum <= codeLines) {
+                // We got a valid line number - show marker
+                setAudioWorkletErrors([{
+                    lineNum,
+                    column,
+                    endColumn,
+                    message: err.message
+                }]);
+                logStatus(`✗ AudioWorklet error (line ${lineNum}): ${err.message}`, 'error');
+            } else {
+                // No line number available (AudioWorklet limitation)
+                // Monaco's built-in JavaScript linter should still show errors in the editor
+                console.warn('Could not parse line number from AudioWorklet error (browser limitation)');
+                logStatus(`✗ AudioWorklet error: ${err.message} (check editor for red underlines)`, 'error');
+            }
+            
+            state.audioMode = AUDIO_MODES.NONE;
+            return false;
+        }
+    }
+    
+    function stopAudio() {
+        // Stop GPU audio
+        state.audioPipeline = null;
+        state.pendingAudio = false;
+        
+        // Stop AudioWorklet
+        if (state.audioWorkletNode) {
+            state.audioWorkletNode.disconnect();
+            state.audioWorkletNode = null;
+        }
+        
+        state.audioMode = AUDIO_MODES.NONE;
+    }
+
+    // Live Shader Reload - no time reset, no init() call
+    async function reloadShader(isResizeOnly = false) {
+    const hasGraphics = state.activeTabs.includes('graphics');
+    const hasAudioGpu = state.activeTabs.includes('audio_gpu');
+    const hasAudioWorklet = state.activeTabs.includes('audio_worklet');
+    const hasAudio = hasAudioGpu || hasAudioWorklet;
+    const hasGPUTabs = hasGraphics || hasAudioGpu;
+    
+    // CRITICAL: Stop old audio before loading new audio
+    // This prevents both audio modes from playing simultaneously
+    // EXCEPTION: If this is just a resize and AudioWorklet is active, keep it running
+    const isWorkletActive = state.audioMode === AUDIO_MODES.WORKLET && state.audioWorkletNode;
+    const skipAudioWorkletReload = isResizeOnly && isWorkletActive && hasAudioWorklet;
+    
+    if (!skipAudioWorkletReload) {
+        stopAudio();
+    }
+    
+    // Skip WebGPU compilation if no GPU tabs are present
+    if (!hasGPUTabs || !state.hasWebGPU) {
+        try {
+            logStatus('Compiling...', 'info');
+            clearMonacoErrors();
+            
+            const startTotal = performance.now();
+            let timeAudio = 0;
+            let timeJS = 0;
+            let audioCompileSuccess = true;
+            let jsCompileSuccess = true;
+            
+            // Load AudioWorklet if present
+            if (hasAudioWorklet && !skipAudioWorkletReload) {
+                const startAudio = performance.now();
+                const workletLoaded = await loadAudioWorklet();
+                timeAudio = performance.now() - startAudio;
+                
+                if (workletLoaded) {
+                    state.audioMode = AUDIO_MODES.WORKLET;
+                    state.currentAudioType = 'worklet';
+                } else {
+                    audioCompileSuccess = false;
+                }
+            }
+            
+            // Compile JS
+            if (state.activeTabs.includes('js')) {
+                const startJS = performance.now();
+                jsCompileSuccess = compileUserJS();
+                timeJS = performance.now() - startJS;
+            }
+            
+            // Show appropriate status message
+            if (audioCompileSuccess && jsCompileSuccess) {
+                const totalTime = performance.now() - startTotal;
+                
+                // Build timing info string
+                let timingParts = [];
+                if (hasAudioWorklet && timeAudio > 0.1) {
+                    timingParts.push(`Worklet: ${timeAudio.toFixed(1)}ms`);
+                }
+                if (state.activeTabs.includes('js')) {
+                    timingParts.push(`JS: ${timeJS.toFixed(1)}ms`);
+                }
+                
+                const timingStr = timingParts.length > 0 ? ` (${timingParts.join(', ')})` : '';
+                logStatus(`✓ Compiled in ${totalTime.toFixed(1)}ms${timingStr}`, 'success');
+                return true;
+            } else {
+                // Errors already logged by loadAudioWorklet or compileUserJS
+                return false;
+            }
+        } catch (err) {
+            logStatus('✗ ' + err.message, 'error');
+            return false;
+        }
+    }
+    
+    // Compile graphics shader
+    const boilerplate = getBoilerplate();
+    const graphics = state.graphicsEditor.getValue();
+    
+    // Get audio code only if we have a GPU audio tab
+    const audio = hasAudioGpu ? state.audioEditor.getValue() : '';
+    const code = boilerplate + '\n' + graphics + '\n' + audio;
+    
+    // Update boilerplate editor
+    state.boilerplateEditor.setValue(boilerplate);
+    
+    try {
+        logStatus('Compiling...', 'info');
+        clearMonacoErrors();
+        
+        // Start timing
+        const startTotal = performance.now();
+        let timeWGSL = 0;
+        let timeAudio = 0;
+        let timeJS = 0;
+        
+        // Compile graphics shader
+        const startWGSL = performance.now();
+        const shaderModule = state.gpuDevice.createShaderModule({ code });
+        const compilationInfo = await shaderModule.getCompilationInfo();
+        const errors = compilationInfo.messages.filter(m => m.type === 'error');
+        
+        if (errors.length > 0) {
+            setMonacoErrors(errors);
+            const errorMsg = errors.map(e => 
+                `Line ${e.lineNum}: ${e.message}`
+            ).join('\n');
+            throw new Error('Shader compilation failed:\n' + errorMsg);
+        }
+        
+        const pipelineLayout = state.gpuDevice.createPipelineLayout({
+            bindGroupLayouts: [state.bindGroupLayout],
+        });
+        
+        // Create graphics pipeline
+        const newGraphicsPipeline = state.gpuDevice.createComputePipeline({
+            layout: pipelineLayout,
+            compute: { module: shaderModule, entryPoint: 'graphics_main' },
+        });
+        state.graphicsPipeline = newGraphicsPipeline;
+        timeWGSL = performance.now() - startWGSL;
+        
+        // Handle audio based on active tab type
+        let audioCompileSuccess = true;
+        const startAudio = performance.now();
+        if (hasAudioWorklet) {
+            // Skip AudioWorklet reload if this is just a canvas resize
+            if (skipAudioWorkletReload) {
+                // AudioWorklet is still running from before, no need to reload
+                audioCompileSuccess = true;
+            } else {
+                // Load AudioWorklet - this will always reload the code
+                const workletLoaded = await loadAudioWorklet();
+                if (workletLoaded) {
+                    state.audioMode = AUDIO_MODES.WORKLET;
+                    state.currentAudioType = 'worklet';
+                } else {
+                    // AudioWorklet failed to load - error already logged by loadAudioWorklet
+                    audioCompileSuccess = false;
+                }
+            }
+        } else if (hasAudioGpu) {
+            // Create GPU audio pipeline
+            const newAudioPipeline = state.gpuDevice.createComputePipeline({
+                layout: pipelineLayout,
+                compute: { module: shaderModule, entryPoint: 'audio_main' },
+            });
+            state.audioPipeline = newAudioPipeline;
+            state.audioMode = AUDIO_MODES.GPU;
+            state.currentAudioType = 'gpu';
+        } else {
+            // No audio - already stopped above
+            state.currentAudioType = null;
+        }
+        timeAudio = performance.now() - startAudio;
+        
+        // Compile JS
+        const startJS = performance.now();
+        const jsCompileSuccess = compileUserJS();
+        timeJS = performance.now() - startJS;
+        
+        // Show appropriate status message
+        if (audioCompileSuccess && jsCompileSuccess) {
+            const totalTime = performance.now() - startTotal;
+            
+            // Build timing info string
+            // Note: WGSL includes both graphics and GPU audio (compiled together)
+            let timingParts = [`WGSL: ${timeWGSL.toFixed(1)}ms`];
+            
+            // Only show separate audio time for AudioWorklet (different compilation path)
+            if (hasAudioWorklet && timeAudio > 0.1) {
+                timingParts.push(`Worklet: ${timeAudio.toFixed(1)}ms`);
+            }
+            
+            timingParts.push(`JS: ${timeJS.toFixed(1)}ms`);
+            const timingStr = timingParts.join(', ');
+            
+            logStatus(`✓ Compiled in ${totalTime.toFixed(1)}ms (${timingStr})`, 'success');
+            return true; // Success
+        } else if (!audioCompileSuccess) {
+            // Audio error already logged in loadAudioWorklet, don't override
+            return false; // Failed
+        } else if (!jsCompileSuccess) {
+            // JS error already logged by compileUserJS with line number, don't override
+            return false; // Failed
+        }
+        
+    } catch (err) {
+        logStatus('✗ ' + err.message, 'error');
+        return false; // Failed
+    }
+    
+    return true; // Success by default
+}
+
+    function logStatus(message, type = 'info') {
+        const display = document.getElementById('errorDisplay');
+        display.textContent = message;
+        display.className = type;
+    }
+
+    // Render a single frame (used when paused, e.g., after restart)
+    function renderSingleFrame() {
+        if (!state.isRunning || !state.gpuDevice) return;
+        
+        const device = state.gpuDevice;
+        const ctx = state.audioContext;
+        
+        // Calculate current elapsed time (accounting for pauses)
+        // If paused, freeze time at the pause moment
+        let rawTime;
+        if (!state.isPlaying && state.lastPauseTime > 0) {
+            // Use the frozen time from when we paused
+            rawTime = state.lastPauseTime;
+        } else {
+            rawTime = performance.now();
+        }
+        const elapsedMs = rawTime - state.startTime - state.pausedTime;
+        const elapsedSec = elapsedMs * 0.001;
+        
+        const uniformData = new ArrayBuffer(256);
+        const uniformF32 = new Float32Array(uniformData);
+        const uniformI32 = new Int32Array(uniformData);
+        
+        uniformF32[UNIFORM_STRUCT.time] = elapsedSec;
+        uniformF32[UNIFORM_STRUCT.audioCurrentTime] = ctx.currentTime;
+        uniformF32[UNIFORM_STRUCT.audioPlayTime] = state.nextAudioTime;
+        uniformF32[UNIFORM_STRUCT.audioFractTime] = state.nextAudioTime % 1;
+        uniformI32[UNIFORM_STRUCT.audioFrame] = state.audioFrame;
+        
+        // Call enterframe with current elapsed time
+        if (state.userEnterframe) {
+            try {
+                const api = {
+                    time: elapsedSec,
+                    deltaTime: 0,
+                    mouse: { x: state.mouseX, y: state.mouseY },
+                    sampleRate: DERIVED.sampleRate,
+                    samplesPerBlock: DERIVED.samplesPerBlock,
+                    audioFrame: state.audioFrame,
+                    audioBlockGenerated: false,
+                    uniforms: {
+                        setFloat: (index, value) => {
+                            if (index >= 5 && index < 20) {
+                                uniformF32[index] = value;
+                            }
+                        },
+                        setInt: (index, value) => {
+                            if (index >= 5 && index < 20) {
+                                uniformI32[index] = value;
+                            }
+                        }
+                    },
+                    audio: {
+                        send: (data) => {
+                            if (state.audioWorkletNode && state.audioWorkletNode.port) {
+                                state.audioWorkletNode.port.postMessage(data);
+                            }
+                        },
+                        setParam: (name, value) => {
+                            if (state.audioWorkletNode && state.audioWorkletNode.parameters && state.audioWorkletNode.parameters.has(name)) {
+                                state.audioWorkletNode.parameters.get(name).value = value;
+                            }
+                        }
+                    }
+                };
+                state.userEnterframe(state.userState, api);
+            } catch (err) {
+                // Silently fail for single frame render
+                console.warn('enterframe error during single frame render:', err);
+            }
+        }
+        
+        device.queue.writeBuffer(state.uniformBuffer, 0, uniformData);
+        
+        const textureView = state.gpuContext.getCurrentTexture().createView();
+        const bindGroup = device.createBindGroup({
+            layout: state.bindGroupLayout,
+            entries: [
+                { binding: 0, resource: { buffer: state.uniformBuffer } },
+                { binding: 1, resource: { buffer: state.computeBuffer } },
+                { binding: 2, resource: { buffer: state.audioBufferGPU } },
+                { binding: 3, resource: textureView },
+                { binding: 4, resource: { buffer: state.phaseStateBuffer } },
+            ],
+        });
+        
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginComputePass();
+        
+        // Only render graphics (no audio)
+        pass.setPipeline(state.graphicsPipeline);
+        pass.setBindGroup(0, bindGroup);
+        pass.dispatchWorkgroups(
+            Math.ceil(state.canvasWidth / state.pixelScale / 8),
+            Math.ceil(state.canvasHeight / state.pixelScale / 8),
+            1
+        );
+        
+        pass.end();
+        device.queue.submit([encoder.finish()]);
+    }
+
+    // Render Loop
+    function render(rawTime) {
+        if (!state.isRunning) return;
+        
+        // Only render when playing
+        if (!state.isPlaying) {
+            requestAnimationFrame(render);
+            return;
+        }
+
+        const device = state.gpuDevice;
+        const ctx = state.audioContext;
+        
+        // Non-GPU mode: just call enterframe and loop
+        if (!device || !state.hasWebGPU) {
+            // Calculate elapsed time
+            const elapsedMs = rawTime - state.startTime - state.pausedTime;
+            const elapsedSec = elapsedMs * 0.001;
+            
+            // Update counters
+            state.visualFrame++;
+            state.fpsFrameCount++;
+            if (rawTime - state.fpsLastTime >= 1000) {
+                state.fps = Math.round(state.fpsFrameCount * 1000 / (rawTime - state.fpsLastTime));
+                state.fpsFrameCount = 0;
+                state.fpsLastTime = rawTime;
+                document.getElementById('fpsCounter').textContent = state.fps;
+            }
+            document.getElementById('frameCounter').textContent = state.visualFrame;
+            document.getElementById('timeCounter').textContent = elapsedSec.toFixed(2) + 's';
+            
+            // Call user's enterframe
+            if (state.userEnterframe) {
+                try {
+                    const api = {
+                        time: elapsedSec,
+                        deltaTime: 0.016,
+                        mouse: { x: state.mouseX, y: state.mouseY },
+                        sampleRate: DERIVED.sampleRate,
+                        samplesPerBlock: DERIVED.samplesPerBlock,
+                        audioFrame: state.audioFrame,
+                        audioMode: state.audioMode,
+                        audioBlockGenerated: false,
+                        uniforms: {
+                            setFloat: () => {},  // No-op without GPU
+                            setInt: () => {}     // No-op without GPU
+                        },
+                        audio: {
+                            send: (data) => {
+                                if (state.audioWorkletNode && state.audioWorkletNode.port) {
+                                    state.audioWorkletNode.port.postMessage(data);
+                                }
+                            },
+                            setParam: (name, value) => {
+                                if (state.audioWorkletNode && state.audioWorkletNode.parameters && state.audioWorkletNode.parameters.has(name)) {
+                                    state.audioWorkletNode.parameters.get(name).value = value;
+                                }
+                            }
+                        }
+                    };
+                    state.userEnterframe(state.userState, api);
+                } catch (err) {
+                    // Pause playback on runtime error
+                    state.isPlaying = false;
+                    state.audioContext.suspend();
+                    updatePlayPauseButton();
+                    
+                    if (state.activeTabs.includes('js')) {
+                        const code = state.jsEditor.getValue();
+                        const codeLines = code.split('\n').length;
+                        const errorInfo = parseJSError(err, codeLines);
+                        
+                        setJSErrors([{
+                            lineNum: errorInfo.lineNum,
+                            column: errorInfo.column,
+                            endColumn: errorInfo.endColumn,
+                            message: `Runtime error in enterframe(): ${errorInfo.message}`
+                        }]);
+                        
+                        logStatus(`✗ JS enterframe() error (line ${errorInfo.lineNum}): ${err.message}`, 'error');
+                    } else {
+                        logStatus(`✗ JS enterframe() error: ${err.message}`, 'error');
+                    }
+                    console.error('enterframe error:', err);
+                }
+            }
+            
+            requestAnimationFrame(render);
+            return;
+        }
+        
+        // Calculate elapsed time (accounting for pauses)
+        const elapsedMs = rawTime - state.startTime - state.pausedTime;
+        const elapsedSec = elapsedMs * 0.001;
+        
+        // Increment visual frame counter
+        state.visualFrame++;
+        
+        // Calculate FPS (update every second)
+        state.fpsFrameCount++;
+        if (rawTime - state.fpsLastTime >= 1000) {
+            state.fps = Math.round(state.fpsFrameCount * 1000 / (rawTime - state.fpsLastTime));
+            state.fpsFrameCount = 0;
+            state.fpsLastTime = rawTime;
+            document.getElementById('fpsCounter').textContent = state.fps;
+        }
+        
+        document.getElementById('frameCounter').textContent = state.visualFrame;
+        document.getElementById('timeCounter').textContent = elapsedSec.toFixed(2) + 's';
+
+        const uniformData = new ArrayBuffer(256);
+        const uniformF32 = new Float32Array(uniformData);
+        const uniformI32 = new Int32Array(uniformData);
+        
+        uniformF32[UNIFORM_STRUCT.time] = elapsedSec;
+        uniformF32[UNIFORM_STRUCT.audioCurrentTime] = ctx.currentTime;
+        uniformF32[UNIFORM_STRUCT.audioPlayTime] = state.nextAudioTime;
+        uniformF32[UNIFORM_STRUCT.audioFractTime] = state.nextAudioTime % 1;
+        uniformI32[UNIFORM_STRUCT.audioFrame] = state.audioFrame;
+        
+    // Call user's enterframe with API
+    if (state.isPlaying && state.userEnterframe) {
+        try {
+            const api = {
+                time: elapsedSec,
+                deltaTime: 0.016, // Could calculate real delta
+                mouse: { x: state.mouseX, y: state.mouseY },
+                sampleRate: DERIVED.sampleRate,
+                samplesPerBlock: DERIVED.samplesPerBlock,
+                audioFrame: state.audioFrame,
+                audioMode: state.audioMode,
+                audioBlockGenerated: false,  // Will be set to true if audio was generated this frame
+                uniforms: {
+                    setFloat: (index, value) => {
+                        if (index >= 5 && index < 20) {
+                            uniformF32[index] = value;
+                        }
+                    },
+                    setInt: (index, value) => {
+                        if (index >= 5 && index < 20) {
+                            uniformI32[index] = value;
+                        }
+                    }
+                },
+                audio: {
+                    send: (data) => {
+                        if (state.audioWorkletNode && state.audioWorkletNode.port) {
+                            state.audioWorkletNode.port.postMessage(data);
+                        }
+                    },
+                    setParam: (name, value) => {
+                        if (state.audioWorkletNode && state.audioWorkletNode.parameters && state.audioWorkletNode.parameters.has(name)) {
+                            state.audioWorkletNode.parameters.get(name).value = value;
+                        }
+                    }
+                }
+            };
+            state.userEnterframe(state.userState, api);
+        } catch (err) {
+            // Pause playback on runtime error
+            state.isPlaying = false;
+            state.audioContext.suspend();
+            updatePlayPauseButton();
+            
+            // Show error with line number (only if JS tab is visible)
+            if (state.activeTabs.includes('js')) {
+                const code = state.jsEditor.getValue();
+                const codeLines = code.split('\n').length;
+                const errorInfo = parseJSError(err, codeLines);
+                
+                setJSErrors([{
+                    lineNum: errorInfo.lineNum,
+                    column: errorInfo.column,
+                    endColumn: errorInfo.endColumn,
+                    message: `Runtime error in enterframe(): ${errorInfo.message}`
+                }]);
+                
+                logStatus(`✗ JS enterframe() error (line ${errorInfo.lineNum}): ${err.message}`, 'error');
+            } else {
+                logStatus(`✗ JS runtime error: ${err.message}`, 'error');
+            }
+            console.error('enterframe error:', err);
+        }
+    }
+    
+    device.queue.writeBuffer(state.uniformBuffer, 0, uniformData);
+
+        const textureView = state.gpuContext.getCurrentTexture().createView();
+        const bindGroup = device.createBindGroup({
+            layout: state.bindGroupLayout,
+            entries: [
+                { binding: 0, resource: { buffer: state.uniformBuffer } },
+                { binding: 1, resource: { buffer: state.computeBuffer } },
+                { binding: 2, resource: { buffer: state.audioBufferGPU } },
+                { binding: 3, resource: textureView },
+                { binding: 4, resource: { buffer: state.phaseStateBuffer } },
+            ],
+        });
+
+        // Check if we need to generate GPU audio THIS frame (only for GPU audio mode)
+        const needsGPUAudio = state.isPlaying && 
+                              state.audioMode === AUDIO_MODES.GPU &&
+                              state.audioPipeline &&
+                              ctx.currentTime >= state.nextAudioTime - CONFIG.audioBlockDuration && 
+                              !state.pendingAudio;
+
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginComputePass();
+        
+        // AUDIO PASS FIRST - Only for GPU audio mode!
+        if (needsGPUAudio) {
+            pass.setPipeline(state.audioPipeline);
+            pass.setBindGroup(0, bindGroup);
+            pass.dispatchWorkgroups(
+                Math.ceil(DERIVED.samplesPerBlock / 128),  // e.g., ceil(4800/128) = 38 workgroups
+                1,
+                1
+            );
+        }
+        
+        // GRAPHICS PASS SECOND - Reads audio data from buffer
+        // 8×8 workgroups for optimal 2D texture access
+        pass.setPipeline(state.graphicsPipeline);
+        pass.setBindGroup(0, bindGroup);
+        pass.dispatchWorkgroups(
+            Math.ceil(state.canvasWidth / state.pixelScale / 8),   // Scaled workgroups X
+            Math.ceil(state.canvasHeight / state.pixelScale / 8),  // Scaled workgroups Y
+            1
+        );
+        
+        pass.end();
+
+        if (needsGPUAudio) {
+            state.pendingAudio = true;
+            
+            const readbackBuffer = state.audioBuffersReadback[state.readbackIndex];
+            encoder.copyBufferToBuffer(
+                state.audioBufferGPU, 0,
+                readbackBuffer, 0,
+                DERIVED.audioBufferSize
+            );
+            
+            device.queue.submit([encoder.finish()]);
+            
+            readbackBuffer.mapAsync(GPUMapMode.READ).then(() => {
+                playAudioBlock(readbackBuffer);
+                state.readbackIndex = 1 - state.readbackIndex;
+                state.pendingAudio = false;
+            }).catch(err => {
+                console.error('Audio readback failed:', err);
+                state.pendingAudio = false;
+            });
+        } else {
+            device.queue.submit([encoder.finish()]);
+        }
+
+        requestAnimationFrame(render);
+    }
+
+    function playAudioBlock(readbackBuffer) {
+        const ctx = state.audioContext;
+        const audioData = new Float32Array(readbackBuffer.getMappedRange());
+        
+        const audioBuffer = ctx.createBuffer(
+            CONFIG.channels,
+            DERIVED.samplesPerBlock,
+            DERIVED.sampleRate
+        );
+        
+        for (let ch = 0; ch < CONFIG.channels; ch++) {
+            const channelData = audioBuffer.getChannelData(ch);
+            const offset = ch * DERIVED.samplesPerBlock;
+            for (let i = 0; i < DERIVED.samplesPerBlock; i++) {
+                channelData[i] = audioData[offset + i];
+            }
+        }
+        
+        readbackBuffer.unmap();
+        
+        const source = ctx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(state.gainNode);
+        source.start(state.nextAudioTime);
+        
+        state.nextAudioTime += CONFIG.audioBlockDuration;
+        state.audioFrame++;
+    }
+
+    // ============================================================================
+    // Start
+    // ============================================================================
+    window.addEventListener('load', init);
+    </script>
+</body>
+</html>

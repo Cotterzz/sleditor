@@ -3,11 +3,10 @@
 // External file to keep main HTML clean
 // ============================================================================
 
-// These functions need access to globals: CONFIG, DERIVED, state
-// They'll be called from the main HTML
+import { CONFIG, DERIVED, state } from './core.js';
 
 // Load help content from external file
-async function getHelpContent() {
+export async function getHelpContent() {
     try {
         const response = await fetch('content/help.txt');
         if (!response.ok) throw new Error('Help file not found');
@@ -18,7 +17,7 @@ async function getHelpContent() {
     }
 }
 
-function getBoilerplate() {
+export function getBoilerplate() {
     return `// ============================================================================
 // AUTO-GENERATED BOILERPLATE
 // This section is read-only and updates when settings change
@@ -34,18 +33,30 @@ const PI = 3.1415926535897932f;
 const TAU = 6.283185307179586f;
 
 struct Uniforms {
-    time: f32,              // 0
-    audioCurrentTime: f32,  // 1
-    audioPlayTime: f32,     // 2
-    audioFractTime: f32,    // 3
-    audioFrame: i32,        // 4
+    time: f32,              // 0  - auto-set
+    audioCurrentTime: f32,  // 1  - auto-set
+    audioPlayTime: f32,     // 2  - auto-set
+    audioFractTime: f32,    // 3  - auto-set
+    audioFrame: i32,        // 4  - auto-set
+    mouseX: f32,            // 5  - auto-set
+    mouseY: f32,            // 6  - auto-set
     
-    // User-accessible uniforms (controlled from JavaScript)
-    mouseX: f32,            // 5
-    mouseY: f32,            // 6
-    frequency: f32,         // 7
-    user3: f32,             // 8
-    user4: f32,             // 9
+    // Custom uniforms (set via api.uniforms.setCustomFloat(slot, value))
+    custom0: f32,           // 7  - api.uniforms.setCustomFloat(0, ...)
+    custom1: f32,           // 8  - api.uniforms.setCustomFloat(1, ...)
+    custom2: f32,           // 9  - api.uniforms.setCustomFloat(2, ...)
+    custom3: f32,           // 10 - api.uniforms.setCustomFloat(3, ...)
+    custom4: f32,           // 11 - api.uniforms.setCustomFloat(4, ...)
+    custom5: f32,           // 12 - api.uniforms.setCustomFloat(5, ...)
+    custom6: f32,           // 13 - api.uniforms.setCustomFloat(6, ...)
+    custom7: f32,           // 14 - api.uniforms.setCustomFloat(7, ...)
+    custom8: f32,           // 15 - api.uniforms.setCustomFloat(8, ...)
+    custom9: f32,           // 16 - api.uniforms.setCustomFloat(9, ...)
+    custom10: f32,          // 17 - api.uniforms.setCustomFloat(10, ...)
+    custom11: f32,          // 18 - api.uniforms.setCustomFloat(11, ...)
+    custom12: f32,          // 19 - api.uniforms.setCustomFloat(12, ...)
+    custom13: f32,          // 20 - api.uniforms.setCustomFloat(13, ...)
+    custom14: f32,          // 21 - api.uniforms.setCustomFloat(14, ...)
 }
 
 @binding(0) @group(0) var<uniform> uniforms: Uniforms;
@@ -56,7 +67,7 @@ struct Uniforms {
 `;
 }
 
-function getDefaultGraphicsShader() {
+export function getDefaultGraphicsShader() {
     return `// ============================================================================
 // GRAPHICS SHADER - Edit this to create visuals
 // ============================================================================
@@ -126,7 +137,7 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
 `;
 }
 
-function getDefaultAudioShader() {
+export function getDefaultAudioShader() {
     return `// ============================================================================
 // AUDIO SHADER - Edit this to create sound
 // ============================================================================
@@ -144,7 +155,7 @@ fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let basePhase = phaseState[0];
     
     // Calculate phase increment per sample using CURRENT frequency
-    let phaseIncrement = uniforms.frequency * TAU / SAMPLE_RATE;
+     let phaseIncrement = uniforms.custom0 * TAU / SAMPLE_RATE;
     
     // Calculate phase for THIS specific sample
     var phase = basePhase + f32(sampleIndex) * phaseIncrement;
@@ -178,14 +189,14 @@ fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 
 // Minimal starter code for when user adds a new tab
-const MINIMAL_JS = `function init() {
+export const MINIMAL_JS = `function init() {
     return {};
 }
 
 function enterframe(state, api) {
-    // Pass mouse position to shader
-    api.uniforms.setFloat(5, api.mouse.x);
-    api.uniforms.setFloat(6, api.mouse.y);
+    // Mouse is automatically available as a built-in uniform
+    // Use custom uniforms for your own data:
+    // api.uniforms.setCustomFloat(0, someValue);
 }`;
 
 const MINIMAL_AUDIO_GPU = `// Simple sine wave (GPU)
@@ -240,7 +251,7 @@ class AudioProcessor extends AudioWorkletProcessor {
 
 registerProcessor('user-audio', AudioProcessor);`;
 
-const DEFAULT_JS = `// This code runs alongside your WGSL shader
+export const DEFAULT_JS = `// This code runs alongside your shader
 // Use 'state' to persist data between frames
 
 function init() {
@@ -266,22 +277,17 @@ function enterframe(state, api) {
     // Optional: smooth frequency changes for even cleaner sound
     state.smoothFreq += (state.targetFreq - state.smoothFreq) * 0.3;
     
-    // Pass data to WGSL shader uniforms
-    // Indices 5-9 map to: mouseX, mouseY, frequency, user3, user4
-    api.uniforms.setFloat(5, state.mouseX);
-    api.uniforms.setFloat(6, state.mouseY);
-    api.uniforms.setFloat(7, state.smoothFreq);
+    // Pass data to shader uniforms
+
+    api.uniforms.setCustomFloat(0, state.smoothFreq);
     
-    // You can use user3 and user4 for other data:
-    // api.uniforms.setFloat(8, someValue);
-    // api.uniforms.setFloat(9, anotherValue);
 }`;
 
 // ============================================================================
 // EXAMPLES LIBRARY
 // ============================================================================
 
-const EXAMPLES = {
+export const EXAMPLES = {
     audioworklet_demo: {
         name: "AudioWorklet Demo",
         description: "JavaScript-based audio synthesis without WebGPU - works on all browsers",
@@ -355,27 +361,14 @@ function enterframe(state, api) {
 }`
     },
     grey_blob: {
-        name: "Grey Blob",
+        name: "Grey Blob WGSL",
         description: "Imported GLSL raymarching shader with mesmerizing organic motion",
         thumbnail: "thumbnails/greyblob.png",
         tabs: ["graphics", "help"],
         webgpuRequired: true,
-        graphics: `/*
-//port of this shadertoy by diatribes:
-void mainImage(out vec4 o, vec2 u) {
-    float i, d, s, n,T = iTime;
-    vec3 p,r = iResolution;
-    for(o = vec4(0); i++<1e2;
-        d += s = .004+.3*abs(s),
-        o += 1./s)
-        for (p = vec3((u-r.xy/2.)/r.y * d, d - 8.),
-             p += .1*(cos(2.*T+dot(cos(3.*T+p+cos(.3*p)), p) *  p )),
-             s = length(p) - 1.5,
-             n = .01; n <.4; n += n )
-                 s -= abs(dot(cos(T+p/n),sin(4.*p.yzx)*.2)) * n;
-    o = tanh(o/8e3);
-}
-*/
+        graphics: `
+//port of the glsl shader by diatribes
+
 @compute @workgroup_size(8, 8, 1)
 fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (gid.x >= u32(SCREEN_WIDTH) || gid.y >= u32(SCREEN_HEIGHT)) { return; }
@@ -411,8 +404,71 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
         audio: null,
         js: null
     },
+    grey_blob_glsl: {
+        name: "Grey Blob GLSL",
+        description: "Original GLSL version of the Grey Blob WGSL example",
+        thumbnail: "thumbnails/greyblob.png",
+        tabs: ["glsl_fragment", "help"],
+        webgpuRequired: false,
+        graphics: `#version 300 es
+precision highp float;
+
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+
+out vec4 fragColor;
+// by diatribes
+void main() {
+    vec2 u = gl_FragCoord.xy;
+    vec4 o;
+    float i, d, s, n,T = u_time;
+    vec3 p;
+    vec2 r = u_resolution;
+    for(o = vec4(0); i++<1e2;
+        d += s = .004+.3*abs(s),
+        o += 1./s)
+        for (p = vec3((u-r/2.)/r.y * d, d - 8.),
+             p += .1*(cos(2.*T+dot(cos(3.*T+p+cos(.3*p)), p) *  p )),
+             s = length(p) - 1.5,
+             n = .01; n <.4; n += n )
+                 s -= abs(dot(cos(T+p/n),sin(4.*p.yzx)*.2)) * n;
+    fragColor = tanh(o/8e3);
+}`,
+        audio: null,
+        js: null
+    },
+    glsl_hello: {
+        name: "GLSL Hello World",
+        description: "Your first GLSL fragment shader - a simple colorful gradient",
+        thumbnail: "thumbnails/new.png",
+        tabs: ["glsl_fragment", "help"],
+        webgpuRequired: false,
+        graphics: `#version 300 es
+precision highp float;
+
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+
+out vec4 fragColor;
+
+void main() {
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    
+    // Time-varying color gradient
+    vec3 col = vec3(uv, 0.5 + 0.5 * sin(u_time));
+    
+    // Output to screen
+    fragColor = vec4(col, 1.0);
+}`,
+        audio: null,
+        js: MINIMAL_JS
+    },
+    
     hello_world: {
-        name: "Hello World",
+        name: "Hello World (WGSL)",
         description: "A simple gradient - perfect first shader to understand coordinates and colors",
         thumbnail: "thumbnails/new.png",
         tabs: ["graphics", "help"],
@@ -530,7 +586,7 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
     
     let uv = vec2f(gid.xy) / vec2f(SCREEN_WIDTH, SCREEN_HEIGHT);
-    let freq = uniforms.frequency;
+    let freq = uniforms.custom0;
     
     // Frequency visualization
     let normalizedFreq = (freq - 220.0) / 660.0;  // Range: 220-880 Hz
@@ -605,10 +661,8 @@ function enterframe(state, api) {
     // Send frequency to AudioWorklet
     api.audio.send({ frequency: state.frequency });
     
-    // Also set shader uniforms for visualization
-    api.uniforms.setFloat(5, state.mouseX);
-    api.uniforms.setFloat(6, state.mouseY);
-    api.uniforms.setFloat(7, state.frequency);
+
+    api.uniforms.setCustomFloat(0, state.frequency);
 }`
     },
     

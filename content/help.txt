@@ -1,3 +1,7 @@
+THIS HELP GUIDE IS OUT OF DATE.
+NEEDS REWRITING TO INCLUDE GLSL, AND THE UNIFORMS
+
+
 WEBGPU COMPUTE SHADER EDITOR - QUICK START GUIDE
 ═══════════════════════════════════════════════════════════════════
 
