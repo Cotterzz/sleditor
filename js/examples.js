@@ -67,139 +67,27 @@ struct Uniforms {
 `;
 }
 
-export function getDefaultGraphicsShader() {
-    return `// ============================================================================
-// GRAPHICS SHADER - Edit this to create visuals
-// ============================================================================
-@compute @workgroup_size(8, 8, 1)
-fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if (gid.x >= u32(SCREEN_WIDTH) || gid.y >= u32(SCREEN_HEIGHT)) {
-        return;
-    }
-    
-    let uv = vec2f(gid.xy) / vec2f(SCREEN_WIDTH, SCREEN_HEIGHT);
-    let t = uniforms.time;
-    
-    // Background pattern (dimmed)
-    let mouseOffset = vec2f(uniforms.mouseX, uniforms.mouseY) * 5.0;
-    let pattern = cos((uv + mouseOffset) * 10.0 + t);
-    var color = vec3f(
-        pattern.x * 0.15 + 0.15,
-        pattern.y * 0.15 + 0.15,
-        0.2
-    );
-    
-    // Draw multi-scale waveforms
-    let waveformCount = 4;
-    let waveformColors = array<vec3f, 4>(
-        vec3f(0.0, 1.0, 0.5),   // Cyan-green
-        vec3f(1.0, 0.8, 0.0),   // Yellow
-        vec3f(1.0, 0.3, 0.5),   // Pink
-        vec3f(0.5, 0.5, 1.0)    // Light blue
-    );
-    
-    for (var i = 0; i < waveformCount; i++) {
-        let waveformY = (f32(i) + 0.5) / f32(waveformCount);  // Vertical position
-        let zoom = pow(4.0, f32(i));  // 1x, 4x, 16x, 64x zoom
-        
-        // Sample audio buffer at current X position with zoom
-        let samplePos = i32(uv.x * f32(SAMPLES_PER_BLOCK) / zoom) % SAMPLES_PER_BLOCK;
-        let audioSample = audioBuffer[samplePos];  // Left channel (mono for simplicity)
-        
-        // Convert audio sample (-1 to 1) to screen space around waveformY
-        let waveformHeight = 0.15 / f32(waveformCount);  // Height of each waveform strip
-        let sampleY = waveformY + audioSample * waveformHeight;
-        
-        // Anti-aliased line drawing
-        let distToWaveform = abs(uv.y - sampleY);
-        let lineThickness = 0.003;
-        let lineIntensity = smoothstep(lineThickness * 2.0, lineThickness * 0.5, distToWaveform);
-        
-        // Add waveform to color
-        color += waveformColors[i] * lineIntensity * 0.8;
-        
-        // Draw center line for reference
-        let centerDist = abs(uv.y - waveformY);
-        let centerLine = smoothstep(0.002, 0.001, centerDist) * 0.2;
-        color += vec3f(0.3) * centerLine;
-    }
-    
-    // Draw scale labels (grid lines at divisions)
-    for (var i = 0; i < waveformCount + 1; i++) {
-        let divY = f32(i) / f32(waveformCount);
-        let divDist = abs(uv.y - divY);
-        let divLine = smoothstep(0.002, 0.001, divDist) * 0.3;
-        color += vec3f(0.5) * divLine;
-    }
-    
-    textureStore(screenTexture, gid.xy, vec4f(color, 1.0));
-}
-`;
-}
-
-export function getDefaultAudioShader() {
-    return `// ============================================================================
-// AUDIO SHADER - Edit this to create sound
-// ============================================================================
-@compute @workgroup_size(128, 1, 1)
-fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    let sampleIndex = i32(gid.x);
-    
-    // Early exit for threads beyond sample count
-    if (sampleIndex >= SAMPLES_PER_BLOCK) {
-        return;
-    }
-    
-    // GPU-SIDE PHASE ACCUMULATION - Perfect timing!
-    // Read persistent phase from previous block (stored on GPU)
-    let basePhase = phaseState[0];
-    
-    // Calculate phase increment per sample using CURRENT frequency
-     let phaseIncrement = uniforms.custom0 * TAU / SAMPLE_RATE;
-    
-    // Calculate phase for THIS specific sample
-    var phase = basePhase + f32(sampleIndex) * phaseIncrement;
-    
-    // Generate audio sample
-    let sample = sin(phase) * 0.3;
-    
-    // Write to interleaved stereo buffer
-    audioBuffer[sampleIndex] = sample;
-    audioBuffer[SAMPLES_PER_BLOCK + sampleIndex] = sample;
-    
-    // CRITICAL: Only the very last thread updates phase state
-    // This ensures one and only one write happens
-    if (sampleIndex == SAMPLES_PER_BLOCK - 1) {
-        // Calculate final phase after all samples
-        var finalPhase = basePhase + f32(SAMPLES_PER_BLOCK) * phaseIncrement;
-        
-        // Wrap phase to [0, TAU) range to prevent precision loss
-        // Use while loop for robust wrapping
-        while (finalPhase >= TAU) {
-            finalPhase -= TAU;
-        }
-        while (finalPhase < 0.0) {
-            finalPhase += TAU;
-        }
-        
-        phaseState[0] = finalPhase;
-    }
-}
-`;
-}
 
 // Minimal starter code for when user adds a new tab
 export const MINIMAL_JS = `function init() {
-    return {};
+    // populate state object with values
+    return {
+        // parameter: 440,
+    };
 }
 
 function enterframe(state, api) {
-    // Mouse is automatically available as a built-in uniform
-    // Use custom uniforms for your own data:
-    // api.uniforms.setCustomFloat(0, someValue);
+    // modify state values each frame
+    //state.parameter += 1;
+
+    // Send message object to AudioWorklet:
+    //api.audio.send({ frequency: state.parameter });
+
+    // Set shader uniforms - works for all shaders
+    //api.uniforms.setCustomFloat(0, state.parameter);
 }`;
 
-const MINIMAL_AUDIO_GPU = `// Simple sine wave (GPU)
+export const MINIMAL_AUDIO_GPU = `// Simple sine wave (GPU)
 @compute @workgroup_size(128, 1, 1)
 fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let sampleIndex = i32(gid.x);
@@ -212,7 +100,7 @@ fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     audioBuffer[SAMPLES_PER_BLOCK + sampleIndex] = sample;
 }`;
 
-const MINIMAL_AUDIO_WORKLET = `// Simple sine wave (AudioWorklet)
+export const MINIMAL_AUDIO_WORKLET = `// Simple sine wave (AudioWorklet)
 class AudioProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
@@ -251,37 +139,6 @@ class AudioProcessor extends AudioWorkletProcessor {
 
 registerProcessor('user-audio', AudioProcessor);`;
 
-export const DEFAULT_JS = `// This code runs alongside your shader
-// Use 'state' to persist data between frames
-
-function init() {
-    // Called once when you press Play
-    return {
-        mouseX: 0,
-        mouseY: 0,
-        targetFreq: 440,
-        smoothFreq: 440,
-    };
-}
-
-function enterframe(state, api) {
-    // Called every frame while playing
-    
-    // Smooth mouse movement
-    state.mouseX += (api.mouse.x - state.mouseX) * 0.1;
-    state.mouseY += (api.mouse.y - state.mouseY) * 0.1;
-    
-    // Change frequency
-    state.targetFreq = 440 + (1. + state.mouseX) * 220 ;
-    
-    // Optional: smooth frequency changes for even cleaner sound
-    state.smoothFreq += (state.targetFreq - state.smoothFreq) * 0.3;
-    
-    // Pass data to shader uniforms
-
-    api.uniforms.setCustomFloat(0, state.smoothFreq);
-    
-}`;
 
 // ============================================================================
 // EXAMPLES LIBRARY
@@ -316,7 +173,7 @@ void main() {
     fragColor = vec4(col, 1.0);
 }`,
         audio: null,
-        js: MINIMAL_JS
+        js: null
     },
     
     hello_world: {
@@ -598,14 +455,157 @@ function enterframe(state, api) {
     },
     
     waveform_viz: {
-        name: "Waveform Visualizer",
-        description: "Multi-scale audio visualization with GPU-based waveform analysis",
+        name: "WGSL Waveforms",
+        description: "Interactive frequency variation, use of phase accumulation, buffer reading and waveform visualisation",
         thumbnail: "thumbnails/audiowgsl.png",
         tabs: ["graphics", "audio", "js", "boilerplate"],
         webgpuRequired: true,
-        graphics: getDefaultGraphicsShader(),
-        audio: getDefaultAudioShader(),
-        js: DEFAULT_JS
+        graphics: `// ============================================================================
+// GRAPHICS SHADER - Edit this to create visuals
+// ============================================================================
+@compute @workgroup_size(8, 8, 1)
+fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    if (gid.x >= u32(SCREEN_WIDTH) || gid.y >= u32(SCREEN_HEIGHT)) {
+        return;
+    }
+    
+    let uv = vec2f(gid.xy) / vec2f(SCREEN_WIDTH, SCREEN_HEIGHT);
+    let t = uniforms.time;
+    
+    // Background pattern (dimmed)
+    let mouseOffset = vec2f(uniforms.mouseX, uniforms.mouseY) * 5.0;
+    let pattern = cos((uv + mouseOffset) * 10.0 + t);
+    var color = vec3f(
+        pattern.x * 0.15 + 0.15,
+        pattern.y * 0.15 + 0.15,
+        0.2
+    );
+    
+    // Draw multi-scale waveforms
+    let waveformCount = 4;
+    let waveformColors = array<vec3f, 4>(
+        vec3f(0.0, 1.0, 0.5),   // Cyan-green
+        vec3f(1.0, 0.8, 0.0),   // Yellow
+        vec3f(1.0, 0.3, 0.5),   // Pink
+        vec3f(0.5, 0.5, 1.0)    // Light blue
+    );
+    
+    for (var i = 0; i < waveformCount; i++) {
+        let waveformY = (f32(i) + 0.5) / f32(waveformCount);  // Vertical position
+        let zoom = pow(4.0, f32(i));  // 1x, 4x, 16x, 64x zoom
+        
+        // Sample audio buffer at current X position with zoom
+        let samplePos = i32(uv.x * f32(SAMPLES_PER_BLOCK) / zoom) % SAMPLES_PER_BLOCK;
+        let audioSample = audioBuffer[samplePos];  // Left channel (mono for simplicity)
+        
+        // Convert audio sample (-1 to 1) to screen space around waveformY
+        let waveformHeight = 0.15 / f32(waveformCount);  // Height of each waveform strip
+        let sampleY = waveformY + audioSample * waveformHeight;
+        
+        // Anti-aliased line drawing
+        let distToWaveform = abs(uv.y - sampleY);
+        let lineThickness = 0.003;
+        let lineIntensity = smoothstep(lineThickness * 2.0, lineThickness * 0.5, distToWaveform);
+        
+        // Add waveform to color
+        color += waveformColors[i] * lineIntensity * 0.8;
+        
+        // Draw center line for reference
+        let centerDist = abs(uv.y - waveformY);
+        let centerLine = smoothstep(0.002, 0.001, centerDist) * 0.2;
+        color += vec3f(0.3) * centerLine;
+    }
+    
+    // Draw scale labels (grid lines at divisions)
+    for (var i = 0; i < waveformCount + 1; i++) {
+        let divY = f32(i) / f32(waveformCount);
+        let divDist = abs(uv.y - divY);
+        let divLine = smoothstep(0.002, 0.001, divDist) * 0.3;
+        color += vec3f(0.5) * divLine;
+    }
+    
+    textureStore(screenTexture, gid.xy, vec4f(color, 1.0));
+}
+`,
+        audio: `// ============================================================================
+// AUDIO SHADER - Edit this to create sound
+// ============================================================================
+@compute @workgroup_size(128, 1, 1)
+fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let sampleIndex = i32(gid.x);
+    
+    // Early exit for threads beyond sample count
+    if (sampleIndex >= SAMPLES_PER_BLOCK) {
+        return;
+    }
+    
+    // GPU-SIDE PHASE ACCUMULATION - Perfect timing!
+    // Read persistent phase from previous block (stored on GPU)
+    let basePhase = phaseState[0];
+    
+    // Calculate phase increment per sample using CURRENT frequency
+     let phaseIncrement = uniforms.custom0 * TAU / SAMPLE_RATE;
+    
+    // Calculate phase for THIS specific sample
+    var phase = basePhase + f32(sampleIndex) * phaseIncrement;
+    
+    // Generate audio sample
+    let sample = sin(phase) * 0.3;
+    
+    // Write to interleaved stereo buffer
+    audioBuffer[sampleIndex] = sample;
+    audioBuffer[SAMPLES_PER_BLOCK + sampleIndex] = sample;
+    
+    // CRITICAL: Only the very last thread updates phase state
+    // This ensures one and only one write happens
+    if (sampleIndex == SAMPLES_PER_BLOCK - 1) {
+        // Calculate final phase after all samples
+        var finalPhase = basePhase + f32(SAMPLES_PER_BLOCK) * phaseIncrement;
+        
+        // Wrap phase to [0, TAU) range to prevent precision loss
+        // Use while loop for robust wrapping
+        while (finalPhase >= TAU) {
+            finalPhase -= TAU;
+        }
+        while (finalPhase < 0.0) {
+            finalPhase += TAU;
+        }
+        
+        phaseState[0] = finalPhase;
+    }
+}
+`,
+        js: `// This code runs alongside your shader
+// Use 'state' to persist data between frames
+
+function init() {
+    // Called once when you press Play
+    return {
+        mouseX: 0,
+        mouseY: 0,
+        targetFreq: 440,
+        smoothFreq: 440,
+    };
+}
+
+function enterframe(state, api) {
+    // Called every frame while playing
+    
+    // Smooth mouse movement
+    state.mouseX += (api.mouse.x - state.mouseX) * 0.1;
+    state.mouseY += (api.mouse.y - state.mouseY) * 0.1;
+    
+    // Change frequency
+    state.targetFreq = 440 + (1. + state.mouseX) * 220 ;
+    
+    // Optional: smooth frequency changes for even cleaner sound
+    state.smoothFreq += (state.targetFreq - state.smoothFreq) * 0.3;
+    
+    // Pass data to shader uniforms
+
+    api.uniforms.setCustomFloat(0, state.smoothFreq);
+    
+}`
     }, 
     audioworklet_demo: {
         name: "AudioWorklet Only",

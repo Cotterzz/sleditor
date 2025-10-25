@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { state } from './core.js';
+import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET } from './examples.js';
 
 // ============================================================================
 // Tab Information
@@ -158,6 +159,16 @@ export function addTab(tabName) {
     }
     
     state.activeTabs.push(tabName);
+    
+    // Initialize new audio tabs with starter code
+    if (state.audioEditor) {
+        if (tabName === 'audio_gpu') {
+            state.audioEditor.setValue(MINIMAL_AUDIO_GPU);
+        } else if (tabName === 'audio_worklet') {
+            state.audioEditor.setValue(MINIMAL_AUDIO_WORKLET);
+        }
+    }
+    
     switchTab(tabName);
 }
 
