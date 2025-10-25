@@ -20,6 +20,11 @@ body.light-mode {
     --shadow-color: #8888cc;
 }
 
+/* Fix for mobile browsers - use 100% instead of 100vh */
+html, body {
+    height: 100%;
+}
+
 body {
     margin: 0;
     padding: 0px;
@@ -66,7 +71,7 @@ body {
 
 #container {
     display: flex;
-    height: 100vh;
+    height: 100%;  /* Use 100% instead of 100vh for mobile browser compatibility */
     gap: 0;
     position: relative;
 }
