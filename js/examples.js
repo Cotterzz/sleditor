@@ -288,158 +288,10 @@ function enterframe(state, api) {
 // ============================================================================
 
 export const EXAMPLES = {
-    audioworklet_demo: {
-        name: "AudioWorklet Demo",
-        description: "JavaScript-based audio synthesis without WebGPU - works on all browsers",
-        thumbnail: "thumbnails/default.png",
-        tabs: ["audio", "js"],
-        webgpuRequired: false,
-        graphics: null,
-        audio: `// AudioWorklet beep synthesizer
-class AudioProcessor extends AudioWorkletProcessor {
-    constructor() {
-        super();
-        this.phase = 0;
-        this.frequency = 440;
-        this.gain = 0.3;
-        
-        // Listen for updates from JS
-        this.port.onmessage = (e) => {
-            if (e.data.frequency !== undefined) {
-                this.frequency = e.data.frequency;
-            }
-            if (e.data.gain !== undefined) {
-                this.gain = e.data.gain;
-            }
-        };
-    }
-    
-    process(inputs, outputs, parameters) {
-        const output = outputs[0];
-        
-        for (let channel = 0; channel < output.length; channel++) {
-            const outputChannel = output[channel];
-            
-            for (let i = 0; i < outputChannel.length; i++) {
-                // Generate sine wave with envelope
-                const envelope = Math.sin(this.phase * 0.05) * 0.5 + 0.5;
-                outputChannel[i] = Math.sin(this.phase) * this.gain * envelope;
-                
-                // Increment phase
-                this.phase += (this.frequency * Math.PI * 2) / sampleRate;
-                if (this.phase > Math.PI * 2) {
-                    this.phase -= Math.PI * 2;
-                }
-            }
-        }
-        
-        return true; // Keep processor alive
-    }
-}
 
-registerProcessor('user-audio', AudioProcessor);`,
-        js: `function init() {
-    return {
-        time: 0,
-        frequency: 440,
-        gain: 0.3,
-    };
-}
 
-function enterframe(state, api) {
-    state.time += 1/60;
-    
-    // Modulate frequency over time
-    state.frequency = 440 + Math.sin(state.time * 0.5) * 110;
-    state.gain = 0.2 + Math.sin(state.time * 0.3) * 0.1;
-    
-    // Send to AudioWorklet
-    api.audio.send({ 
-        frequency: state.frequency,
-        gain: state.gain 
-    });
-}`
-    },
-    grey_blob: {
-        name: "Grey Blob WGSL",
-        description: "Imported GLSL raymarching shader with mesmerizing organic motion",
-        thumbnail: "thumbnails/greyblob.png",
-        tabs: ["graphics", "help"],
-        webgpuRequired: true,
-        graphics: `
-//port of the glsl shader by diatribes
-
-@compute @workgroup_size(8, 8, 1)
-fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if (gid.x >= u32(SCREEN_WIDTH) || gid.y >= u32(SCREEN_HEIGHT)) { return; }
-    let u = vec2f(gid.xy);
-    let r = vec2f(SCREEN_WIDTH, SCREEN_HEIGHT);
-    let T = uniforms.time;
-    
-    var o = vec4f(0.0);
-    var d = 0.0;
-    var s = 0.0;
-    var p = vec3f(0.0);
-    // Main ray marching loop
-    for (var i = 0.0; i < 100.0; i += 1.0) {
-        // Calculate p for this iteration
-        p = vec3f((u - r / 2.0) / r.y * d, d - 8.0);
-        p += 0.1 * (cos(2.0 * T + dot(cos(3.0 * T + p + cos(0.3 * p)), p) * p)); 
-        // Calculate s (distance field)
-        s = length(p) - 1.5;
-        // Detail loop
-        var n = 0.01;
-        while (n < 0.4) {
-            s -= abs(dot(cos(T + p / n), sin(4.0 * p.yzx) * 0.2)) * n;
-            n += n;
-        }
-        // Update d and accumulate color
-        d += 0.004 + 0.3 * abs(s);
-        o += 1.0 / (0.004 + 0.3 * abs(s));
-    }
-    // Apply tone mapping
-    o = tanh(o / 8000.0);
-    textureStore(screenTexture, gid.xy, o);
-}`,
-        audio: null,
-        js: null
-    },
-    grey_blob_glsl: {
-        name: "Grey Blob GLSL",
-        description: "Original GLSL version of the Grey Blob WGSL example",
-        thumbnail: "thumbnails/greyblob.png",
-        tabs: ["glsl_fragment", "help"],
-        webgpuRequired: false,
-        graphics: `#version 300 es
-precision highp float;
-
-uniform float u_time;
-uniform vec2 u_resolution;
-uniform vec2 u_mouse;
-
-out vec4 fragColor;
-// by diatribes
-void main() {
-    vec2 u = gl_FragCoord.xy;
-    vec4 o;
-    float i, d, s, n,T = u_time;
-    vec3 p;
-    vec2 r = u_resolution;
-    for(o = vec4(0); i++<1e2;
-        d += s = .004+.3*abs(s),
-        o += 1./s)
-        for (p = vec3((u-r/2.)/r.y * d, d - 8.),
-             p += .1*(cos(2.*T+dot(cos(3.*T+p+cos(.3*p)), p) *  p )),
-             s = length(p) - 1.5,
-             n = .01; n <.4; n += n )
-                 s -= abs(dot(cos(T+p/n),sin(4.*p.yzx)*.2)) * n;
-    fragColor = tanh(o/8e3);
-}`,
-        audio: null,
-        js: null
-    },
     glsl_hello: {
-        name: "GLSL Hello World",
+        name: "Hello World (GLSL)",
         description: "Your first GLSL fragment shader - a simple colorful gradient",
         thumbnail: "thumbnails/new.png",
         tabs: ["glsl_fragment", "help"],
@@ -487,7 +339,86 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }`,
         audio: null,
         js: null
+    }, 
+    grey_blob_glsl: {
+        name: "Grey Blob GLSL",
+        description: "Original GLSL version of the Grey Blob WGSL example",
+        thumbnail: "thumbnails/greyblob.png",
+        tabs: ["glsl_fragment", "help"],
+        webgpuRequired: false,
+        graphics: `#version 300 es
+precision highp float;
+
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+
+out vec4 fragColor;
+// by diatribes
+void main() {
+    vec2 u = gl_FragCoord.xy;
+    vec4 o;
+    float i, d, s, n,T = u_time;
+    vec3 p;
+    vec2 r = u_resolution;
+    for(o = vec4(0); i++<1e2;
+        d += s = .004+.3*abs(s),
+        o += 1./s)
+        for (p = vec3((u-r/2.)/r.y * d, d - 8.),
+             p += .1*(cos(2.*T+dot(cos(3.*T+p+cos(.3*p)), p) *  p )),
+             s = length(p) - 1.5,
+             n = .01; n <.4; n += n )
+                 s -= abs(dot(cos(T+p/n),sin(4.*p.yzx)*.2)) * n;
+    fragColor = tanh(o/8e3);
+}`,
+        audio: null,
+        js: null
     },
+    grey_blob: {
+        name: "Grey Blob WGSL",
+        description: "Imported GLSL raymarching shader with mesmerizing organic motion",
+        thumbnail: "thumbnails/greyblob.png",
+        tabs: ["graphics", "help"],
+        webgpuRequired: true,
+        graphics: `
+//port of the glsl shader by diatribes
+
+@compute @workgroup_size(8, 8, 1)
+fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    if (gid.x >= u32(SCREEN_WIDTH) || gid.y >= u32(SCREEN_HEIGHT)) { return; }
+    let u = vec2f(gid.xy);
+    let r = vec2f(SCREEN_WIDTH, SCREEN_HEIGHT);
+    let T = uniforms.time;
+    
+    var o = vec4f(0.0);
+    var d = 0.0;
+    var s = 0.0;
+    var p = vec3f(0.0);
+    // Main ray marching loop
+    for (var i = 0.0; i < 100.0; i += 1.0) {
+        // Calculate p for this iteration
+        p = vec3f((u - r / 2.0) / r.y * d, d - 8.0);
+        p += 0.1 * (cos(2.0 * T + dot(cos(3.0 * T + p + cos(0.3 * p)), p) * p)); 
+        // Calculate s (distance field)
+        s = length(p) - 1.5;
+        // Detail loop
+        var n = 0.01;
+        while (n < 0.4) {
+            s -= abs(dot(cos(T + p / n), sin(4.0 * p.yzx) * 0.2)) * n;
+            n += n;
+        }
+        // Update d and accumulate color
+        d += 0.004 + 0.3 * abs(s);
+        o += 1.0 / (0.004 + 0.3 * abs(s));
+    }
+    // Apply tone mapping
+    o = tanh(o / 8000.0);
+    textureStore(screenTexture, gid.xy, o);
+}`,
+        audio: null,
+        js: null
+    },
+
     
     animated_pattern: {
         name: "Animated Pattern",
@@ -675,6 +606,78 @@ function enterframe(state, api) {
         graphics: getDefaultGraphicsShader(),
         audio: getDefaultAudioShader(),
         js: DEFAULT_JS
+    }, 
+    audioworklet_demo: {
+        name: "AudioWorklet Only",
+        description: "JavaScript-based audio synthesis without WebGPU - works on all browsers",
+        thumbnail: "thumbnails/default.png",
+        tabs: ["audio", "js"],
+        webgpuRequired: false,
+        graphics: null,
+        audio: `// AudioWorklet beep synthesizer
+class AudioProcessor extends AudioWorkletProcessor {
+    constructor() {
+        super();
+        this.phase = 0;
+        this.frequency = 440;
+        this.gain = 0.3;
+        
+        // Listen for updates from JS
+        this.port.onmessage = (e) => {
+            if (e.data.frequency !== undefined) {
+                this.frequency = e.data.frequency;
+            }
+            if (e.data.gain !== undefined) {
+                this.gain = e.data.gain;
+            }
+        };
+    }
+    
+    process(inputs, outputs, parameters) {
+        const output = outputs[0];
+        
+        for (let channel = 0; channel < output.length; channel++) {
+            const outputChannel = output[channel];
+            
+            for (let i = 0; i < outputChannel.length; i++) {
+                // Generate sine wave with envelope
+                const envelope = Math.sin(this.phase * 0.05) * 0.5 + 0.5;
+                outputChannel[i] = Math.sin(this.phase) * this.gain * envelope;
+                
+                // Increment phase
+                this.phase += (this.frequency * Math.PI * 2) / sampleRate;
+                if (this.phase > Math.PI * 2) {
+                    this.phase -= Math.PI * 2;
+                }
+            }
+        }
+        
+        return true; // Keep processor alive
+    }
+}
+
+registerProcessor('user-audio', AudioProcessor);`,
+        js: `function init() {
+    return {
+        time: 0,
+        frequency: 440,
+        gain: 0.3,
+    };
+}
+
+function enterframe(state, api) {
+    state.time += 1/60;
+    
+    // Modulate frequency over time
+    state.frequency = 440 + Math.sin(state.time * 0.5) * 110;
+    state.gain = 0.2 + Math.sin(state.time * 0.3) * 0.1;
+    
+    // Send to AudioWorklet
+    api.audio.send({ 
+        frequency: state.frequency,
+        gain: state.gain 
+    });
+}`
     }
 };
 

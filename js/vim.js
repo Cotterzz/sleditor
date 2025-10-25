@@ -92,12 +92,6 @@ export function toggleVimMode() {
 }
 
 export function applyVimMode() {
-    if (!window.MonacoVim) {
-        console.warn('MonacoVim not loaded yet');
-        logStatus('⚠ Vim library not loaded yet, please try again in a moment');
-        return;
-    }
-    
     const vimStatusBar = document.getElementById('vim-status');
     
     // Remove existing vim mode from all editors
@@ -108,7 +102,21 @@ export function applyVimMode() {
     });
     state.vimStatusNodes = [];
     
+    // Clear any content in the status bar before reapplying
+    if (vimStatusBar) {
+        vimStatusBar.textContent = '';
+    }
+    
     if (state.isVimMode) {
+        // User wants vim mode enabled
+        if (!window.MonacoVim) {
+            console.warn('MonacoVim not loaded yet');
+            logStatus('⚠ Vim library not loaded, browser refresh may be required', 'error');
+            // Hide status bar if vim not loaded
+            if (vimStatusBar) vimStatusBar.style.display = 'none';
+            return;
+        }
+        
         // Enable vim mode on all editors (except read-only ones)
         const editors = [
             state.graphicsEditor,
@@ -132,7 +140,8 @@ export function applyVimMode() {
         
         logStatus('✓ Vim mode enabled');
     } else {
-        // Hide vim status bar
+        // User wants vim mode disabled
+        // Hide vim status bar (works even if MonacoVim isn't loaded)
         if (vimStatusBar) vimStatusBar.style.display = 'none';
         
         logStatus('✓ Vim mode disabled');
@@ -144,8 +153,8 @@ export function applyVimMode() {
 // ============================================================================
 
 export function reapplyVimMode() {
-    if (state.isVimMode && window.MonacoVim) {
-        applyVimMode();
-    }
+    // Always call applyVimMode - it will handle the MonacoVim check internally
+    // based on whether vim mode is enabled or disabled
+    applyVimMode();
 }
 

@@ -416,11 +416,12 @@ button.paused:hover {
 
 }
 #vim-status {
+    display: none;  /* Hidden by default, shown when vim mode is active */
     background: var(--bg-primary);
-        border: 1px solid var(--border-color);
-        padding: 5px;
-        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-        font-size: 12px;
+    border: 1px solid var(--border-color);
+    padding: 5px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 12px;
         min-height: 20px;
         max-height: 120px;
         overflow-y: auto;

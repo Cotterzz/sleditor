@@ -1120,7 +1120,8 @@
         // This ensures Monaco has fully loaded all its language modules first
         setTimeout(() => {
         vim.loadVimLibrary().then((success) => {
-            if (success && state.isVimMode) {
+            if (success) {
+                // Apply vim mode state (will show/hide status bar accordingly)
                 vim.applyVimMode();
             }
         });
