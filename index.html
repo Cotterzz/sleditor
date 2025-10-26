@@ -36,6 +36,7 @@
                 </div>
                 <button id="reloadBtn" class="uiBtn" title="Reload shaders (F5 / Ctrl+S)">⌬</button>
                 <button id="saveShaderBtn" class="uiBtn" title="Save current shader">💾</button>
+                <button id="shareBtn" class="uiBtn" title="Copy shareable link">🔗</button>
             </div>
             
             <!-- Vim status bar (inside dev panel) -->
@@ -567,6 +568,75 @@
     }
 
     // ============================================================================
+    // URL Sharing - Load shader from URL parameters
+    // ============================================================================
+    
+    function getShaderFromURL() {
+        // Support both hash (#shader=example) and query params (?shader=example)
+        // Hash is preferred because it doesn't trigger page reload
+        
+        const hash = window.location.hash.slice(1); // Remove '#'
+        const params = new URLSearchParams(hash);
+        
+        // Check for example shader: #shader=glsl_hello
+        if (params.has('shader')) {
+            return params.get('shader');
+        }
+        
+        // Check for future backend shader: #id=abc123def
+        if (params.has('id')) {
+            // When backend is ready, this will fetch from database
+            // For now, return null (no backend yet)
+            const shaderId = params.get('id');
+            console.log('Backend shader ID detected:', shaderId, '(backend not implemented yet)');
+            return null;
+        }
+        
+        return null;
+    }
+    
+    function updateURLForShader(identifier, isExample = true) {
+        // Update URL without triggering page reload
+        const param = isExample ? 'shader' : 'id';
+        const newHash = `#${param}=${identifier}`;
+        
+        // Only update if different to avoid history spam
+        if (window.location.hash !== newHash) {
+            window.history.pushState(null, '', newHash);
+        }
+    }
+    
+    function generateShareableLink(identifier, isExample = true) {
+        const param = isExample ? 'shader' : 'id';
+        const baseUrl = window.location.origin + window.location.pathname;
+        return `${baseUrl}#${param}=${identifier}`;
+    }
+    
+    function copyShareLink() {
+        let link;
+        
+        if (state.currentExample) {
+            // Sharing an example
+            link = generateShareableLink(state.currentExample, true);
+        } else if (state.currentSavedShader) {
+            // For now, saved shaders can't be shared (no backend)
+            logStatus('⚠ Saved shaders can\'t be shared yet (backend coming soon)', 'error');
+            return;
+        } else {
+            logStatus('⚠ No shader loaded to share', 'error');
+            return;
+        }
+        
+        // Copy to clipboard
+        navigator.clipboard.writeText(link).then(() => {
+            logStatus(`✓ Share link copied: ${link}`, 'success');
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+            logStatus('✗ Failed to copy link', 'error');
+        });
+    }
+
+    // ============================================================================
     // Load Example
     // ============================================================================
 
@@ -638,6 +708,9 @@
                 state.isInitializing = wasInitializing;
             }, 100);
         }
+        
+        // Update URL for sharing
+        updateURLForShader(exampleId, true);
     }
 
     // ============================================================================
@@ -908,6 +981,7 @@
         document.getElementById('playPauseBtn').addEventListener('click', togglePlayPause);
         document.getElementById('restartBtn').addEventListener('click', () => restart(true));
         document.getElementById('reloadBtn').addEventListener('click', () => reloadShader());
+        document.getElementById('shareBtn').addEventListener('click', copyShareLink);
         document.getElementById('addPassBtn').addEventListener('click', tabs.showAddPassMenu);
         document.getElementById('optionsBtn').addEventListener('click', tabs.showOptionsMenu);
         
@@ -954,6 +1028,15 @@
         window.addEventListener('toggle-vim', vim.toggleVimMode);
         window.addEventListener('toggle-js-exec-mode', toggleJSExecMode);
         window.addEventListener('load-example', (e) => loadExample(e.detail));
+        
+        // Browser back/forward navigation support
+        window.addEventListener('hashchange', () => {
+            const urlShader = getShaderFromURL();
+            if (urlShader && urlShader !== state.currentExample) {
+                console.log('Navigating to shader from URL:', urlShader);
+                loadExample(urlShader);
+            }
+        });
         window.addEventListener('stop-audio', stopAudio);
         window.addEventListener('tab-removed-recompile', () => {
             if (state.isRunning) {
@@ -1044,6 +1127,10 @@
         
         // Custom events
         window.addEventListener('shader-saved', () => {
+            save.populateGallery(EXAMPLES);
+            updateSaveButton();
+        });
+        window.addEventListener('shader-deleted', () => {
             save.populateGallery(EXAMPLES);
             updateSaveButton();
         });
@@ -1206,9 +1293,16 @@
         // Populate gallery
         save.populateGallery(EXAMPLES);
         
-        // Initialize tabs
+        // Check if a shader is specified in URL (e.g., #shader=glsl_hello or #id=abc123)
+        const urlShader = getShaderFromURL();
+        if (urlShader) {
+            console.log('Loading shader from URL:', urlShader);
+            loadExample(urlShader);
+        } else {
+            // Initialize with default shader
         tabs.renderTabs();
-        tabs.switchTab('glsl_fragment');
+            tabs.switchTab('glsl_fragment');
+        }
         
         // Compile initial shader (works for both GLSL and WGSL)
         const compileSuccess = await reloadShader();

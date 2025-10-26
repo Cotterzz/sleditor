@@ -109,9 +109,8 @@ class AudioProcessor extends AudioWorkletProcessor {
         
         // Listen for parameter updates from JS
         this.port.onmessage = (e) => {
-            if (e.data.frequency !== undefined) {
-                this.frequency = e.data.frequency;
-            }
+            this.receiveMessage(e.data);
+            
         };
     }
     
@@ -134,6 +133,14 @@ class AudioProcessor extends AudioWorkletProcessor {
         }
         
         return true; // Keep processor alive
+    }
+
+    receiveMessage(data) {
+        //if (data.frequency !== undefined) { this.frequency = e.data.frequency;}
+    }
+
+    sendMessage(data) { // this doesn't work yet, but is on sleditor todo list....
+        //this.port.postMessage(data);
     }
 }
 
@@ -197,6 +204,113 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
         audio: null,
         js: null
     }, 
+    wgsl_gfx_audio: {
+        name: "WGSL GFX & Audio",
+        description: "Basic example mixing WGSL compute for texture output and WGSL compute for audio input",
+        thumbnail: "thumbnails/wcaudiogfx.png",
+        tabs: ["graphics", "audio"],
+        webgpuRequired: true,
+        graphics: `// Simple gradient - your first shader!
+@compute @workgroup_size(8, 8, 1)
+fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    if (gid.x >= u32(SCREEN_WIDTH) || gid.y >= u32(SCREEN_HEIGHT)) {
+        return;
+    }
+    
+    var uv = vec2f(gid.xy) / vec2f(SCREEN_WIDTH, SCREEN_HEIGHT);
+    uv.y*=3.0;
+    uv.y+=-1.3+sin(uv.x*30.0)/2.0;
+    let color = vec3f(uv.x, uv.y, 0.5);
+    
+    textureStore(screenTexture, gid.xy, vec4f(color, 1.0));
+}`,
+        audio: `// Simple sine wave (GPU)
+@compute @workgroup_size(128, 1, 1)
+fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let sampleIndex = i32(gid.x);
+    if (sampleIndex >= SAMPLES_PER_BLOCK) { return; }
+    
+    let t = f32(sampleIndex) / SAMPLE_RATE;
+    let sample = sin(t * 440.0 * TAU) * 0.3;
+    
+    audioBuffer[sampleIndex] = sample;
+    audioBuffer[SAMPLES_PER_BLOCK + sampleIndex] = sample;
+}`,
+        js: null
+    },
+    glsl_worklet: {
+        name: "GLSL & Worklet",
+        description: "Basic example mixing GLSL and AudioWorklet",
+        thumbnail: "thumbnails/audiogfx.png",
+        tabs: ["glsl_fragment", "audio"],
+        webgpuRequired: false,
+        graphics: `#version 300 es
+precision highp float;
+
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
+
+out vec4 fragColor;
+
+void main() {
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    uv.y*=3.;
+    uv.y+=-1.3+sin(uv.x*30.0)/2.0;
+    // Time-varying color gradient
+    vec3 col = vec3(uv, 0.5 + 0.5 * sin(u_time));
+    
+    // Output to screen
+    fragColor = vec4(col, 1.0);
+}`,
+        audio: `// Simple sine wave (AudioWorklet)
+class AudioProcessor extends AudioWorkletProcessor {
+    constructor() {
+        super();
+        this.phase = 0;
+        this.frequency = 440;
+        
+        // Listen for parameter updates from JS
+        this.port.onmessage = (e) => {
+            this.receiveMessage(e.data);
+            
+        };
+    }
+    
+    process(inputs, outputs, parameters) {
+        const output = outputs[0];
+        
+        for (let channel = 0; channel < output.length; channel++) {
+            const outputChannel = output[channel];
+            
+            for (let i = 0; i < outputChannel.length; i++) {
+                // Generate sine wave
+                outputChannel[i] = Math.sin(this.phase) * 0.3;
+                
+                // Increment phase
+                this.phase += (this.frequency * Math.PI * 2) / sampleRate;
+                if (this.phase > Math.PI * 2) {
+                    this.phase -= Math.PI * 2;
+                }
+            }
+        }
+        
+        return true; // Keep processor alive
+    }
+
+    receiveMessage(data) {
+        //if (data.frequency !== undefined) { this.frequency = e.data.frequency;}
+    }
+
+    sendMessage(data) { // this doesn't work yet, but is on sleditor todo list....
+        //this.port.postMessage(data);
+    }
+}
+
+registerProcessor('user-audio', AudioProcessor);`,
+        js: null
+    },
     grey_blob_glsl: {
         name: "Grey Blob GLSL",
         description: "Original GLSL version of the Grey Blob WGSL example",
@@ -384,8 +498,8 @@ function enterframe(state, api) {
 }`
     },
     
-    simple_tone: {
-        name: "Simple Tone (AudioWorklet)",
+    variable_tone: {
+        name: "Variable Tone (AudioWorklet)",
         description: "Basic audio synthesis with AudioWorklet - pure sine wave generation",
         thumbnail: "thumbnails/audioworklet.png",
         tabs: ["graphics", "audio", "js"],

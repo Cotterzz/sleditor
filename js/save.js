@@ -189,11 +189,10 @@ export function deleteSavedShader(shaderId) {
         // If we deleted the currently loaded shader, clear the reference
         if (state.currentSavedShader && state.currentSavedShader.id === shaderId) {
             state.currentSavedShader = null;
-            window.dispatchEvent(new CustomEvent('shader-deleted'));
         }
         
-        // Refresh gallery
-        populateGallery();
+        // Dispatch event to refresh gallery
+        window.dispatchEvent(new CustomEvent('shader-deleted'));
         logStatus('✓ Shader deleted');
         return { success: true };
     } catch (e) {
