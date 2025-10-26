@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { state } from './core.js';
+import { sanitize } from './sanitizer.js';
 
 // Default JS that runs when JS tab is not visible
 const INVISIBLE_DEFAULT_JS = `
@@ -62,12 +63,41 @@ export function parseJSError(err, codeLines) {
 // Compilation
 // ============================================================================
 
-export function compile(code = null, useDefault = false) {
+// Store module URL for cleanup
+let currentModuleURL = null;
+let hasLoggedExecutionMode = false;
+
+export async function compile(code = null, useDefault = false) {
     // If JS tab is not active, use invisible default
     const actualCode = useDefault ? INVISIBLE_DEFAULT_JS : (code || '');
     const codeLines = actualCode.split('\n').length;
     
+    // Reset execution log flag on recompile
+    hasLoggedExecutionMode = false;
+    
+    // Sanitize code (skip for default code)
+    if (!useDefault) {
+        const sanitizeResult = sanitize(actualCode);
+        if (!sanitizeResult.success) {
+            return { success: false, errors: sanitizeResult.errors };
+        }
+    }
+    
+    // Choose execution method based on state
+    if (state.jsExecutionMode === 'module') {
+        console.log('🚀 Compiling JS with Dynamic Import (optimized)');
+        return await compileModule(actualCode, codeLines, useDefault);
+    } else {
+        console.log('📦 Compiling JS with Function Eval (compatible)');
+        return compileFunction(actualCode, codeLines, useDefault);
+    }
+}
+
+// Method 1: new Function() - current method
+function compileFunction(actualCode, codeLines, useDefault) {
     try {
+        const compileStart = performance.now();
+        
         // Create a safe scope and eval the user's code
         // We add one newline before user code to make line numbers match
         const wrappedCode = `
@@ -79,6 +109,9 @@ return { init, enterframe };
         
         state.userInit = userFunctions.init;
         state.userEnterframe = userFunctions.enterframe;
+        
+        const compileTime = performance.now() - compileStart;
+        console.log(`  ✓ Function compilation took ${compileTime.toFixed(3)}ms`);
         
         return { success: true };
     } catch (err) {
@@ -102,12 +135,110 @@ return { init, enterframe };
     }
 }
 
+// Method 2: Dynamic Import - optimized method
+async function compileModule(actualCode, codeLines, useDefault) {
+    try {
+        const compileStart = performance.now();
+        
+        // Clean up previous module URL
+        if (currentModuleURL) {
+            URL.revokeObjectURL(currentModuleURL);
+            currentModuleURL = null;
+        }
+        
+        // Wrap user code in ES6 module format
+        // Users write init() and enterframe() like normal, we export them
+        const moduleCode = `
+${actualCode}
+
+// Auto-export user functions (user doesn't need to write export)
+export { init, enterframe };
+`;
+        
+        // Create blob URL for dynamic import
+        const blob = new Blob([moduleCode], { type: 'application/javascript' });
+        currentModuleURL = URL.createObjectURL(blob);
+        
+        // Import the module
+        const module = await import(currentModuleURL);
+        
+        state.userInit = module.init;
+        state.userEnterframe = module.enterframe;
+        
+        const compileTime = performance.now() - compileStart;
+        console.log(`  ✓ Module import took ${compileTime.toFixed(3)}ms`);
+        
+        return { success: true };
+    } catch (err) {
+        if (useDefault) {
+            // Default JS should never fail, but if it does, log and continue
+            console.error('Default JS compilation failed:', err);
+            return { success: false, errors: [] };
+        }
+        
+        // Parse error from dynamic import
+        const errorInfo = parseModuleError(err, codeLines);
+        
+        return {
+            success: false,
+            errors: [{
+                lineNum: errorInfo.lineNum,
+                column: errorInfo.column,
+                endColumn: errorInfo.endColumn,
+                message: errorInfo.message
+            }]
+        };
+    }
+}
+
+// Parse errors from dynamic import (different format than Function errors)
+function parseModuleError(err, codeLines) {
+    let lineNum = 1;
+    let column = 1;
+    let endColumn = 1000;
+    
+    // Try to parse from error message
+    // Module errors often include line:column format
+    const lineColMatch = err.message?.match(/(\d+):(\d+)/);
+    if (lineColMatch) {
+        lineNum = parseInt(lineColMatch[1]);
+        column = parseInt(lineColMatch[2]);
+        endColumn = column + 20;
+    }
+    
+    // Try to parse from stack trace
+    const stackMatch = err.stack?.match(/blob:[^:]+:(\d+):(\d+)/);
+    if (stackMatch) {
+        // Module line numbers need adjustment for our wrapper
+        const rawLineNum = parseInt(stackMatch[1]);
+        lineNum = Math.max(1, rawLineNum - 1);
+        column = parseInt(stackMatch[2]) || 1;
+        
+        if (err instanceof SyntaxError) {
+            endColumn = column + 10;
+        } else {
+            endColumn = column + 20;
+        }
+    }
+    
+    // Clamp to valid range
+    lineNum = Math.min(lineNum, codeLines);
+    
+    return { lineNum, column, endColumn, message: err.message };
+}
+
 // ============================================================================
 // Runtime Execution
 // ============================================================================
 
 export function callEnterframe(elapsedSec, uniformF32 = null, uniformI32 = null, audioContext = null) {
     if (!state.userEnterframe) return { success: true };
+    
+    // Log execution mode once per compilation
+    if (!hasLoggedExecutionMode) {
+        console.log(`▶️  Executing enterframe() compiled with: ${state.jsExecutionMode}`);
+        hasLoggedExecutionMode = true;
+    }
     
     try {
         const api = {

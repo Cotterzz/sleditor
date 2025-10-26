@@ -334,7 +334,6 @@ export function showOptionsMenu() {
     themeItem.innerHTML = `
         <span style="width: 20px;">${state.isDarkMode ? '💡' : '🕯'}</span>
         <span style="flex: 1;">${state.isDarkMode ? 'Light Mode' : 'Dark Mode'}</span>
-        <span style="color: var(--text-secondary);">${state.isDarkMode ? '' : '✓'}</span>
     `;
     themeItem.onmouseenter = () => themeItem.style.background = 'var(--bg-primary)';
     themeItem.onmouseleave = () => themeItem.style.background = '';
@@ -368,8 +367,34 @@ export function showOptionsMenu() {
         menu.remove();
     };
     
+    // JS execution mode toggle
+    const jsExecItem = document.createElement('div');
+    jsExecItem.style.cssText = `
+        padding: 8px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-primary);
+        font-size: 13px;
+    `;
+    const isModule = state.jsExecutionMode === 'module';
+    jsExecItem.innerHTML = `
+        <span style="width: 20px;">⚡</span>
+        <span style="flex: 1;">${isModule ? 'JS: Function Eval' : 'JS: Module Import'}</span>
+        <span style="color: var(--text-secondary); font-size: 11px;">${isModule ? '' : '(faster)'}</span>
+    `;
+    jsExecItem.onmouseenter = () => jsExecItem.style.background = 'var(--bg-primary)';
+    jsExecItem.onmouseleave = () => jsExecItem.style.background = '';
+    jsExecItem.onclick = () => {
+        // Dispatch event for JS execution mode toggle
+        window.dispatchEvent(new CustomEvent('toggle-js-exec-mode'));
+        menu.remove();
+    };
+    
     menu.appendChild(themeItem);
     menu.appendChild(vimItem);
+    menu.appendChild(jsExecItem);
     
     document.body.appendChild(menu);
     

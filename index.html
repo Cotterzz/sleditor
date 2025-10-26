@@ -206,6 +206,23 @@
         saveSettings({ isDarkMode: state.isDarkMode });
         applyTheme();
     }
+    
+    function toggleJSExecMode() {
+        const oldMode = state.jsExecutionMode;
+        
+        // Toggle between 'function' and 'module'
+        state.jsExecutionMode = state.jsExecutionMode === 'function' ? 'module' : 'function';
+        saveSettings({ jsExecutionMode: state.jsExecutionMode });
+        
+        console.log(`⚙️  JS Execution Mode toggled: ${oldMode} → ${state.jsExecutionMode}`);
+        
+        // Recompile JS with new execution mode
+        if (state.isRunning) {
+            reloadShader();
+        }
+        
+        logStatus(`✓ JS execution mode: ${state.jsExecutionMode === 'module' ? 'Module Import (optimized)' : 'Function Eval (compatible)'}`, 'success');
+    }
 
     // ============================================================================
     // Shader Compilation
@@ -274,7 +291,7 @@
             let jsSuccess = true;
             if (state.activeTabs.includes('js')) {
                 const jsCode = state.jsEditor.getValue();
-                const result = jsRuntime.compile(jsCode, false);
+                const result = await jsRuntime.compile(jsCode, false);
                 if (!result.success) {
                     editor.setJSErrors(result.errors);
                     const errMsg = result.errors[0] ? `Line ${result.errors[0].lineNum || '?'}: ${result.errors[0].message}` : 'Unknown error';
@@ -283,7 +300,7 @@
                 }
             } else {
                 // No JS tab active - reset to minimal JS to prevent old code from running
-                jsRuntime.compile(MINIMAL_JS, false);
+                await jsRuntime.compile(MINIMAL_JS, false);
             }
             
             if (!audioSuccess || !jsSuccess) {
@@ -352,7 +369,7 @@
                 // Compile JS
                 if (state.activeTabs.includes('js')) {
                     const code = state.jsEditor.getValue();
-                    const result = jsRuntime.compile(code, false);
+                    const result = await jsRuntime.compile(code, false);
                     if (!result.success) {
                         editor.setJSErrors(result.errors);
                         logStatus(`✗ JS error: ${result.errors[0].message}`, 'error');
@@ -360,7 +377,7 @@
                     }
                 } else {
                     // No JS tab active - reset to minimal JS to prevent old code from running
-                    jsRuntime.compile(MINIMAL_JS, false);
+                    await jsRuntime.compile(MINIMAL_JS, false);
                 }
                 
                 if (audioSuccess && jsSuccess) {
@@ -456,7 +473,7 @@
             // Compile JS
             if (state.activeTabs.includes('js')) {
                 const jsCode = state.jsEditor.getValue();
-                const result = jsRuntime.compile(jsCode, false);
+                const result = await jsRuntime.compile(jsCode, false);
                 if (!result.success) {
                     editor.setJSErrors(result.errors);
                     const errMsg = result.errors[0] ? `Line ${result.errors[0].lineNum || '?'}: ${result.errors[0].message}` : 'Unknown error';
@@ -465,7 +482,7 @@
                 }
             } else {
                 // No JS tab active - reset to minimal JS to prevent old code from running
-                jsRuntime.compile(MINIMAL_JS, false);
+                await jsRuntime.compile(MINIMAL_JS, false);
             }
             
             const totalTime = performance.now() - startTotal;
@@ -935,6 +952,7 @@
         // Custom events
         window.addEventListener('toggle-theme', toggleTheme);
         window.addEventListener('toggle-vim', vim.toggleVimMode);
+        window.addEventListener('toggle-js-exec-mode', toggleJSExecMode);
         window.addEventListener('load-example', (e) => loadExample(e.detail));
         window.addEventListener('stop-audio', stopAudio);
         window.addEventListener('tab-removed-recompile', () => {
@@ -1127,6 +1145,9 @@
         }
         if (settings.isVimMode !== undefined) {
             state.isVimMode = settings.isVimMode;
+        }
+        if (settings.jsExecutionMode !== undefined) {
+            state.jsExecutionMode = settings.jsExecutionMode;
         }
         applyTheme();
         

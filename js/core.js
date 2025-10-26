@@ -124,6 +124,7 @@ export const state = {
     // Editor settings
     isVimMode: false,
     vimStatusNodes: [],  // Store vim mode handlers for each editor
+    jsExecutionMode: 'function',  // 'function' (new Function) or 'module' (dynamic import)
     
     readbackIndex: 0,
     pendingAudio: false,

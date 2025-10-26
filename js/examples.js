@@ -278,21 +278,81 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     
     animated_pattern: {
-        name: "Animated Pattern",
-        description: "Time-based animation with sine waves creating dynamic patterns",
-        thumbnail: "thumbnails/animatedpattern.png",
+        name: "Light Arc WGSL",
+        description: "Time-based animation originally written for compute.toys",
+        thumbnail: "thumbnails/arc.png",
         tabs: ["graphics"],
         webgpuRequired: true,
-        graphics: `// Animated pattern using time
+        graphics: `@compute @workgroup_size(8, 8, 1)
+fn graphics_main(@builtin(global_invocation_id) id: vec3<u32>) {
+    // Viewport resolution (in pixels)
+    let screen_size = vec2f(SCREEN_WIDTH,SCREEN_HEIGHT);
+    // Prevent overdraw for workgroups on the edge of the viewport
+    if (id.x >= u32(screen_size.x) || id.y >= u32(screen_size.y)) { return; }
+    // Pixel coordinates (centre of pixel, origin at bottom left)
+    let fragCoord = vec2f(f32(id.x) + .5, screen_size.y - f32(id.y) - .5);
+    // Normalised pixel coordinates (from 0 to 1)
+    let uv = fragCoord / vec2f(screen_size);
+    // Time varying pixel colour
+    var col = vec3f(1.0-uv.y);
+    var pos = vec2i(i32(id.x),i32(screen_size.y/2));
+    var dify = vec2i(0,0);
+    var roty = f32(uv.y*150.0);
+    dify.y = i32(sin(roty)*uv.y*150.0*uv.y*uv.y);
+    dify.x = i32(cos(roty)*uv.y*150.0*uv.y*uv.y);
+    var rol = sin(uniforms.time);
+    var difa = vec2i(0,0);
+    var difb = vec2i(0,0);
+    var difc = vec2i(0,0);
+    var difd = vec2i(0,0);
+    var amp = f32(11.0*sin(uv.x*3.1415926535));
+    var cent = f32(uv.x-0.5)+sin(uniforms.time/4)/4;
+    var rota = f32(sin(cent*17.0*sin(uniforms.time*20.0/180.0)));
+    var rotb = f32(sin(cent*70.0*sin(uniforms.time*50.0/100.0)));
+    var rotc = f32(sin(cent*270.0*sin(uniforms.time*200.0/50.0)));
+    var rotd = f32(sin(cent*550.0*sin(uniforms.time*600.0/130.0)));
+    difa.y = i32(cos(rota)*amp*2);
+    difa.x = i32(sin(rota)*amp*2);
+    difb.y = i32(sin(rotb)*amp);
+    difb.x = i32(cos(rotb)*amp);
+    difc.y = i32(sin(rotc)*amp/2);
+    difc.x = i32(cos(rotc)*amp/2);
+    difd.y = i32(sin(rotd)*amp/3);
+    difd.x = i32(cos(rotd)*amp/3);
+    col.r += rota/5.;
+    col.g += rotb/5.;
+    col.b += rotc/5.;
+    var dife = difa*difb*difc*difd;
+    pos += difa;
+    pos += difb;
+    pos += difc;
+    pos += dife/i32(386.0);
+    pos += dify;
+    col=col*col*1.7*((amp)/20);
+    col = col * (col.r+col.g+col.b) * (col.r+col.g+col.b);
+    textureStore(screenTexture, vec2u(pos), vec4f(col, 1.));
+}`,
+        audio: null,
+        js: null
+    },
+    
+    mouse_interactive: {
+        name: "Pattern with Mouse WGSL",
+        description: "Uses built-in mouse uniforms",
+        thumbnail: "thumbnails/animatedpattern.png",
+        tabs: ["graphics", "js"],
+        webgpuRequired: true,
+        graphics: `// Animated pattern using time & mouse
 @compute @workgroup_size(8, 8, 1)
 fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if (gid.x >= u32(SCREEN_WIDTH) || gid.y >= u32(SCREEN_HEIGHT)) {
         return;
     }
     
-    let uv = vec2f(gid.xy) / vec2f(SCREEN_WIDTH, SCREEN_HEIGHT);
+    var uv = vec2f(gid.xy) / vec2f(SCREEN_WIDTH, SCREEN_HEIGHT);
+    let mouse = vec2f(uniforms.mouseX, -uniforms.mouseY);
     let t = uniforms.time;
-    
+    uv -= mouse+vec2f(-0.5, 0.5);
     // Rotating pattern
     let angle = atan2(uv.y - 0.5, uv.x - 0.5);
     let radius = length(uv - 0.5);
@@ -302,42 +362,6 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
         pattern * 0.5 + 0.5,
         sin(t * 0.5) * 0.5 + 0.5,
         cos(t * 0.3) * 0.5 + 0.5
-    );
-    
-    textureStore(screenTexture, gid.xy, vec4f(color, 1.0));
-}`,
-        audio: null,
-        js: null
-    },
-    
-    mouse_interactive: {
-        name: "Mouse Interactive",
-        description: "Mouse creates ripple effects - move your cursor to interact!",
-        thumbnail: "thumbnails/mouseinteractive.png",
-        tabs: ["graphics", "js"],
-        webgpuRequired: true,
-        graphics: `// Mouse-controlled visuals
-@compute @workgroup_size(8, 8, 1)
-fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    if (gid.x >= u32(SCREEN_WIDTH) || gid.y >= u32(SCREEN_HEIGHT)) {
-        return;
-    }
-    
-    let uv = vec2f(gid.xy) / vec2f(SCREEN_WIDTH, SCREEN_HEIGHT);
-    let mouse = vec2f(uniforms.mouseX, 1.0-uniforms.mouseY);
-    let t = uniforms.time;
-    
-    // Distance from mouse
-    let dist = length(uv - mouse);
-    
-    // Ripple effect
-    let ripple = sin(dist * 20.0 - t * 3.0) * 0.5 + 0.5;
-    
-    // Color based on distance and time
-    let color = vec3f(
-        ripple * (1.0 - dist),
-        dist,
-        sin(t + dist * 5.0) * 0.5 + 0.5
     );
     
     textureStore(screenTexture, gid.xy, vec4f(color, 1.0));
@@ -576,7 +600,7 @@ fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `,
         js: `// This code runs alongside your shader
-// Use 'state' to persist data between frames
+// Use 'state' to persist data between each frame
 
 function init() {
     // Called once when you press Play
