@@ -46,7 +46,7 @@ export function init() {
 // Sign in with OAuth provider (GitHub, Google, etc.)
 export async function signInWithOAuth(provider) {
     if (!supabase) {
-        logStatus('✗ Supabase not initialized', 'error');
+        window.showAuthMessage?.('Supabase not initialized', 'error');
         return;
     }
     
@@ -60,7 +60,7 @@ export async function signInWithOAuth(provider) {
     });
     
     if (error) {
-        logStatus(`✗ Sign in failed: ${error.message}`, 'error');
+        window.showAuthMessage?.(`Sign in failed: ${error.message}`, 'error');
         console.error('Sign in error:', error);
     }
     // User will be redirected to OAuth provider
@@ -69,7 +69,7 @@ export async function signInWithOAuth(provider) {
 // Sign in with email/password
 export async function signInWithEmail(email, password) {
     if (!supabase) {
-        logStatus('✗ Supabase not initialized', 'error');
+        window.showAuthMessage?.('Supabase not initialized', 'error');
         return { success: false };
     }
     
@@ -79,18 +79,18 @@ export async function signInWithEmail(email, password) {
     });
     
     if (error) {
-        logStatus(`✗ Sign in failed: ${error.message}`, 'error');
+        window.showAuthMessage?.(`Sign in failed: ${error.message}`, 'error');
         return { success: false, error };
     }
     
-    logStatus('✓ Signed in successfully', 'success');
+    window.showAuthMessage?.('Signed in successfully!', 'success');
     return { success: true };
 }
 
 // Sign up with email/password
-export async function signUpWithEmail(email, password) {
+export async function signUpWithEmail(email, password, displayName) {
     if (!supabase) {
-        logStatus('✗ Supabase not initialized', 'error');
+        window.showAuthMessage?.('Supabase not initialized', 'error');
         return { success: false };
     }
     
@@ -98,23 +98,31 @@ export async function signUpWithEmail(email, password) {
         email: email,
         password: password,
         options: {
-            emailRedirectTo: window.location.origin
+            emailRedirectTo: window.location.origin,
+            data: {
+                display_name: displayName  // Store display name in user metadata
+            }
         }
     });
     
     if (error) {
-        logStatus(`✗ Sign up failed: ${error.message}`, 'error');
+        window.showAuthMessage?.(`Sign up failed: ${error.message}`, 'error');
         return { success: false, error };
     }
     
-    logStatus('✓ Check your email to confirm your account', 'success');
+    // Show prominent success message in modal
+    window.showAuthMessage?.(
+        '✓ Account created! Please check your email to confirm your account. ' +
+        'Check your spam folder if you don\'t see it.',
+        'success'
+    );
     return { success: true };
 }
 
 // Sign out
 export async function signOut() {
     if (!supabase) {
-        logStatus('✗ Supabase not initialized', 'error');
+        window.showAuthMessage?.('Supabase not initialized', 'error');
         return;
     }
     
@@ -134,7 +142,9 @@ function onUserSignedIn(user) {
     state.currentUser = user;
     
     // Extract user info (different providers have different metadata)
-    const username = user.user_metadata?.full_name 
+    // Priority: display_name (email signup) > full_name (OAuth) > user_name > name > email prefix
+    const username = user.user_metadata?.display_name
+                  || user.user_metadata?.full_name 
                   || user.user_metadata?.user_name 
                   || user.user_metadata?.name
                   || user.email?.split('@')[0]

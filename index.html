@@ -77,7 +77,7 @@
             <div id="userMenu" style="display: none; align-items: center; gap: 2px;">
                 <span id="username" style="color: var(--text-primary); font-size: 12px;"></span>
                 <img id="userAvatar" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-color);" alt="User" />
-                <button id="signOutBtn" class="uiBtn" style="font-size: 12px; padding: 4px 10px; height: 24px;">Sign Out</button>
+                <button id="signOutBtn" class="uiBtn" style="font-size: 12px; padding: 4px 10px; height: 24px; border-radius: 3px">Sign Out</button>
             </div>
             
             <!-- Sign in button (default) -->
@@ -207,6 +207,10 @@
                     padding: 30px; max-width: 400px; width: 90%;">
             <h2 style="margin: 0 0 20px 0; color: var(--text-primary);">Sign In</h2>
             
+            <!-- Message Area (for success/error messages) -->
+            <div id="authMessage" style="display: none; padding: 12px; margin-bottom: 15px; border-radius: 4px; 
+                                         font-size: 14px; line-height: 1.4;"></div>
+            
             <!-- OAuth Buttons -->
             <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
                 <button id="signInGitHub" class="uiBtn" style="padding: 10px; font-size: 14px;">
@@ -235,6 +239,12 @@
                               border: 1px solid var(--border-color); background: var(--bg-secondary); 
                               color: var(--text-primary);">
                 <input type="password" id="passwordInput" placeholder="Password" 
+                       style="width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; 
+                              border: 1px solid var(--border-color); background: var(--bg-secondary); 
+                              color: var(--text-primary);">
+                
+                <!-- Display name field (optional for sign-in, required for sign-up) -->
+                <input type="text" id="displayNameInput" placeholder="Display Name (required for sign-up)" 
                        style="width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; 
                               border: 1px solid var(--border-color); background: var(--bg-secondary); 
                               color: var(--text-primary);">
@@ -338,6 +348,40 @@
         }
         
         logStatus(`✓ JS execution mode: ${state.jsExecutionMode === 'module' ? 'Module Import (optimized)' : 'Function Eval (compatible)'}`, 'success');
+    }
+    
+    // ============================================================================
+    // Auth Message Helpers
+    // ============================================================================
+    
+    function showAuthMessage(message, type = 'info') {
+        const msgDiv = document.getElementById('authMessage');
+        if (!msgDiv) return;
+        
+        msgDiv.textContent = message;
+        msgDiv.style.display = 'block';
+        
+        // Style based on type (use dark text for better visibility in both themes)
+        if (type === 'error') {
+            msgDiv.style.background = '#ef444433';
+            msgDiv.style.border = '1px solid #ef4444';
+            msgDiv.style.color = '#000000';
+        } else if (type === 'success') {
+            msgDiv.style.background = '#22c55e33';
+            msgDiv.style.border = '1px solid #22c55e';
+            msgDiv.style.color = '#000000';
+        } else {
+            msgDiv.style.background = '#3b82f633';
+            msgDiv.style.border = '1px solid #3b82f6';
+            msgDiv.style.color = '#000000';
+        }
+    }
+    
+    function hideAuthMessage() {
+        const msgDiv = document.getElementById('authMessage');
+        if (msgDiv) {
+            msgDiv.style.display = 'none';
+        }
     }
 
     // ============================================================================
@@ -1111,6 +1155,11 @@
         
         document.getElementById('closeSignInModal').addEventListener('click', () => {
             document.getElementById('signInModal').style.display = 'none';
+            hideAuthMessage();
+            // Clear form fields
+            document.getElementById('emailInput').value = '';
+            document.getElementById('passwordInput').value = '';
+            document.getElementById('displayNameInput').value = '';
         });
         
         // OAuth sign-in
@@ -1132,12 +1181,13 @@
             const password = document.getElementById('passwordInput').value;
             
             if (!email || !password) {
-                logStatus('✗ Please enter email and password', 'error');
+                showAuthMessage('Please enter email and password', 'error');
                 return;
             }
             
             const result = await backend.signInWithEmail(email, password);
             if (result.success) {
+                hideAuthMessage();
                 document.getElementById('signInModal').style.display = 'none';
             }
         });
@@ -1146,16 +1196,20 @@
         document.getElementById('emailSignUp').addEventListener('click', async () => {
             const email = document.getElementById('emailInput').value;
             const password = document.getElementById('passwordInput').value;
+            const displayName = document.getElementById('displayNameInput').value;
             
             if (!email || !password) {
-                logStatus('✗ Please enter email and password', 'error');
+                showAuthMessage('Please enter email and password', 'error');
                 return;
             }
             
-            const result = await backend.signUpWithEmail(email, password);
-            if (result.success) {
-                document.getElementById('signInModal').style.display = 'none';
+            if (!displayName) {
+                showAuthMessage('Please enter a display name', 'error');
+                return;
             }
+            
+            const result = await backend.signUpWithEmail(email, password, displayName);
+            // Don't close modal on success - user needs to see the "check your email" message
         });
         
         // Volume control
@@ -1502,9 +1556,11 @@
         }, 200);
     }
 
-    // Make some functions global for Monaco keyboard shortcuts
+    // Make some functions global for Monaco keyboard shortcuts and backend
     window.reloadShader = reloadShader;
     window.togglePlayPause = togglePlayPause;
+    window.showAuthMessage = showAuthMessage;
+    window.hideAuthMessage = hideAuthMessage;
 
     // Start application
     window.addEventListener('load', init);
