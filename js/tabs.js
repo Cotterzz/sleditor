@@ -42,9 +42,7 @@ function getTabLabel(tabName) {
 export function renderTabs() {
     const tabsContainer = document.getElementById('editorTabs');
     
-    // Remove all tab buttons but keep the action buttons
-    const addPassBtn = document.getElementById('addPassBtn');
-    const optionsBtn = document.getElementById('optionsBtn');
+    // Clear all tab buttons (action buttons are now in top bar)
     tabsContainer.innerHTML = '';
     
     // Add tab buttons
@@ -69,14 +67,6 @@ export function renderTabs() {
         
         tabsContainer.appendChild(button);
     });
-    
-    // Re-add the action buttons at the end
-    if (addPassBtn) {
-        tabsContainer.appendChild(addPassBtn);
-    }
-    if (optionsBtn) {
-        tabsContainer.appendChild(optionsBtn);
-    }
 }
 
 // ============================================================================

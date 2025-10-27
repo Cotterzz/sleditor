@@ -6,18 +6,93 @@
     <title>EDITOR</title>
     <link rel="stylesheet" href="css/app.css">
     <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/favicon/favicon.svg" />
     <link rel="shortcut icon" href="/favicon/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
     <link rel="manifest" href="/favicon/site.webmanifest" />
+    
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <div id="container">
+    <!-- Top Bar -->
+    <div id="topBar" style="display: flex; align-items: center; 
+                             background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); 
+                             height: 30px; gap: 10px;">
+        <!-- Logo + Title (Left) -->
+        <div style="display: flex; align-items: center; gap: 2px; padding-left: 2px;">
+            <img src="favicon/topbar.png" alt="SL" style="height: 20px; opacity: 0.9;padding-top: 1px;" />
+            <span style="font-weight: 600; font-size: 14px; color: var(--text-primary); letter-spacing: 0.5px;">EDITOR</span>
+        </div>
+        
+        <!-- Action Buttons (Over Dev Section) -->
+        <div style="display: flex; align-items: center; gap: 6px; flex: 0 0 auto; margin-left: 15px;">
+            <button id="addPassBtn" style="padding: 0px 6px; height: 24px; font-size: 12px; border-radius: 3px; 
+                                            background: var(--bg-primary); color: var(--text-primary); 
+                                            border: 1px solid var(--border-color); cursor: pointer; 
+                                            font-weight: 500; transition: background 0.2s;"
+                    onmouseover="this.style.background='var(--bg-secondary)'" 
+                    onmouseout="this.style.background='var(--bg-primary)'">
+                + Add Pass
+            </button>
+            <button id="optionsBtn" style="padding: 0px 6px; height: 24px; font-size: 12px; border-radius: 3px; 
+                                            background: var(--bg-primary); color: var(--text-primary); 
+                                            border: 1px solid var(--border-color); cursor: pointer; 
+                                            font-weight: 500; transition: background 0.2s;"
+                    onmouseover="this.style.background='var(--bg-secondary)'" 
+                    onmouseout="this.style.background='var(--bg-primary)'">
+                ⚙ Options
+            </button>
+        </div>
+        
+        <!-- Social Links (Center) -->
+        <div style="flex: 1; display: flex; justify-content: center; gap: 8px;">
+            <a href="https://discord.gg/embXuftRKx" target="_blank" rel="noopener noreferrer" 
+               style="display: flex; align-items: center; gap: 6px; padding: 0px 6px; height: 24px;
+                      background: #5865F2; color: white; text-decoration: none; border-radius: 3px; 
+                      font-size: 12px; font-weight: 500; transition: background 0.2s;"
+               onmouseover="this.style.background='#4752C4'" 
+               onmouseout="this.style.background='#5865F2'">
+                <svg width="14" height="14" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6019 45.5576C70.6551 45.5182 70.6887 45.459 70.6943 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978ZM23.7259 37.3253C20.2276 37.3253 17.3451 34.1136 17.3451 30.1693C17.3451 26.225 20.1717 23.0133 23.7259 23.0133C27.308 23.0133 30.1626 26.2532 30.1066 30.1693C30.1066 34.1136 27.28 37.3253 23.7259 37.3253ZM47.3178 37.3253C43.8196 37.3253 40.9371 34.1136 40.9371 30.1693C40.9371 26.225 43.7636 23.0133 47.3178 23.0133C50.9 23.0133 53.7545 26.2532 53.6986 30.1693C53.6986 34.1136 50.9 37.3253 47.3178 37.3253Z" fill="currentColor"/>
+                </svg>
+                <span>Discord</span>
+            </a>
+            
+            <a href="https://github.com/Cotterzz/sleditor" target="_blank" rel="noopener noreferrer" 
+               style="display: flex; align-items: center; gap: 6px; padding: 0px 6px; height: 24px;
+                      background: #24292e; color: white; text-decoration: none; border-radius: 3px; 
+                      font-size: 12px; font-weight: 500; transition: background 0.2s;"
+               onmouseover="this.style.background='#1a1e22'" 
+               onmouseout="this.style.background='#24292e'">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+                <span>GitHub</span>
+            </a>
+        </div>
+        
+        <!-- Auth Section (Right) -->
+        <div id="authSection" style="display: flex; align-items: center; padding-right: 2px;">
+            <!-- Logged in (hidden by default) -->
+            <div id="userMenu" style="display: none; align-items: center; gap: 2px;">
+                <span id="username" style="color: var(--text-primary); font-size: 12px;"></span>
+                <img id="userAvatar" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-color);" alt="User" />
+                <button id="signOutBtn" class="uiBtn" style="font-size: 12px; padding: 4px 10px; height: 24px;">Sign Out</button>
+            </div>
+            
+            <!-- Sign in button (default) -->
+            <button id="signInBtn" class="uiBtn" style="font-size: 12px; padding: 0px 4px; height: 24px; display: flex; align-items: center; gap: 0px; border-radius: 3px">
+                <span>Sign In</span>
+                <span style="font-size: 16px;">👤</span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Main Container -->
+    <div id="container" style="height: calc(100% - 30px);">
         <div id="devPanel">
 <div id="editorTabs" style="display: flex; margin-bottom: 0px; gap: 5px; align-items: center;">
     <!-- Tabs will be dynamically added here -->
-    <button id="addPassBtn" style="padding: 6px 12px; font-size: 13px; margin-left: auto;">+ Add Pass</button>
-    <button id="optionsBtn" style="padding: 6px 12px; font-size: 13px;">⚙ Options</button>
 </div>
 <div id="boilerplateContainer" class="editor-panel" style="display: none;">
 </div>
@@ -83,22 +158,7 @@
             <!-- Shader Info -->
             <div id="shaderInfo" style="padding: 10px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; flex-grow: 1;">
                 <div id="shaderTitle" style="font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px;">GLSL Hello World</div>
-                <div id="shaderDescription" style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 10px;">Your first GLSL fragment shader - a simple colorful gradient</div>
-                
-                <!-- Discord Invite (pushed to bottom) -->
-                <div style="margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border-color);">
-                    <a href="https://discord.gg/embXuftRKx" target="_blank" rel="noopener noreferrer" 
-                       style="display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 12px; 
-                              background: #5865F2; color: white; text-decoration: none; border-radius: 4px; 
-                              font-size: 13px; font-weight: 500; transition: background 0.2s;"
-                       onmouseover="this.style.background='#4752C4'" 
-                       onmouseout="this.style.background='#5865F2'">
-                        <svg width="20" height="20" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6019 45.5576C70.6551 45.5182 70.6887 45.459 70.6943 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978ZM23.7259 37.3253C20.2276 37.3253 17.3451 34.1136 17.3451 30.1693C17.3451 26.225 20.1717 23.0133 23.7259 23.0133C27.308 23.0133 30.1626 26.2532 30.1066 30.1693C30.1066 34.1136 27.28 37.3253 23.7259 37.3253ZM47.3178 37.3253C43.8196 37.3253 40.9371 34.1136 40.9371 30.1693C40.9371 26.225 43.7636 23.0133 47.3178 23.0133C50.9 23.0133 53.7545 26.2532 53.6986 30.1693C53.6986 34.1136 50.9 37.3253 47.3178 37.3253Z" fill="currentColor"/>
-                        </svg>
-                        <span>Join Sleditor Discord</span>
-                    </a>
-                </div>
+                <div id="shaderDescription" style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;margin-bottom: 10px;">Your first GLSL fragment shader - a simple colorful gradient</div>
             </div>
         </div>
         
@@ -140,6 +200,60 @@
         </div>
     </div>
 
+    <!-- Sign In Modal -->
+    <div id="signInModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+                                 background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center;">
+        <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; 
+                    padding: 30px; max-width: 400px; width: 90%;">
+            <h2 style="margin: 0 0 20px 0; color: var(--text-primary);">Sign In</h2>
+            
+            <!-- OAuth Buttons -->
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+                <button id="signInGitHub" class="uiBtn" style="padding: 10px; font-size: 14px;">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle; margin-right: 8px;">
+                        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                    </svg>
+                    Sign in with GitHub
+                </button>
+                
+                <!-- Hidden until OAuth is configured -->
+                <button id="signInGoogle" class="uiBtn" style="padding: 10px; font-size: 14px; display: none;">
+                    🔍 Sign in with Google
+                </button>
+                
+                <button id="signInFacebook" class="uiBtn" style="padding: 10px; font-size: 14px; display: none;">
+                    📘 Sign in with Facebook
+                </button>
+            </div>
+            
+            <div style="text-align: center; color: var(--text-secondary); margin: 15px 0;">or</div>
+            
+            <!-- Email/Password Form -->
+            <div id="emailForm">
+                <input type="email" id="emailInput" placeholder="Email" 
+                       style="width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; 
+                              border: 1px solid var(--border-color); background: var(--bg-secondary); 
+                              color: var(--text-primary);">
+                <input type="password" id="passwordInput" placeholder="Password" 
+                       style="width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; 
+                              border: 1px solid var(--border-color); background: var(--bg-secondary); 
+                              color: var(--text-primary);">
+                
+                <button id="emailSignIn" class="uiBtn" style="width: 100%; padding: 10px; margin-bottom: 5px;">
+                    Sign In
+                </button>
+                <button id="emailSignUp" class="uiBtn" style="width: 100%; padding: 10px;">
+                    Sign Up
+                </button>
+            </div>
+            
+            <button id="closeSignInModal" style="margin-top: 20px; background: none; border: none; 
+                                                   color: var(--text-secondary); cursor: pointer; width: 100%;">
+                Cancel
+            </button>
+        </div>
+    </div>
+
     <!-- Load Monaco from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
     
@@ -161,6 +275,7 @@
     import * as webgpu from './js/backends/webgpu.js';
     import * as webgl from './js/backends/webgl.js';
     import * as audioWorklet from './js/backends/audio-worklet.js';
+    import * as backend from './js/backend.js';
     import * as render from './js/render.js';
     import * as editor from './js/editor.js';
     import * as jsRuntime from './js/js-runtime.js';
@@ -985,6 +1100,64 @@
         document.getElementById('addPassBtn').addEventListener('click', tabs.showAddPassMenu);
         document.getElementById('optionsBtn').addEventListener('click', tabs.showOptionsMenu);
         
+        // Auth buttons
+        document.getElementById('signInBtn').addEventListener('click', () => {
+            document.getElementById('signInModal').style.display = 'flex';
+        });
+        
+        document.getElementById('signOutBtn').addEventListener('click', () => {
+            backend.signOut();
+        });
+        
+        document.getElementById('closeSignInModal').addEventListener('click', () => {
+            document.getElementById('signInModal').style.display = 'none';
+        });
+        
+        // OAuth sign-in
+        document.getElementById('signInGitHub').addEventListener('click', () => {
+            backend.signInWithOAuth('github');
+        });
+        
+        document.getElementById('signInGoogle').addEventListener('click', () => {
+            backend.signInWithOAuth('google');
+        });
+        
+        document.getElementById('signInFacebook').addEventListener('click', () => {
+            backend.signInWithOAuth('facebook');
+        });
+        
+        // Email/password sign-in
+        document.getElementById('emailSignIn').addEventListener('click', async () => {
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            
+            if (!email || !password) {
+                logStatus('✗ Please enter email and password', 'error');
+                return;
+            }
+            
+            const result = await backend.signInWithEmail(email, password);
+            if (result.success) {
+                document.getElementById('signInModal').style.display = 'none';
+            }
+        });
+        
+        // Email/password sign-up
+        document.getElementById('emailSignUp').addEventListener('click', async () => {
+            const email = document.getElementById('emailInput').value;
+            const password = document.getElementById('passwordInput').value;
+            
+            if (!email || !password) {
+                logStatus('✗ Please enter email and password', 'error');
+                return;
+            }
+            
+            const result = await backend.signUpWithEmail(email, password);
+            if (result.success) {
+                document.getElementById('signInModal').style.display = 'none';
+            }
+        });
+        
         // Volume control
         document.getElementById('volumeSlider').addEventListener('input', (e) => {
             const vol = e.target.value / 100;
@@ -1240,6 +1413,9 @@
         
         setupUI();
         setupSaveSystem();
+        
+        // Initialize backend (Supabase auth)
+        backend.init();
         
         // Initialize audio FIRST
         initWebAudio();

@@ -149,6 +149,9 @@ export const state = {
     isInitializing: true,  // Prevent dirty marking during initial load
     currentSavedShader: null,  // Currently loaded saved shader (if any)
     
+    // Authentication
+    currentUser: null,  // Supabase user object when signed in
+    
     userState: null,
     userInit: null,
     userEnterframe: null,
