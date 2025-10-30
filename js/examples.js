@@ -4,6 +4,7 @@
 // ============================================================================
 
 import { CONFIG, DERIVED, state } from './core.js';
+import { getThumbnailUrl } from './backend.js';
 
 // Load help content from external file
 export async function getHelpContent() {
@@ -157,7 +158,7 @@ export const EXAMPLES = {
     glsl_hello: {
         name: "Hello World (GLSL)",
         description: "Your first GLSL fragment shader - a simple colorful gradient",
-        thumbnail: "thumbnails/new.png",
+        thumbnail: getThumbnailUrl("new.png"),
         tabs: ["glsl_fragment", "help"],
         webgpuRequired: false,
         graphics: `#version 300 es
@@ -186,7 +187,7 @@ void main() {
     hello_world: {
         name: "Hello World (WGSL)",
         description: "A simple gradient - perfect first shader to understand coordinates and colors",
-        thumbnail: "thumbnails/new.png",
+        thumbnail: getThumbnailUrl("new.png"),
         tabs: ["graphics", "help"],
         webgpuRequired: true,
         graphics: `// Simple gradient - your first shader!
@@ -207,7 +208,7 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     wgsl_gfx_audio: {
         name: "WGSL GFX & Audio",
         description: "Basic example mixing WGSL compute for texture output and WGSL compute for audio input",
-        thumbnail: "thumbnails/wcaudiogfx.png",
+        thumbnail: getThumbnailUrl("wcaudiogfx.png"),
         tabs: ["graphics", "audio"],
         webgpuRequired: true,
         graphics: `// Simple gradient - your first shader!
@@ -241,7 +242,7 @@ fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     glsl_worklet: {
         name: "GLSL & Worklet",
         description: "Basic example mixing GLSL and AudioWorklet",
-        thumbnail: "thumbnails/audiogfx.png",
+        thumbnail: getThumbnailUrl("audiogfx.png"),
         tabs: ["glsl_fragment", "audio"],
         webgpuRequired: false,
         graphics: `#version 300 es
@@ -314,7 +315,7 @@ registerProcessor('user-audio', AudioProcessor);`,
     grey_blob_glsl: {
         name: "Grey Blob GLSL",
         description: "Original GLSL version of the Grey Blob WGSL example",
-        thumbnail: "thumbnails/greyblob.png",
+        thumbnail: getThumbnailUrl("greyblob.png"),
         tabs: ["glsl_fragment", "help"],
         webgpuRequired: false,
         graphics: `#version 300 es
@@ -348,7 +349,7 @@ void main() {
     grey_blob: {
         name: "Grey Blob WGSL",
         description: "Imported GLSL raymarching shader with mesmerizing organic motion",
-        thumbnail: "thumbnails/greyblob.png",
+        thumbnail: getThumbnailUrl("greyblob.png"),
         tabs: ["graphics", "help"],
         webgpuRequired: true,
         graphics: `
@@ -394,7 +395,7 @@ fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     animated_pattern: {
         name: "Light Arc WGSL",
         description: "Time-based animation originally written for compute.toys",
-        thumbnail: "thumbnails/arc.png",
+        thumbnail: getThumbnailUrl("arc.png"),
         tabs: ["graphics"],
         webgpuRequired: true,
         graphics: `@compute @workgroup_size(8, 8, 1)
@@ -453,7 +454,7 @@ fn graphics_main(@builtin(global_invocation_id) id: vec3<u32>) {
     mouse_interactive: {
         name: "Pattern with Mouse WGSL",
         description: "Uses built-in mouse uniforms",
-        thumbnail: "thumbnails/animatedpattern.png",
+        thumbnail: getThumbnailUrl("animatedpattern.png"),
         tabs: ["graphics", "js"],
         webgpuRequired: true,
         graphics: `// Animated pattern using time & mouse
@@ -501,7 +502,7 @@ function enterframe(state, api) {
     variable_tone: {
         name: "Variable Tone (AudioWorklet)",
         description: "Basic audio synthesis with AudioWorklet - pure sine wave generation",
-        thumbnail: "thumbnails/audioworklet.png",
+        thumbnail: getThumbnailUrl("audioworklet.png"),
         tabs: ["graphics", "audio", "js"],
         webgpuRequired: true,
         graphics: `// Visualize the frequency
@@ -595,7 +596,7 @@ function enterframe(state, api) {
     waveform_viz: {
         name: "WGSL Waveforms",
         description: "Interactive frequency variation, use of phase accumulation, buffer reading and waveform visualisation",
-        thumbnail: "thumbnails/audiowgsl.png",
+        thumbnail: getThumbnailUrl("audiowgsl.png"),
         tabs: ["graphics", "audio", "js", "boilerplate"],
         webgpuRequired: true,
         graphics: `// ============================================================================
@@ -748,7 +749,7 @@ function enterframe(state, api) {
     audioworklet_demo: {
         name: "AudioWorklet Only",
         description: "JavaScript-based audio synthesis without WebGPU - works on all browsers",
-        thumbnail: "thumbnails/default.png",
+        thumbnail: getThumbnailUrl("default.png"),
         tabs: ["audio", "js"],
         webgpuRequired: false,
         graphics: null,

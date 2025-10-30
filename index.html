@@ -58,9 +58,21 @@
                 <span>Discord</span>
             </a>
             
+            <a href="https://bsky.app/profile/cotterzz.bsky.social" target="_blank" rel="noopener noreferrer" 
+               style="display: flex; align-items: center; gap: 6px; padding: 0px 6px; height: 24px;
+                      background: #0085FF; color: white; text-decoration: none; border-radius: 3px; 
+                      font-size: 12px; font-weight: 500; transition: background 0.2s;"
+               onmouseover="this.style.background='#0070DD'" 
+               onmouseout="this.style.background='#0085FF'">
+                <svg width="14" height="14" viewBox="0 0 600 530" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46C524.6 6.209 563.64 4.825 583.47 7.43c42.088 5.53 57.532 24.345 60.687 54.076 0.77 8.568 1.05 17.537 1.05 27.273 0 77.554-40.13 241.24-160.52 321.98-97.522 65.395-172.72-5.682-189.02-38.314-0.03-0.07-0.05-0.12-0.08-0.19-0.03 0.07-0.05 0.12-0.08 0.19-16.303 32.632-91.502 103.71-189.02 38.314C26.09 330.33-14.04 166.65-14.04 89.093c0-9.736 0.28-18.705 1.05-27.273C-9.838 32.089 5.605 13.274 47.694 7.744c19.83-2.605 58.87-1.221 88.026 36.286z" fill="currentColor"/>
+                </svg>
+                <span>Bluesky</span>
+            </a>
+            
             <a href="https://github.com/Cotterzz/sleditor" target="_blank" rel="noopener noreferrer" 
                style="display: flex; align-items: center; gap: 6px; padding: 0px 6px; height: 24px;
-                      background: #24292e; color: white; text-decoration: none; border-radius: 3px; 
+                      background: #24292e; color: rgb(255, 255, 255); text-decoration: none; border-radius: 3px; 
                       font-size: 12px; font-weight: 500; transition: background 0.2s;"
                onmouseover="this.style.background='#1a1e22'" 
                onmouseout="this.style.background='#24292e'">
@@ -153,26 +165,95 @@
                     <div>Frame: <span id="frameCounter">0</span></div>
                     <div>Time: <span id="timeCounter">0.00s</span></div>
                 </div>
+                <!-- Spacer to push views/likes to the right -->
+                <div style="flex: 1;"></div>
+                <!-- Views and Likes -->
+                <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-end; color: var(--text-secondary); font-size: 12px; padding-right: 5px;">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span style="font-size: 14px;">👁️</span>
+                        <span id="viewCount">0</span>
+                    </div>
+                    <button id="likeButton" style="display: flex; align-items: center; gap: 4px; background: none; border: none; color: var(--text-secondary); font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 4px; transition: all 0.2s;" title="Like this shader">
+                        <span id="likeIcon" style="font-size: 14px;">🤍</span>
+                        <span id="likeText">Like</span>
+                        <span id="likeCount">0</span>
+                    </button>
+                </div>
             </div>
             
             <!-- Shader Info -->
             <div id="shaderInfo" style="padding: 10px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; flex-grow: 1;">
-                <div id="shaderTitle" style="font-size: 14px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px;">GLSL Hello World</div>
-                <div id="shaderDescription" style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;margin-bottom: 10px;">Your first GLSL fragment shader - a simple colorful gradient</div>
+                <div style="display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px;">
+                    <!-- Title (can be text or input) -->
+                    <div id="shaderTitleDisplay" style="font-size: 14px; font-weight: 500; color: var(--text-primary);">GLSL Hello World</div>
+                    <input type="text" id="shaderTitleInput" style="display: none; font-size: 14px; font-weight: 500; flex: 1; max-width: 400px; padding: 2px 4px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px;" placeholder="Shader Title" maxlength="50">
+                    <div id="shaderCreator" style="font-size: 10px; color: var(--text-secondary);">by Community</div>
+                    <!-- Edit button (only shown when not in edit mode) -->
+                    <button id="editShaderButton" style="display: none; margin-left: auto; padding: 2px 6px; background: none; border: 1px solid var(--border-color); border-radius: 3px; color: var(--text-secondary); font-size: 11px; cursor: pointer; transition: all 0.2s;" title="Edit shader details">✏️</button>
+                </div>
+                
+                <!-- Visibility Controls (only shown in edit/fork mode) -->
+                <div id="visibilityControls" style="display: none; margin: 6px 0; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px;">
+                    <div style="font-size: 11px; font-weight: 500; color: var(--text-primary); margin-bottom: 4px;">Visibility:</div>
+                    <label style="display: block; margin-bottom: 2px; cursor: pointer;">
+                        <input type="radio" name="visibility" value="private" id="visibilityPrivate" checked style="margin-right: 6px;">
+                        <span style="font-size: 11px; font-weight: 500; color: var(--text-primary);">Private</span>
+                        <span style="font-size: 10px; color: var(--text-secondary);"> - Only you can see this.</span>
+                    </label>
+                    <label style="display: block; margin-bottom: 2px; cursor: pointer;">
+                        <input type="radio" name="visibility" value="published" id="visibilityPublished" style="margin-right: 6px;">
+                        <span style="font-size: 11px; font-weight: 500; color: var(--text-primary);">Published</span>
+                        <span style="font-size: 10px; color: var(--text-secondary);"> - Visible to logged in members in the gallery, also to the public if they have the url.</span>
+                    </label>
+                    <div style="font-size: 9px; color: var(--text-secondary); margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border-color);">
+                        Shaders using JS aren't currently shareable while we figure out a security model, AudioWorklet is shareable.
+                    </div>
+                </div>
+                
+                <!-- Description (can be text or textarea) -->
+                <div id="shaderDescriptionDisplay" style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 10px;">Your first GLSL fragment shader - a simple colorful gradient</div>
+                <textarea id="shaderDescriptionInput" style="display: none; font-size: 12px; width: 100%; min-height: 60px; padding: 4px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px; resize: vertical; font-family: inherit;" placeholder="Description (optional)" maxlength="200"></textarea>
             </div>
         </div>
         
-        <!-- Divider between Display and Gallery -->
+        <!-- Divider between Display and Gallery/Comments Panel -->
         <div class="panel-divider" id="divider2" data-divider="display-gallery">
             <div class="divider-handle">⋮</div>
         </div>
         
-        <div id="galleryPanel">
-            <div class="gallery-header">
-                <h2 style="margin: 0; font-size: 16px; color: var(--text-primary);">Gallery</h2>
+        <!-- Right Panel Container (acts as galleryPanel for divider) -->
+        <div id="galleryPanel" style="display: flex; flex-direction: column; overflow: hidden;">
+            <!-- Top-level tabs: Comments / Gallery -->
+            <div style="display: flex; gap: 0; padding: 10px 10px 0 10px; border-bottom: 2px solid var(--border-color);">
+                <button id="topTabComments" class="top-level-tab" data-panel="comments" style="flex: 1; padding: 10px 16px; background: none; border: none; border-bottom: 3px solid transparent; color: var(--text-secondary); font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; margin-bottom: -2px;">
+                    Comments
+                </button>
+                <button id="topTabGallery" class="top-level-tab active" data-panel="gallery" style="flex: 1; padding: 10px 16px; background: none; border: none; border-bottom: 3px solid var(--accent-color); color: var(--accent-color); font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; margin-bottom: -2px;">
+                    Gallery
+                </button>
             </div>
-            <div id="galleryContent">
-                <!-- Gallery items will be populated here -->
+            
+            <!-- Comments Panel (hidden by default) -->
+            <div id="commentsPanel" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+                <!-- Comments will be populated here by comments.js -->
+            </div>
+            
+            <!-- Gallery Section (visible by default) -->
+            <div id="gallerySection" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+                <div id="galleryTabs" style="display: flex; gap: 2px; padding: 0 10px; margin: 10px 0; border-bottom: 1px solid var(--border-color);">
+                    <button class="gallery-tab active" data-tab="my" style="flex: 1; padding: 8px 12px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); font-size: 12px; cursor: pointer; transition: all 0.2s;">
+                        My Shaders
+                    </button>
+                    <button class="gallery-tab" data-tab="community" style="flex: 1; padding: 8px 12px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); font-size: 12px; cursor: pointer; transition: all 0.2s;">
+                        Community
+                    </button>
+                    <button class="gallery-tab" data-tab="examples" style="flex: 1; padding: 8px 12px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); font-size: 12px; cursor: pointer; transition: all 0.2s;">
+                        Examples
+                    </button>
+                </div>
+                <div id="galleryContent" style="flex: 1; overflow-y: auto;">
+                    <!-- Gallery items will be populated here -->
+                </div>
             </div>
         </div>
     </div>
@@ -265,6 +346,9 @@
     </div>
 
     <!-- Load Monaco from CDN -->
+    <!-- Marked.js for Markdown rendering in comments -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
     
     <!-- Configure Monaco loader -->
@@ -291,6 +375,7 @@
     import * as jsRuntime from './js/js-runtime.js';
     import * as tabs from './js/tabs.js';
     import * as save from './js/save.js';
+    import * as comments from './js/comments.js';
     import * as vim from './js/vim.js';
     import { getBoilerplate, getHelpContent, MINIMAL_JS, EXAMPLES } from './js/examples.js';
 
@@ -774,12 +859,17 @@
     function copyShareLink() {
         let link;
         
-        if (state.currentExample) {
-            // Sharing an example
+        // Check if we have a database shader loaded
+        if (state.currentDatabaseShader?.slug) {
+            // Database shader - use slug-based URL
+            const baseUrl = window.location.origin + window.location.pathname;
+            link = `${baseUrl}#id=${state.currentDatabaseShader.slug}`;
+        } else if (state.currentExample) {
+            // Old hardcoded example (shouldn't happen anymore)
             link = generateShareableLink(state.currentExample, true);
         } else if (state.currentSavedShader) {
-            // For now, saved shaders can't be shared (no backend)
-            logStatus('⚠ Saved shaders can\'t be shared yet (backend coming soon)', 'error');
+            // Local storage shader (can't share yet)
+            logStatus('⚠ Local shaders can\'t be shared. Sign in and save to database to share.', 'error');
             return;
         } else {
             logStatus('⚠ No shader loaded to share', 'error');
@@ -849,8 +939,9 @@
         tabs.switchTab(updatedTabs[0] || 'graphics');
         
         // Update shader info
-        document.getElementById('shaderTitle').textContent = example.name;
-        document.getElementById('shaderDescription').textContent = example.description || '';
+        document.getElementById('shaderTitleDisplay').textContent = example.name;
+        document.getElementById('shaderCreator').textContent = example.creator ? `by ${example.creator}` : '';
+        document.getElementById('shaderDescriptionDisplay').textContent = example.description || '';
         
         // Reload shader and restart (maintains play/pause state)
         if (state.isRunning) {
@@ -1167,6 +1258,30 @@
             backend.signInWithOAuth('github');
         });
         
+        // Edit shader button
+        document.getElementById('editShaderButton').addEventListener('click', () => {
+            enterEditMode(false); // false = editing owned shader, not forking
+        });
+        
+        // Like button
+        document.getElementById('likeButton').addEventListener('click', handleLikeClick);
+        
+        // Top-level tab switching (Comments / Gallery)
+        document.querySelectorAll('.top-level-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const panel = tab.dataset.panel;
+                switchTopLevelPanel(panel);
+            });
+        });
+        
+        // Gallery tab switching
+        document.querySelectorAll('.gallery-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                save.populateGallery(tabName);
+            });
+        });
+        
         document.getElementById('signInGoogle').addEventListener('click', () => {
             backend.signInWithOAuth('google');
         });
@@ -1281,6 +1396,53 @@
         });
     }
 
+    // Add after setupUI() function
+
+        // TEMPORARY: Admin button to save examples to DB
+        if (backend.isSignedIn()) {
+            const saveExampleBtn = document.createElement('button');
+            saveExampleBtn.textContent = '💾 Save Current as Example';
+            saveExampleBtn.className = 'uiBtn';
+            saveExampleBtn.style.cssText = 'position: fixed; top: 40px; right: 10px; z-index: 9999; background: #f59e0b;';
+            saveExampleBtn.onclick = async () => {
+                if (!confirm('Save current shader as Example?')) return;
+
+                // Capture thumbnail
+                const blob = await backend.captureThumbnailBlob();
+                const filename = `${Date.now()}.png`;
+                const thumbResult = await backend.uploadThumbnail(blob, filename);
+
+                if (!thumbResult.success) {
+                    alert('Failed to upload thumbnail: ' + thumbResult.error);
+                    return;
+                }
+
+                // Prepare shader data
+                const shaderData = {
+                    title: state.currentExample ? EXAMPLES[state.currentExample].name : 'Untitled',
+                    description: state.currentExample ? EXAMPLES[state.currentExample].description : '',
+                    code_types: state.activeTabs.filter(t => t !== 'help' && t !== 'boilerplate'),
+                    code: {
+                        ...(state.graphicsEditor && { [state.activeTabs.find(t => t.includes('gl'))]: state.graphicsEditor.getValue() }),
+                        ...(state.audioEditor && state.activeTabs.includes('audio_gpu') && { wgsl_audio: state.audioEditor.getValue() }),
+                        ...(state.audioEditor && state.activeTabs.includes('audio_worklet') && { audioworklet: state.audioEditor.getValue() }),
+                        ...(state.jsEditor && state.activeTabs.includes('js') && { javascript: state.jsEditor.getValue() })
+                    },
+                    visibility: 'example',
+                    thumbnail_url: thumbResult.url
+                };
+
+                const result = await backend.saveShader(shaderData);
+
+                if (result.success) {
+                    alert('✓ Saved as example! Slug: ' + result.shader.slug);
+                } else {
+                    alert('✗ Failed to save: ' + result.error);
+                }
+            };
+            document.body.appendChild(saveExampleBtn);
+        }
+
     function updateCanvasSize(width, height, recompile = true) {
         state.canvasWidth = width;
         state.canvasHeight = height;
@@ -1326,12 +1488,208 @@
         }
     }
 
+    // Handle save/fork button click
+    async function handleSaveForkClick() {
+        const isLoggedIn = !!state.currentUser;
+        const isOwned = isShaderOwnedByUser();
+        const isEditMode = isInEditMode();
+        
+        // Not logged in - show modal
+        if (!isLoggedIn) {
+            showSaveModal();
+            return;
+        }
+        
+        // In edit mode - save the shader
+        if (isEditMode) {
+            await saveShaderInline();
+            return;
+        }
+        
+        // Viewing owned shader - save directly
+        if (isOwned) {
+            await saveOwnedShader();
+            return;
+        }
+        
+        // Viewing someone else's shader - enter fork mode
+        enterEditMode(true);
+    }
+    
+    // Save owned shader directly (update existing)
+    async function saveOwnedShader() {
+        if (!state.currentDatabaseShader) {
+            logStatus('⚠ No shader to save', 'error');
+            return;
+        }
+        
+        const shaderData = {
+            id: state.currentDatabaseShader.id,
+            title: state.currentDatabaseShader.title,
+            description: state.currentDatabaseShader.description,
+            tags: state.currentDatabaseShader.tags || [],
+            visibility: state.currentDatabaseShader.visibility || 'published',
+            code: {},
+            code_types: [...state.activeTabs.filter(t => t !== 'help')]
+        };
+        
+        // Collect code from editors
+        if (state.graphicsEditor) {
+            const graphicsTab = state.activeTabs.find(t => 
+                t === 'glsl_fragment' || t === 'wgsl_graphics' || t === 'graphics'
+            );
+            if (graphicsTab) {
+                shaderData.code[graphicsTab] = state.graphicsEditor.getValue();
+            }
+        }
+        if (state.audioEditor) {
+            if (state.activeTabs.includes('wgsl_audio')) {
+                shaderData.code.wgsl_audio = state.audioEditor.getValue();
+            } else if (state.activeTabs.includes('audioworklet')) {
+                shaderData.code.audioworklet = state.audioEditor.getValue();
+            }
+        }
+        if (state.jsEditor && state.activeTabs.includes('js')) {
+            shaderData.code.js = state.jsEditor.getValue();
+        }
+        
+        // Capture and upload thumbnail
+        try {
+            const blob = await backend.captureThumbnailBlob();
+            if (blob) {
+                const filename = `shader_${state.currentDatabaseShader.id}_${Date.now()}.png`;
+                const uploadResult = await backend.uploadThumbnail(blob, filename);
+                if (uploadResult.success) {
+                    shaderData.thumbnail_url = uploadResult.url;
+                }
+            }
+        } catch (err) {
+            console.error('Thumbnail capture error:', err);
+        }
+        
+        // Save to database
+        const result = await backend.saveShader(shaderData);
+        
+        if (result.success) {
+            state.isDirty = false;
+            state.currentDatabaseShader = result.shader;
+            updateSaveButton();
+            save.populateGallery();
+            logStatus('✓ Shader updated');
+        } else {
+            logStatus('✗ Failed to save: ' + result.error, 'error');
+        }
+    }
+    
+    // Save shader from inline edit mode (create new or update)
+    async function saveShaderInline() {
+        const titleInput = document.getElementById('shaderTitleInput');
+        const descInput = document.getElementById('shaderDescriptionInput');
+        const title = titleInput.value.trim();
+        const description = descInput.value.trim();
+        
+        if (!title) {
+            logStatus('⚠ Title is required', 'error');
+            titleInput.focus();
+            return;
+        }
+        
+        // Get visibility
+        const visibility = document.getElementById('visibilityPrivate').checked ? 'private' : 'published';
+        
+        const shaderData = {
+            title,
+            description,
+            tags: [], // Could add tag input later
+            visibility,
+            code: {},
+            code_types: [...state.activeTabs.filter(t => t !== 'help')]
+        };
+        
+        // If updating owned shader, include ID
+        if (isShaderOwnedByUser() && state.currentDatabaseShader) {
+            shaderData.id = state.currentDatabaseShader.id;
+        }
+        
+        // Collect code from editors
+        if (state.graphicsEditor) {
+            const graphicsTab = state.activeTabs.find(t => 
+                t === 'glsl_fragment' || t === 'wgsl_graphics' || t === 'graphics'
+            );
+            if (graphicsTab) {
+                shaderData.code[graphicsTab] = state.graphicsEditor.getValue();
+            }
+        }
+        
+        if (state.audioEditor) {
+            if (state.activeTabs.includes('wgsl_audio')) {
+                shaderData.code.wgsl_audio = state.audioEditor.getValue();
+            } else if (state.activeTabs.includes('audioworklet')) {
+                shaderData.code.audioworklet = state.audioEditor.getValue();
+            }
+        }
+        
+        if (state.jsEditor && state.activeTabs.includes('js')) {
+            shaderData.code.js = state.jsEditor.getValue();
+        }
+        
+        // Capture and upload thumbnail
+        try {
+            logStatus('📸 Capturing thumbnail...');
+            const blob = await backend.captureThumbnailBlob();
+            
+            if (blob) {
+                const filename = `shader_${Date.now()}.png`;
+                const uploadResult = await backend.uploadThumbnail(blob, filename);
+                
+                if (uploadResult.success) {
+                    shaderData.thumbnail_url = uploadResult.url;
+                }
+            }
+        } catch (err) {
+            console.error('Thumbnail capture error:', err);
+        }
+        
+        // Save to database
+        const result = await backend.saveShader(shaderData);
+        
+        if (result.success) {
+            state.isDirty = false;
+            state.currentDatabaseShader = result.shader;
+            exitEditMode();
+            
+            // Update URL to new shader
+            if (result.shader.slug) {
+                const newHash = `#id=${result.shader.slug}`;
+                window.history.pushState(null, '', newHash);
+            }
+            
+            // Update UI
+            document.getElementById('shaderTitleDisplay').textContent = result.shader.title;
+            document.getElementById('shaderDescriptionDisplay').textContent = result.shader.description || '';
+            
+            const displayName = state.currentUser.user_metadata?.display_name || 
+                               state.currentUser.email?.split('@')[0] || 
+                               'You';
+            document.getElementById('shaderCreator').textContent = `by ${displayName}`;
+            
+            updateSaveButton();
+            save.populateGallery();
+            logStatus(shaderData.id ? '✓ Shader updated' : '✓ Shader saved');
+        } else {
+            logStatus('✗ Failed to save: ' + result.error, 'error');
+        }
+    }
+
     // ============================================================================
     // Setup Save System
     // ============================================================================
 
     function setupSaveSystem() {
-        document.getElementById('saveShaderBtn').addEventListener('click', showSaveModal);
+        // Main save/fork button handler
+        document.getElementById('saveShaderBtn').addEventListener('click', handleSaveForkClick);
+        
+        // Modal handlers (for non-logged-in users)
         document.getElementById('saveCancelBtn').addEventListener('click', hideSaveModal);
         document.getElementById('saveConfirmBtn').addEventListener('click', () => {
             const title = document.getElementById('saveModalTitle').value.trim();
@@ -1347,18 +1705,18 @@
             const result = save.saveShaderToStorage(title, description, tags);
             if (result.success) {
                 hideSaveModal();
-                save.populateGallery(EXAMPLES);
+                save.populateGallery();
                 logStatus('✓ Shader saved');
             }
         });
         
         // Custom events
         window.addEventListener('shader-saved', () => {
-            save.populateGallery(EXAMPLES);
+            save.populateGallery();
             updateSaveButton();
         });
         window.addEventListener('shader-deleted', () => {
-            save.populateGallery(EXAMPLES);
+            save.populateGallery();
             updateSaveButton();
         });
         window.addEventListener('shader-loaded', (e) => {
@@ -1374,8 +1732,9 @@
             // Don't change canvas size or pixel scale - use current values
             
             // Update shader info
-            document.getElementById('shaderTitle').textContent = shader.title;
-            document.getElementById('shaderDescription').textContent = shader.description || '';
+            document.getElementById('shaderTitleDisplay').textContent = shader.title;
+            document.getElementById('shaderCreator').textContent = shader.creator ? `by ${shader.creator}` : '';
+            document.getElementById('shaderDescriptionDisplay').textContent = shader.description || '';
             
             // Update UI
             tabs.renderTabs();
@@ -1415,17 +1774,137 @@
         }
     }
 
+    // ============================================================================
+    // Save/Fork Button Logic
+    // ============================================================================
+    
+    // Check if current shader is owned by logged-in user
+    function isShaderOwnedByUser() {
+        if (!state.currentUser || !state.currentDatabaseShader) return false;
+        return state.currentDatabaseShader.user_id === state.currentUser.id;
+    }
+    
+    // Check if we're in edit/fork mode (inline editing active)
+    function isInEditMode() {
+        return document.getElementById('shaderTitleInput').style.display !== 'none';
+    }
+    
+    // Enter edit/fork mode - make title/description editable
+    function enterEditMode(isFork = false) {
+        const titleDisplay = document.getElementById('shaderTitleDisplay');
+        const titleInput = document.getElementById('shaderTitleInput');
+        const descDisplay = document.getElementById('shaderDescriptionDisplay');
+        const descInput = document.getElementById('shaderDescriptionInput');
+        const creatorEl = document.getElementById('shaderCreator');
+        const visibilityControls = document.getElementById('visibilityControls');
+        const editBtn = document.getElementById('editShaderButton');
+        
+        // Get current values
+        let currentTitle = titleDisplay.textContent || 'Untitled';
+        const currentDesc = descDisplay.textContent || '';
+        
+        // If forking, prefix title
+        if (isFork && state.currentDatabaseShader) {
+            currentTitle = `Fork of: ${state.currentDatabaseShader.title}`;
+        }
+        
+        // Hide displays, show inputs
+        titleDisplay.style.display = 'none';
+        titleInput.style.display = 'block';
+        titleInput.value = currentTitle;
+        
+        descDisplay.style.display = 'none';
+        descInput.style.display = 'block';
+        descInput.value = currentDesc;
+        
+        // Update creator to current user
+        if (state.currentUser) {
+            const displayName = state.currentUser.user_metadata?.display_name || 
+                               state.currentUser.email?.split('@')[0] || 
+                               'You';
+            creatorEl.textContent = `by ${displayName}`;
+        }
+        
+        // Hide edit button while in edit mode
+        if (editBtn) editBtn.style.display = 'none';
+        
+        // Show visibility controls
+        visibilityControls.style.display = 'block';
+        
+        // Set default visibility - private by default when forking, keep current when editing owned
+        const defaultVisibility = isFork ? 'private' : (state.currentDatabaseShader?.visibility || 'private');
+        document.getElementById('visibilityPrivate').checked = defaultVisibility === 'private';
+        document.getElementById('visibilityPublished').checked = defaultVisibility === 'published';
+        
+        // Update button to Save mode
+        updateSaveButton();
+    }
+    
+    // Exit edit mode - return to display mode
+    function exitEditMode() {
+        const titleDisplay = document.getElementById('shaderTitleDisplay');
+        const titleInput = document.getElementById('shaderTitleInput');
+        const descDisplay = document.getElementById('shaderDescriptionDisplay');
+        const descInput = document.getElementById('shaderDescriptionInput');
+        const visibilityControls = document.getElementById('visibilityControls');
+        const editBtn = document.getElementById('editShaderButton');
+        
+        // Show displays, hide inputs
+        titleDisplay.style.display = 'block';
+        titleInput.style.display = 'none';
+        
+        descDisplay.style.display = 'block';
+        descInput.style.display = 'none';
+        
+        // Hide visibility controls
+        visibilityControls.style.display = 'none';
+        
+        // Show edit button if user owns this shader
+        if (editBtn && isShaderOwnedByUser()) {
+            editBtn.style.display = 'inline-block';
+        }
+        
+        // Update button
+        updateSaveButton();
+    }
+    
     function updateSaveButton() {
         const btn = document.getElementById('saveShaderBtn');
+        const editBtn = document.getElementById('editShaderButton');
         if (!btn) return;
         
-        if (state.isDirty) {
-            btn.textContent = '💾*';
-            btn.title = 'Save current shader (unsaved changes)';
-        } else {
-            btn.textContent = '💾';
-            btn.title = 'Save current shader';
+        const isOwned = isShaderOwnedByUser();
+        const isEditMode = isInEditMode();
+        const isLoggedIn = !!state.currentUser;
+        
+        // Not logged in - show save icon (will use modal), hide edit button
+        if (!isLoggedIn) {
+            btn.textContent = state.isDirty ? '💾*' : '💾';
+            btn.title = 'Save shader (requires sign in)';
+            if (editBtn) editBtn.style.display = 'none';
+            return;
         }
+        
+        // In edit mode (forking or editing owned) - show save button, hide edit button
+        if (isEditMode) {
+            btn.textContent = state.isDirty ? '💾*' : '💾';
+            btn.title = isOwned ? 'Save changes' : 'Save as new shader';
+            if (editBtn) editBtn.style.display = 'none';
+            return;
+        }
+        
+        // Viewing owned shader - show save button and edit button
+        if (isOwned) {
+            btn.textContent = state.isDirty ? '💾*' : '💾';
+            btn.title = state.isDirty ? 'Save changes' : 'Saved';
+            if (editBtn) editBtn.style.display = 'inline-block';
+            return;
+        }
+        
+        // Viewing someone else's shader - show fork button, hide edit button
+        btn.textContent = state.isDirty ? '🍴*' : '🍴';
+        btn.title = state.isDirty ? 'Fork this shader (unsaved changes)' : 'Fork this shader';
+        if (editBtn) editBtn.style.display = 'none';
     }
 
     function setupDirtyTracking(editor) {
@@ -1446,6 +1925,196 @@
         document.getElementById('saveModalDescription').value = '';
         document.getElementById('saveModalTags').value = '';
     }
+
+    // ============================================================================
+    // Top-Level Panel Switching (Comments / Gallery)
+    // ============================================================================
+
+    function switchTopLevelPanel(panelName) {
+        const commentsPanel = document.getElementById('commentsPanel');
+        const gallerySection = document.getElementById('gallerySection');
+        const commentsTab = document.getElementById('topTabComments');
+        const galleryTab = document.getElementById('topTabGallery');
+
+        if (panelName === 'comments') {
+            // Show comments, hide gallery
+            commentsPanel.style.display = 'flex';
+            gallerySection.style.display = 'none';
+            
+            // Update tab styles
+            commentsTab.classList.add('active');
+            commentsTab.style.borderBottomColor = 'var(--accent-color)';
+            commentsTab.style.color = 'var(--accent-color)';
+            
+            galleryTab.classList.remove('active');
+            galleryTab.style.borderBottomColor = 'transparent';
+            galleryTab.style.color = 'var(--text-secondary)';
+            
+            // Load comments for current shader
+            if (state.currentDatabaseShader) {
+                comments.loadCommentsForShader(state.currentDatabaseShader);
+            }
+        } else {
+            // Show gallery, hide comments
+            gallerySection.style.display = 'flex';
+            commentsPanel.style.display = 'none';
+            
+            // Update tab styles
+            galleryTab.classList.add('active');
+            galleryTab.style.borderBottomColor = 'var(--accent-color)';
+            galleryTab.style.color = 'var(--accent-color)';
+            
+            commentsTab.classList.remove('active');
+            commentsTab.style.borderBottomColor = 'transparent';
+            commentsTab.style.color = 'var(--text-secondary)';
+            
+            // Unload comments to clean up subscriptions
+            comments.unloadComments();
+        }
+    }
+
+    // ============================================================================
+    // Views and Likes
+    // ============================================================================
+
+    async function updateViewsAndLikes(shader) {
+        const viewCountEl = document.getElementById('viewCount');
+        const likeCountEl = document.getElementById('likeCount');
+        const likeButton = document.getElementById('likeButton');
+        const likeIcon = document.getElementById('likeIcon');
+        const likeText = document.getElementById('likeText');
+        
+        if (!shader || !shader.id) {
+            // No shader loaded, hide/reset UI
+            if (viewCountEl) viewCountEl.textContent = '0';
+            if (likeCountEl) likeCountEl.textContent = '0';
+            if (likeButton) likeButton.classList.remove('liked');
+            if (likeIcon) likeIcon.textContent = '🤍';
+            if (likeText) likeText.textContent = 'Like';
+            backend.unsubscribeFromLikes();
+            return;
+        }
+        
+        // Update view count
+        if (viewCountEl) {
+            viewCountEl.textContent = shader.view_count || '0';
+        }
+        
+        // Increment view count in background (don't await)
+        backend.incrementViewCount(shader.id).then(newCount => {
+            if (viewCountEl && newCount) {
+                viewCountEl.textContent = newCount;
+            }
+        });
+        
+        // Update like count
+        if (likeCountEl) {
+            likeCountEl.textContent = shader.like_count || '0';
+        }
+        
+        // Check if user has liked this shader
+        console.log('🔍 Checking initial like state for shader:', shader.id);
+        const isLiked = await backend.checkIfLiked(shader.id);
+        console.log('📌 Initial like state:', isLiked);
+        updateLikeButtonState(isLiked);
+        
+        // Subscribe to real-time like updates
+        backend.subscribeToLikes(shader.id, (newCount, newIsLiked) => {
+            if (likeCountEl) {
+                likeCountEl.textContent = newCount;
+            }
+            
+            // Animate if count changed (someone else liked)
+            const currentIsLiked = likeButton?.classList.contains('liked');
+            if (currentIsLiked === newIsLiked && likeIcon) {
+                // Same like state but count changed = someone else liked/unliked
+                animateLikeIcon();
+            }
+            
+            updateLikeButtonState(newIsLiked);
+        });
+    }
+    
+    function updateLikeButtonState(isLiked) {
+        const likeButton = document.getElementById('likeButton');
+        const likeIcon = document.getElementById('likeIcon');
+        const likeText = document.getElementById('likeText');
+        
+        console.log('🔄 Updating like button state to:', isLiked ? 'LIKED' : 'NOT LIKED');
+        
+        if (!likeButton) return;
+        
+        if (isLiked) {
+            likeButton.classList.add('liked');
+            if (likeIcon) likeIcon.textContent = '❤️';
+            if (likeText) likeText.textContent = 'Liked';
+        } else {
+            likeButton.classList.remove('liked');
+            if (likeIcon) likeIcon.textContent = '🤍';
+            if (likeText) likeText.textContent = 'Like';
+        }
+    }
+    
+    function animateLikeIcon() {
+        const likeIcon = document.getElementById('likeIcon');
+        if (!likeIcon) return;
+        
+        likeIcon.classList.remove('like-animate');
+        // Force reflow to restart animation
+        void likeIcon.offsetWidth;
+        likeIcon.classList.add('like-animate');
+        
+        // Remove animation class after it completes
+        setTimeout(() => {
+            likeIcon.classList.remove('like-animate');
+        }, 300);
+    }
+    
+    let isLikeActionPending = false;
+    
+    async function handleLikeClick() {
+        const shader = state.currentDatabaseShader;
+        if (!shader || !shader.id) return;
+        
+        if (!state.currentUser) {
+            logStatus('Please sign in to like shaders', 'error');
+            return;
+        }
+        
+        // Prevent double-clicks
+        if (isLikeActionPending) return;
+        isLikeActionPending = true;
+        
+        const likeButton = document.getElementById('likeButton');
+        const isCurrentlyLiked = likeButton?.classList.contains('liked');
+        
+        // Disable button during action
+        likeButton.style.opacity = '0.5';
+        likeButton.style.pointerEvents = 'none';
+        
+        // Animate the icon
+        animateLikeIcon();
+        
+        // Toggle like - DON'T update UI here, let the real-time subscription handle it
+        try {
+            if (isCurrentlyLiked) {
+                await backend.unlikeShader(shader.id);
+            } else {
+                await backend.likeShader(shader.id);
+            }
+            
+            // Wait a moment for the subscription to update
+            await new Promise(resolve => setTimeout(resolve, 100));
+        } finally {
+            // Re-enable button
+            likeButton.style.opacity = '1';
+            likeButton.style.pointerEvents = 'auto';
+            isLikeActionPending = false;
+        }
+    }
+    
+    // Expose for save.js to call
+    window.updateViewsAndLikes = updateViewsAndLikes;
 
     // ============================================================================
     // Initialization
@@ -1520,17 +2189,47 @@
             WebGL: '(not initialized - will init on-demand)'
         });
         
-        // Populate gallery
-        save.populateGallery(EXAMPLES);
+        // Gallery will be populated by auth state change listener in backend.js
         
-        // Check if a shader is specified in URL (e.g., #shader=glsl_hello or #id=abc123)
-        const urlShader = getShaderFromURL();
-        if (urlShader) {
-            console.log('Loading shader from URL:', urlShader);
-            loadExample(urlShader);
+        // Check if a shader is specified in URL
+        const urlHash = window.location.hash;
+        let shaderToLoad = null;
+        
+        // Check for #id=slug (database shader)
+        if (urlHash.includes('id=')) {
+            const slug = urlHash.split('id=')[1]?.split('&')[0];
+            if (slug) {
+                console.log('Loading shader from URL slug:', slug);
+                const result = await backend.loadShader(slug);
+                if (result.success) {
+                    shaderToLoad = result.shader;
+                } else {
+                    console.warn('Failed to load shader from URL:', result.error);
+                }
+            }
+        } 
+        // If it's an old-style #shader= URL (before database migration), clear it
+        else if (urlHash.includes('shader=')) {
+            console.log('Clearing old example URL format');
+            window.history.replaceState(null, '', window.location.pathname);
+        }
+        
+        // If no URL shader or failed to load, get first example from database
+        if (!shaderToLoad) {
+            const examplesResult = await backend.loadExamples();
+            if (examplesResult.success && examplesResult.shaders.length > 0) {
+                shaderToLoad = examplesResult.shaders[0];
+                console.log('Loading first example:', shaderToLoad.title);
+            }
+        }
+        
+        // Load the shader
+        if (shaderToLoad) {
+            console.log('Loading shader:', shaderToLoad.title);
+            save.loadDatabaseShader(shaderToLoad);
         } else {
-            // Initialize with default shader
-        tabs.renderTabs();
+            // Fallback if no shaders in database yet
+            tabs.renderTabs();
             tabs.switchTab('glsl_fragment');
         }
         
@@ -1555,13 +2254,167 @@
             state.isInitializing = false;
         }, 200);
     }
+    
+    // ============================================================================
+    // TEMPORARY: Admin Button to Save Examples to Database
+    // ============================================================================
+    
+    function addSaveExampleButton() {
+        // Remove old button if exists
+        const oldBtn = document.getElementById('saveExampleBtn');
+        if (oldBtn) oldBtn.remove();
+        
+        // Only show if signed in
+        if (!backend.isSignedIn()) {
+            console.log('Not signed in, skipping example save button');
+            return;
+        }
+        
+        const saveExampleBtn = document.createElement('button');
+        saveExampleBtn.id = 'saveExampleBtn';
+        saveExampleBtn.textContent = '💾 Save as Example';
+        saveExampleBtn.className = 'uiBtn';
+        saveExampleBtn.style.cssText = 'position: fixed; top: 40px; right: 10px; z-index: 9999; background: #f59e0b; color: white;';
+        
+        saveExampleBtn.onclick = async () => {
+            if (!confirm('Save current shader as Example in database?')) return;
+            
+            try {
+                saveExampleBtn.disabled = true;
+                saveExampleBtn.textContent = '⏳ Saving...';
+                
+                // Capture thumbnail
+                const blob = await backend.captureThumbnailBlob();
+                const filename = `${Date.now()}.png`;
+                const thumbResult = await backend.uploadThumbnail(blob, filename);
+                
+                if (!thumbResult.success) {
+                    alert('Failed to upload thumbnail: ' + thumbResult.error);
+                    saveExampleBtn.disabled = false;
+                    saveExampleBtn.textContent = '💾 Save as Example';
+                    return;
+                }
+                
+                // Determine code types from active tabs
+                const codeTypes = state.activeTabs.filter(t => t !== 'help' && t !== 'boilerplate');
+                
+                // Build code object
+                const code = {};
+                if (state.graphicsEditor) {
+                    const graphicsTab = state.activeTabs.find(t => t.includes('gl') || t === 'graphics');
+                    if (graphicsTab) {
+                        code[graphicsTab] = state.graphicsEditor.getValue();
+                    }
+                }
+                if (state.audioEditor) {
+                    if (state.activeTabs.includes('audio_gpu')) {
+                        code.wgsl_audio = state.audioEditor.getValue();
+                    } else if (state.activeTabs.includes('audio_worklet')) {
+                        code.audioworklet = state.audioEditor.getValue();
+                    }
+                }
+                if (state.jsEditor && state.activeTabs.includes('js')) {
+                    code.javascript = state.jsEditor.getValue();
+                }
+                
+                // Prepare shader data
+                const shaderData = {
+                    title: state.currentExample ? EXAMPLES[state.currentExample].name : 'Untitled Example',
+                    description: state.currentExample ? EXAMPLES[state.currentExample].description : '',
+                    tags: ['example'],  // Add 'example' tag
+                    code_types: codeTypes,
+                    code: code,
+                    visibility: 'example',
+                    thumbnail_url: thumbResult.url
+                };
+                
+                const result = await backend.saveShader(shaderData);
+                
+                if (result.success) {
+                    alert(`✓ Saved as example!\n\nSlug: ${result.shader.slug}\nTitle: ${result.shader.title}`);
+                    console.log('Saved shader:', result.shader);
+                } else {
+                    alert('✗ Failed to save: ' + result.error);
+                }
+                
+                saveExampleBtn.disabled = false;
+                saveExampleBtn.textContent = '💾 Save as Example';
+                
+            } catch (error) {
+                alert('✗ Error: ' + error.message);
+                console.error('Save example error:', error);
+                saveExampleBtn.disabled = false;
+                saveExampleBtn.textContent = '💾 Save as Example';
+            }
+        };
+        
+        document.body.appendChild(saveExampleBtn);
+        console.log('✓ Save Example button added');
+    }
 
     // Make some functions global for Monaco keyboard shortcuts and backend
     window.reloadShader = reloadShader;
     window.togglePlayPause = togglePlayPause;
     window.showAuthMessage = showAuthMessage;
     window.hideAuthMessage = hideAuthMessage;
+    window.addSaveExampleButton = addSaveExampleButton;
+    window.updateSaveButton = updateSaveButton;
+    window.isShaderOwnedByUser = isShaderOwnedByUser;
+    window.isInEditMode = isInEditMode;
+    window.enterEditMode = enterEditMode;
+    window.exitEditMode = exitEditMode;
+    window.save = save; // Expose save module for backend.js
 
+    // Handle back/forward button navigation
+    let isNavigating = false;
+    let previousHash = window.location.hash;
+    
+    window.addEventListener('hashchange', async (e) => {
+        // Prevent recursive calls
+        if (isNavigating) return;
+        
+        const urlHash = window.location.hash;
+        
+        // Check for unsaved changes
+        if (state.isDirty) {
+            const message = 'You have unsaved changes. Are you sure you want to leave?';
+            if (!confirm(message)) {
+                // User cancelled - restore previous hash without triggering another event
+                isNavigating = true;
+                window.history.replaceState(null, '', previousHash || '#');
+                isNavigating = false;
+                return;
+            }
+            // User confirmed - clear dirty flag and update button
+            state.isDirty = false;
+            updateSaveButton();
+        }
+        
+        // Update previous hash for next navigation
+        previousHash = urlHash;
+        
+        // Check for #id=slug (database shader)
+        if (urlHash.includes('id=')) {
+            const slug = urlHash.split('id=')[1]?.split('&')[0];
+            if (slug) {
+                console.log('Loading shader from navigation:', slug);
+                const result = await backend.loadShader(slug);
+                if (result.success) {
+                    save.loadDatabaseShader(result.shader);
+                } else {
+                    console.warn('Failed to load shader:', result.error);
+                }
+            }
+        } 
+        // If hash is cleared, load first example
+        else if (!urlHash || urlHash === '#') {
+            const examplesResult = await backend.loadExamples();
+            if (examplesResult.success && examplesResult.shaders.length > 0) {
+                save.loadDatabaseShader(examplesResult.shaders[0]);
+            }
+        }
+    });
+    
     // Start application
     window.addEventListener('load', init);
     </script>

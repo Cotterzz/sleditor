@@ -2,7 +2,7 @@
 // Tabs - Tab Management and UI
 // ============================================================================
 
-import { state } from './core.js';
+import { state, logStatus } from './core.js';
 import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET } from './examples.js';
 
 // ============================================================================
@@ -139,6 +139,15 @@ export function addTab(tabName) {
         return;
     }
     
+    // Prevent WGSL audio with GLSL graphics (incompatible backends)
+    if (tabName === 'audio_gpu' || tabName === 'wgsl_audio') {
+        const hasGLSL = state.activeTabs.some(t => t === 'glsl_fragment' || t.includes('glsl'));
+        if (hasGLSL) {
+            logStatus('⚠ WGSL Audio requires WebGPU graphics (not compatible with GLSL)', 'error');
+            return;
+        }
+    }
+    
     // Audio tabs are mutually exclusive - remove the other if adding one
     if (tabName === 'audio_gpu' || tabName === 'audio_worklet') {
         const otherAudioTab = tabName === 'audio_gpu' ? 'audio_worklet' : 'audio_gpu';
@@ -231,12 +240,15 @@ export function showAddPassMenu() {
     // Check if any audio tab is active for mutual exclusion
     const hasAudioGpu = state.activeTabs.includes('audio_gpu');
     const hasAudioWorklet = state.activeTabs.includes('audio_worklet');
+    const hasGLSL = state.activeTabs.some(t => t === 'glsl_fragment' || t.includes('glsl'));
     
     availableTabs.forEach(tab => {
         const isActive = state.activeTabs.includes(tab.name);
         
-        // Grey out the other audio tab if one is active
-        const isDisabled = (tab.name === 'audio_gpu' && hasAudioWorklet) || 
+        // Grey out incompatible tabs:
+        // - Other audio tab if one is active (mutual exclusion)
+        // - WGSL audio if GLSL graphics is active (incompatible backends)
+        const isDisabled = (tab.name === 'audio_gpu' && (hasAudioWorklet || hasGLSL)) || 
                           (tab.name === 'audio_worklet' && hasAudioGpu);
         
         const option = document.createElement('div');

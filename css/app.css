@@ -574,5 +574,104 @@ button.paused:hover {
     filter: brightness(1.1);
 }
 
+/* Gallery Tabs */
+.gallery-tab:hover {
+    color: var(--text-primary);
+    background: var(--bg-primary);
+}
+
+.gallery-tab.active {
+    color: var(--accent-color);
+    border-bottom-color: var(--accent-color) !important;
+    font-weight: 500;
+}
+
+/* Edit Shader Button */
+#editShaderButton:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border-color: var(--accent-color);
+}
+
+/* Like Button */
+#likeButton:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+#likeButton.liked {
+    color: var(--text-primary);
+}
+
+#likeButton.liked #likeIcon {
+    color: #e74c3c;
+}
+
+/* Like animation */
+@keyframes likePress {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
+
+.like-animate {
+    animation: likePress 0.3s ease-out;
+}
+
+/* Top-level tabs (Comments / Gallery) */
+.top-level-tab:hover {
+    color: var(--text-primary) !important;
+    background: var(--bg-secondary);
+}
+
+/* Comments */
+.comment-item {
+    transition: background 0.2s;
+}
+
+.comment-item:hover {
+    background: var(--bg-primary) !important;
+}
+
+.comment-text p {
+    margin: 0.5em 0;
+}
+
+.comment-text p:first-child {
+    margin-top: 0;
+}
+
+.comment-text p:last-child {
+    margin-bottom: 0;
+}
+
+.comment-text code {
+    background: var(--bg-primary);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+.comment-text pre {
+    background: var(--bg-primary);
+    padding: 8px;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.comment-text pre code {
+    background: none;
+    padding: 0;
+}
+
+.comment-text a {
+    color: var(--accent-color);
+    text-decoration: none;
+}
+
+.comment-text a:hover {
+    text-decoration: underline;
+}
 
 
