@@ -15,6 +15,12 @@ import * as jsRuntime from './js-runtime.js';
 export function render(rawTime) {
     if (!state.isRunning) return;
     
+    // Skip rendering during shader recompilation to prevent flicker
+    if (state.isRecompiling) {
+        requestAnimationFrame(render);
+        return;
+    }
+    
     // Only render when playing
     if (!state.isPlaying) {
         requestAnimationFrame(render);

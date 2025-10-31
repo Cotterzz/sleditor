@@ -425,11 +425,12 @@ export function setGLSLErrors(errors) {
         endColumn: 1000,
         message: err.message
     }));
-    monaco.editor.setModelMarkers(state.graphicsEditor.getModel(), 'glsl', markers);
+    // Use 'glsl-errors' as owner to avoid conflicts with monaco's cpp linter
+    monaco.editor.setModelMarkers(state.graphicsEditor.getModel(), 'glsl-errors', markers);
 }
 
 export function clearGLSLErrors() {
-    monaco.editor.setModelMarkers(state.graphicsEditor.getModel(), 'glsl', []);
+    monaco.editor.setModelMarkers(state.graphicsEditor.getModel(), 'glsl-errors', []);
 }
 
 // ============================================================================

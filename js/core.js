@@ -130,6 +130,7 @@ export const state = {
     pendingAudio: false,
     isRunning: false,      // System initialized and ready
     isPlaying: true,       // Currently playing (default true)
+    isRecompiling: false,  // Temporarily pause rendering during shader recompilation
 
     // Monaco editors
     boilerplateEditor: null,

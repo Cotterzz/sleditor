@@ -92,11 +92,15 @@ export async function compile(fragmentSource) {
             };
         }
 
-        // Compile fragment shader
-        const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
-        if (!fragmentShader) {
-            const error = gl.getShaderInfoLog(fragmentShader || gl.createShader(gl.FRAGMENT_SHADER));
+        // Compile fragment shader with error handling
+        const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragmentShader, fragmentSource);
+        gl.compileShader(fragmentShader);
+        
+        if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+            const error = gl.getShaderInfoLog(fragmentShader);
             const errors = parseGLSLErrors(error, fragmentSource);
+            gl.deleteShader(fragmentShader);
             gl.deleteShader(vertexShader);
             return { success: false, errors };
         }

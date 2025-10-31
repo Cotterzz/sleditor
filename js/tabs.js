@@ -113,7 +113,8 @@ export function switchTab(tabName) {
     if (tabName === 'graphics' && state.graphicsEditor) {
         monaco.editor.setModelLanguage(state.graphicsEditor.getModel(), 'wgsl');
     } else if (tabName === 'glsl_fragment' && state.graphicsEditor) {
-        monaco.editor.setModelLanguage(state.graphicsEditor.getModel(), 'glsl');
+        // Monaco doesn't have built-in GLSL, use 'cpp' for similar syntax highlighting
+        monaco.editor.setModelLanguage(state.graphicsEditor.getModel(), 'cpp');
     } else if (tabName === 'audio_gpu' && state.audioEditor) {
         monaco.editor.setModelLanguage(state.audioEditor.getModel(), 'wgsl');
     } else if (tabName === 'audio_worklet' && state.audioEditor) {

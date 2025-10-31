@@ -247,7 +247,7 @@ export async function populateGallery(tab = currentGalleryTab) {
                 if (myResult.success && myResult.shaders.length > 0) {
                     myResult.shaders.forEach(shader => {
                         const item = createGalleryItem(shader, 'database', true);
-                        galleryContent.appendChild(item);
+                        if (item) galleryContent.appendChild(item);
                     });
                 } else {
                     const noShaders = document.createElement('div');
@@ -265,7 +265,7 @@ export async function populateGallery(tab = currentGalleryTab) {
                 if (savedShaders.length > 0) {
                     savedShaders.forEach(shader => {
                         const item = createGalleryItem(shader, 'localStorage', false);
-                        galleryContent.appendChild(item);
+                        if (item) galleryContent.appendChild(item);
                     });
                 } else {
                     const noShaders = document.createElement('div');
@@ -282,12 +282,25 @@ export async function populateGallery(tab = currentGalleryTab) {
         
         // ===== COMMUNITY TAB =====
         else if (tab === 'community') {
+            // Require login to view community gallery (anti-scraping measure)
+            if (!state.currentUser) {
+                const loginRequired = document.createElement('div');
+                loginRequired.style.cssText = 'grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--text-secondary);';
+                loginRequired.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 10px;">🔒</div>
+                    <div>Sign in to browse community shaders</div>
+                    <div style="font-size: 12px; margin-top: 5px;">Published shaders are still accessible via direct link</div>
+                `;
+                galleryContent.appendChild(loginRequired);
+                return;
+            }
+            
             const result = await backend.loadPublicShaders();
             
             if (result.success && result.shaders.length > 0) {
                 result.shaders.forEach(shader => {
                     const item = createGalleryItem(shader, 'database', false);
-                    galleryContent.appendChild(item);
+                    if (item) galleryContent.appendChild(item);
                 });
             } else {
                 const noShaders = document.createElement('div');
@@ -308,7 +321,7 @@ export async function populateGallery(tab = currentGalleryTab) {
             if (result.success && result.shaders.length > 0) {
                 result.shaders.forEach(shader => {
                     const item = createGalleryItem(shader, 'database', false);
-                    galleryContent.appendChild(item);
+                    if (item) galleryContent.appendChild(item);
                 });
             } else {
                 const noExamples = document.createElement('div');
@@ -332,6 +345,15 @@ function createGalleryItem(data, source, isOwned = false) {
     
     const isLocalStorage = source === 'localStorage';
     const isDatabase = source === 'database';
+    
+    // Check if shader requires WebGPU
+    const codeTypes = data.tabs || data.code_types || [];
+    const needsWebGPU = codeTypes.some(t => t === 'wgsl_graphics' || t === 'graphics' || t === 'wgsl_audio' || t === 'audio_gpu');
+    
+    // Skip WebGPU shaders if WebGPU is not available
+    if (needsWebGPU && !state.hasWebGPU) {
+        return null; // Will be filtered out
+    }
     
     // Thumbnail
     const thumbnail = document.createElement('div');
@@ -469,6 +491,15 @@ function createGalleryItem(data, source, isOwned = false) {
 
 export function loadDatabaseShader(shader) {
     console.log('Loading database shader:', shader);
+    
+    // Check if shader requires WebGPU
+    const needsWebGPU = shader.code_types?.some(t => t === 'wgsl_graphics' || t === 'graphics' || t === 'wgsl_audio' || t === 'audio_gpu');
+    
+    if (needsWebGPU && !state.hasWebGPU) {
+        logStatus('⚠️ This shader requires WebGPU, which is not available in your browser', 'error');
+        alert('WebGPU Required\n\nThis shader requires WebGPU support, which is not available in your current browser.\n\nTo view this shader, please use:\n• Chrome 113+\n• Edge 113+\n• Safari 18+ (macOS 14+, iOS 18+)\n\nAlternatively, try a GLSL shader instead.');
+        return;
+    }
     
     // Update URL to shareable link
     if (shader.slug) {

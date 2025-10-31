@@ -241,6 +241,9 @@ function createCommentForm(shaderId, parentCommentId = null) {
         resize: vertical;
         box-sizing: border-box;
     `;
+    
+    // Add emoji picker on right-click
+    setupEmojiPicker(textarea);
 
     const buttonContainer = document.createElement('div');
     buttonContainer.style.cssText = 'display: flex; gap: 8px; margin-top: 6px; align-items: center;';
@@ -358,6 +361,147 @@ function showEmptyState(message) {
             <div style="font-size: 14px;">${message}</div>
         </div>
     `;
+}
+
+/**
+ * Setup emoji picker for textarea (right-click context menu)
+ */
+function setupEmojiPicker(textarea) {
+    // Common emojis grouped by category
+    const emojiGroups = {
+        'Faces': ['😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚'],
+        'Gestures': ['👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💪'],
+        'Emotions': ['❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝'],
+        'Symbols': ['✨', '⭐', '🌟', '💫', '✅', '❌', '⚠️', '💯', '🔥', '💧', '💥', '💢', '🎉', '🎊', '🎈'],
+        'Objects': ['💻', '🖥️', '⌨️', '🖱️', '🎮', '🎨', '🎭', '🎪', '🎬', '🎤', '🎧', '🎵', '🎶', '📱', '💾']
+    };
+
+    let emojiMenu = null;
+
+    textarea.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+
+        // Remove existing menu
+        if (emojiMenu) {
+            emojiMenu.remove();
+        }
+
+        // Create menu
+        emojiMenu = document.createElement('div');
+        emojiMenu.style.cssText = `
+            position: fixed;
+            z-index: 10000;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            padding: 8px;
+            max-width: 320px;
+            max-height: 400px;
+            overflow-y: auto;
+        `;
+
+        // Position near click, but keep in viewport
+        const x = Math.min(e.clientX, window.innerWidth - 330);
+        const y = Math.min(e.clientY, window.innerHeight - 410);
+        emojiMenu.style.left = x + 'px';
+        emojiMenu.style.top = y + 'px';
+
+        // Add emoji groups
+        Object.entries(emojiGroups).forEach(([category, emojis]) => {
+            const categoryHeader = document.createElement('div');
+            categoryHeader.textContent = category;
+            categoryHeader.style.cssText = `
+                font-size: 10px;
+                color: var(--text-secondary);
+                margin-top: 6px;
+                margin-bottom: 4px;
+                font-weight: 500;
+            `;
+            emojiMenu.appendChild(categoryHeader);
+
+            const emojiGrid = document.createElement('div');
+            emojiGrid.style.cssText = `
+                display: grid;
+                grid-template-columns: repeat(9, 1fr);
+                gap: 2px;
+                margin-bottom: 4px;
+            `;
+
+            emojis.forEach(emoji => {
+                const btn = document.createElement('button');
+                btn.textContent = emoji;
+                btn.style.cssText = `
+                    background: none;
+                    border: none;
+                    font-size: 18px;
+                    cursor: pointer;
+                    padding: 4px;
+                    border-radius: 4px;
+                    transition: background 0.1s;
+                `;
+                btn.onmouseenter = () => {
+                    btn.style.background = 'var(--bg-secondary)';
+                };
+                btn.onmouseleave = () => {
+                    btn.style.background = 'none';
+                };
+                btn.onclick = () => {
+                    insertAtCursor(textarea, emoji);
+                    emojiMenu.remove();
+                    emojiMenu = null;
+                    textarea.focus();
+                };
+                emojiGrid.appendChild(btn);
+            });
+
+            emojiMenu.appendChild(emojiGrid);
+        });
+
+        document.body.appendChild(emojiMenu);
+
+        // Close on click outside or ESC
+        const closeMenu = (event) => {
+            if (emojiMenu && !emojiMenu.contains(event.target)) {
+                emojiMenu.remove();
+                emojiMenu = null;
+                document.removeEventListener('click', closeMenu);
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+
+        const handleEscape = (event) => {
+            if (event.key === 'Escape' && emojiMenu) {
+                emojiMenu.remove();
+                emojiMenu = null;
+                document.removeEventListener('click', closeMenu);
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+
+        // Delay to prevent immediate close
+        setTimeout(() => {
+            document.addEventListener('click', closeMenu);
+            document.addEventListener('keydown', handleEscape);
+        }, 10);
+    });
+}
+
+/**
+ * Insert text at textarea cursor position
+ */
+function insertAtCursor(textarea, text) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = textarea.value.substring(0, start);
+    const after = textarea.value.substring(end);
+    
+    textarea.value = before + text + after;
+    
+    // Move cursor after inserted text
+    const newPos = start + text.length;
+    textarea.selectionStart = newPos;
+    textarea.selectionEnd = newPos;
 }
 
 /**

@@ -558,6 +558,11 @@
             // Call user init
             jsRuntime.callInit();
             
+            // If paused, render a single frame to show the compiled shader
+            if (!state.isPlaying) {
+                render.renderOnce();
+            }
+            
             return true;
         } catch (err) {
             logStatus('✗ ' + err.message, 'error');
@@ -736,6 +741,11 @@
             // Call user init
             jsRuntime.callInit();
             
+            // If paused, render a single frame to show the compiled shader
+            if (!state.isPlaying) {
+                render.renderOnce();
+            }
+            
             return true;
         } catch (err) {
             logStatus('✗ ' + err.message, 'error');
@@ -759,11 +769,14 @@
         state.isPlaying = !state.isPlaying;
         
         if (state.isPlaying) {
+            // Resuming from pause
             state.audioContext.resume();
-            state.lastPauseTime = performance.now();
-            const pauseDuration = state.lastPauseTime - (state.lastPauseTime || 0);
+            const now = performance.now();
+            const pauseDuration = now - (state.lastPauseTime || now);
             state.pausedTime += pauseDuration;
+            state.lastPauseTime = 0;
         } else {
+            // Pausing
             state.audioContext.suspend();
             state.lastPauseTime = performance.now();
         }
@@ -784,14 +797,22 @@
 
     function restart(userInitiated = false) {
         const now = performance.now();
+        const wasPaused = !state.isPlaying;
+        
         state.startTime = now;
         state.pausedTime = 0;
-        state.lastPauseTime = 0;
         state.visualFrame = 0;
         state.audioFrame = 0;
         state.nextAudioTime = state.audioContext.currentTime + 0.1;
         state.fpsLastTime = now;
         state.fpsFrameCount = 0;
+        
+        // If currently paused, set lastPauseTime to now so time doesn't accumulate
+        if (wasPaused) {
+            state.lastPauseTime = now;
+        } else {
+            state.lastPauseTime = 0;
+        }
         
         // Call user init
         jsRuntime.callInit();
@@ -806,7 +827,7 @@
         document.getElementById('fpsCounter').textContent = '0';
         
         // If paused, render one frame to show the restart visually
-        if (!state.isPlaying && state.isRunning) {
+        if (wasPaused && state.isRunning) {
             render.renderOnce();
         }
     }
@@ -1443,7 +1464,7 @@
             document.body.appendChild(saveExampleBtn);
         }
 
-    function updateCanvasSize(width, height, recompile = true) {
+    async function updateCanvasSize(width, height, recompile = true) {
         state.canvasWidth = width;
         state.canvasHeight = height;
         
@@ -1465,8 +1486,22 @@
         document.getElementById('resolutionDisplay').textContent = 
             `${renderWidth} × ${renderHeight} × ${state.pixelScale}`;
         
-        if (recompile && state.isRunning) {
-            reloadShader(true);
+        // Skip recompilation if editors aren't initialized yet (happens during startup)
+        if (recompile && state.graphicsEditor) {
+            if (state.isPlaying) {
+                // Pause rendering during recompilation to prevent flicker
+                state.isRecompiling = true;
+                // Both WebGPU and WebGL need to reload shader
+                await reloadShader(true);
+                state.isRecompiling = false;
+            } else {
+                // If paused, recompile shader and render a single frame
+                await reloadShader(true);
+                // Wait for layout update before rendering
+                requestAnimationFrame(() => {
+                    render.renderOnce();
+                });
+            }
         }
     }
 
@@ -1902,7 +1937,8 @@
         }
         
         // Viewing someone else's shader - show fork button, hide edit button
-        btn.textContent = state.isDirty ? '🍴*' : '🍴';
+        const forkIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="display: inline-block; vertical-align: middle;"><circle cx="6" cy="6" r="2" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="6" r="2" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="18" r="2" stroke="currentColor" stroke-width="2"/><path d="M6 8v3c0 2 1 3 3 3h7M18 8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+        btn.innerHTML = state.isDirty ? forkIcon + '*' : forkIcon;
         btn.title = state.isDirty ? 'Fork this shader (unsaved changes)' : 'Fork this shader';
         if (editBtn) editBtn.style.display = 'none';
     }
@@ -2164,6 +2200,15 @@
         setupDirtyTracking(state.jsEditor);
         setupDirtyTracking(state.boilerplateEditor);
         // Help is read-only, no need to track
+        
+        // Pre-load C++ language module (used for GLSL) to avoid AMD loader conflicts with vim
+        // This ensures the module is loaded before vim.js interferes with define()
+        await new Promise((resolve) => {
+            require(['vs/basic-languages/cpp/cpp'], () => {
+                console.log('✓ C++ language module pre-loaded');
+                resolve();
+            });
+        });
         
         // Load vim library asynchronously after a short delay
         // This ensures Monaco has fully loaded all its language modules first
