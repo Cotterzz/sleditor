@@ -343,6 +343,11 @@ function createGalleryItem(data, source, isOwned = false) {
     item.className = 'gallery-item';
     item.style.position = 'relative';
     
+    // Add data-shader-id for realtime updates
+    if (data.id) {
+        item.setAttribute('data-shader-id', data.id);
+    }
+    
     const isLocalStorage = source === 'localStorage';
     const isDatabase = source === 'database';
     
@@ -472,8 +477,9 @@ function createGalleryItem(data, source, isOwned = false) {
         
         // Likes
         const likes = document.createElement('span');
+        likes.className = 'gallery-likes-container';
         likes.style.cssText = 'display: flex; align-items: center; gap: 2px;';
-        likes.innerHTML = `❤️ ${data.like_count || 0}`;
+        likes.innerHTML = `❤️ <span class="gallery-likes">${data.like_count || 0}</span>`;
         stats.appendChild(likes);
         
         info.appendChild(stats);

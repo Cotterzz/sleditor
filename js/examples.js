@@ -102,38 +102,40 @@ fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }`;
 
 export const MINIMAL_AUDIO_WORKLET = `// Simple sine wave (AudioWorklet)
-// Your code is wrapped in an AudioWorkletProcessor class
+// Define your audio processor methods in this object
 
-init() {
-    // Initialize your audio processor
-    this.phase = [0, 0]; // Separate phase for left and right channels
-    this.frequency = 440;
-}
-
-userProcess(output, inputs, parameters) {
-    // Generate audio samples
-    // output[channel][sample] = value (range: -1 to 1)
+const audioProcessor = {
+    init() {
+        // Initialize your audio processor
+        this.phase = [0, 0]; // Separate phase for left and right channels
+        this.frequency = 440;
+    },
     
-    for (let channel = 0; channel < output.length; channel++) {
-        const outputChannel = output[channel];
+    userProcess(output, inputs, parameters) {
+        // Generate audio samples
+        // output[channel][sample] = value (range: -1 to 1)
         
-        for (let i = 0; i < outputChannel.length; i++) {
-            // Generate sine wave
-            outputChannel[i] = Math.sin(this.phase[channel]) * 0.3;
+        for (let channel = 0; channel < output.length; channel++) {
+            const outputChannel = output[channel];
             
-            // Increment phase
-            this.phase[channel] += (this.frequency * Math.PI * 2) / sampleRate;
-            if (this.phase[channel] > Math.PI * 2) {
-                this.phase[channel] -= Math.PI * 2;
+            for (let i = 0; i < outputChannel.length; i++) {
+                // Generate sine wave
+                outputChannel[i] = Math.sin(this.phase[channel]) * 0.3;
+                
+                // Increment phase
+                this.phase[channel] += (this.frequency * Math.PI * 2) / sampleRate;
+                if (this.phase[channel] > Math.PI * 2) {
+                    this.phase[channel] -= Math.PI * 2;
+                }
             }
         }
+    },
+    
+    receiveMessage(data) {
+        // Handle messages from main thread
+        // Example: if (data.frequency) this.frequency = data.frequency;
     }
-}
-
-receiveMessage(data) {
-    // Handle messages from main thread
-    // Example: if (data.frequency) this.frequency = data.frequency;
-}`;
+};`;
 
 
 // ============================================================================

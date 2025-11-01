@@ -44,28 +44,47 @@ export async function load(audioCode) {
         const processorName = 'user-audio-' + Date.now();
         
         // Wrap user code in AudioWorkletProcessor boilerplate
+        // User code should define: const audioProcessor = { init() {...}, userProcess() {...}, receiveMessage() {...} }
         const wrappedCode = `
+// User code defines audioProcessor object
+${audioCode}
+
 class AudioProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
         this.sampleRate = sampleRate;
-        this.init();
-        this.port.onmessage = (e) => this.receiveMessage(e.data);
+        this.audioProcessor = audioProcessor;
+        
+        // Bind methods to this instance so 'this' works correctly in user code
+        if (this.audioProcessor.init) {
+            this.audioProcessor.init = this.audioProcessor.init.bind(this);
+            this.audioProcessor.init();
+        }
+        if (this.audioProcessor.userProcess) {
+            this.audioProcessor.userProcess = this.audioProcessor.userProcess.bind(this);
+        }
+        if (this.audioProcessor.receiveMessage) {
+            this.audioProcessor.receiveMessage = this.audioProcessor.receiveMessage.bind(this);
+        }
+        
+        this.port.onmessage = (e) => {
+            if (this.audioProcessor.receiveMessage) {
+                this.audioProcessor.receiveMessage(e.data);
+            }
+        };
     }
 
     process(inputs, outputs, parameters) {
-        const output = outputs[0];
-        this.userProcess(output, inputs, parameters);
+        if (this.audioProcessor.userProcess) {
+            const output = outputs[0];
+            this.audioProcessor.userProcess(output, inputs, parameters);
+        }
         return true;
     }
 
     sendMessage(data) {
         this.port.postMessage(data);
     }
-
-    /// USER CODE ///
-${audioCode}
-    /// END OF USER CODE ///
 }
 registerProcessor('${processorName}', AudioProcessor);
 `;

@@ -2103,6 +2103,17 @@
                 likeCountEl.textContent = newCount;
             }
             
+            // Update cached shader data if this is the currently loaded shader
+            if (state.currentDatabaseShader && state.currentDatabaseShader.id === shader.id) {
+                state.currentDatabaseShader.like_count = newCount;
+            }
+            
+            // Update gallery thumbnail if it exists
+            const galleryThumb = document.querySelector(`[data-shader-id="${shader.id}"] .gallery-likes`);
+            if (galleryThumb) {
+                galleryThumb.textContent = newCount;
+            }
+            
             // Animate if count changed (someone else liked)
             const currentIsLiked = likeButton?.classList.contains('liked');
             if (currentIsLiked === newIsLiked && likeIcon) {
