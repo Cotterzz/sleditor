@@ -270,9 +270,13 @@ export async function saveShader(shaderData) {
             code_types: shaderData.code_types || [],
             code: shaderData.code || {},
             visibility: shaderData.visibility || 'private',
-            thumbnail_url: shaderData.thumbnail_url || null,
             creator_name: creatorName
         };
+        
+        // Only include thumbnail_url if provided (don't overwrite with null on updates)
+        if (shaderData.thumbnail_url) {
+            data.thumbnail_url = shaderData.thumbnail_url;
+        }
 
         let result;
 
@@ -287,6 +291,11 @@ export async function saveShader(shaderData) {
         }
         // Insert new shader
         else {
+            // For new shaders, ensure thumbnail_url is set (even if null)
+            if (!data.thumbnail_url) {
+                data.thumbnail_url = null;
+            }
+            
             result = await supabase
                 .from('shaders')
                 .insert(data)
@@ -476,12 +485,30 @@ export async function deleteShader(shaderId) {
     }
 
     try {
+        // First, get the shader to find its thumbnail
+        const shaderResult = await supabase
+            .from('shaders')
+            .select('thumbnail_url')
+            .eq('id', shaderId)
+            .single();
+
+        const thumbnailUrl = shaderResult.data?.thumbnail_url;
+
+        // Delete shader from database
         const result = await supabase
             .from('shaders')
             .delete()
             .eq('id', shaderId);
 
         if (result.error) throw result.error;
+
+        // Delete thumbnail from storage (fire-and-forget, non-critical)
+        if (thumbnailUrl) {
+            const filename = thumbnailUrl.split('/').pop();
+            deleteThumbnail(filename).catch(err => {
+                console.warn('Thumbnail cleanup on delete failed (non-critical):', err);
+            });
+        }
 
         console.log('✓ Shader deleted:', shaderId);
         return { success: true };
@@ -526,6 +553,32 @@ export async function uploadThumbnail(imageBlob, filename) {
 
     } catch (error) {
         console.error('Upload thumbnail error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Delete a thumbnail from storage
+ * @param {string} filename - Filename (e.g., 'shader_abc123_1234567890.png')
+ * @returns {Promise<Object>} { success, error }
+ */
+export async function deleteThumbnail(filename) {
+    if (!supabase) {
+        return { success: false, error: 'Supabase not initialized' };
+    }
+
+    try {
+        const { error } = await supabase.storage
+            .from('thumbnails')
+            .remove([filename]);
+
+        if (error) throw error;
+
+        console.log('✓ Old thumbnail deleted:', filename);
+        return { success: true };
+
+    } catch (error) {
+        console.error('Delete thumbnail error:', error);
         return { success: false, error: error.message };
     }
 }

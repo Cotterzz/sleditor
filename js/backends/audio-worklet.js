@@ -43,14 +43,35 @@ export async function load(audioCode) {
         // Generate unique processor name for each reload to avoid registration conflicts
         const processorName = 'user-audio-' + Date.now();
         
-        // Replace the registerProcessor call in user's code with our unique name
-        const modifiedCode = audioCode.replace(
-            /registerProcessor\s*\(\s*['"]user-audio['"]\s*,/,
-            `registerProcessor('${processorName}',`
-        );
+        // Wrap user code in AudioWorkletProcessor boilerplate
+        const wrappedCode = `
+class AudioProcessor extends AudioWorkletProcessor {
+    constructor() {
+        super();
+        this.sampleRate = sampleRate;
+        this.init();
+        this.port.onmessage = (e) => this.receiveMessage(e.data);
+    }
+
+    process(inputs, outputs, parameters) {
+        const output = outputs[0];
+        this.userProcess(output, inputs, parameters);
+        return true;
+    }
+
+    sendMessage(data) {
+        this.port.postMessage(data);
+    }
+
+    /// USER CODE ///
+${audioCode}
+    /// END OF USER CODE ///
+}
+registerProcessor('${processorName}', AudioProcessor);
+`;
         
-        // Create blob URL with the modified audio code
-        const blob = new Blob([modifiedCode], { type: 'application/javascript' });
+        // Create blob URL with the wrapped audio code
+        const blob = new Blob([wrappedCode], { type: 'application/javascript' });
         const url = URL.createObjectURL(blob);
         
         // Load the module

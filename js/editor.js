@@ -216,6 +216,12 @@ export async function initMonaco(callback, initialCode, helpContent) {
             monaco.languages.setLanguageConfiguration('glsl', GLSL_LANGUAGE_CONFIG);
             monaco.languages.setMonarchTokensProvider('glsl', GLSL_MONARCH_TOKENS);
             
+            // Configure JavaScript validation to be lenient for code fragments
+            monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+                noSemanticValidation: false,  // Enable semantic validation
+                noSyntaxValidation: false,    // Enable syntax checking
+            });
+            
             // Define custom themes to match our CSS
             monaco.editor.defineTheme('sleditor-dark', {
                 base: 'vs-dark',

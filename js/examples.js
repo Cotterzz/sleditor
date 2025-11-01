@@ -102,50 +102,38 @@ fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }`;
 
 export const MINIMAL_AUDIO_WORKLET = `// Simple sine wave (AudioWorklet)
-class AudioProcessor extends AudioWorkletProcessor {
-    constructor() {
-        super();
-        this.phase = 0;
-        this.frequency = 440;
-        
-        // Listen for parameter updates from JS
-        this.port.onmessage = (e) => {
-            this.receiveMessage(e.data);
-            
-        };
-    }
+// Your code is wrapped in an AudioWorkletProcessor class
+
+init() {
+    // Initialize your audio processor
+    this.phase = [0, 0]; // Separate phase for left and right channels
+    this.frequency = 440;
+}
+
+userProcess(output, inputs, parameters) {
+    // Generate audio samples
+    // output[channel][sample] = value (range: -1 to 1)
     
-    process(inputs, outputs, parameters) {
-        const output = outputs[0];
+    for (let channel = 0; channel < output.length; channel++) {
+        const outputChannel = output[channel];
         
-        for (let channel = 0; channel < output.length; channel++) {
-            const outputChannel = output[channel];
+        for (let i = 0; i < outputChannel.length; i++) {
+            // Generate sine wave
+            outputChannel[i] = Math.sin(this.phase[channel]) * 0.3;
             
-            for (let i = 0; i < outputChannel.length; i++) {
-                // Generate sine wave
-                outputChannel[i] = Math.sin(this.phase) * 0.3;
-                
-                // Increment phase
-                this.phase += (this.frequency * Math.PI * 2) / sampleRate;
-                if (this.phase > Math.PI * 2) {
-                    this.phase -= Math.PI * 2;
-                }
+            // Increment phase
+            this.phase[channel] += (this.frequency * Math.PI * 2) / sampleRate;
+            if (this.phase[channel] > Math.PI * 2) {
+                this.phase[channel] -= Math.PI * 2;
             }
         }
-        
-        return true; // Keep processor alive
-    }
-
-    receiveMessage(data) {
-        //if (data.frequency !== undefined) { this.frequency = e.data.frequency;}
-    }
-
-    sendMessage(data) { // this doesn't work yet, but is on sleditor todo list....
-        //this.port.postMessage(data);
     }
 }
 
-registerProcessor('user-audio', AudioProcessor);`;
+receiveMessage(data) {
+    // Handle messages from main thread
+    // Example: if (data.frequency) this.frequency = data.frequency;
+}`;
 
 
 // ============================================================================

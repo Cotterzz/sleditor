@@ -1392,11 +1392,12 @@
         window.addEventListener('toggle-js-exec-mode', toggleJSExecMode);
         window.addEventListener('load-example', (e) => loadExample(e.detail));
         
-        // Browser back/forward navigation support
+        // Browser back/forward navigation support (for OLD example URLs - deprecated)
         window.addEventListener('hashchange', () => {
             const urlShader = getShaderFromURL();
-            if (urlShader && urlShader !== state.currentExample) {
-                console.log('Navigating to shader from URL:', urlShader);
+            // Only load if it's an old-style example URL (no 'id=' present)
+            if (urlShader && !window.location.hash.includes('id=') && urlShader !== state.currentExample) {
+                console.log('[OLD FORMAT] Navigating to example from URL:', urlShader);
                 loadExample(urlShader);
             }
         });
@@ -1488,19 +1489,33 @@
         
         // Skip recompilation if editors aren't initialized yet (happens during startup)
         if (recompile && state.graphicsEditor) {
-            if (state.isPlaying) {
-                // Pause rendering during recompilation to prevent flicker
-                state.isRecompiling = true;
-                // Both WebGPU and WebGL need to reload shader
-                await reloadShader(true);
-                state.isRecompiling = false;
+            // Check if we're using WebGPU (which needs recompilation for workgroup size)
+            const needsRecompile = state.activeTabs.includes('graphics') || state.activeTabs.includes('audio_gpu');
+            
+            if (needsRecompile) {
+                // WebGPU/WGSL needs full recompilation for workgroup size changes
+                if (state.isPlaying) {
+                    // Pause rendering during recompilation to prevent flicker
+                    state.isRecompiling = true;
+                    await reloadShader(true);
+                    state.isRecompiling = false;
+                } else {
+                    // If paused, recompile shader and render a single frame
+                    await reloadShader(true);
+                    // Wait for layout update before rendering
+                    requestAnimationFrame(() => {
+                        render.renderOnce();
+                    });
+                }
             } else {
-                // If paused, recompile shader and render a single frame
-                await reloadShader(true);
-                // Wait for layout update before rendering
-                requestAnimationFrame(() => {
-                    render.renderOnce();
-                });
+                // WebGL/GLSL doesn't need recompilation, just render a frame
+                if (!state.isPlaying) {
+                    // If paused, render once to show the resize
+                    requestAnimationFrame(() => {
+                        render.renderOnce();
+                    });
+                }
+                // If playing, it will automatically render with new canvas size
             }
         }
     }
@@ -1580,7 +1595,7 @@
         if (state.audioEditor) {
             if (state.activeTabs.includes('wgsl_audio')) {
                 shaderData.code.wgsl_audio = state.audioEditor.getValue();
-            } else if (state.activeTabs.includes('audioworklet')) {
+            } else if (state.activeTabs.includes('audio_worklet')) {
                 shaderData.code.audioworklet = state.audioEditor.getValue();
             }
         }
@@ -1592,14 +1607,26 @@
         try {
             const blob = await backend.captureThumbnailBlob();
             if (blob) {
+                // Always use timestamp to avoid cache issues
                 const filename = `shader_${state.currentDatabaseShader.id}_${Date.now()}.png`;
                 const uploadResult = await backend.uploadThumbnail(blob, filename);
                 if (uploadResult.success) {
+                    // Delete old thumbnail in background (fire-and-forget)
+                    if (state.currentDatabaseShader.thumbnail_url) {
+                        const oldFilename = state.currentDatabaseShader.thumbnail_url.split('/').pop();
+                        backend.deleteThumbnail(oldFilename).catch(err => {
+                            console.warn('Old thumbnail cleanup failed (non-critical):', err);
+                        });
+                    }
                     shaderData.thumbnail_url = uploadResult.url;
+                } else {
+                    console.error('Thumbnail upload failed:', uploadResult.error);
+                    // Keep old thumbnail by not setting thumbnail_url
                 }
             }
         } catch (err) {
             console.error('Thumbnail capture error:', err);
+            // Keep old thumbnail by not setting thumbnail_url
         }
         
         // Save to database
@@ -1659,7 +1686,7 @@
         if (state.audioEditor) {
             if (state.activeTabs.includes('wgsl_audio')) {
                 shaderData.code.wgsl_audio = state.audioEditor.getValue();
-            } else if (state.activeTabs.includes('audioworklet')) {
+            } else if (state.activeTabs.includes('audio_worklet')) {
                 shaderData.code.audioworklet = state.audioEditor.getValue();
             }
         }
@@ -1674,15 +1701,31 @@
             const blob = await backend.captureThumbnailBlob();
             
             if (blob) {
-                const filename = `shader_${Date.now()}.png`;
+                // Always use timestamp to avoid cache issues
+                const filename = shaderData.id 
+                    ? `shader_${shaderData.id}_${Date.now()}.png`  // Update: new timestamped file
+                    : `shader_${Date.now()}.png`;                   // New: timestamp only (no ID yet)
+                    
                 const uploadResult = await backend.uploadThumbnail(blob, filename);
                 
                 if (uploadResult.success) {
+                    // Delete old thumbnail in background (fire-and-forget) for updates
+                    if (shaderData.id && state.currentDatabaseShader?.thumbnail_url) {
+                        const oldFilename = state.currentDatabaseShader.thumbnail_url.split('/').pop();
+                        backend.deleteThumbnail(oldFilename).catch(err => {
+                            console.warn('Old thumbnail cleanup failed (non-critical):', err);
+                        });
+                    }
                     shaderData.thumbnail_url = uploadResult.url;
+                    logStatus('✓ Thumbnail uploaded', 'success');
+                } else {
+                    console.error('Thumbnail upload failed:', uploadResult.error);
+                    logStatus('⚠️ Thumbnail upload failed (keeping old thumbnail)', 'error');
                 }
             }
         } catch (err) {
             console.error('Thumbnail capture error:', err);
+            logStatus('⚠️ Thumbnail capture failed (keeping old thumbnail)', 'error');
         }
         
         // Save to database
@@ -2272,15 +2315,16 @@
         if (shaderToLoad) {
             console.log('Loading shader:', shaderToLoad.title);
             save.loadDatabaseShader(shaderToLoad);
+            // Note: loadDatabaseShader() calls reloadShader() internally
         } else {
             // Fallback if no shaders in database yet
             tabs.renderTabs();
             tabs.switchTab('glsl_fragment');
+            
+            // Only compile if we didn't load a database shader
+            const compileSuccess = await reloadShader();
+            console.log('Initial shader compilation:', compileSuccess ? 'success' : 'failed');
         }
-        
-        // Compile initial shader (works for both GLSL and WGSL)
-        const compileSuccess = await reloadShader();
-        console.log('Initial shader compilation:', compileSuccess ? 'success' : 'failed');
         
         // IMPORTANT: Start render loop BEFORE setting isRunning = true
         console.log('Starting render loop, canvas size:', state.canvasWebGPU.width, 'x', state.canvasWebGPU.height);

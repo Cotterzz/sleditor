@@ -554,7 +554,7 @@ export function loadDatabaseShader(shader) {
         state.audioEditor.setValue(audioCode);
         
         // Set correct language
-        const isWorklet = shader.code_types?.includes('audioworklet');
+        const isWorklet = shader.code_types?.includes('audio_worklet');
         const language = isWorklet ? 'javascript' : 'wgsl';
         monaco.editor.setModelLanguage(state.audioEditor.getModel(), language);
     }
