@@ -42,6 +42,15 @@
                     onmouseout="this.style.background='var(--bg-primary)'">
                 ⚙ Options
             </button>
+            <button id="perfMonitorBtn" style="padding: 0px 6px; height: 24px; font-size: 12px; border-radius: 3px; 
+                                            background: var(--bg-primary); color: var(--text-primary); 
+                                            border: 1px solid var(--border-color); cursor: pointer; 
+                                            font-weight: 500; transition: background 0.2s; display: flex; align-items: center;"
+                    onmouseover="this.style.background='var(--bg-secondary)'" 
+                    onmouseout="this.style.background='var(--bg-primary)'"
+                    title="Performance Monitor">
+                <span>Stats</span>
+            </button>
         </div>
         
         <!-- Social Links (Center) -->
@@ -207,9 +216,9 @@
                     </label>
                     <div style="font-size: 9px; color: var(--text-secondary); margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border-color);">
                         Shaders using JS aren't currently shareable while we figure out a security model, AudioWorklet is shareable.
-                    </div>
-                </div>
-                
+            </div>
+        </div>
+        
                 <!-- Description (can be text or textarea) -->
                 <div id="shaderDescriptionDisplay" style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 10px;">Your first GLSL fragment shader - a simple colorful gradient</div>
                 <textarea id="shaderDescriptionInput" style="display: none; font-size: 12px; width: 100%; min-height: 60px; padding: 4px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 3px; resize: vertical; font-family: inherit;" placeholder="Description (optional)" maxlength="200"></textarea>
@@ -252,7 +261,7 @@
                     </button>
                 </div>
                 <div id="galleryContent" style="flex: 1; overflow-y: auto;">
-                    <!-- Gallery items will be populated here -->
+                <!-- Gallery items will be populated here -->
                 </div>
             </div>
         </div>
@@ -376,6 +385,7 @@
     import * as tabs from './js/tabs.js';
     import * as save from './js/save.js';
     import * as comments from './js/comments.js';
+    import * as perfMonitor from './js/performance-monitor.js';
     import * as vim from './js/vim.js';
     import { getBoilerplate, getHelpContent, MINIMAL_JS, EXAMPLES } from './js/examples.js';
 
@@ -1255,6 +1265,7 @@
         document.getElementById('shareBtn').addEventListener('click', copyShareLink);
         document.getElementById('addPassBtn').addEventListener('click', tabs.showAddPassMenu);
         document.getElementById('optionsBtn').addEventListener('click', tabs.showOptionsMenu);
+        document.getElementById('perfMonitorBtn').addEventListener('click', () => perfMonitor.togglePanel());
         
         // Auth buttons
         document.getElementById('signInBtn').addEventListener('click', () => {
@@ -2230,6 +2241,14 @@
         // Initialize backend (Supabase auth)
         backend.init();
         
+        // Initialize performance monitor
+        perfMonitor.init();
+        
+        // Add mini visualization to stats button
+        const perfBtn = document.getElementById('perfMonitorBtn');
+        const miniCanvas = perfMonitor.createMiniVisualization();
+        perfBtn.appendChild(miniCanvas);
+        
         // Initialize audio FIRST
         initWebAudio();
         
@@ -2329,7 +2348,7 @@
             // Note: loadDatabaseShader() calls reloadShader() internally
         } else {
             // Fallback if no shaders in database yet
-            tabs.renderTabs();
+        tabs.renderTabs();
             tabs.switchTab('glsl_fragment');
             
             // Only compile if we didn't load a database shader
@@ -2514,7 +2533,7 @@
             }
         }
     });
-    
+
     // Start application
     window.addEventListener('load', init);
     </script>

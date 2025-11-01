@@ -7,6 +7,7 @@ import { UniformBuilder } from './uniforms.js';
 import * as webgpu from './backends/webgpu.js';
 import * as webgl from './backends/webgl.js';
 import * as jsRuntime from './js-runtime.js';
+import * as perfMonitor from './performance-monitor.js';
 
 // ============================================================================
 // Main Render Loop
@@ -27,6 +28,9 @@ export function render(rawTime) {
         return;
     }
 
+    // Mark frame start for performance monitoring
+    perfMonitor.markFrameStart();
+
     const device = state.gpuDevice;
     const gl = state.glContext;
     const ctx = state.audioContext;
@@ -35,6 +39,9 @@ export function render(rawTime) {
     if (state.visualFrame === 0) {
         console.log('First render frame - backend:', state.graphicsBackend, 'device:', !!device, 'gl:', !!gl);
     }
+    
+    // Mark JS start (before user code)
+    perfMonitor.markJSStart();
     
     // Determine rendering mode based on available backend
     if (state.graphicsBackend === 'webgl' && gl) {
@@ -45,6 +52,12 @@ export function render(rawTime) {
         // Non-graphics mode: just call enterframe
         renderNonGPUMode(rawTime);
     }
+    
+    // Mark JS end (after user code)
+    perfMonitor.markJSEnd();
+    
+    // Mark frame end for performance monitoring
+    perfMonitor.markFrameEnd();
     
     requestAnimationFrame(render);
 }

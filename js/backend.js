@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { state, logStatus } from './core.js';
+import * as perfMonitor from './performance-monitor.js';
 
 // Supabase credentials (set at module level so they're available immediately)
 const SUPABASE_URL = 'https://vnsdnskppjwktvksxxvp.supabase.co';
@@ -746,6 +747,9 @@ export function subscribeToLikes(shaderId, onLikeChange) {
                 filter: `shader_id=eq.${shaderId}`
             },
             async (payload) => {
+                // Count websocket message for performance monitoring
+                perfMonitor.countWebSocketMessage();
+                
                 console.log('🔔 Real-time like change detected:', payload.eventType, 'for shader:', shaderId);
                 
                 // Small delay to ensure all DB operations complete
@@ -895,6 +899,9 @@ export function subscribeToComments(shaderId, onCommentChange) {
                 filter: `shader_id=eq.${shaderId}`
             },
             (payload) => {
+                // Count websocket message for performance monitoring
+                perfMonitor.countWebSocketMessage();
+                
                 console.log('🔔 Comment change detected:', payload.eventType);
                 if (onCommentChange) {
                     onCommentChange();
