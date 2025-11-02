@@ -543,11 +543,6 @@ export function loadDatabaseShader(shader) {
     // Set active tabs from code_types
     state.activeTabs = [...(shader.code_types || [])];
     
-    // Add help tab if not present
-    if (!state.activeTabs.includes('help')) {
-        state.activeTabs.push('help');
-    }
-    
     // Load code into editors
     if (state.graphicsEditor && shader.code) {
         // Find graphics code (could be glsl_fragment, glsl_vertex, wgsl_graphics, or graphics)

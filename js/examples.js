@@ -149,7 +149,7 @@ export const EXAMPLES = {
         name: "Hello World (GLSL)",
         description: "Your first GLSL fragment shader - a simple colorful gradient",
         thumbnail: getThumbnailUrl("new.png"),
-        tabs: ["glsl_fragment", "help"],
+        tabs: ["glsl_fragment"],
         webgpuRequired: false,
         graphics: `#version 300 es
 precision highp float;
@@ -178,7 +178,7 @@ void main() {
         name: "Hello World (WGSL)",
         description: "A simple gradient - perfect first shader to understand coordinates and colors",
         thumbnail: getThumbnailUrl("new.png"),
-        tabs: ["graphics", "help"],
+        tabs: ["graphics"],
         webgpuRequired: true,
         graphics: `// Simple gradient - your first shader!
 @compute @workgroup_size(8, 8, 1)
@@ -306,7 +306,7 @@ registerProcessor('user-audio', AudioProcessor);`,
         name: "Grey Blob GLSL",
         description: "Original GLSL version of the Grey Blob WGSL example",
         thumbnail: getThumbnailUrl("greyblob.png"),
-        tabs: ["glsl_fragment", "help"],
+        tabs: ["glsl_fragment"],
         webgpuRequired: false,
         graphics: `#version 300 es
 precision highp float;
@@ -340,7 +340,7 @@ void main() {
         name: "Grey Blob WGSL",
         description: "Imported GLSL raymarching shader with mesmerizing organic motion",
         thumbnail: getThumbnailUrl("greyblob.png"),
-        tabs: ["graphics", "help"],
+        tabs: ["graphics"],
         webgpuRequired: true,
         graphics: `
 //port of the glsl shader by diatribes
