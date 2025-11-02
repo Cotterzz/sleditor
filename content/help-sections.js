@@ -81,7 +81,6 @@ Click on any shader in the **Examples** gallery to load it.
 - ✅ Share shaders with unique URLs
 - ✅ Like and comment on shaders
 - ✅ View community gallery
-- ✅ Build a public portfolio
 `
     },
     loadsave: {
@@ -425,20 +424,22 @@ registerProcessor('user-audio-...', AudioProcessor);
 # Credits & Useful Links
 
 ## SLEditor
-Created by [Cotterzz](https://github.com/Cotterzz)
+Created by [John Cotterell aka Cotterzz](https://johnc.pro)
+
+Special thanks to:
+Diatribes, Konsumer, Kuko Visuals, Vipits, Peter0x044, Jae and others
+for feedback, suggestions and encouragement in the Discord channel
 
 ## Technologies
 - **Monaco Editor** - Code editing
-- **WebGPU/WGSL** - Modern GPU compute
-- **WebGL/GLSL** - Graphics rendering
 - **Supabase** - Backend & auth
 - **Marked.js** - Markdown rendering
+- **WebGPU/WGSL** - Modern GPU compute
+- **WebGL/GLSL** - Graphics rendering
+- **Sublime Text** - Code editing
+- **Cursor** - Code editing
+- **Claude 4.5 Sonnet** - Refactoring and DB assistance
 
-## Shader Resources
-- [ShaderToy](https://www.shadertoy.com/) - GLSL examples
-- [WebGPU Samples](https://webgpu.github.io/webgpu-samples/)
-- [The Book of Shaders](https://thebookofshaders.com/)
-- [Inigo Quilez](https://iquilezles.org/) - Ray marching techniques
 
 ## Community
 - 💬 [Discord](https://discord.gg/embXuftRKx)
