@@ -393,9 +393,21 @@ export async function loadExamples() {
 
         if (result.error) throw result.error;
         
+        // Filter out WebGPU shaders if WebGPU is not available
+        let filteredShaders = result.data;
+        if (!state.hasWebGPU) {
+            filteredShaders = result.data.filter(shader => {
+                const codeTypes = shader.code_types || [];
+                const hasGraphicsTab = codeTypes.includes('graphics');
+                const isWGSL = hasGraphicsTab && (shader.code?.wgsl_graphics || shader.code?.graphics) && !shader.code?.glsl_fragment;
+                const needsWebGPU = codeTypes.some(t => t === 'wgsl_graphics' || t === 'wgsl_audio' || t === 'audio_gpu') || isWGSL;
+                return !needsWebGPU;
+            });
+        }
+        
         // Examples are trusted - no need to filter JS
         // Use creator_name if available, fallback to "Community"
-        const shadersWithUsername = result.data.map(shader => ({
+        const shadersWithUsername = filteredShaders.map(shader => ({
             ...shader,
             username: shader.creator_name || 'Community'
         }));
