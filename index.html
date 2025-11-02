@@ -14,11 +14,52 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-    <!-- Top Bar -->
-    <div id="topBar" style="display: flex; align-items: center; 
+    <!-- Help Panel (Hidden by default) -->
+    <div id="helpPanel" style="position: fixed; top: 0; left: 0; right: 0; 
+                                 height: 33.33vh; 
+                                 background: var(--bg-primary); 
+                                 border-bottom: 1px solid var(--border-color); 
+                                 transform: translateY(-100%); 
+                                 transition: transform 0.3s ease-out;
+                                 overflow: hidden;
+                                 box-sizing: border-box;
+                                 z-index: 5;
+                                 display: flex;">
+        <!-- Table of Contents (Left 1/3) -->
+        <div id="helpTOC" style="width: 33.33%; 
+                                  background: var(--bg-secondary); 
+                                  border-right: 1px solid var(--border-color);
+                                  overflow-y: auto;
+                                  padding: 10px;">
+            <h3 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 12px;">Contents</h3>
+            <div id="helpTOCLinks" style="font-size: 11px;"></div>
+        </div>
+        
+        <!-- Content Area (Right 2/3) -->
+        <div id="helpContent" style="width: 66.67%; 
+                                      overflow-y: auto; 
+                                      padding: 12px 15px;
+                                      color: var(--text-primary);
+                                      line-height: 1.5;
+                                      columns: 2;
+                                      column-gap: 20px;">
+            <!-- Content will be populated by JavaScript -->
+        </div>
+    </div>
+    
+    <!-- Main Content Wrapper (includes top bar + container) -->
+    <div id="mainWrapper" style="position: fixed; 
+                                 top: 0; 
+                                 left: 0; 
+                                 right: 0; 
+                                 bottom: 0;
+                                 transition: top 0.3s ease-out;
+                                 z-index: 10;">
+        <!-- Top Bar -->
+        <div id="topBar" style="display: flex; align-items: center; 
                              background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); 
                              height: 30px; gap: 10px;">
-        <!-- Logo + Title (Left) -->
+            <!-- Logo + Title (Left) -->
         <div style="display: flex; align-items: center; gap: 2px; padding-left: 2px;">
             <img src="favicon/topbar.png" alt="SL" style="height: 20px; opacity: 0.9;padding-top: 1px;" />
             <span style="font-weight: 600; font-size: 14px; color: var(--text-primary); letter-spacing: 0.5px;">EDITOR</span>
@@ -52,6 +93,17 @@
                 <span>Stats</span>
             </button>
         </div>
+        
+        <!-- Help Button (Between Stats and Social) -->
+        <button id="helpToggleBtn" style="padding: 0px 6px; height: 24px; font-size: 12px; border-radius: 3px; 
+                                        background: var(--bg-primary); color: var(--text-primary); 
+                                        border: 1px solid var(--border-color); cursor: pointer; 
+                                        font-weight: 500; transition: background 0.2s;"
+                onmouseover="this.style.background='var(--bg-secondary)'" 
+                onmouseout="this.style.background='var(--bg-primary)'"
+                title="Toggle Help Panel">
+            Help ▼
+        </button>
         
         <!-- Social Links (Center) -->
         <div style="flex: 1; display: flex; justify-content: center; gap: 8px;">
@@ -107,9 +159,9 @@
                 <span style="font-size: 16px;">👤</span>
             </button>
         </div>
-    </div>
+    </div> <!-- End topBar -->
     
-    <!-- Main Container -->
+    <!-- Main Container (Content below top bar) -->
     <div id="container" style="height: calc(100% - 30px);">
         <div id="devPanel">
 <div id="editorTabs" style="display: flex; margin-bottom: 0px; gap: 5px; align-items: center;">
@@ -804,6 +856,611 @@
             btn.className = 'paused';
         }
     }
+    
+    // ============================================================================
+    // Help Panel Toggle
+    // ============================================================================
+    
+    let isHelpPanelOpen = false;
+    
+    function toggleHelpPanel() {
+        const helpPanel = document.getElementById('helpPanel');
+        const mainWrapper = document.getElementById('mainWrapper');
+        const helpBtn = document.getElementById('helpToggleBtn');
+        
+        isHelpPanelOpen = !isHelpPanelOpen;
+        
+        if (isHelpPanelOpen) {
+            // Show help panel and push main wrapper (top bar + content) down
+            helpPanel.style.transform = 'translateY(0)';
+            mainWrapper.style.top = '33.33vh';
+            helpBtn.textContent = 'Help ▲';
+            
+            // Initialize help content on first open
+            if (!window.helpInitialized) {
+                initializeHelp();
+                window.helpInitialized = true;
+            }
+        } else {
+            // Hide help panel and restore main wrapper
+            helpPanel.style.transform = 'translateY(-100%)';
+            mainWrapper.style.top = '0';
+            helpBtn.textContent = 'Help ▼';
+        }
+    }
+    
+    // ============================================================================
+    // Help Content System
+    // ============================================================================
+    
+    const HELP_SECTIONS = {
+        intro: {
+            title: 'Introduction',
+            category: 'Getting Started',
+            content: `
+# Welcome to SLEditor!
+
+![SLEditor Logo](/favicon/biglogo.png)
+
+SLEditor is a powerful browser-based shader editor supporting:
+- **GLSL** fragment shaders (WebGL)
+- **WGSL** compute graphics and audio (WebGPU)
+- **AudioWorklet** for advanced audio synthesis
+- **JavaScript** for interactive control
+
+## Quick Actions
+- 📚 Check out the **[QuickStart](#quickstart)** to get coding immediately
+- 📖 Browse the **Contents** to learn specific features
+`
+        },
+        quickstart: {
+            title: 'QuickStart',
+            category: 'Getting Started',
+            content: `
+# QuickStart Guide
+
+## Interface Overview
+- **Top Bar**: Controls, performance stats, help, and account
+- **Left Panel**: Code editors with tabbed interface
+- **Center**: Live shader preview canvas
+- **Right Panel**: Gallery and comments
+
+## Getting Started
+
+### 1. Select an Example
+Click on any shader in the **Examples** gallery to load it.
+
+### 2. Fork and Edit
+- Click the **Fork** button to create your own copy
+- Edit the code in the Monaco editor
+- Changes compile automatically
+
+### 3. Save Your Work
+- **Logged out**: Saves to browser localStorage
+- **Logged in**: Saves to cloud with shareable links
+`
+        },
+        membership: {
+            title: 'Membership',
+            category: 'Getting Started',
+            content: `
+# Membership & Accounts
+
+## Sign Up Options
+- **Email/Password**: Traditional signup
+- **GitHub OAuth**: Sign in with your GitHub account
+- **Google** *(coming soon)*
+- **Facebook** *(coming soon)*
+
+## Anonymous vs Logged In
+
+### Anonymous Users Can:
+- ✅ View and fork example shaders
+- ✅ Save shaders to localStorage
+- ✅ View published shaders via direct link
+- ❌ Cannot share shaders
+- ❌ Cannot comment or like
+
+### Logged In Members Can:
+- ✅ All anonymous features
+- ✅ Save shaders to the cloud
+- ✅ Share shaders with unique URLs
+- ✅ Like and comment on shaders
+- ✅ View community gallery
+- ✅ Build a public portfolio
+`
+        },
+        loadsave: {
+            title: 'Load & Save',
+            category: 'Getting Started',
+            content: `
+# Loading & Saving Shaders
+
+## Saving Your Work
+
+### When Logged Out
+Shaders are saved to **browser localStorage**. They persist until you clear browser data.
+
+### When Logged In
+Shaders are saved to the **cloud** with these options:
+
+#### Visibility Settings
+- **Private**: Only you can see it
+- **Published**: Visible in community gallery + shareable link
+- **Example**: *(Admin only)* Listed for all users
+
+### Forking Shaders
+Click the **Fork** button on any shader to create your own copy. The title will be prefixed with "Fork of:".
+
+## Deleting Shaders
+Click the 🗑️ trash icon on any shader thumbnail in "My Shaders" to delete it.
+
+## Sharing
+Published shaders get a unique URL like: \`sleditor.com/#id=abc123def\`
+`
+        },
+        support: {
+            title: 'Support',
+            category: 'Getting Started',
+            content: `
+# Support & Community
+
+## Report Issues
+- **GitHub**: [github.com/Cotterzz/sleditor](https://github.com/Cotterzz/sleditor)
+- **Discord**: [Join our server](https://discord.gg/embXuftRKx)
+- **Bluesky**: [@cotterzz.bsky.social](https://bsky.app/profile/cotterzz.bsky.social)
+
+## Get Help
+Ask questions in our Discord server or check the documentation sections below.
+
+## Feature Requests
+Open an issue on GitHub or discuss on Discord.
+`
+        },
+        
+        // PART 2: Shader Types
+        glsl_intro: {
+            title: 'GLSL Introduction',
+            category: 'Shader Types',
+            content: `
+# GLSL (OpenGL Shading Language)
+
+GLSL is the shading language for WebGL, allowing you to write fragment shaders that run on the GPU.
+
+## Why GLSL?
+- ✅ **Widely supported**: Works on all browsers
+- ✅ **Well documented**: Lots of resources online
+- ✅ **ShaderToy compatible**: Easy to port existing shaders
+- ⚠️ **Graphics only**: No compute or audio support
+
+## What You Can Build
+- Real-time visual effects
+- Ray marching scenes
+- Image processing filters
+- Animated patterns
+`
+        },
+        glsl_frag: {
+            title: 'GLSL Fragment Shader',
+            category: 'Shader Types',
+            content: `
+# GLSL Fragment Shaders
+
+## Basic Structure
+\`\`\`glsl
+void main() {
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    vec3 col = vec3(uv.x, uv.y, 0.5);
+    gl_FragColor = vec4(col, 1.0);
+}
+\`\`\`
+
+## Available Uniforms
+- \`iResolution\` - Canvas size (vec3)
+- \`iTime\` - Elapsed time in seconds
+- \`iFrame\` - Frame number
+- \`iMouse\` - Mouse position (vec4)
+
+## Tips
+- Normalize coordinates: \`uv = gl_FragCoord.xy / iResolution.xy\`
+- Center coordinates: \`uv = (uv - 0.5) * 2.0\`
+- Maintain aspect ratio: multiply by \`iResolution.xy / iResolution.y\`
+`
+        },
+        wgsl_intro: {
+            title: 'WGSL Introduction',
+            category: 'Shader Types',
+            content: `
+# WGSL (WebGPU Shading Language)
+
+WGSL is the modern shading language for WebGPU, offering compute shaders for graphics and audio.
+
+## Why WGSL?
+- ✅ **Compute shaders**: Full GPU compute capabilities
+- ✅ **Audio synthesis**: Generate audio on the GPU
+- ✅ **Modern**: Future-proof technology
+- ⚠️ **Limited support**: Chrome 113+, Safari 18+, Edge 113+
+
+## What You Can Build
+- GPU-accelerated graphics
+- Real-time audio synthesis
+- Compute-based effects
+- Advanced parallel processing
+`
+        },
+        wgsl_compute: {
+            title: 'WGSL Compute Graphics',
+            category: 'Shader Types',
+            content: `
+# WGSL Compute Graphics
+
+Compute shaders process each pixel in parallel using workgroups.
+
+## Basic Structure
+\`\`\`wgsl
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let pos = vec2<f32>(id.xy);
+    let uv = pos / vec2<f32>(resolution);
+    
+    let color = vec4<f32>(uv.x, uv.y, 0.5, 1.0);
+    textureStore(outputTex, id.xy, color);
+}
+\`\`\`
+
+## Available Uniforms
+- \`resolution\` - Canvas size
+- \`time\` - Elapsed time
+- \`frame\` - Frame number
+- \`mouse\` - Mouse position
+
+## Workgroup Sizes
+Automatically recalculated when canvas size changes to ensure full coverage.
+`
+        },
+        wgsl_audio: {
+            title: 'WGSL Audio',
+            category: 'Shader Types',
+            content: `
+# WGSL Audio Synthesis
+
+Generate audio using GPU compute shaders for extremely efficient synthesis.
+
+## Basic Structure
+\`\`\`wgsl
+@compute @workgroup_size(256)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    let sampleIndex = id.x;
+    let t = f32(audioFrame + sampleIndex) / 44100.0;
+    
+    let freq = 440.0; // A4 note
+    let sample = sin(t * freq * 6.28318);
+    
+    audioBuffer[sampleIndex] = sample;
+    audioBuffer[SAMPLES_PER_BLOCK + sampleIndex] = sample; // Stereo
+}
+\`\`\`
+
+## Performance
+Capable of synthesizing thousands of oscillators in real-time!
+`
+        },
+        audioworklet: {
+            title: 'AudioWorklet',
+            category: 'Shader Types',
+            content: `
+# AudioWorklet
+
+Modern Web Audio API for custom audio processing in a separate thread.
+
+## Code Structure
+\`\`\`javascript
+const audioProcessor = {
+    init() {
+        // Initialize your processor
+        this.phase = [0, 0]; // Stereo channels
+        this.frequency = 440;
+    },
+    
+    userProcess(output, inputs, parameters) {
+        // Generate audio samples
+        for (let channel = 0; channel < output.length; channel++) {
+            const outputChannel = output[channel];
+            for (let i = 0; i < outputChannel.length; i++) {
+                outputChannel[i] = Math.sin(this.phase[channel]) * 0.3;
+                this.phase[channel] += (this.frequency * Math.PI * 2) / sampleRate;
+            }
+        }
+    },
+    
+    receiveMessage(data) {
+        // Handle messages from main thread
+        if (data.frequency) this.frequency = data.frequency;
+    }
+};
+\`\`\`
+
+## Available Variables
+- \`sampleRate\` - Audio sample rate (usually 44100 or 48000)
+- \`this.port.postMessage(data)\` - Send messages to main thread via \`sendMessage()\`
+`
+        },
+        javascript: {
+            title: 'JavaScript',
+            category: 'Shader Types',
+            content: `
+# JavaScript Tab
+
+Add interactivity and control to your shaders with JavaScript.
+
+## Available Functions
+
+### \`init()\`
+Called once when shader loads.
+\`\`\`javascript
+function init() {
+    console.log('Shader initialized!');
+}
+\`\`\`
+
+### \`enterframe(elapsed, uniforms)\`
+Called every frame.
+\`\`\`javascript
+function enterframe(elapsed, uniforms) {
+    // elapsed: time in seconds
+    // uniforms: object to set custom uniforms
+    uniforms.customValue = Math.sin(elapsed) * 0.5 + 0.5;
+}
+\`\`\`
+
+## Custom Uniforms
+Set values in \`enterframe\` to pass data to your shaders:
+\`\`\`javascript
+uniforms.myFloat = 1.5;
+uniforms.myVec2 = [x, y];
+uniforms.myVec3 = [r, g, b];
+\`\`\`
+
+## Security Note
+⚠️ JavaScript shaders are currently **private only** for security reasons.
+`
+        },
+        
+        // Appendix
+        wgsl_boilerplate: {
+            title: 'WGSL Boilerplate',
+            category: 'Reference',
+            content: `
+# WGSL Boilerplate
+
+The full boilerplate code wrapped around your WGSL compute shaders.
+
+## Graphics Boilerplate
+\`\`\`wgsl
+@group(0) @binding(0) var outputTex: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(1) var<uniform> uniforms: Uniforms;
+
+struct Uniforms {
+    resolution: vec2<f32>,
+    time: f32,
+    frame: u32,
+    mouse: vec4<f32>,
+}
+
+// Your code here
+
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+    // Your main function
+}
+\`\`\`
+
+## Audio Boilerplate
+Similar structure with audio-specific uniforms and buffer bindings.
+`
+        },
+        audioworklet_boilerplate: {
+            title: 'AudioWorklet Boilerplate',
+            category: 'Reference',
+            content: `
+# AudioWorklet Boilerplate
+
+Your code is wrapped in an AudioWorkletProcessor class.
+
+\`\`\`javascript
+class AudioProcessor extends AudioWorkletProcessor {
+    constructor() {
+        super();
+        this.sampleRate = sampleRate;
+        this.audioProcessor = audioProcessor; // Your object
+        
+        // Bind your methods
+        if (this.audioProcessor.init) {
+            this.audioProcessor.init = this.audioProcessor.init.bind(this);
+            this.audioProcessor.init();
+        }
+        // ... more binding
+        
+        this.port.onmessage = (e) => {
+            if (this.audioProcessor.receiveMessage) {
+                this.audioProcessor.receiveMessage(e.data);
+            }
+        };
+    }
+
+    process(inputs, outputs, parameters) {
+        if (this.audioProcessor.userProcess) {
+            const output = outputs[0];
+            this.audioProcessor.userProcess(output, inputs, parameters);
+        }
+        return true;
+    }
+
+    sendMessage(data) {
+        this.port.postMessage(data);
+    }
+}
+registerProcessor('user-audio-...', AudioProcessor);
+\`\`\`
+`
+        },
+        credits: {
+            title: 'Credits & Links',
+            category: 'Reference',
+            content: `
+# Credits & Useful Links
+
+## SLEditor
+Created by [Cotterzz](https://github.com/Cotterzz)
+
+## Technologies
+- **Monaco Editor** - Code editing
+- **WebGPU/WGSL** - Modern GPU compute
+- **WebGL/GLSL** - Graphics rendering
+- **Supabase** - Backend & auth
+- **Marked.js** - Markdown rendering
+
+## Shader Resources
+- [ShaderToy](https://www.shadertoy.com/) - GLSL examples
+- [WebGPU Samples](https://webgpu.github.io/webgpu-samples/)
+- [The Book of Shaders](https://thebookofshaders.com/)
+- [Inigo Quilez](https://iquilezles.org/) - Ray marching techniques
+
+## Community
+- 💬 [Discord](https://discord.gg/embXuftRKx)
+- 🦋 [Bluesky](https://bsky.app/profile/cotterzz.bsky.social)
+- 🐙 [GitHub](https://github.com/Cotterzz/sleditor)
+`
+        }
+    };
+    
+    function initializeHelp() {
+        // Build table of contents - organize by category in columns
+        const tocContainer = document.getElementById('helpTOCLinks');
+        
+        // Group sections by category
+        const categories = {};
+        Object.entries(HELP_SECTIONS).forEach(([id, section]) => {
+            if (!categories[section.category]) {
+                categories[section.category] = [];
+            }
+            categories[section.category].push({ id, title: section.title });
+        });
+        
+        // Build TOC with inline-block categories
+        let tocHTML = '<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between;">';
+        
+        Object.entries(categories).forEach(([category, sections]) => {
+            tocHTML += `<div style="flex: 1; min-width: 100px;">`;
+            tocHTML += `<div style="font-weight: bold; color: var(--text-primary); font-size: 10px; text-transform: uppercase; margin-bottom: 4px;">${category}</div>`;
+            
+            sections.forEach(({ id, title }) => {
+                tocHTML += `<div style="padding: 2px 0px; cursor: pointer; color: var(--text-secondary); transition: color 0.2s; font-size: 10px;" 
+                                 onmouseover="this.style.color='var(--text-primary)'" 
+                                 onmouseout="this.style.color='var(--text-secondary)'"
+                                 onclick="showHelpSection('${id}')">
+                    ${title}
+                </div>`;
+            });
+            
+            tocHTML += '</div>';
+        });
+        
+        tocHTML += '</div>';
+        tocContainer.innerHTML = tocHTML;
+        
+        // Show intro by default
+        showHelpSection('intro');
+    }
+    
+    window.showHelpSection = function(sectionId) {
+        const section = HELP_SECTIONS[sectionId];
+        if (!section) return;
+        
+        const contentContainer = document.getElementById('helpContent');
+        
+        // Render markdown using marked.js (already loaded for comments)
+        const htmlContent = marked.parse(section.content.trim());
+        contentContainer.innerHTML = htmlContent;
+        
+        // Scroll to top
+        contentContainer.scrollTop = 0;
+        
+        // Style the rendered markdown
+        contentContainer.querySelectorAll('pre').forEach(pre => {
+            pre.style.cssText = 'break-inside: avoid; margin: 6px 0;';
+        });
+        
+        contentContainer.querySelectorAll('pre code').forEach(block => {
+            block.style.cssText = `
+                display: block;
+                padding: 8px;
+                background: var(--bg-secondary);
+                border-radius: 3px;
+                overflow-x: auto;
+                font-size: 10px;
+                line-height: 1.4;
+            `;
+        });
+        
+        contentContainer.querySelectorAll('code').forEach(inline => {
+            if (!inline.parentElement || inline.parentElement.tagName !== 'PRE') {
+                inline.style.cssText = `
+                    background: var(--bg-secondary);
+                    padding: 1px 4px;
+                    border-radius: 2px;
+                    font-size: 10px;
+                `;
+            }
+        });
+        
+        contentContainer.querySelectorAll('h1').forEach(h => {
+            h.style.cssText = 'font-size: 18px; margin: 0 0 8px 0; border-bottom: 1px solid var(--border-color); padding-bottom: 6px; column-span: all; break-after: avoid;';
+        });
+        
+        contentContainer.querySelectorAll('h2').forEach(h => {
+            h.style.cssText = 'font-size: 14px; margin: 12px 0 6px 0; color: var(--text-primary); break-after: avoid;';
+        });
+        
+        contentContainer.querySelectorAll('h3').forEach(h => {
+            h.style.cssText = 'font-size: 12px; margin: 10px 0 4px 0; color: var(--text-primary); break-after: avoid;';
+        });
+        
+        contentContainer.querySelectorAll('p').forEach(p => {
+            p.style.cssText = 'margin: 6px 0; font-size: 11px; break-inside: avoid;';
+        });
+        
+        contentContainer.querySelectorAll('ul, ol').forEach(list => {
+            list.style.cssText = 'margin: 6px 0; padding-left: 20px; font-size: 11px; break-inside: avoid;';
+        });
+        
+        contentContainer.querySelectorAll('li').forEach(li => {
+            li.style.cssText = 'margin: 2px 0; break-inside: avoid;';
+        });
+        
+        contentContainer.querySelectorAll('a').forEach(link => {
+            if (link.href.includes('#')) {
+                // Internal help link
+                const hash = link.href.split('#')[1];
+                if (hash) {
+                    link.onclick = (e) => {
+                        e.preventDefault();
+                        showHelpSection(hash);
+                    };
+                    link.style.cssText = 'color: #0088ff; cursor: pointer; text-decoration: none;';
+                }
+            } else {
+                // External link
+                link.style.cssText = 'color: #0088ff;';
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+            }
+        });
+        
+        contentContainer.querySelectorAll('img').forEach(img => {
+            img.style.cssText = 'max-width: 150px; float: right; margin-left: 15px; margin-bottom: 10px;';
+        });
+    }
 
     function restart(userInitiated = false) {
         const now = performance.now();
@@ -1266,6 +1923,7 @@
         document.getElementById('addPassBtn').addEventListener('click', tabs.showAddPassMenu);
         document.getElementById('optionsBtn').addEventListener('click', tabs.showOptionsMenu);
         document.getElementById('perfMonitorBtn').addEventListener('click', () => perfMonitor.togglePanel());
+        document.getElementById('helpToggleBtn').addEventListener('click', toggleHelpPanel);
         
         // Auth buttons
         document.getElementById('signInBtn').addEventListener('click', () => {
@@ -2537,6 +3195,7 @@
     // Start application
     window.addEventListener('load', init);
     </script>
+    </div> <!-- End mainWrapper -->
 </body>
 </html>
 

@@ -11,26 +11,22 @@ import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET } from './examples.js';
 
 function getTabIcon(tabName) {
     const icons = {
-        boilerplate: '📄',
         graphics: '🎨',
         glsl_fragment: '🔺',
         audio_gpu: '🔊',
         audio_worklet: '🎵',
-        js: '⚡',
-        help: '❓'
+        js: '⚡'
     };
     return icons[tabName] || '📝';
 }
 
 function getTabLabel(tabName) {
     const labels = {
-        boilerplate: 'Boilerplate',
         graphics: 'Graphics (WGSL)',
         glsl_fragment: 'Fragment (GLSL)',
         audio_gpu: 'Audio (WGSL)',
         audio_worklet: 'Audio (Worklet)',
-        js: 'JavaScript',
-        help: 'Help'
+        js: 'JavaScript'
     };
     return labels[tabName] || tabName;
 }
@@ -81,23 +77,19 @@ export function switchTab(tabName) {
     state.currentTab = tabName;
     
     const containers = {
-        boilerplate: document.getElementById('boilerplateContainer'),
         graphics: document.getElementById('graphicsContainer'),
         glsl_fragment: document.getElementById('graphicsContainer'),  // GLSL uses graphics container
         audio_gpu: document.getElementById('audioContainer'),
         audio_worklet: document.getElementById('audioContainer'),  // Both audio tabs use same container
-        js: document.getElementById('jsEditorContainer'),
-        help: document.getElementById('helpContainer')
+        js: document.getElementById('jsEditorContainer')
     };
     
     const editors = {
-        boilerplate: state.boilerplateEditor,
         graphics: state.graphicsEditor,
         glsl_fragment: state.graphicsEditor,  // GLSL uses graphics editor
         audio_gpu: state.audioEditor,
         audio_worklet: state.audioEditor,  // Both audio tabs use same editor
-        js: state.jsEditor,
-        help: state.helpEditor
+        js: state.jsEditor
     };
     
     // Hide all containers (use unique set to avoid hiding/showing same container twice)
@@ -229,11 +221,9 @@ export function showAddPassMenu() {
     
     // Build menu options
     const availableTabs = [
-        { name: 'boilerplate', label: '📄 Boilerplate' },
         { name: 'audio_gpu', label: '🔊 Audio (WGSL)' },
         { name: 'audio_worklet', label: '🎵 Audio (Worklet)' },
-        { name: 'js', label: '⚡ JavaScript' },
-        { name: 'help', label: '❓ Help' }
+        { name: 'js', label: '⚡ JavaScript' }
     ];
     
     menu.innerHTML = '';
