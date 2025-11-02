@@ -1810,7 +1810,7 @@
             tags: state.currentDatabaseShader.tags || [],
             visibility: state.currentDatabaseShader.visibility || 'published',
             code: {},
-            code_types: [...state.activeTabs.filter(t => t !== 'help')]
+            code_types: [...state.activeTabs.filter(t => t !== 'help' && t !== 'boilerplate')]
         };
         
         // Collect code from editors
@@ -1830,7 +1830,7 @@
             }
         }
         if (state.jsEditor && state.activeTabs.includes('js')) {
-            shaderData.code.js = state.jsEditor.getValue();
+            shaderData.code.javascript = state.jsEditor.getValue();
         }
         
         // Capture and upload thumbnail
@@ -1895,7 +1895,7 @@
             tags: [], // Could add tag input later
             visibility,
             code: {},
-            code_types: [...state.activeTabs.filter(t => t !== 'help')]
+            code_types: [...state.activeTabs.filter(t => t !== 'help' && t !== 'boilerplate')]
         };
         
         // If updating owned shader, include ID
@@ -1922,7 +1922,7 @@
         }
         
         if (state.jsEditor && state.activeTabs.includes('js')) {
-            shaderData.code.js = state.jsEditor.getValue();
+            shaderData.code.javascript = state.jsEditor.getValue();
         }
         
         // Capture and upload thumbnail

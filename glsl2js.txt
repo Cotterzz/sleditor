@@ -1,0 +1,445 @@
+// My audioworklet as it is right now:
+
+const audioProcessor = {
+    init() {
+        // Initialize your audio processor
+        this.phase = [0, 0]; // Separate phase for left and right channels
+        this.frequency = 440;
+        this.mouseX = 0;
+        this.mouseY = 0;
+    },
+    
+    userProcess(output, inputs, parameters) {
+        // Generate audio samples
+        // output[channel][sample] = value (range: -1 to 1)
+        
+        for (let channel = 0; channel < output.length; channel++) {
+            const outputChannel = output[channel];
+            
+            for (let i = 0; i < outputChannel.length; i++) {
+
+                // This is where wavetable function will be called from
+                outputChannel[i] = Math.sin(this.phase[channel]) * 0.3;
+                
+                // Increment phase
+                this.phase[channel] += (this.frequency * Math.PI * 2) / sampleRate;
+                if (this.phase[channel] > Math.PI * 2) {
+                    this.phase[channel] -= Math.PI * 2;
+                }
+            }
+        }
+    },
+    
+    receiveMessage(data) {
+        // Handle messages from main thread
+        if (data.mx) this.mouseX = data.mx;
+        if (data.my) this.mouseY = data.my;
+    }
+};
+
+
+// GLSL, needs converting to JS and adding to audioworklet
+
+// Wavetable functions
+float wavetabletest(vec2 uv) {
+    float x = uv.x;  // Phase (0-1)
+    float y = uv.y;  // Table position (0-1)
+    
+    // Ensure continuity at boundaries
+    float phase = x * 2.0 * 3.14159265359;
+    
+    if (y < 0.5) {
+        // Interpolate between sine and square
+        float t = y * 2.0;  // 0 to 1 for first half
+        
+        // Sine wave
+        float sine = sin(phase);
+        
+        // Square wave (bandlimited with a few harmonics)
+        float square = 0.0;
+        for(int i = 1; i <= 7; i += 2) {
+            square += sin(phase * float(i)) / float(i);
+        }
+        square *= 4.0 / 3.14159265359;
+        
+        return mix(sine, square, t);
+    } else {
+        // Interpolate between square and complex wave
+        float t = (y - 0.5) * 4.0;  // 0 to 1 for second half
+        
+        // Square wave
+        float square = 0.0;
+        for(int i = 1; i <= 7; i += 2) {
+            square += sin(phase * float(i)) / float(i);
+        }
+        square *= 4.0 / 3.14159265359;
+        
+        // Complex wave (multiple harmonics)
+        float complex = sin(phase) * 0.5 +           // Fundamental
+                       sin(phase * 2.0) * 0.3 +      // 2nd harmonic
+                       sin(phase * 3.0) * 0.15 +     // 3rd harmonic
+                       sin(phase * 5.0) * 0.05;      // 5th harmonic
+        
+        return mix(square, complex, t);
+    }
+}
+
+float wavetable_metallic(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    // Start harmonic, become increasingly inharmonic
+    float wave = sin(phase);
+    
+    // Add inharmonic partials
+    wave += sin(phase * 2.1) * 0.5 * y;
+    wave += sin(phase * 3.3) * 0.3 * y;
+    wave += sin(phase * 4.7) * 0.2 * y;
+    wave += sin(phase * 6.2) * 0.15 * y;
+    wave += sin(phase * 7.9) * 0.1 * y;
+    
+    return wave / (1.0 + y);
+}
+
+float wavetable_fold(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    // Start with sine
+    float wave = sin(phase);
+    
+    // Apply wave folding - increases with y
+    float foldAmount = 1.0 + y * 4.0;
+    wave *= foldAmount;
+    
+    // Fold the wave
+    wave = abs(fract(wave * 0.25 + 0.5) * 2.0 - 1.0) * 2.0 - 1.0;
+    
+    return wave;
+}
+
+
+float wavetable_bitcrush(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    // Start with clean sine
+    float wave = sin(phase);
+    
+    // Reduce bit depth as y increases
+    float bits = 5.0 - y * 7.0; // From 16-bit to 1-bit
+    float steps = pow(2.0, bits);
+    
+    wave = floor(wave * steps) / steps;
+    
+    return wave;
+}
+float wavetable_vowel(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    // Different formant frequencies for vowel sounds
+    float wave = 0.0;
+    
+    if (y < 0.25) {
+        // A to E
+        float t = y * 4.0;
+        // A: 730, 1090, 2440
+        float a = sin(phase) + 0.5*sin(phase*1.5) + 0.3*sin(phase*3.3);
+        // E: 530, 1840, 2480
+        float e = sin(phase) + 0.4*sin(phase*3.5) + 0.3*sin(phase*4.7);
+        wave = mix(a, e, t);
+        
+    } else if (y < 0.5) {
+        // E to I
+        float t = (y - 0.25) * 4.0;
+        float e = sin(phase) + 0.4*sin(phase*3.5) + 0.3*sin(phase*4.7);
+        // I: 270, 2290, 3010
+        float i = sin(phase) + 0.3*sin(phase*8.5) + 0.2*sin(phase*11.2);
+        wave = mix(e, i, t);
+        
+    } else if (y < 0.75) {
+        // I to O
+        float t = (y - 0.5) * 4.0;
+        float i = sin(phase) + 0.3*sin(phase*8.5) + 0.2*sin(phase*11.2);
+        // O: 570, 840, 2410
+        float o = sin(phase) + 0.5*sin(phase*1.5) + 0.2*sin(phase*4.2);
+        wave = mix(i, o, t);
+        
+    } else {
+        // O to U
+        float t = (y - 0.75) * 4.0;
+        float o = sin(phase) + 0.5*sin(phase*1.5) + 0.2*sin(phase*4.2);
+        // U: 440, 1020, 2240
+        float u = sin(phase) + 0.4*sin(phase*2.3) + 0.2*sin(phase*5.1);
+        wave = mix(o, u, t);
+    }
+    
+    return wave * 0.6; // Normalize
+}
+float wavetable_morph(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    if (y < 0.333) {
+        // Sine to Triangle
+        float t = y * 3.0;
+        float sine = sin(phase);
+        float triangle = asin(sin(phase)) * 2.0 / 3.14159265359;
+        return mix(sine, triangle, t);
+        
+    } else if (y < 0.666) {
+        // Triangle to Sawtooth
+        float t = (y - 0.333) * 3.0;
+        float triangle = asin(sin(phase)) * 2.0 / 3.14159265359;
+        float saw = (fract(x) * 2.0 - 1.0);
+        return mix(triangle, saw, t);
+        
+    } else {
+        // Sawtooth to Square
+        float t = (y - 0.666) * 3.0;
+        float saw = (fract(x) * 2.0 - 1.0);
+        
+        // Square wave (bandlimited)
+        float square = 0.0;
+        for(int i = 1; i <= 7; i += 2) {
+            square += sin(phase * float(i)) / float(i);
+        }
+        square *= 4.0 / 3.14159265359;
+        
+        return mix(saw, square, t);
+    }
+}
+float wavetable_harmonic(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    // Start with sine, add harmonics as y increases
+    float wave = sin(phase);
+    
+    // Add harmonics progressively
+    int maxHarmonics = int(1.0 + y * 15.0);
+    for(int i = 2; i <= 16; i++) {
+        if(i <= maxHarmonics) {
+            float amplitude = 1.0 / float(i);
+            wave += sin(phase * float(i)) * amplitude;
+        }
+    }
+    
+    // Normalize
+    return wave / (1.0 + y * 2.0);
+}
+float wavetable_harmonic2(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    float outp = sin(phase) * 0.5;  // Fundamental always present
+    
+    // Gradually add harmonics based on table position
+    int numHarmonics = int(y * 12.0) + 1;
+    
+    for(int i = 2; i <= numHarmonics && i <= 12; i++) {
+        float harmAmp = (1.0 / float(i)) * (1.0 - float(i - 2) / 11.0 * 0.5);
+        outp += sin(phase * float(i)) * harmAmp * y;
+    }
+    
+    return outp / (1.0 + y * 0.5);  // Normalize
+}
+float wavetable_pwm(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    // Pulse width varies from 10% to 90%
+    float pulseWidth = 0.1 + y * 0.8;
+    
+    // Generate pulse wave using fourier series
+    float wave = 0.0;
+    for(int i = 1; i <= 9; i++) {
+        float n = float(i);
+        wave += (sin(n * 3.14159265359 * pulseWidth) / n) * sin(n * phase);
+    }
+    wave *= 2.0 / 3.14159265359;
+    
+    return wave;
+}
+float wavetable_pwm2(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    // Pulse width varies from 10% to 90%
+    float pulseWidth = 0.1 + y * 0.8;
+    
+    // Bandlimited pulse wave
+    float pulse = 0.0;
+    for(int i = 1; i <= 10; i++) {
+        pulse += sin(phase * float(i)) * sin(float(i) * 3.14159265359 * pulseWidth) / float(i);
+    }
+    pulse *= 4.0 / 3.14159265359;
+    
+    return pulse;
+}
+float wavetableclassic(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    if (y < 0.5) {
+        // Saw to Triangle
+        float t = y * 2.0;
+        
+        // Bandlimited saw wave
+        float saw = 0.0;
+        for(int i = 1; i <= 10; i++) {
+            saw += sin(phase * float(i)) / float(i);
+        }
+        saw *= -2.0 / 3.14159265359;
+        
+        // Triangle wave
+        float triangle = asin(sin(phase)) * 2.0 / 3.14159265359;
+        
+        return mix(saw, triangle, t);
+    } else {
+        // Triangle to Sine
+        float t = (y - 0.5) * 2.0;
+        float triangle = asin(sin(phase)) * 2.0 / 3.14159265359;
+        float sine = sin(phase);
+        return mix(triangle, sine, t);
+    }
+}
+float wavetablevoc(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    if (y < 0.33) {
+        // "Ooh" formant (darker)
+        float t = y * 3.0;
+        float ooh = sin(phase) * 0.8 + 
+                   sin(phase * 2.0) * 0.15 * (1.0 - t) +
+                   sin(phase * 3.0) * 0.05;
+        return ooh;
+    } else if (y < 0.66) {
+        // "Aah" formant (brighter)
+        float t = (y - 0.33) * 3.0;
+        float aah = sin(phase) * 0.5 +
+                   sin(phase * 2.0) * 0.3 +
+                   sin(phase * 4.0) * 0.15 +
+                   sin(phase * 5.0) * 0.05;
+        return aah * (1.0 + t * 0.2);
+    } else {
+        // "Eeh" formant (brightest)
+        float t = (y - 0.66) * 3.0;
+        float eeh = sin(phase) * 0.4 +
+                   sin(phase * 3.0) * 0.3 +
+                   sin(phase * 5.0) * 0.2 +
+                   sin(phase * 7.0) * 0.1;
+        return eeh;
+    }
+}
+float wavetablebell(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    // Start with fundamental
+    float outp = sin(phase) * (1.0 - y * 0.5);
+    
+    // Add increasingly inharmonic partials
+    outp += sin(phase * 2.7) * y * 0.3;   // Minor third-ish
+    outp += sin(phase * 4.2) * y * 0.2;   // Between harmonics
+    outp += sin(phase * 5.4) * y * 0.15;  // Metallic partial
+    outp += sin(phase * 7.8) * y * 0.1;   // Bell-like partial
+    
+    if (y > 0.5) {
+        float t = (y - 0.5) * 2.0;
+        outp += sin(phase * 9.3) * t * 0.08;
+        outp += sin(phase * 11.7) * t * 0.05;
+    }
+    
+    return outp;
+}
+float wavetabledist(vec2 uv) {
+    float x = uv.x;
+    float y = uv.y;
+    float phase = x * 2.0 * 3.14159265359;
+    
+    float sine = sin(phase);
+    float drive = 1.0 + y * 10.0;  // Increase overdrive with y
+    
+    // Soft to hard clipping
+    float clipped = sine * drive;
+    
+    if (y < 0.5) {
+        // Soft clipping (tanh-like)
+        clipped = tanh(clipped * 2.0) * 0.9;
+    } else {
+        // Harder clipping
+        clipped = clamp(clipped, -1.0, 1.0);
+        // Add some harmonics back for bandlimiting
+        float t = (y - 0.5) * 2.0;
+        clipped = mix(tanh(sine * drive * 2.0), 
+                     sign(sine) * pow(abs(sine), 0.3 - t * 0.2), 
+                     t) * 0.9;
+    }
+    
+    return clipped;
+}
+float wavetable(vec2 uv, float time) {
+
+    float period = clamp(u_mouse.x,0.0,1.0)*14.0;//time/6.2832;
+    int num = int(floor(period));
+    float phase = fract(period);
+    num = num%14;
+    float sampl;
+    
+    switch (num){
+        case 0: sampl = wavetablebell(uv); break;
+        case 1: sampl = wavetabletest(uv); break;
+        case 2: sampl = wavetable_metallic(uv); break;
+        case 3: sampl = wavetable_fold(uv) ; break;
+        case 4: sampl = wavetable_bitcrush(uv) ; break;
+        case 5: sampl = wavetable_vowel(uv) ; break;
+        case 6: sampl = wavetable_morph(uv) ; break;
+        case 7: sampl = wavetable_harmonic(uv) ; break;
+        case 8: sampl = wavetable_harmonic2(uv) ; break;
+        case 9: sampl = wavetable_pwm(uv) ; break;
+        case 10: sampl = wavetable_pwm2(uv); break;
+        case 11: sampl = wavetableclassic( uv) ; break;
+        case 12: sampl = wavetablevoc(uv) ; break;
+        case 13: sampl = wavetabledist(uv) ; break;
+    }
+    
+    float sampl2;
+    
+    switch (num+1){
+        
+
+        case 1: sampl2 = wavetabletest(uv); break;
+        case 2: sampl2 = wavetable_metallic(uv); break;
+        case 3: sampl2 = wavetable_fold(uv) ; break;
+        case 4: sampl2 = wavetable_bitcrush(uv) ; break;
+        case 5: sampl2 = wavetable_vowel(uv) ; break;
+        case 6: sampl2 = wavetable_morph(uv) ; break;
+        case 7: sampl2 = wavetable_harmonic(uv) ; break;
+        case 8: sampl2= wavetable_harmonic2(uv) ; break;
+        case 9: sampl2 = wavetable_pwm(uv) ; break;
+        case 10: sampl2 = wavetable_pwm2(uv); break;
+        case 11: sampl2 = wavetableclassic( uv) ; break;
+        case 12: sampl2 = wavetablevoc(uv) ; break;
+        case 13: sampl2 = wavetabledist(uv) ; break;
+        case 14: sampl2 = wavetablebell(uv); break;
+    }
+    
+    sampl = mix(sampl, sampl2, phase);
+    
+   return clamp( sampl  , -1.,1.);
+}

@@ -560,8 +560,10 @@ export function loadDatabaseShader(shader) {
         monaco.editor.setModelLanguage(state.audioEditor.getModel(), language);
     }
     
-    if (state.jsEditor && shader.code?.javascript) {
-        state.jsEditor.setValue(shader.code.javascript);
+    if (state.jsEditor && (shader.code?.javascript || shader.code?.js)) {
+        // Support both 'javascript' (new) and 'js' (legacy) keys
+        const jsCode = shader.code.javascript || shader.code.js || '';
+        state.jsEditor.setValue(jsCode);
     }
     
     // Update boilerplate if needed

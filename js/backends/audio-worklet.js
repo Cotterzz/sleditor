@@ -55,29 +55,30 @@ class AudioProcessor extends AudioWorkletProcessor {
         this.sampleRate = sampleRate;
         this.audioProcessor = audioProcessor;
         
-        // Bind methods to this instance so 'this' works correctly in user code
-        if (this.audioProcessor.init) {
-            this.audioProcessor.init = this.audioProcessor.init.bind(this);
-            this.audioProcessor.init();
+        // Bind ALL methods from audioProcessor to this instance
+        // This allows user code to call helper functions like this.wavetablebell()
+        for (const key in audioProcessor) {
+            if (typeof audioProcessor[key] === 'function') {
+                this[key] = audioProcessor[key].bind(this);
+            }
         }
-        if (this.audioProcessor.userProcess) {
-            this.audioProcessor.userProcess = this.audioProcessor.userProcess.bind(this);
-        }
-        if (this.audioProcessor.receiveMessage) {
-            this.audioProcessor.receiveMessage = this.audioProcessor.receiveMessage.bind(this);
+        
+        // Call init if it exists
+        if (this.init) {
+            this.init();
         }
         
         this.port.onmessage = (e) => {
-            if (this.audioProcessor.receiveMessage) {
-                this.audioProcessor.receiveMessage(e.data);
+            if (this.receiveMessage) {
+                this.receiveMessage(e.data);
             }
         };
     }
 
     process(inputs, outputs, parameters) {
-        if (this.audioProcessor.userProcess) {
+        if (this.userProcess) {
             const output = outputs[0];
-            this.audioProcessor.userProcess(output, inputs, parameters);
+            this.userProcess(output, inputs, parameters);
         }
         return true;
     }
