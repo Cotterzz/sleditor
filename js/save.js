@@ -353,7 +353,10 @@ function createGalleryItem(data, source, isOwned = false) {
     
     // Check if shader requires WebGPU
     const codeTypes = data.tabs || data.code_types || [];
-    const needsWebGPU = codeTypes.some(t => t === 'wgsl_graphics' || t === 'wgsl_audio' || t === 'audio_gpu');
+    // 'graphics' is ambiguous - check code keys to determine if it's WGSL (WebGPU) or GLSL (WebGL)
+    const hasGraphicsTab = codeTypes.includes('graphics');
+    const isWGSL = hasGraphicsTab && (data.code?.wgsl_graphics || data.code?.graphics) && !data.code?.glsl_fragment;
+    const needsWebGPU = codeTypes.some(t => t === 'wgsl_graphics' || t === 'wgsl_audio' || t === 'audio_gpu') || isWGSL;
     
     // Skip WebGPU shaders if WebGPU is not available
     if (needsWebGPU && !state.hasWebGPU) {
@@ -499,7 +502,10 @@ export function loadDatabaseShader(shader) {
     console.log('Loading database shader:', shader);
     
     // Check if shader requires WebGPU
-    const needsWebGPU = shader.code_types?.some(t => t === 'wgsl_graphics' || t === 'wgsl_audio' || t === 'audio_gpu');
+    // 'graphics' is ambiguous - check code keys to determine if it's WGSL (WebGPU) or GLSL (WebGL)
+    const hasGraphicsTab = shader.code_types?.includes('graphics');
+    const isWGSL = hasGraphicsTab && (shader.code?.wgsl_graphics || shader.code?.graphics) && !shader.code?.glsl_fragment;
+    const needsWebGPU = shader.code_types?.some(t => t === 'wgsl_graphics' || t === 'wgsl_audio' || t === 'audio_gpu') || isWGSL;
     
     if (needsWebGPU && !state.hasWebGPU) {
         logStatus('⚠️ This shader requires WebGPU, which is not available in your browser', 'error');
