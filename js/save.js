@@ -353,7 +353,7 @@ function createGalleryItem(data, source, isOwned = false) {
     
     // Check if shader requires WebGPU
     const codeTypes = data.tabs || data.code_types || [];
-    const needsWebGPU = codeTypes.some(t => t === 'wgsl_graphics' || t === 'graphics' || t === 'wgsl_audio' || t === 'audio_gpu');
+    const needsWebGPU = codeTypes.some(t => t === 'wgsl_graphics' || t === 'wgsl_audio' || t === 'audio_gpu');
     
     // Skip WebGPU shaders if WebGPU is not available
     if (needsWebGPU && !state.hasWebGPU) {
@@ -499,7 +499,7 @@ export function loadDatabaseShader(shader) {
     console.log('Loading database shader:', shader);
     
     // Check if shader requires WebGPU
-    const needsWebGPU = shader.code_types?.some(t => t === 'wgsl_graphics' || t === 'graphics' || t === 'wgsl_audio' || t === 'audio_gpu');
+    const needsWebGPU = shader.code_types?.some(t => t === 'wgsl_graphics' || t === 'wgsl_audio' || t === 'audio_gpu');
     
     if (needsWebGPU && !state.hasWebGPU) {
         logStatus('⚠️ This shader requires WebGPU, which is not available in your browser', 'error');
