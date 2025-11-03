@@ -125,6 +125,49 @@ const audioProcessor = {
     }
 };`;
 
+export const MINIMAL_GLSL = `#version 300 es
+precision highp float;
+
+// Uniforms (automatically provided by SLEditor)
+uniform vec3 iResolution;  // Canvas resolution (width, height, aspect)
+uniform float iTime;       // Time in seconds since start
+uniform vec4 iMouse;       // Mouse position (x, y, clickX, clickY)
+uniform int iFrame;        // Frame counter
+
+out vec4 fragColor;
+
+void main() {
+    // Normalized pixel coordinates (0.0 to 1.0)
+    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    
+    // Simple gradient
+    vec3 col = vec3(uv.x, uv.y, 0.5);
+    
+    // Output to screen
+    fragColor = vec4(col, 1.0);
+}`;
+
+export const MINIMAL_WGSL = `// Simple WGSL graphics shader
+@compute @workgroup_size(8, 8, 1)
+fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    // Get pixel coordinates
+    let coord = vec2<i32>(i32(gid.x), i32(gid.y));
+    
+    // Check bounds
+    if (coord.x >= SCREEN_WIDTH || coord.y >= SCREEN_HEIGHT) {
+        return;
+    }
+    
+    // Normalized coordinates (0.0 to 1.0)
+    let uv = vec2<f32>(f32(coord.x), f32(coord.y)) / vec2<f32>(f32(SCREEN_WIDTH), f32(SCREEN_HEIGHT));
+    
+    // Simple gradient
+    let color = vec4<f32>(uv.x, uv.y, 0.5, 1.0);
+    
+    // Write to screen
+    textureStore(screenTexture, coord, color);
+}`;
+
 
 // ============================================================================
 // EXAMPLES LIBRARY

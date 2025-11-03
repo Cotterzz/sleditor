@@ -5,33 +5,9 @@
 import { state, logStatus } from './core.js';
 import * as backend from './backend.js';
 import * as tabs from './tabs.js';
+import { getTabIcon, getTabLabel, getTabDbKey, dbKeyToTabName, getEditorForTab } from './tab-config.js';
 
 const MAX_SAVED_SHADERS = 10;
-
-// Tab icon/label helpers - duplicated here to avoid circular dependency
-function getTabIcon(tabName) {
-    const icons = {
-        boilerplate: '📄',
-        graphics: '🎨',
-        audio_gpu: '🔊',
-        audio_worklet: '🎵',
-        js: '⚡',
-        help: '❓'
-    };
-    return icons[tabName] || '📝';
-}
-
-function getTabLabel(tabName) {
-    const labels = {
-        boilerplate: 'Boilerplate',
-        graphics: 'Graphics',
-        audio_gpu: 'Audio (WGSL)',
-        audio_worklet: 'Audio (Worklet)',
-        js: 'JavaScript',
-        help: 'Help'
-    };
-    return labels[tabName] || tabName;
-}
 
 // ============================================================================
 // Thumbnail Capture
@@ -65,19 +41,23 @@ export function getAllSavedShaders() {
 export function saveShaderToStorage(title, description, tags) {
     const thumbnail = captureThumbnail();
     
+    // Build code object using proper DB keys
+    const code = {};
+    state.activeTabs.forEach(tabName => {
+        const editor = getEditorForTab(tabName, state);
+        if (editor) {
+            const dbKey = getTabDbKey(tabName);
+            code[dbKey] = editor.getValue();
+        }
+    });
+    
     const shaderData = {
         id: Date.now(),
         title: title.trim(),
         description: description.trim(),
         tags: tags.split(',').map(t => t.trim()).filter(t => t),
         thumbnail: thumbnail,
-        code: {
-            boilerplate: state.boilerplateEditor ? state.boilerplateEditor.getValue() : '',
-            graphics: state.graphicsEditor ? state.graphicsEditor.getValue() : '',
-            audio_gpu: state.activeTabs.includes('audio_gpu') && state.audioEditor ? state.audioEditor.getValue() : '',
-            audio_worklet: state.activeTabs.includes('audio_worklet') && state.audioEditor ? state.audioEditor.getValue() : '',
-            js: state.jsEditor ? state.jsEditor.getValue() : ''
-        },
+        code: code,
         tabs: [...state.activeTabs],
         currentTab: state.currentTab,
         canvasWidth: state.canvasWidth,
@@ -142,8 +122,8 @@ export function loadSavedShader(shaderId) {
     // Don't restore canvas size - use current resolution
     // Pixel scale is also kept at current value
     
-    // Restore tabs
-    state.activeTabs = [...shader.tabs];
+    // Restore tabs (filter out legacy 'help' and 'boilerplate' tabs)
+    state.activeTabs = (shader.tabs || []).filter(t => t !== 'help' && t !== 'boilerplate');
     
     // Determine current audio type from tabs
     if (state.activeTabs.includes('audio_gpu')) {
@@ -155,28 +135,50 @@ export function loadSavedShader(shaderId) {
     }
     
     // Load code into editors
-    if (state.boilerplateEditor && shader.code.boilerplate) {
-        state.boilerplateEditor.setValue(shader.code.boilerplate);
-    }
-    if (state.graphicsEditor) {
-        state.graphicsEditor.setValue(shader.code.graphics || '');
-    }
-    if (state.audioEditor) {
-        const audioCode = shader.code.audio_gpu || shader.code.audio_worklet || '';
-        state.audioEditor.setValue(audioCode);
+    Object.keys(shader.code).forEach(dbKey => {
+        const code = shader.code[dbKey];
+        if (!code) return;
         
-        // Set correct language for audio editor
-        const language = state.currentAudioType === 'worklet' ? 'javascript' : 'wgsl';
-        monaco.editor.setModelLanguage(state.audioEditor.getModel(), language);
-    }
-    if (state.jsEditor) {
-        state.jsEditor.setValue(shader.code.js || '');
-    }
+        // Map DB key to tab name (handles legacy naming)
+        const tabName = mapLegacyCodeKey(dbKey, shader.tabs);
+        const editor = getEditorForTab(tabName, state);
+        
+        if (editor) {
+            editor.setValue(code);
+            
+            // Set correct language for audio editor
+            if (tabName === 'audio_worklet') {
+                monaco.editor.setModelLanguage(editor.getModel(), 'javascript');
+            } else if (tabName === 'audio_gpu') {
+                monaco.editor.setModelLanguage(editor.getModel(), 'wgsl');
+            }
+        }
+    });
     
     // Dispatch events for UI updates
     window.dispatchEvent(new CustomEvent('shader-loaded', { detail: shader }));
     
     return { success: true, shader };
+}
+
+/**
+ * Map legacy code keys to current tab names
+ * Handles old localStorage/database shaders with non-standard keys
+ */
+function mapLegacyCodeKey(dbKey, tabs = []) {
+    // Special case: 'graphics' key is ambiguous (could be GLSL or WGSL)
+    // Check tabs array to disambiguate
+    if (dbKey === 'graphics') {
+        // If tabs includes 'glsl_fragment', this is a legacy GLSL shader
+        if (tabs.includes('glsl_fragment')) {
+            return 'glsl_fragment';
+        }
+        // Otherwise it's a real WGSL shader
+        return 'graphics';
+    }
+    
+    // Use standard legacy key mapping for all other keys
+    return dbKeyToTabName(dbKey);
 }
 
 export function deleteSavedShader(shaderId) {
@@ -546,30 +548,30 @@ export function loadDatabaseShader(shader) {
         window.updateViewsAndLikes(shader);
     }
     
-    // Set active tabs from code_types
-    state.activeTabs = [...(shader.code_types || [])];
+    // Set active tabs from code_types (filter out legacy 'help' and 'boilerplate' tabs)
+    state.activeTabs = (shader.code_types || []).filter(t => t !== 'help' && t !== 'boilerplate');
     
     // Load code into editors
-    if (state.graphicsEditor && shader.code) {
-        // Find graphics code (could be glsl_fragment, glsl_vertex, wgsl_graphics, or graphics)
-        const graphicsCode = shader.code.glsl_fragment || shader.code.wgsl_graphics || shader.code.graphics || '';
-        state.graphicsEditor.setValue(graphicsCode);
-    }
-    
-    if (state.audioEditor && shader.code) {
-        const audioCode = shader.code.wgsl_audio || shader.code.audioworklet || '';
-        state.audioEditor.setValue(audioCode);
-        
-        // Set correct language
-        const isWorklet = shader.code_types?.includes('audio_worklet');
-        const language = isWorklet ? 'javascript' : 'wgsl';
-        monaco.editor.setModelLanguage(state.audioEditor.getModel(), language);
-    }
-    
-    if (state.jsEditor && (shader.code?.javascript || shader.code?.js)) {
-        // Support both 'javascript' (new) and 'js' (legacy) keys
-        const jsCode = shader.code.javascript || shader.code.js || '';
-        state.jsEditor.setValue(jsCode);
+    if (shader.code) {
+        Object.keys(shader.code).forEach(dbKey => {
+            const code = shader.code[dbKey];
+            if (!code) return;
+            
+            // Map DB key to tab name (handles legacy naming)
+            const tabName = mapLegacyCodeKey(dbKey, shader.code_types);
+            const editor = getEditorForTab(tabName, state);
+            
+            if (editor) {
+                editor.setValue(code);
+                
+                // Set correct language for audio editor
+                if (tabName === 'audio_worklet') {
+                    monaco.editor.setModelLanguage(editor.getModel(), 'javascript');
+                } else if (tabName === 'audio_gpu') {
+                    monaco.editor.setModelLanguage(editor.getModel(), 'wgsl');
+                }
+            }
+        });
     }
     
     // Update boilerplate if needed

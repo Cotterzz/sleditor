@@ -4,32 +4,7 @@
 
 import { state, logStatus } from './core.js';
 import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET } from './examples.js';
-
-// ============================================================================
-// Tab Information
-// ============================================================================
-
-function getTabIcon(tabName) {
-    const icons = {
-        graphics: '🎨',
-        glsl_fragment: '🔺',
-        audio_gpu: '🔊',
-        audio_worklet: '🎵',
-        js: '⚡'
-    };
-    return icons[tabName] || '📝';
-}
-
-function getTabLabel(tabName) {
-    const labels = {
-        graphics: 'Graphics (WGSL)',
-        glsl_fragment: 'Fragment (GLSL)',
-        audio_gpu: 'Audio (WGSL)',
-        audio_worklet: 'Audio (Worklet)',
-        js: 'JavaScript'
-    };
-    return labels[tabName] || tabName;
-}
+import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive } from './tab-config.js';
 
 // ============================================================================
 // Tab Rendering
@@ -133,22 +108,25 @@ export function addTab(tabName) {
     }
     
     // Prevent WGSL audio with GLSL graphics (incompatible backends)
-    if (tabName === 'audio_gpu' || tabName === 'wgsl_audio') {
+    if (tabRequiresWebGPU(tabName)) {
         const hasGLSL = state.activeTabs.some(t => t === 'glsl_fragment' || t.includes('glsl'));
         if (hasGLSL) {
-            logStatus('⚠ WGSL Audio requires WebGPU graphics (not compatible with GLSL)', 'error');
+            logStatus('⚠ WGSL tabs require WebGPU graphics (not compatible with GLSL)', 'error');
             return;
         }
     }
     
-    // Audio tabs are mutually exclusive - remove the other if adding one
-    if (tabName === 'audio_gpu' || tabName === 'audio_worklet') {
-        const otherAudioTab = tabName === 'audio_gpu' ? 'audio_worklet' : 'audio_gpu';
-        const otherIndex = state.activeTabs.indexOf(otherAudioTab);
-        if (otherIndex !== -1) {
-            state.activeTabs.splice(otherIndex, 1);
+    // Handle mutually exclusive tabs (e.g., audio tabs)
+    const toRemove = state.activeTabs.filter(existing => 
+        tabsAreMutuallyExclusive(tabName, existing)
+    );
+    
+    toRemove.forEach(tab => {
+        const index = state.activeTabs.indexOf(tab);
+        if (index !== -1) {
+            state.activeTabs.splice(index, 1);
         }
-    }
+    });
     
     state.activeTabs.push(tabName);
     

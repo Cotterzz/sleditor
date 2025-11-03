@@ -16,11 +16,10 @@
 <body>
     <!-- Help Panel (Hidden by default) -->
     <div id="helpPanel" style="position: fixed; top: 0; left: 0; right: 0; 
-                                 height: 33.33vh; 
+                                 height: 33.33vh;
                                  background: var(--bg-primary); 
                                  border-bottom: 1px solid var(--border-color); 
                                  transform: translateY(-100%); 
-                                 transition: transform 0.3s ease-out;
                                  overflow: hidden;
                                  box-sizing: border-box;
                                  z-index: 5;
@@ -64,7 +63,6 @@
                                  left: 0; 
                                  right: 0; 
                                  bottom: 0;
-                                 transition: top 0.3s ease-out;
                                  z-index: 10;">
         <!-- Top Bar -->
         <div id="topBar" style="display: flex; align-items: center; 
@@ -195,7 +193,7 @@
                 </div>
                 <button id="reloadBtn" class="uiBtn" title="Reload shaders (F5 / Ctrl+S)">⌬</button>
                 <button id="saveShaderBtn" class="uiBtn" title="Save current shader">💾</button>
-                <button id="shareBtn" class="uiBtn" title="Copy shareable link">🔗</button>
+                <button id="newShaderBtn" class="uiBtn" title="Create new shader">📄 ▾</button>
             </div>
             
             <!-- Vim status bar (inside dev panel) -->
@@ -450,8 +448,12 @@
     import * as comments from './js/comments.js';
     import * as perfMonitor from './js/performance-monitor.js';
     import * as vim from './js/vim.js';
-    import { getBoilerplate, MINIMAL_JS } from './js/examples.js';
+    import { getBoilerplate, MINIMAL_JS, MINIMAL_GLSL, MINIMAL_WGSL } from './js/examples.js';
     import { HELP_SECTIONS } from './content/help-sections.js';
+    import * as tabConfig from './js/tab-config.js';
+    
+    // Expose tab config globally for inline functions
+    window.tabConfig = tabConfig;
 
     // ============================================================================
     // Audio Initialization
@@ -875,6 +877,13 @@
     
     let isHelpPanelOpen = false;
     
+    // Help panel dragging state
+    let helpPanelHeight = 33.33; // percentage of viewport height
+    let isHelpDragging = false;
+    let helpDragStartY = 0;
+    let helpDragStartHeight = 0;
+    let helpHasMoved = false;
+    
     function toggleHelpPanel() {
         const helpPanel = document.getElementById('helpPanel');
         const mainWrapper = document.getElementById('mainWrapper');
@@ -885,7 +894,8 @@
         if (isHelpPanelOpen) {
             // Show help panel and push main wrapper (top bar + content) down
             helpPanel.style.transform = 'translateY(0)';
-            mainWrapper.style.top = '33.33vh';
+            helpPanel.style.height = helpPanelHeight + 'vh';
+            mainWrapper.style.top = helpPanelHeight + 'vh';
             helpBtn.textContent = 'Help ▲';
             
             // Initialize help content on first open
@@ -899,6 +909,62 @@
             mainWrapper.style.top = '0';
             helpBtn.textContent = 'Help ▼';
         }
+    }
+    
+    function startHelpDrag(e) {
+        // If panel is closed, a click will open it (handled in stopHelpDrag)
+        // If panel is open, prepare for potential drag
+        isHelpDragging = true;
+        helpHasMoved = false;
+        helpDragStartY = e.clientY;
+        helpDragStartHeight = helpPanelHeight;
+        
+        if (isHelpPanelOpen) {
+            document.body.style.cursor = 'ns-resize';
+        }
+        document.body.style.userSelect = 'none';
+        
+        e.preventDefault();
+    }
+    
+    function doHelpDrag(e) {
+        if (!isHelpDragging || !isHelpPanelOpen) return; // Only drag when open
+        
+        const deltaY = e.clientY - helpDragStartY;
+        const viewportHeight = window.innerHeight;
+        const deltaPercent = (deltaY / viewportHeight) * 100;
+        
+        // Track if user has moved enough to consider it a drag (not a click)
+        if (Math.abs(deltaY) > 3) {
+            helpHasMoved = true;
+        }
+        
+        // Calculate new height (min 15%, max 80%)
+        const newHeight = Math.max(15, Math.min(80, helpDragStartHeight + deltaPercent));
+        helpPanelHeight = newHeight;
+        
+        const helpPanel = document.getElementById('helpPanel');
+        const mainWrapper = document.getElementById('mainWrapper');
+        
+        helpPanel.style.height = helpPanelHeight + 'vh';
+        mainWrapper.style.top = helpPanelHeight + 'vh';
+        
+        e.preventDefault();
+    }
+    
+    function stopHelpDrag(e) {
+        if (!isHelpDragging) return;
+        
+        isHelpDragging = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        
+        // If user didn't move much, treat it as a click (toggle)
+        if (!helpHasMoved) {
+            toggleHelpPanel();
+        }
+        
+        e.preventDefault();
     }
     
     // ============================================================================
@@ -1116,33 +1182,158 @@
         return `${baseUrl}#${param}=${identifier}`;
     }
     
-    function copyShareLink() {
-        let link;
-        
-        // Check if we have a database shader loaded
-        if (state.currentDatabaseShader?.slug) {
-            // Database shader - use slug-based URL
-            const baseUrl = window.location.origin + window.location.pathname;
-            link = `${baseUrl}#id=${state.currentDatabaseShader.slug}`;
-        } else if (state.currentExample) {
-            // Old hardcoded example (shouldn't happen anymore)
-            link = generateShareableLink(state.currentExample, true);
-        } else if (state.currentSavedShader) {
-            // Local storage shader (can't share yet)
-            logStatus('⚠ Local shaders can\'t be shared. Sign in and save to database to share.', 'error');
-            return;
-        } else {
-            logStatus('⚠ No shader loaded to share', 'error');
-            return;
+    // ============================================================================
+    // Create New Shader
+    // ============================================================================
+    
+    function createNewShader(type) {
+        // Check for unsaved changes
+        if (state.isDirty) {
+            const confirmed = confirm('You have unsaved changes. Create new shader anyway?');
+            if (!confirmed) return;
         }
         
-        // Copy to clipboard
-        navigator.clipboard.writeText(link).then(() => {
-            logStatus(`✓ Share link copied: ${link}`, 'success');
-        }).catch(err => {
-            console.error('Failed to copy:', err);
-            logStatus('✗ Failed to copy link', 'error');
+        // Clear current state
+        state.currentExample = null;
+        state.currentSavedShader = null;
+        state.currentDatabaseShader = null;
+        state.isDirty = false;
+        
+        // Clear URL hash
+        window.history.pushState(null, '', window.location.pathname);
+        
+        // Reset title and description
+        const titleEl = document.getElementById('shaderTitleDisplay');
+        const creatorEl = document.getElementById('shaderCreator');
+        const descEl = document.getElementById('shaderDescriptionDisplay');
+        if (titleEl) titleEl.textContent = 'Untitled';
+        if (creatorEl) creatorEl.textContent = '';
+        if (descEl) descEl.textContent = '';
+        
+        // Temporarily disable dirty tracking
+        const wasInitializing = state.isInitializing;
+        state.isInitializing = true;
+        
+        // Set up tabs and code based on type
+        if (type === 'glsl') {
+            state.activeTabs = ['glsl_fragment'];
+            state.currentTab = 'glsl_fragment';
+            
+            if (state.graphicsEditor) {
+                state.graphicsEditor.setValue(MINIMAL_GLSL);
+            }
+        } else if (type === 'wgsl') {
+            state.activeTabs = ['graphics'];
+            state.currentTab = 'graphics';
+            
+            if (state.graphicsEditor) {
+                state.graphicsEditor.setValue(MINIMAL_WGSL);
+            }
+        }
+        
+        // Clear other editors
+        if (state.audioEditor) {
+            state.audioEditor.setValue('');
+        }
+        if (state.jsEditor) {
+            state.jsEditor.setValue('');
+        }
+        
+        // Update tabs
+        tabs.renderTabs();
+        tabs.switchTab(state.currentTab);
+        
+        // Recompile
+        reloadShader().then(() => {
+            setTimeout(() => {
+                state.isInitializing = wasInitializing;
+                state.isDirty = false;
+                
+                // Enter edit mode (like forking) - makes title editable, shows save button, etc.
+                enterEditMode(true);
+            }, 100);
         });
+        
+        logStatus(`✓ New ${type.toUpperCase()} shader created`, 'success');
+    }
+    
+    function showNewShaderMenu() {
+        const btn = document.getElementById('newShaderBtn');
+        
+        // Create menu if it doesn't exist
+        let menu = document.getElementById('newShaderMenu');
+        if (!menu) {
+            menu = document.createElement('div');
+            menu.id = 'newShaderMenu';
+            menu.style.cssText = `
+                position: absolute;
+                background: var(--bg-secondary);
+                border: 1px solid var(--border-color);
+                padding: 4px;
+                z-index: 1000;
+                display: none;
+            `;
+            document.body.appendChild(menu);
+        }
+        
+        // Build menu options
+        menu.innerHTML = '';
+        
+        const glslOption = document.createElement('div');
+        glslOption.textContent = '🔺 New GLSL Shader';
+        glslOption.style.cssText = `
+            padding: 6px 12px;
+            cursor: pointer;
+            color: var(--text-primary);
+        `;
+        glslOption.onmouseenter = () => glslOption.style.background = 'var(--bg-primary)';
+        glslOption.onmouseleave = () => glslOption.style.background = 'transparent';
+        glslOption.onclick = () => {
+            createNewShader('glsl');
+            menu.style.display = 'none';
+        };
+        
+        const wgslOption = document.createElement('div');
+        wgslOption.textContent = '🎨 New WGSL Shader';
+        wgslOption.style.cssText = `
+            padding: 6px 12px;
+            cursor: pointer;
+            color: var(--text-primary);
+        `;
+        wgslOption.onmouseenter = () => wgslOption.style.background = 'var(--bg-primary)';
+        wgslOption.onmouseleave = () => wgslOption.style.background = 'transparent';
+        wgslOption.onclick = () => {
+            createNewShader('wgsl');
+            menu.style.display = 'none';
+        };
+        
+        // Disable WGSL if WebGPU not available
+        if (!state.hasWebGPU) {
+            wgslOption.style.color = 'var(--text-secondary)';
+            wgslOption.style.cursor = 'default';
+            wgslOption.style.pointerEvents = 'none';
+            wgslOption.textContent += ' (WebGPU not available)';
+        }
+        
+        menu.appendChild(glslOption);
+        menu.appendChild(wgslOption);
+        
+        // Position menu above button (button is at bottom of screen)
+        const rect = btn.getBoundingClientRect();
+        menu.style.bottom = (window.innerHeight - rect.top + 5) + 'px';
+        menu.style.left = rect.left + 'px';
+        menu.style.top = 'auto'; // Clear any previous top value
+        menu.style.display = 'block';
+        
+        // Close menu when clicking outside
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu(e) {
+                if (!menu.contains(e.target) && e.target !== btn) {
+                    menu.style.display = 'none';
+                    document.removeEventListener('click', closeMenu);
+                }
+            });
+        }, 0);
     }
 
     // ============================================================================
@@ -1491,11 +1682,16 @@
         document.getElementById('playPauseBtn').addEventListener('click', togglePlayPause);
         document.getElementById('restartBtn').addEventListener('click', () => restart(true));
         document.getElementById('reloadBtn').addEventListener('click', () => reloadShader());
-        document.getElementById('shareBtn').addEventListener('click', copyShareLink);
+        document.getElementById('newShaderBtn').addEventListener('click', showNewShaderMenu);
         document.getElementById('addPassBtn').addEventListener('click', tabs.showAddPassMenu);
         document.getElementById('optionsBtn').addEventListener('click', tabs.showOptionsMenu);
         document.getElementById('perfMonitorBtn').addEventListener('click', () => perfMonitor.togglePanel());
-        document.getElementById('helpToggleBtn').addEventListener('click', toggleHelpPanel);
+        // Help button - draggable divider
+        const helpToggleBtn = document.getElementById('helpToggleBtn');
+        helpToggleBtn.addEventListener('mousedown', startHelpDrag);
+        helpToggleBtn.style.cursor = 'ns-resize';
+        document.addEventListener('mousemove', doHelpDrag);
+        document.addEventListener('mouseup', stopHelpDrag);
         
         // Auth buttons
         document.getElementById('signInBtn').addEventListener('click', () => {
@@ -1681,16 +1877,25 @@
                 }
 
                 // Prepare shader data
+                // Build code object using proper DB keys from tab config
+                const code = {};
+                state.activeTabs.forEach(tabName => {
+                    if (tabName === 'boilerplate') return; // Skip boilerplate
+                    
+                    const tabConfig = window.tabConfig.getTabConfig(tabName);
+                    if (!tabConfig) return;
+                    
+                    const editor = window.tabConfig.getEditorForTab(tabName, state);
+                    if (editor) {
+                        code[tabConfig.dbKey] = editor.getValue();
+                    }
+                });
+                
                 const shaderData = {
                     title: state.currentExample ? EXAMPLES[state.currentExample].name : 'Untitled',
                     description: state.currentExample ? EXAMPLES[state.currentExample].description : '',
-                    code_types: state.activeTabs.filter(t => t !== 'help' && t !== 'boilerplate'),
-                    code: {
-                        ...(state.graphicsEditor && { [state.activeTabs.find(t => t.includes('gl'))]: state.graphicsEditor.getValue() }),
-                        ...(state.audioEditor && state.activeTabs.includes('audio_gpu') && { wgsl_audio: state.audioEditor.getValue() }),
-                        ...(state.audioEditor && state.activeTabs.includes('audio_worklet') && { audioworklet: state.audioEditor.getValue() }),
-                        ...(state.jsEditor && state.activeTabs.includes('js') && { javascript: state.jsEditor.getValue() })
-                    },
+                    code_types: state.activeTabs.filter(t => t !== 'boilerplate'),
+                    code: code,
                     visibility: 'example',
                     thumbnail_url: thumbResult.url
                 };
@@ -1821,28 +2026,21 @@
             tags: state.currentDatabaseShader.tags || [],
             visibility: state.currentDatabaseShader.visibility || 'published',
             code: {},
-            code_types: [...state.activeTabs.filter(t => t !== 'help' && t !== 'boilerplate')]
+            code_types: [...state.activeTabs.filter(t => t !== 'boilerplate')]
         };
         
-        // Collect code from editors
-        if (state.graphicsEditor) {
-            const graphicsTab = state.activeTabs.find(t => 
-                t === 'glsl_fragment' || t === 'wgsl_graphics' || t === 'graphics'
-            );
-            if (graphicsTab) {
-                shaderData.code[graphicsTab] = state.graphicsEditor.getValue();
+        // Collect code from editors using tab config
+        state.activeTabs.forEach(tabName => {
+            if (tabName === 'boilerplate') return; // Skip boilerplate
+            
+            const tabConfig = window.tabConfig.getTabConfig(tabName);
+            if (!tabConfig) return;
+            
+            const editor = window.tabConfig.getEditorForTab(tabName, state);
+            if (editor) {
+                shaderData.code[tabConfig.dbKey] = editor.getValue();
             }
-        }
-        if (state.audioEditor) {
-            if (state.activeTabs.includes('wgsl_audio')) {
-                shaderData.code.wgsl_audio = state.audioEditor.getValue();
-            } else if (state.activeTabs.includes('audio_worklet')) {
-                shaderData.code.audioworklet = state.audioEditor.getValue();
-            }
-        }
-        if (state.jsEditor && state.activeTabs.includes('js')) {
-            shaderData.code.javascript = state.jsEditor.getValue();
-        }
+        });
         
         // Capture and upload thumbnail
         try {
@@ -1906,7 +2104,7 @@
             tags: [], // Could add tag input later
             visibility,
             code: {},
-            code_types: [...state.activeTabs.filter(t => t !== 'help' && t !== 'boilerplate')]
+            code_types: [...state.activeTabs.filter(t => t !== 'boilerplate')]
         };
         
         // If updating owned shader, include ID
@@ -1914,27 +2112,18 @@
             shaderData.id = state.currentDatabaseShader.id;
         }
         
-        // Collect code from editors
-        if (state.graphicsEditor) {
-            const graphicsTab = state.activeTabs.find(t => 
-                t === 'glsl_fragment' || t === 'wgsl_graphics' || t === 'graphics'
-            );
-            if (graphicsTab) {
-                shaderData.code[graphicsTab] = state.graphicsEditor.getValue();
+        // Collect code from editors using tab config
+        state.activeTabs.forEach(tabName => {
+            if (tabName === 'boilerplate') return; // Skip boilerplate
+            
+            const tabConfig = window.tabConfig.getTabConfig(tabName);
+            if (!tabConfig) return;
+            
+            const editor = window.tabConfig.getEditorForTab(tabName, state);
+            if (editor) {
+                shaderData.code[tabConfig.dbKey] = editor.getValue();
             }
-        }
-        
-        if (state.audioEditor) {
-            if (state.activeTabs.includes('wgsl_audio')) {
-                shaderData.code.wgsl_audio = state.audioEditor.getValue();
-            } else if (state.activeTabs.includes('audio_worklet')) {
-                shaderData.code.audioworklet = state.audioEditor.getValue();
-            }
-        }
-        
-        if (state.jsEditor && state.activeTabs.includes('js')) {
-            shaderData.code.javascript = state.jsEditor.getValue();
-        }
+        });
         
         // Capture and upload thumbnail
         try {

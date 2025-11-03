@@ -137,10 +137,9 @@ export const state = {
     graphicsEditor: null,
     audioEditor: null,
     jsEditor: null,
-    helpEditor: null,
     
     // Active tabs and current example
-    activeTabs: ['glsl_fragment', 'help'],  // glsl_hello tabs
+    activeTabs: ['glsl_fragment'],  // Default to GLSL fragment shader
     currentTab: 'glsl_fragment',
     currentExample: 'glsl_hello',
     currentAudioType: null,  // 'gpu' or 'worklet' - tracks which audio tab is active
