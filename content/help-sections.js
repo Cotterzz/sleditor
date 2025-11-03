@@ -14,8 +14,6 @@ export const HELP_SECTIONS = {
         content: `
 # Welcome to SLEditor!
 
-![SLEditor Logo](/favicon/biglogotp.png)
-
 SLEditor is a powerful browser-based shader editor supporting:
 - **GLSL** fragment shaders (WebGL)
 - **WGSL** compute graphics and audio (WebGPU)
@@ -25,6 +23,7 @@ SLEditor is a powerful browser-based shader editor supporting:
 ## Quick Actions
 - 📚 Check out the **[QuickStart](#quickstart)** to get coding immediately
 - 📖 Browse the **Contents** to learn specific features
+
 `
     },
     quickstart: {
