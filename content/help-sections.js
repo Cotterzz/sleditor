@@ -14,7 +14,7 @@ export const HELP_SECTIONS = {
         content: `
 # Welcome to SLEditor!
 
-![SLEditor Logo](/favicon/biglogo.png)
+![SLEditor Logo](/favicon/biglogotp.png)
 
 SLEditor is a powerful browser-based shader editor supporting:
 - **GLSL** fragment shaders (WebGL)
