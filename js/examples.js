@@ -128,20 +128,18 @@ const audioProcessor = {
 export const MINIMAL_GLSL = `#version 300 es
 precision highp float;
 
-// Uniforms (automatically provided by SLEditor)
-uniform vec3 iResolution;  // Canvas resolution (width, height, aspect)
-uniform float iTime;       // Time in seconds since start
-uniform vec4 iMouse;       // Mouse position (x, y, clickX, clickY)
-uniform int iFrame;        // Frame counter
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
 
 out vec4 fragColor;
 
 void main() {
-    // Normalized pixel coordinates (0.0 to 1.0)
-    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = gl_FragCoord.xy / u_resolution;
     
-    // Simple gradient
-    vec3 col = vec3(uv.x, uv.y, 0.5);
+    // Time-varying color gradient
+    vec3 col = vec3(uv, 0.5 + 0.5 * sin(u_time));
     
     // Output to screen
     fragColor = vec4(col, 1.0);
