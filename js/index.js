@@ -519,6 +519,48 @@ async function init() {
     const urlHash = window.location.hash;
     let shaderToLoad = null;
     
+    // Check for #g: (golf shader in URL) - handle this before loading defaults
+    if (urlHash.startsWith('#g:')) {
+        const code = decodeURIComponent(urlHash.substring(3));
+        console.log('Loading golf shader from URL on init:', code.length, 'chars');
+        
+        // Set up golf tab
+        state.activeTabs = ['glsl_golf'];
+        state.currentTab = 'glsl_golf';
+        
+        // Load the code
+        state.graphicsEditor.setValue(code);
+        
+        // Update tabs and compile
+        tabs.renderTabs();
+        tabs.switchTab('glsl_golf');
+        
+        await compiler.reloadShader();
+        
+        // Start render loop
+        console.log('Starting render loop for golf shader, canvas size:', state.canvasWebGL.width, 'x', state.canvasWebGL.height);
+        render.start();
+        
+        // Set up playback state
+        state.isRunning = true;
+        ui.restart();
+        state.isPlaying = true;
+        state.audioContext.resume();
+        ui.updatePlayPauseButton();
+        
+        // Enter edit mode
+        shaderManagement.enterEditMode(true);
+        
+        // Mark initialization complete
+        setTimeout(() => {
+            state.isInitializing = false;
+        }, 200);
+        
+        // Setup navigation listeners and return (don't load default example)
+        routing.setupNavigationListeners();
+        return;
+    }
+    
     // Check for #id=slug (database shader)
     if (urlHash.includes('id=')) {
         const slug = urlHash.split('id=')[1]?.split('&')[0];

@@ -53,6 +53,31 @@ export function generateShareableLink(identifier, isExample = true) {
     return `${baseUrl}#${param}=${identifier}`;
 }
 
+/**
+ * Generate a shareable URL for a golf shader
+ * @param {string} code - The golf shader code
+ * @returns {string} - URL with encoded golf shader
+ */
+export function generateGolfURL(code) {
+    const baseUrl = window.location.origin + window.location.pathname;
+    const encoded = encodeURIComponent(code);
+    return `${baseUrl}#g:${encoded}`;
+}
+
+/**
+ * Update URL to golf format when in golf mode
+ * @param {string} code - The golf shader code
+ */
+export function updateURLForGolf(code) {
+    const encoded = encodeURIComponent(code);
+    const newHash = `#g:${encoded}`;
+    
+    // Only update if different
+    if (window.location.hash !== newHash) {
+        window.history.replaceState(null, '', newHash);
+    }
+}
+
 // ============================================================================
 // Navigation Handler
 // ============================================================================
@@ -66,7 +91,63 @@ export async function handleHashChange() {
     
     const urlHash = window.location.hash;
     
-    // Check for unsaved changes
+    // Check for #g: (golf shader in URL)
+    if (urlHash.startsWith('#g:')) {
+        const code = decodeURIComponent(urlHash.substring(3));
+        console.log('Loading golf shader from URL:', code.length, 'chars');
+        
+        // Check for unsaved changes
+        if (state.isDirty) {
+            const message = 'You have unsaved changes. Load golf shader from URL anyway?';
+            if (!confirm(message)) {
+                isNavigating = true;
+                window.history.replaceState(null, '', previousHash || '#');
+                isNavigating = false;
+                return;
+            }
+        }
+        
+        // Update previous hash
+        previousHash = urlHash;
+        
+        // Create new golf shader with the URL code
+        // Import needed functions dynamically to avoid circular dependencies
+        const { createNewShader } = await import('./index.js');
+        
+        // Clear state
+        state.currentExample = null;
+        state.currentDatabaseShader = null;
+        state.isDirty = false;
+        state.isInitializing = true;
+        
+        // Set up golf tab
+        state.activeTabs = ['glsl_golf'];
+        state.currentTab = 'glsl_golf';
+        
+        // Load the code
+        if (state.graphicsEditor) {
+            state.graphicsEditor.setValue(code);
+        }
+        
+        // Update tabs and compile
+        const tabs = await import('./tabs.js');
+        tabs.renderTabs();
+        tabs.switchTab('glsl_golf');
+        
+        const compiler = await import('./compiler.js');
+        await compiler.reloadShader();
+        
+        setTimeout(() => {
+            state.isInitializing = false;
+        }, 100);
+        
+        // Enter edit mode
+        shaderManagement.enterEditMode(true);
+        
+        return;
+    }
+    
+    // Check for unsaved changes (for non-golf navigation)
     if (state.isDirty) {
         const message = 'You have unsaved changes. Are you sure you want to leave?';
         if (!confirm(message)) {
