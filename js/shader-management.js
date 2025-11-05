@@ -44,6 +44,7 @@ export function createNewShader(type, MINIMAL_GLSL, MINIMAL_WGSL, reloadShader) 
     state.currentExample = null;
     state.currentDatabaseShader = null;
     state.isDirty = false;
+    state.isAnonymousGolfURL = false;  // Clear read-only flag for new shaders
     
     // Clear URL hash
     window.history.pushState(null, '', window.location.pathname);
@@ -306,6 +307,24 @@ export function enterEditMode(isFork = false) {
     descDisplay.style.display = 'none';
     descInput.style.display = 'block';
     descInput.value = currentDesc;
+    
+    // If this is an anonymous golf URL, make fields read-only
+    if (state.isAnonymousGolfURL) {
+        titleInput.disabled = true;
+        descInput.disabled = true;
+        titleInput.style.opacity = '0.7';
+        descInput.style.opacity = '0.7';
+        titleInput.style.cursor = 'not-allowed';
+        descInput.style.cursor = 'not-allowed';
+    } else {
+        // Ensure fields are enabled for normal edit mode
+        titleInput.disabled = false;
+        descInput.disabled = false;
+        titleInput.style.opacity = '1';
+        descInput.style.opacity = '1';
+        titleInput.style.cursor = 'text';
+        descInput.style.cursor = 'text';
+    }
     
     // Show visibility controls
     if (visibilityControls) {

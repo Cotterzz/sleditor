@@ -524,6 +524,9 @@ async function init() {
         const code = decodeURIComponent(urlHash.substring(3));
         console.log('Loading golf shader from URL on init:', code.length, 'chars');
         
+        // Mark as anonymous golf URL view (read-only)
+        state.isAnonymousGolfURL = true;
+        
         // Set up golf tab
         state.activeTabs = ['glsl_golf'];
         state.currentTab = 'glsl_golf';
@@ -537,6 +540,14 @@ async function init() {
         
         await compiler.reloadShader();
         
+        // Set title and description for anonymous golf shader (set display elements BEFORE enterEditMode)
+        const titleDisplay = document.getElementById('shaderTitleDisplay');
+        const descDisplay = document.getElementById('shaderDescriptionDisplay');
+        if (titleDisplay && descDisplay) {
+            titleDisplay.textContent = `Golfed: ${code.length} chars of code from url`;
+            descDisplay.textContent = `Use http://gsl.golf/#g:${code} to get here`;
+        }
+        
         // Start render loop
         console.log('Starting render loop for golf shader, canvas size:', state.canvasWebGL.width, 'x', state.canvasWebGL.height);
         render.start();
@@ -548,8 +559,8 @@ async function init() {
         state.audioContext.resume();
         ui.updatePlayPauseButton();
         
-        // Enter edit mode
-        shaderManagement.enterEditMode(true);
+        // For anonymous golf URLs, do NOT enter edit mode - keep the display-only view
+        // The title/description are already set in the display elements above
         
         // Mark initialization complete
         setTimeout(() => {
