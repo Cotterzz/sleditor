@@ -14,7 +14,6 @@ import * as editor from './editor.js';
 import * as jsRuntime from './js-runtime.js';
 import { getBoilerplate, MINIMAL_JS } from './examples.js';
 import { getBoilerplateForTab, getBoilerplateLineCount } from './glsl-boilerplate.js';
-import { updateURLForGolf } from './routing.js';
 
 // ============================================================================
 // GLSL Compilation Path
@@ -128,14 +127,11 @@ export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
         
         const totalTime = performance.now() - startTotal;
         
-        // For Golf mode, add character count and update URL
+        // For Golf mode, add character count to status message
         let statusMessage = `✓ Compiled in ${totalTime.toFixed(1)}ms`;
         if (currentGLSLTab === 'glsl_golf') {
             const charCount = userCode.length;
             statusMessage += ` | ${charCount} chars`;
-            
-            // Update URL to golf format for easy sharing
-            updateURLForGolf(userCode);
         }
         logStatus(statusMessage, 'success');
         
