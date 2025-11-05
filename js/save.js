@@ -1,13 +1,11 @@
 // ============================================================================
-// Save - localStorage, Gallery, Thumbnails
+// Save - Gallery, Thumbnails (Database Only)
 // ============================================================================
 
 import { state, logStatus } from './core.js';
 import * as backend from './backend.js';
 import * as tabs from './tabs.js';
-import { getTabIcon, getTabLabel, getTabDbKey, dbKeyToTabName, getEditorForTab } from './tab-config.js';
-
-const MAX_SAVED_SHADERS = 10;
+import { getTabIcon, getTabLabel, dbKeyToTabName, getEditorForTab } from './tab-config.js';
 
 // ============================================================================
 // Thumbnail Capture
@@ -25,145 +23,25 @@ export function captureThumbnail() {
 }
 
 // ============================================================================
-// localStorage Management
+// Gallery Population
 // ============================================================================
 
-export function getAllSavedShaders() {
-    try {
-        const saved = localStorage.getItem('savedShaders');
-        return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-        console.error('Failed to load saved shaders:', e);
-        return [];
-    }
-}
+let isPopulatingGallery = false;
+let currentGalleryTab = 'my'; // Track current tab
 
-export function saveShaderToStorage(title, description, tags) {
-    const thumbnail = captureThumbnail();
-    
-    // Build code object using proper DB keys
-    const code = {};
-    state.activeTabs.forEach(tabName => {
-        const editor = getEditorForTab(tabName, state);
-        if (editor) {
-            const dbKey = getTabDbKey(tabName);
-            code[dbKey] = editor.getValue();
-        }
-    });
-    
-    const shaderData = {
-        id: Date.now(),
-        title: title.trim(),
-        description: description.trim(),
-        tags: tags.split(',').map(t => t.trim()).filter(t => t),
-        thumbnail: thumbnail,
-        code: code,
-        tabs: [...state.activeTabs],
-        currentTab: state.currentTab,
-        canvasWidth: state.canvasWidth,
-        canvasHeight: state.canvasHeight,
-        pixelScale: state.pixelScale,
-        created: new Date().toISOString(),
-        modified: new Date().toISOString()
-    };
-    
-    let savedShaders = getAllSavedShaders();
-    
-    // If editing an existing saved shader, update it
-    if (state.currentSavedShader) {
-        const index = savedShaders.findIndex(s => s.id === state.currentSavedShader.id);
-        if (index !== -1) {
-            shaderData.id = state.currentSavedShader.id;
-            shaderData.created = state.currentSavedShader.created;
-            savedShaders[index] = shaderData;
-        } else {
-            savedShaders.push(shaderData);
-        }
-    } else {
-        savedShaders.push(shaderData);
-    }
-    
-    // Enforce limit
-    if (savedShaders.length > MAX_SAVED_SHADERS) {
-        // Sort by modified date, keep most recent
-        savedShaders.sort((a, b) => new Date(b.modified) - new Date(a.modified));
-        savedShaders = savedShaders.slice(0, MAX_SAVED_SHADERS);
-    }
-    
-    try {
-        localStorage.setItem('savedShaders', JSON.stringify(savedShaders));
-        state.currentSavedShader = shaderData;
-        state.isDirty = false;
-        
-        // Dispatch event to update UI
-        window.dispatchEvent(new CustomEvent('shader-saved'));
-        
-        return { success: true, shader: shaderData };
-    } catch (e) {
-        console.error('Failed to save shader:', e);
-        return { success: false, error: e.message };
-    }
-}
+// Cache for each gallery tab
+let galleryCache = {
+    my: null,
+    community: null,
+    examples: null
+};
 
-export function loadSavedShader(shaderId) {
-    const savedShaders = getAllSavedShaders();
-    const shader = savedShaders.find(s => s.id === shaderId);
-    
-    if (!shader) {
-        console.error('Shader not found:', shaderId);
-        return { success: false, error: 'Shader not found' };
-    }
-    
-    // Clear example reference (we're loading a saved shader now)
-    state.currentExample = null;
-    state.currentSavedShader = shader;
-    state.isDirty = false;
-    
-    // Don't restore canvas size - use current resolution
-    // Pixel scale is also kept at current value
-    
-    // Restore tabs (filter out legacy 'help' and 'boilerplate' tabs)
-    state.activeTabs = (shader.tabs || []).filter(t => t !== 'help' && t !== 'boilerplate');
-    
-    // Determine current audio type from tabs
-    if (state.activeTabs.includes('audio_gpu')) {
-        state.currentAudioType = 'gpu';
-    } else if (state.activeTabs.includes('audio_worklet')) {
-        state.currentAudioType = 'worklet';
-    } else {
-        state.currentAudioType = null;
-    }
-    
-    // Load code into editors
-    Object.keys(shader.code).forEach(dbKey => {
-        const code = shader.code[dbKey];
-        if (!code) return;
-        
-        // Map DB key to tab name (handles legacy naming)
-        const tabName = mapLegacyCodeKey(dbKey, shader.tabs);
-        const editor = getEditorForTab(tabName, state);
-        
-        if (editor) {
-            editor.setValue(code);
-            
-            // Set correct language for audio editor
-            if (tabName === 'audio_worklet') {
-                monaco.editor.setModelLanguage(editor.getModel(), 'javascript');
-            } else if (tabName === 'audio_gpu') {
-                monaco.editor.setModelLanguage(editor.getModel(), 'wgsl');
-            }
-        }
-    });
-    
-    // Dispatch events for UI updates
-    window.dispatchEvent(new CustomEvent('shader-loaded', { detail: shader }));
-    
-    return { success: true, shader };
-}
+// Track if user was logged in when cache was created
+let cacheUserState = null;
 
 /**
  * Map legacy code keys to current tab names
- * Handles old localStorage/database shaders with non-standard keys
+ * Handles old database shaders with non-standard keys
  */
 function mapLegacyCodeKey(dbKey, tabs = []) {
     // Special case: 'graphics' key is ambiguous (could be GLSL or WGSL)
@@ -181,39 +59,7 @@ function mapLegacyCodeKey(dbKey, tabs = []) {
     return dbKeyToTabName(dbKey);
 }
 
-export function deleteSavedShader(shaderId) {
-    if (!confirm('Delete this saved shader?')) return { success: false, cancelled: true };
-    
-    let savedShaders = getAllSavedShaders();
-    savedShaders = savedShaders.filter(s => s.id !== shaderId);
-    
-    try {
-        localStorage.setItem('savedShaders', JSON.stringify(savedShaders));
-        
-        // If we deleted the currently loaded shader, clear the reference
-        if (state.currentSavedShader && state.currentSavedShader.id === shaderId) {
-            state.currentSavedShader = null;
-        }
-        
-        // Dispatch event to refresh gallery
-        window.dispatchEvent(new CustomEvent('shader-deleted'));
-        logStatus('✓ Shader deleted');
-        return { success: true };
-    } catch (e) {
-        console.error('Failed to delete shader:', e);
-        logStatus('✗ Failed to delete shader');
-        return { success: false, error: e.message };
-    }
-}
-
-// ============================================================================
-// Gallery Population
-// ============================================================================
-
-let isPopulatingGallery = false;
-let currentGalleryTab = 'my'; // Track current tab
-
-export async function populateGallery(tab = currentGalleryTab) {
+export async function populateGallery(tab = currentGalleryTab, forceRefresh = false) {
     const galleryContent = document.getElementById('galleryContent');
     if (!galleryContent) return;
     
@@ -232,6 +78,22 @@ export async function populateGallery(tab = currentGalleryTab) {
     });
     
     try {
+        // Check if user login state changed (invalidate "my" cache)
+        const isLoggedIn = state.currentUser !== null;
+        if (tab === 'my' && cacheUserState !== null && cacheUserState !== isLoggedIn) {
+            console.log('User login state changed, invalidating "my" cache');
+            galleryCache.my = null;
+        }
+        cacheUserState = isLoggedIn;
+        
+        // Check cache first (unless force refresh)
+        if (!forceRefresh && galleryCache[tab] && galleryCache[tab].length >= 0) {
+            console.log(`Using cached data for '${tab}' tab`);
+            renderGalleryFromCache(galleryContent, tab);
+            isPopulatingGallery = false;
+            return;
+        }
+        
         galleryContent.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; padding: 20px;">Loading...</div>';
         
         // Small delay to ensure any other concurrent calls are blocked
@@ -239,19 +101,21 @@ export async function populateGallery(tab = currentGalleryTab) {
         
         galleryContent.innerHTML = '';
         
-        const isLoggedIn = state.currentUser !== null;
-        
         // ===== MY SHADERS TAB =====
         if (tab === 'my') {
             if (isLoggedIn) {
                 // Load from database for logged-in users
                 const myResult = await backend.loadMyShaders();
                 if (myResult.success && myResult.shaders.length > 0) {
+                    // Cache the shaders
+                    galleryCache.my = myResult.shaders;
+                    
                     myResult.shaders.forEach(shader => {
-                        const item = createGalleryItem(shader, 'database', true);
+                        const item = createGalleryItem(shader, true);
                         if (item) galleryContent.appendChild(item);
                     });
                 } else {
+                    galleryCache.my = [];
                     const noShaders = document.createElement('div');
                     noShaders.style.cssText = 'grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--text-secondary);';
                     noShaders.innerHTML = `
@@ -262,23 +126,16 @@ export async function populateGallery(tab = currentGalleryTab) {
                     galleryContent.appendChild(noShaders);
                 }
             } else {
-                // Show localStorage shaders for non-logged-in users
-                const savedShaders = getAllSavedShaders();
-                if (savedShaders.length > 0) {
-                    savedShaders.forEach(shader => {
-                        const item = createGalleryItem(shader, 'localStorage', false);
-                        if (item) galleryContent.appendChild(item);
-                    });
-                } else {
-                    const noShaders = document.createElement('div');
-                    noShaders.style.cssText = 'grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--text-secondary);';
-                    noShaders.innerHTML = `
-                        <div style="font-size: 48px; margin-bottom: 10px;">📝</div>
-                        <div>No saved shaders</div>
-                        <div style="font-size: 12px; margin-top: 5px;">Sign in to save to the cloud!</div>
-                    `;
-                    galleryContent.appendChild(noShaders);
-                }
+                // Not logged in - show sign in prompt
+                galleryCache.my = [];
+                const noShaders = document.createElement('div');
+                noShaders.style.cssText = 'grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--text-secondary);';
+                noShaders.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 10px;">🔒</div>
+                    <div>Sign in to save your shaders</div>
+                    <div style="font-size: 12px; margin-top: 5px;">Your creations will be saved to the cloud!</div>
+                `;
+                galleryContent.appendChild(noShaders);
             }
         }
         
@@ -300,11 +157,15 @@ export async function populateGallery(tab = currentGalleryTab) {
             const result = await backend.loadPublicShaders();
             
             if (result.success && result.shaders.length > 0) {
+                // Cache the shaders
+                galleryCache.community = result.shaders;
+                
                 result.shaders.forEach(shader => {
-                    const item = createGalleryItem(shader, 'database', false);
+                    const item = createGalleryItem(shader, false);
                     if (item) galleryContent.appendChild(item);
                 });
             } else {
+                galleryCache.community = [];
                 const noShaders = document.createElement('div');
                 noShaders.style.cssText = 'grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--text-secondary);';
                 noShaders.innerHTML = `
@@ -321,11 +182,15 @@ export async function populateGallery(tab = currentGalleryTab) {
             const result = await backend.loadExamples();
             
             if (result.success && result.shaders.length > 0) {
+                // Cache the shaders
+                galleryCache.examples = result.shaders;
+                
                 result.shaders.forEach(shader => {
-                    const item = createGalleryItem(shader, 'database', false);
+                    const item = createGalleryItem(shader, false);
                     if (item) galleryContent.appendChild(item);
                 });
             } else {
+                galleryCache.examples = [];
                 const noExamples = document.createElement('div');
                 noExamples.style.cssText = 'grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--text-secondary);';
                 noExamples.innerHTML = `
@@ -340,7 +205,91 @@ export async function populateGallery(tab = currentGalleryTab) {
     }
 }
 
-function createGalleryItem(data, source, isOwned = false) {
+// Helper: Render gallery from cached data
+function renderGalleryFromCache(container, tab) {
+    container.innerHTML = '';
+    
+    const cached = galleryCache[tab];
+    if (!cached || cached.length === 0) {
+        // Shouldn't happen, but handle it
+        populateGallery(tab, true); // Force refresh
+        return;
+    }
+    
+    const isLoggedIn = state.currentUser !== null;
+    const isMyTab = tab === 'my';
+    
+    cached.forEach(shader => {
+        const item = createGalleryItem(shader, isMyTab && isLoggedIn);
+        if (item) container.appendChild(item);
+    });
+}
+
+// Optimistic updates: Add shader to cache without refetch
+export function addShaderToCache(shader) {
+    if (!galleryCache.my) galleryCache.my = [];
+    
+    // Check if shader already exists (avoid duplicates)
+    const existsInCache = galleryCache.my.some(s => s.id === shader.id);
+    if (existsInCache) {
+        // Update instead of add
+        updateShaderInCache(shader.id, shader);
+        return;
+    }
+    
+    // Add to beginning of cached array
+    galleryCache.my.unshift(shader);
+    
+    // If currently viewing "my" tab, update UI optimistically
+    if (currentGalleryTab === 'my') {
+        const galleryContent = document.getElementById('galleryContent');
+        if (galleryContent) {
+            renderGalleryFromCache(galleryContent, 'my');
+        }
+    }
+}
+
+// Optimistic updates: Update shader in cache
+export function updateShaderInCache(shaderId, updates) {
+    ['my', 'community', 'examples'].forEach(tab => {
+        if (!galleryCache[tab]) return;
+        
+        const index = galleryCache[tab].findIndex(s => s.id === shaderId);
+        if (index !== -1) {
+            galleryCache[tab][index] = { ...galleryCache[tab][index], ...updates };
+            
+            // If currently viewing this tab, update UI
+            if (currentGalleryTab === tab) {
+                const galleryContent = document.getElementById('galleryContent');
+                if (galleryContent) {
+                    renderGalleryFromCache(galleryContent, tab);
+                }
+            }
+        }
+    });
+}
+
+// Optimistic updates: Remove shader from cache
+export function removeShaderFromCache(shaderId) {
+    ['my', 'community', 'examples'].forEach(tab => {
+        if (!galleryCache[tab]) return;
+        
+        const index = galleryCache[tab].findIndex(s => s.id === shaderId);
+        if (index !== -1) {
+            galleryCache[tab].splice(index, 1);
+            
+            // If currently viewing this tab, update UI
+            if (currentGalleryTab === tab) {
+                const galleryContent = document.getElementById('galleryContent');
+                if (galleryContent) {
+                    renderGalleryFromCache(galleryContent, tab);
+                }
+            }
+        }
+    });
+}
+
+function createGalleryItem(data, isOwned = false) {
     const item = document.createElement('div');
     item.className = 'gallery-item';
     item.style.position = 'relative';
@@ -349,9 +298,6 @@ function createGalleryItem(data, source, isOwned = false) {
     if (data.id) {
         item.setAttribute('data-shader-id', data.id);
     }
-    
-    const isLocalStorage = source === 'localStorage';
-    const isDatabase = source === 'database';
     
     // Check if shader requires WebGPU
     const codeTypes = data.tabs || data.code_types || [];
@@ -369,7 +315,7 @@ function createGalleryItem(data, source, isOwned = false) {
     const thumbnail = document.createElement('div');
     thumbnail.className = 'gallery-item-thumbnail';
     
-    // Get thumbnail URL (different property names for localStorage vs database)
+    // Get thumbnail URL
     const thumbnailUrl = data.thumbnail_url || data.thumbnail;
     
     if (thumbnailUrl) {
@@ -404,8 +350,8 @@ function createGalleryItem(data, source, isOwned = false) {
         thumbnail.appendChild(icons);
     }
     
-    // Delete button for owned shaders (localStorage or database)
-    if (isOwned || isLocalStorage) {
+    // Delete button for owned database shaders only
+    if (isOwned) {
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = '🗑️';
         deleteBtn.title = 'Delete shader';
@@ -417,36 +363,29 @@ function createGalleryItem(data, source, isOwned = false) {
             const confirmed = confirm(`Delete "${data.title || data.name}"?\n\nThis action cannot be undone.`);
             if (!confirmed) return;
             
-            if (isLocalStorage) {
-                deleteSavedShader(data.id);
-            } else if (isDatabase) {
-                // Delete from database
-                const result = await backend.deleteShader(data.id);
-                if (result.success) {
-                    populateGallery(); // Refresh gallery
-                    logStatus('✓ Shader deleted');
-                    
-                    // If this was the current shader, load first example
-                    if (state.currentDatabaseShader?.id === data.id) {
-                        const examplesResult = await backend.loadExamples();
-                        if (examplesResult.success && examplesResult.shaders.length > 0) {
-                            loadDatabaseShader(examplesResult.shaders[0]);
-                        }
+            // Delete from database
+            const result = await backend.deleteShader(data.id);
+            if (result.success) {
+                // Update UI immediately
+                removeShaderFromCache(data.id);
+                logStatus('✓ Shader deleted');
+                
+                // If this was the current shader, load first example
+                if (state.currentDatabaseShader?.id === data.id) {
+                    const examplesResult = await backend.loadExamples();
+                    if (examplesResult.success && examplesResult.shaders.length > 0) {
+                        loadDatabaseShader(examplesResult.shaders[0]);
                     }
-                } else {
-                    logStatus('✗ Failed to delete: ' + result.error, 'error');
                 }
+            } else {
+                logStatus('✗ Failed to delete: ' + result.error, 'error');
             }
         };
         thumbnail.appendChild(deleteBtn);
     }
     
-    // Click handler
-    if (isLocalStorage) {
-        item.onclick = () => loadSavedShader(data.id);
-    } else if (isDatabase) {
-        item.onclick = () => loadDatabaseShader(data);
-    }
+    // Click handler - database only
+    item.onclick = () => loadDatabaseShader(data);
     
     // Info
     const info = document.createElement('div');
@@ -459,8 +398,8 @@ function createGalleryItem(data, source, isOwned = false) {
     
     info.appendChild(title);
     
-    // Username (for database shaders)
-    if (isDatabase && data.creator_name) {
+    // Username
+    if (data.creator_name) {
         const username = document.createElement('div');
         username.className = 'gallery-item-username';
         username.textContent = `by ${data.creator_name}`;
@@ -468,8 +407,8 @@ function createGalleryItem(data, source, isOwned = false) {
         info.appendChild(username);
     }
     
-    // Views and Likes stats (for database shaders)
-    if (isDatabase) {
+    // Views and Likes stats
+    {
         const stats = document.createElement('div');
         stats.className = 'gallery-item-stats';
         stats.style.cssText = 'display: flex; gap: 8px; font-size: 10px; color: var(--text-secondary); margin-top: 4px;';
@@ -529,7 +468,6 @@ export function loadDatabaseShader(shader) {
     
     // Clear current references
     state.currentExample = null;
-    state.currentSavedShader = null;
     state.isDirty = false;
     
     // Store current shader for potential editing

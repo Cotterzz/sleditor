@@ -455,6 +455,16 @@ button.paused:hover {
     /* image-rendering set dynamically via JS */
 }
 
+/* Canvas render modes */
+canvas.render-pixelated {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+canvas.render-smooth {
+    image-rendering: auto;
+}
+
 /* Old resize handle removed - using panel dividers now */
 
 .hint {
@@ -672,6 +682,324 @@ button.paused:hover {
 
 .comment-text a:hover {
     text-decoration: underline;
+}
+
+/* ============================================================================
+   TOPBAR COMPONENTS
+   ============================================================================ */
+
+/* Topbar button - standard action button */
+.topbar-btn {
+    padding: 0px 6px;
+    height: 24px;
+    font-size: 12px;
+    border-radius: 3px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.topbar-btn:hover {
+    background: var(--bg-secondary);
+}
+
+/* Topbar button with flex layout (for icons) */
+.topbar-btn-flex {
+    display: flex;
+    align-items: center;
+}
+
+/* Social link buttons */
+.topbar-social-link {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0px 6px;
+    height: 24px;
+    text-decoration: none;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+/* Discord link */
+.topbar-discord {
+    background: #5865F2;
+    color: white;
+}
+
+.topbar-discord:hover {
+    background: #4752C4;
+}
+
+/* Twitter/X link */
+.topbar-twitter {
+    background: #1DA1F2;
+    color: white;
+}
+
+.topbar-twitter:hover {
+    background: #1A91DA;
+}
+
+/* Bluesky link */
+.topbar-bluesky {
+    background: #0085FF;
+    color: white;
+}
+
+.topbar-bluesky:hover {
+    background: #0070DD;
+}
+
+/* GitHub link */
+.topbar-github {
+    background: #24292e;
+    color: white;
+}
+
+.topbar-github:hover {
+    background: #1a1e22;
+}
+
+/* User section buttons */
+.topbar-user-btn {
+    padding: 0px 8px;
+    height: 24px;
+    font-size: 12px;
+    border-radius: 3px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.topbar-user-btn:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent-color);
+}
+
+/* Theme toggle button */
+.topbar-theme-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+    border-radius: 3px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    padding: 0;
+}
+
+.topbar-theme-btn:hover {
+    background: var(--bg-secondary);
+}
+
+/* ============================================================================
+   SHADER INFO PANEL
+   ============================================================================ */
+
+#shaderInfo {
+    padding: 10px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.shader-title-header {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.shader-title-display {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.shader-title-input {
+    display: none;
+    font-size: 14px;
+    font-weight: 500;
+    flex: 1;
+    max-width: 400px;
+    padding: 2px 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+}
+
+.shader-creator {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.shader-edit-btn {
+    display: none;
+    margin-left: auto;
+    padding: 2px 6px;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.shader-description-display {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-bottom: 10px;
+}
+
+.shader-description-input {
+    display: none;
+    font-size: 12px;
+    width: 100%;
+    min-height: 60px;
+    padding: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+/* Visibility Controls */
+#visibilityControls {
+    display: none;
+    margin: 6px 0;
+    padding: 6px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.visibility-heading {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.visibility-label {
+    display: block;
+    margin-bottom: 2px;
+    cursor: pointer;
+}
+
+.visibility-label input[type="radio"] {
+    margin-right: 6px;
+}
+
+.visibility-label-text {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.visibility-label-desc {
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.visibility-note {
+    font-size: 9px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* ============================================================================
+   GALLERY TABS
+   ============================================================================ */
+
+.gallery-tabs-container {
+    display: flex;
+    gap: 2px;
+    padding: 0 10px;
+    margin: 10px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.gallery-tab {
+    flex: 1;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.gallery-refresh-btn {
+    font-size: 14px;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    cursor: pointer;
+    user-select: none;
+}
+
+.gallery-tab:hover .gallery-refresh-btn,
+.gallery-tab.active .gallery-refresh-btn {
+    opacity: 0.5;
+}
+
+.gallery-refresh-btn:hover {
+    opacity: 1 !important;
+    transform: rotate(180deg);
+}
+
+/* Top-level tabs (Comments / Gallery) */
+.top-level-tabs-container {
+    display: flex;
+    gap: 0;
+    padding: 10px 10px 0 10px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.top-level-tab {
+    flex: 1;
+    padding: 10px 16px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: -2px;
+}
+
+.top-level-tab.active {
+    border-bottom-color: var(--accent-color);
+    color: var(--accent-color);
 }
 
 

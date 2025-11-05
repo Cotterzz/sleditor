@@ -51,9 +51,9 @@ const STATS_CONFIG = {
         type: 'logarithmic'
     },
     netSize: {
-        label: 'Net Size',
+        label: 'Supabase',
         color: '#ffff00',
-        max: 1, // MB, adaptive
+        max: 100, // KB, adaptive
         unit: 'KB',
         type: 'linear'
     },
@@ -92,6 +92,13 @@ const perfState = {
     wsMessageCount: 0,
     lastNetworkResourceCount: 0,
     networkBytesWindow: [], // Sliding window for bandwidth calculation
+    lastSupabaseBytes: 0, // Track last Supabase measurement for per-sample delta
+    supabaseSampleSize: 0, // Supabase bytes in current sample
+    
+    // Cumulative totals (session-wide)
+    totalNetworkBytes: 0,
+    totalNetworkRequests: 0,
+    sessionStartTime: performance.now(),
     
     // History buffers (circular)
     history: {},
@@ -101,7 +108,9 @@ const perfState = {
     panel: null,
     statSquares: {},
     timelineCanvases: {},
-    miniCanvas: null
+    miniCanvas: null,
+    miniTotalsText: null,
+    totalsDisplay: null
 };
 
 // Initialize history buffers
@@ -136,126 +145,60 @@ export function init() {
 // ============================================================================
 
 export function createPanel() {
-    const panel = document.createElement('div');
-    panel.id = 'perfMonitorPanel';
-    panel.style.cssText = `
-        position: fixed;
-        top: 60px;
-        right: 20px;
-        background: var(--bg-primary);
-        border: 1px solid var(--border-color);
-        border-radius: 8px;
-        padding: 16px;
-        z-index: 10000;
-        display: none;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        font-family: monospace;
-        font-size: 11px;
-        max-height: calc(100vh - 100px);
-        overflow-y: auto;
-    `;
-    
-    const title = document.createElement('div');
-    title.textContent = 'Performance Monitor';
-    title.style.cssText = `
-        font-weight: bold;
-        margin-bottom: 12px;
-        font-size: 13px;
-        color: var(--text-primary);
-    `;
-    panel.appendChild(title);
-    
-    // Create stats container
-    const statsContainer = document.createElement('div');
-    statsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 12px;';
-    
-    Object.entries(STATS_CONFIG).forEach(([key, config]) => {
-        const statRow = document.createElement('div');
-        statRow.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
-        
-        // Label and current value
-        const header = document.createElement('div');
-        header.style.cssText = 'display: flex; justify-content: space-between; align-items: center;';
-        
-        const label = document.createElement('span');
-        label.textContent = config.label;
-        label.style.color = config.color;
-        header.appendChild(label);
-        
-        const value = document.createElement('span');
-        value.id = `perfValue-${key}`;
-        value.style.cssText = 'color: var(--text-secondary);';
-        value.textContent = config.available === false ? 'N/A' : '0';
-        header.appendChild(value);
-        
-        statRow.appendChild(header);
-        
-        // Current stat square
-        const square = document.createElement('div');
-        square.style.cssText = `
-            width: 24px;
-            height: 24px;
-            background: ${config.available === false ? '#333' : '#000'};
-            border: 1px solid ${config.color};
-            border-radius: 3px;
-            margin-bottom: 4px;
-        `;
-        perfState.statSquares[key] = square;
-        statRow.appendChild(square);
-        
-        // Timeline canvas
-        const canvas = document.createElement('canvas');
-        canvas.width = 300;
-        canvas.height = 24;
-        canvas.style.cssText = `
-            width: 300px;
-            height: 24px;
-            border: 1px solid ${config.color};
-            border-radius: 3px;
-            background: #000;
-        `;
-        perfState.timelineCanvases[key] = canvas;
-        statRow.appendChild(canvas);
-        
-        statsContainer.appendChild(statRow);
-    });
-    
-    panel.appendChild(statsContainer);
-    document.body.appendChild(panel);
-    perfState.panel = panel;
-    
-    return panel;
+    // Panel disabled - using mini display only for development
+    return null;
 }
 
 export function createMiniVisualization() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 300; // 1:1 with MAX_SAMPLES for no aliasing
-    canvas.height = 24; // 8 stats × 3 pixels
-    canvas.style.cssText = `
-        width: 300px;
-        height: 24px;
-        image-rendering: pixelated;
-        image-rendering: crisp-edges;
+    const container = document.createElement('div');
+    container.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
         vertical-align: middle;
         margin-left: 8px;
     `;
-    perfState.miniCanvas = canvas;
     
-    // Start sampling immediately for mini visualization
+    // Mini canvas - lightweight visualization
+    const canvas = document.createElement('canvas');
+    canvas.width = 300; // 1:1 with MAX_SAMPLES for no aliasing
+    canvas.height = 16; // Compact view
+    canvas.style.cssText = `
+        width: 300px;
+        height: 16px;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        cursor: pointer;
+    `;
+    canvas.onclick = togglePanel;
+    
+    const totalsText = document.createElement('span');
+    totalsText.id = 'perfMiniTotals';
+    totalsText.style.cssText = `
+        font-family: monospace;
+        font-size: 11px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    `;
+    totalsText.textContent = '0 KB | 0 req';
+    
+    container.appendChild(canvas);
+    container.appendChild(totalsText);
+    
+    perfState.miniCanvas = canvas;
+    perfState.miniTotalsText = totalsText;
+    
+    // Start sampling immediately
     perfState.isActive = true;
     perfState.lastSampleTime = performance.now();
     startSampling();
     
-    return canvas;
+    return container;
 }
 
 export function togglePanel() {
-    if (!perfState.panel) {
-        createPanel();
-    }
-    
-    const isVisible = perfState.panel.style.display !== 'none';
-    perfState.panel.style.display = isVisible ? 'none' : 'block';
+    // Panel disabled - no-op
+    console.log('Performance panel disabled for development. Check top bar for Supabase bandwidth.');
 }
 
 // ============================================================================
@@ -331,7 +274,17 @@ function collectSample() {
     // Network Stats
     const netStats = collectNetworkStats();
     samples.netRequests = netStats.requests;
-    samples.netSize = netStats.size;
+    
+    // Supabase stats - calculate delta since last sample
+    let supabaseBytes = 0;
+    if (window.backend?.getBandwidthStats) {
+        const stats = window.backend.getBandwidthStats();
+        const currentTotal = stats.totalBytes;
+        supabaseBytes = currentTotal - perfState.lastSupabaseBytes;
+        perfState.lastSupabaseBytes = currentTotal;
+    }
+    samples.netSize = supabaseBytes / 1024; // KB
+    
     samples.netBandwidth = netStats.bandwidth;
     
     // WebSocket Messages (count since last sample)
@@ -357,11 +310,60 @@ function collectNetworkStats() {
     
     // Count and size of new requests
     const requests = newResources.length;
-    const size = newResources.reduce((sum, r) => sum + (r.transferSize || 0), 0) / 1024; // KB
+    
+    // Calculate total size with fallback for CORS-restricted resources
+    let sizeBytes = 0;
+    let transferSizeCount = 0;
+    let encodedSizeCount = 0;
+    let cachedCount = 0;
+    
+    newResources.forEach(r => {
+        // Try transferSize first (includes headers + body, but often 0 for CORS)
+        if (r.transferSize > 0) {
+            sizeBytes += r.transferSize;
+            transferSizeCount++;
+        }
+        // Fallback to encodedBodySize (compressed response body, no headers)
+        else if (r.encodedBodySize > 0) {
+            // Add estimated 10% overhead for headers
+            sizeBytes += r.encodedBodySize * 1.1;
+            encodedSizeCount++;
+        }
+        // Last resort: decodedBodySize (uncompressed, but better than nothing)
+        else if (r.decodedBodySize > 0) {
+            // Estimate 50% compression + 10% headers
+            sizeBytes += r.decodedBodySize * 0.55;
+            encodedSizeCount++;
+        }
+        // All sizes are 0 = cached resource
+        else {
+            cachedCount++;
+        }
+    });
+    
+    const size = sizeBytes / 1024; // KB
+    
+    // Update cumulative totals
+    perfState.totalNetworkBytes += sizeBytes;
+    perfState.totalNetworkRequests += requests;
+    
+    // Always log totals when there are new requests
+    if (requests > 0) {
+        const cached = cachedCount > 0 ? ` (${cachedCount} cached)` : '';
+        console.log(`[Bandwidth] +${requests} req, +${size.toFixed(1)} KB | Total: ${(perfState.totalNetworkBytes / 1024).toFixed(1)} KB, ${perfState.totalNetworkRequests} req${cached}`);
+    }
+    
+    // Debug logging (only when enabled)
+    if (requests > 0 && window.DEBUG_BANDWIDTH) {
+        console.log(`  Details: ${transferSizeCount} exact, ${encodedSizeCount} estimated`);
+        newResources.forEach(r => {
+            console.log(`  - ${r.name}: transfer=${r.transferSize}, encoded=${r.encodedBodySize}, decoded=${r.decodedBodySize}`);
+        });
+    }
     
     // Bandwidth calculation (rolling window)
     const now = performance.now();
-    perfState.networkBytesWindow.push({ time: now, bytes: size * 1024 });
+    perfState.networkBytesWindow.push({ time: now, bytes: sizeBytes });
     
     // Remove entries older than 1 second
     perfState.networkBytesWindow = perfState.networkBytesWindow.filter(
@@ -386,46 +388,34 @@ function collectNetworkStats() {
 // UI Update
 // ============================================================================
 
-function updateUI(samples) {
-    Object.entries(samples).forEach(([key, value]) => {
-        const config = STATS_CONFIG[key];
-        if (!config) return;
-        
-        // Skip unavailable stats
-        if (config.available === false) return;
-        
-        // Calculate percentage with special scaling
-        let percentage = calculatePercentage(key, value, config);
-        
-        // Update value display
-        const valueEl = document.getElementById(`perfValue-${key}`);
-        if (valueEl) {
-            let displayValue = value;
-            if (config.unit === 'ms' || config.unit === 'KB' || config.unit === 'KB/s' || config.unit === 'MB') {
-                displayValue = value.toFixed(1);
-            } else {
-                displayValue = Math.round(value);
-            }
-            valueEl.textContent = `${displayValue}${config.unit}`;
-        }
-        
-        // Update square color
-        const square = perfState.statSquares[key];
-        if (square) {
-            square.style.background = getColorForPercentage(config.color, percentage);
-        }
-        
-        // Update timeline
-        const canvas = perfState.timelineCanvases[key];
-        if (canvas) {
-            drawTimeline(canvas, key, config);
-        }
-    });
+function updateTotalsDisplay() {
+    // Get Supabase bandwidth stats if available
+    let supabaseKB = 0;
+    let supabaseRequests = 0;
+    if (window.backend?.getBandwidthStats) {
+        const stats = window.backend.getBandwidthStats();
+        supabaseKB = stats.totalBytes / 1024;
+        supabaseRequests = stats.totalRequests;
+    }
     
-    // Update mini visualization
+    // Update mini display only (always visible) - Show Supabase total
+    if (perfState.miniTotalsText) {
+        perfState.miniTotalsText.textContent = `${supabaseKB.toFixed(1)} KB | ${supabaseRequests} req`;
+    }
+    
+    // Panel disabled - skip panel updates
+}
+
+function updateUI(samples) {
+    // Update totals display (text)
+    updateTotalsDisplay();
+    
+    // Update mini canvas visualization only
     if (perfState.miniCanvas) {
         drawMiniVisualization();
     }
+    
+    // Skip big panel rendering - disabled
 }
 
 function calculatePercentage(key, value, config) {
@@ -524,7 +514,7 @@ function drawMiniVisualization() {
     const canvas = perfState.miniCanvas;
     const ctx = canvas.getContext('2d');
     const width = canvas.width; // 300px
-    const height = canvas.height; // 24px (8 stats × 3px)
+    const height = canvas.height; // 16px
     
     // Clear canvas
     ctx.fillStyle = '#000000';
@@ -533,27 +523,27 @@ function drawMiniVisualization() {
     const statKeys = Object.keys(STATS_CONFIG);
     const startIndex = perfState.historyIndex;
     
-    // Draw each stat row (3 pixels tall)
+    // Draw each stat row (2 pixels tall for 16px height)
     statKeys.forEach((key, statIndex) => {
         const config = STATS_CONFIG[key];
         if (config.available === false) {
             // Draw dark grey for unavailable stats
             ctx.fillStyle = '#333333';
-            ctx.fillRect(0, statIndex * 3, width, 3);
+            ctx.fillRect(0, statIndex * 2, width, 2);
             return;
         }
         
         const history = perfState.history[key];
-        const y = statIndex * 3;
+        const y = statIndex * 2;
         
-        // Draw 3px square for current value
+        // Draw 2px square for current value
         const currentValue = history[(startIndex - 1 + MAX_SAMPLES) % MAX_SAMPLES];
         const currentPercentage = calculatePercentage(key, currentValue, config);
         ctx.fillStyle = getColorForPercentage(config.color, currentPercentage);
-        ctx.fillRect(0, y, 3, 3);
+        ctx.fillRect(0, y, 2, 2);
         
         // Draw horizontal history (1:1 pixel mapping, no aliasing)
-        const historyWidth = width - 3; // 297 pixels
+        const historyWidth = width - 2; // 298 pixels
         
         for (let x = 0; x < historyWidth; x++) {
             // 1:1 mapping: each pixel = one sample
@@ -565,8 +555,8 @@ function drawMiniVisualization() {
             const percentage = calculatePercentage(key, value, config);
             ctx.fillStyle = getColorForPercentage(config.color, percentage);
             
-            // Draw 1px wide, 3px tall column
-            ctx.fillRect(3 + x, y, 1, 3);
+            // Draw 1px wide, 2px tall column
+            ctx.fillRect(2 + x, y, 1, 2);
         }
     });
 }

@@ -11,6 +11,46 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 let supabase = null;
 
+// Bandwidth tracking
+const bandwidthStats = {
+    totalBytes: 0,
+    totalRequests: 0,
+    byType: {
+        api: { bytes: 0, requests: 0 },      // REST API calls
+        storage: { bytes: 0, requests: 0 },  // Storage (thumbnails, etc.)
+        realtime: { bytes: 0, requests: 0 }  // Realtime subscriptions
+    }
+};
+
+// Track bandwidth for a request
+function trackBandwidth(type, bytes) {
+    bandwidthStats.totalBytes += bytes;
+    bandwidthStats.totalRequests++;
+    bandwidthStats.byType[type].bytes += bytes;
+    bandwidthStats.byType[type].requests++;
+    
+    // Log to console in KB
+    const totalKB = (bandwidthStats.totalBytes / 1024).toFixed(1);
+    const thisKB = (bytes / 1024).toFixed(1);
+    console.log(`[Supabase ${type}] +${thisKB} KB | Total: ${totalKB} KB (${bandwidthStats.totalRequests} requests)`);
+    
+    // Update performance monitor if available
+    if (window.perfMonitor?.trackSupabaseBandwidth) {
+        window.perfMonitor.trackSupabaseBandwidth(bytes);
+    }
+}
+
+// Expose stats for external access
+export function getBandwidthStats() {
+    return {
+        ...bandwidthStats,
+        totalMB: (bandwidthStats.totalBytes / 1024 / 1024).toFixed(2),
+        apiMB: (bandwidthStats.byType.api.bytes / 1024 / 1024).toFixed(2),
+        storageMB: (bandwidthStats.byType.storage.bytes / 1024 / 1024).toFixed(2),
+        realtimeMB: (bandwidthStats.byType.realtime.bytes / 1024 / 1024).toFixed(2)
+    };
+}
+
 export function init() {
     // Check if credentials are set
     if (SUPABASE_URL === 'YOUR_SUPABASE_URL_HERE') {
@@ -35,7 +75,7 @@ export function init() {
         } else if (event === 'INITIAL_SESSION' && !session) {
             // No session on initial load - populate gallery with localStorage/examples
             if (window.save && window.save.populateGallery) {
-                window.save.populateGallery();
+                window.save.populateGallery('my', false); // Use cache if available
             }
         }
     });
@@ -163,9 +203,10 @@ function onUserSignedIn(user) {
         window.updateSaveButton();
     }
     
-    // Refresh gallery to show user's database shaders instead of localStorage
+    // Refresh gallery to show user's database shaders
+    // Cache will auto-invalidate due to user state change
     if (window.save && window.save.populateGallery) {
-        window.save.populateGallery();
+        window.save.populateGallery('my', false); // Use cache if valid
     }
     
     logStatus(`✓ Welcome, ${username}!`, 'success');
@@ -186,9 +227,10 @@ function onUserSignedOut() {
         window.updateSaveButton();
     }
     
-    // Refresh gallery to show localStorage shaders instead of user shaders
+    // Refresh gallery to show sign-in prompt
+    // Cache will auto-invalidate due to user state change
     if (window.save && window.save.populateGallery) {
-        window.save.populateGallery();
+        window.save.populateGallery('my', false); // Use cache if valid
     }
     
     // Exit edit mode if in it
@@ -366,6 +408,11 @@ export async function loadShader(idOrSlug) {
         }
 
         console.log('✓ Shader loaded:', result.data);
+        
+        // Track bandwidth
+        const estimatedBytes = JSON.stringify(result.data).length;
+        trackBandwidth('api', estimatedBytes);
+        
         return { success: true, shader: result.data };
 
     } catch (error) {
@@ -411,6 +458,10 @@ export async function loadExamples() {
             ...shader,
             username: shader.creator_name || 'Community'
         }));
+        
+        // Track bandwidth
+        const estimatedBytes = JSON.stringify(shadersWithUsername).length;
+        trackBandwidth('api', estimatedBytes);
 
         return { success: true, shaders: shadersWithUsername };
 
@@ -441,6 +492,10 @@ export async function loadMyShaders() {
             .order('updated_at', { ascending: false });
 
         if (result.error) throw result.error;
+        
+        // Track bandwidth (estimate JSON size)
+        const estimatedBytes = JSON.stringify(result.data).length;
+        trackBandwidth('api', estimatedBytes);
 
         return { success: true, shaders: result.data };
 
@@ -468,6 +523,10 @@ export async function loadPublicShaders() {
             .limit(50); // Limit to 50 most recent
 
         if (result.error) throw result.error;
+        
+        // Track bandwidth
+        const estimatedBytes = JSON.stringify(result.data).length;
+        trackBandwidth('api', estimatedBytes);
 
         // SECURITY: Filter out shaders with JavaScript (XSS risk)
         // Remove this filter when JS sandboxing is fully implemented
@@ -552,7 +611,7 @@ export async function uploadThumbnail(imageBlob, filename) {
         const result = await supabase.storage
             .from('thumbnails')
             .upload(filename, imageBlob, {
-                contentType: 'image/png',
+                contentType: 'image/jpeg',
                 upsert: true  // Overwrite if exists
             });
 
@@ -572,7 +631,7 @@ export async function uploadThumbnail(imageBlob, filename) {
 
 /**
  * Delete a thumbnail from storage
- * @param {string} filename - Filename (e.g., 'shader_abc123_1234567890.png')
+ * @param {string} filename - Filename (e.g., 'shader_abc123_1234567890.jpg')
  * @returns {Promise<Object>} { success, error }
  */
 export async function deleteThumbnail(filename) {
@@ -598,6 +657,7 @@ export async function deleteThumbnail(filename) {
 
 /**
  * Capture canvas as blob (for thumbnail upload)
+ * Resizes to 256x256 and converts to JPEG for bandwidth efficiency
  * @returns {Promise<Blob>}
  */
 export async function captureThumbnailBlob() {
@@ -608,14 +668,40 @@ export async function captureThumbnailBlob() {
         await new Promise(resolve => requestAnimationFrame(resolve));
     }
     
+    // Create thumbnail canvas at fixed 256x256 size
+    const THUMBNAIL_SIZE = 256;
+    const thumbCanvas = document.createElement('canvas');
+    const ctx = thumbCanvas.getContext('2d');
+    
+    thumbCanvas.width = THUMBNAIL_SIZE;
+    thumbCanvas.height = THUMBNAIL_SIZE;
+    
+    // Draw scaled-down version (centered and cropped to square)
+    const sourceAspect = activeCanvas.width / activeCanvas.height;
+    let sx = 0, sy = 0, sw = activeCanvas.width, sh = activeCanvas.height;
+    
+    if (sourceAspect > 1) {
+        // Wider than tall - crop sides
+        sw = activeCanvas.height;
+        sx = (activeCanvas.width - sw) / 2;
+    } else {
+        // Taller than wide - crop top/bottom
+        sh = activeCanvas.width;
+        sy = (activeCanvas.height - sh) / 2;
+    }
+    
+    ctx.drawImage(activeCanvas, sx, sy, sw, sh, 0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE);
+    
+    // Convert to JPEG with 80% quality
     return new Promise((resolve, reject) => {
-        activeCanvas.toBlob((blob) => {
+        thumbCanvas.toBlob((blob) => {
             if (blob) {
+                console.log(`Thumbnail: ${Math.round(blob.size / 1024)}KB (JPEG 256×256)`);
                 resolve(blob);
             } else {
                 reject(new Error('Failed to capture canvas'));
             }
-        }, 'image/png', 0.8);
+        }, 'image/jpeg', 0.8);
     });
 }
 

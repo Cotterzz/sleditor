@@ -54,6 +54,9 @@ export function switchTab(tabName) {
     const containers = {
         graphics: document.getElementById('graphicsContainer'),
         glsl_fragment: document.getElementById('graphicsContainer'),  // GLSL uses graphics container
+        glsl_regular: document.getElementById('graphicsContainer'),   // Regular GLSL also uses graphics container
+        glsl_stoy: document.getElementById('graphicsContainer'),      // S-Toy GLSL also uses graphics container
+        glsl_golf: document.getElementById('graphicsContainer'),      // Golf GLSL also uses graphics container
         audio_gpu: document.getElementById('audioContainer'),
         audio_worklet: document.getElementById('audioContainer'),  // Both audio tabs use same container
         js: document.getElementById('jsEditorContainer')
@@ -62,6 +65,9 @@ export function switchTab(tabName) {
     const editors = {
         graphics: state.graphicsEditor,
         glsl_fragment: state.graphicsEditor,  // GLSL uses graphics editor
+        glsl_regular: state.graphicsEditor,   // Regular GLSL also uses graphics editor
+        glsl_stoy: state.graphicsEditor,      // S-Toy GLSL also uses graphics editor
+        glsl_golf: state.graphicsEditor,      // Golf GLSL also uses graphics editor
         audio_gpu: state.audioEditor,
         audio_worklet: state.audioEditor,  // Both audio tabs use same editor
         js: state.jsEditor
@@ -199,6 +205,10 @@ export function showAddPassMenu() {
     
     // Build menu options
     const availableTabs = [
+        { name: 'glsl_regular', label: '🎨 Regular (GLSL)' },
+        { name: 'glsl_stoy', label: '🔺 S-Toy (GLSL)' },
+        { name: 'glsl_golf', label: '⛳ Golf (GLSL)' },
+        { name: 'glsl_fragment', label: '🔺 Raw (GLSL)' },
         { name: 'audio_gpu', label: '🔊 Audio (WGSL)' },
         { name: 'audio_worklet', label: '🎵 Audio (Worklet)' },
         { name: 'js', label: '⚡ JavaScript' }
@@ -209,7 +219,7 @@ export function showAddPassMenu() {
     // Check if any audio tab is active for mutual exclusion
     const hasAudioGpu = state.activeTabs.includes('audio_gpu');
     const hasAudioWorklet = state.activeTabs.includes('audio_worklet');
-    const hasGLSL = state.activeTabs.some(t => t === 'glsl_fragment' || t.includes('glsl'));
+    const hasGLSL = state.activeTabs.some(t => t === 'glsl_fragment' || t === 'glsl_regular' || t === 'glsl_stoy' || t === 'glsl_golf');
     
     availableTabs.forEach(tab => {
         const isActive = state.activeTabs.includes(tab.name);
@@ -217,8 +227,10 @@ export function showAddPassMenu() {
         // Grey out incompatible tabs:
         // - Other audio tab if one is active (mutual exclusion)
         // - WGSL audio if GLSL graphics is active (incompatible backends)
+        // - GLSL tabs if already have another GLSL tab active
         const isDisabled = (tab.name === 'audio_gpu' && (hasAudioWorklet || hasGLSL)) || 
-                          (tab.name === 'audio_worklet' && hasAudioGpu);
+                          (tab.name === 'audio_worklet' && hasAudioGpu) ||
+                          ((tab.name === 'glsl_fragment' || tab.name === 'glsl_regular' || tab.name === 'glsl_stoy' || tab.name === 'glsl_golf') && hasGLSL);
         
         const option = document.createElement('div');
         option.textContent = tab.label + (isActive ? ' ✓' : '');

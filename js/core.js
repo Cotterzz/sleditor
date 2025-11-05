@@ -147,7 +147,6 @@ export const state = {
     // Save/Load tracking
     isDirty: false,  // Track unsaved changes
     isInitializing: true,  // Prevent dirty marking during initial load
-    currentSavedShader: null,  // Currently loaded saved shader (localStorage)
     currentDatabaseShader: null,  // Currently loaded database shader (Supabase)
     
     // Authentication

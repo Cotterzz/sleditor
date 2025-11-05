@@ -128,24 +128,49 @@ const audioProcessor = {
 export const MINIMAL_GLSL = `#version 300 es
 precision highp float;
 
-// Uniforms (automatically provided by SLEditor)
-uniform vec3 iResolution;  // Canvas resolution (width, height, aspect)
-uniform float iTime;       // Time in seconds since start
-uniform vec4 iMouse;       // Mouse position (x, y, clickX, clickY)
-uniform int iFrame;        // Frame counter
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform vec2 u_mouse;
 
 out vec4 fragColor;
 
 void main() {
-    // Normalized pixel coordinates (0.0 to 1.0)
-    vec2 uv = gl_FragCoord.xy / iResolution.xy;
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = gl_FragCoord.xy / u_resolution;
     
-    // Simple gradient
-    vec3 col = vec3(uv.x, uv.y, 0.5);
+    // Time-varying color gradient
+    vec3 col = vec3(uv, 0.5 + 0.5 * sin(u_time));
     
     // Output to screen
     fragColor = vec4(col, 1.0);
 }`;
+
+export const MINIMAL_GLSL_REGULAR = `// Boilerplate mode - just write your main() function!
+// All uniforms and constants are already defined for you.
+
+void main() {
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    
+    // Time-varying color gradient
+    vec3 col = vec3(uv, 0.5 + 0.5 * sin(u_time));
+    
+    // Output to screen
+    fragColor = vec4(col, 1.0);
+}`;
+
+export const MINIMAL_GLSL_STOY = `void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    // Normalized pixel coordinates (from 0 to 1)
+    vec2 uv = fragCoord / iResolution.xy;
+    
+    // Time-varying color gradient
+    vec3 col = vec3(uv, 0.5 + 0.5 * sin(iTime));
+    
+    // Output to screen
+    fragColor = vec4(col, 1.0);
+}`;
+
+export const MINIMAL_GLSL_GOLF = `M{V2 u=U.xy/R;O=V4(u,sin(T),1.);}`;
 
 export const MINIMAL_WGSL = `// Simple WGSL graphics shader
 @compute @workgroup_size(8, 8, 1)

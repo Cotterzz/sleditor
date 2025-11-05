@@ -65,16 +65,17 @@ Click on any shader in the **Examples** gallery to load it.
 - **Google** *(coming soon)*
 - **Facebook** *(coming soon)*
 
-## Anonymous vs Logged In
+## Anonymous vs Signed In
 
 ### Anonymous Users Can:
 - ✅ View and fork example shaders
-- ✅ Save shaders to localStorage
+- ✅ Edit shaders (not saved)
 - ✅ View published shaders via direct link
+- ❌ Cannot save shaders
 - ❌ Cannot share shaders
 - ❌ Cannot comment or like
 
-### Logged In Members Can:
+### Signed In Members Can:
 - ✅ All anonymous features
 - ✅ Save shaders to the cloud
 - ✅ Share shaders with unique URLs
@@ -90,10 +91,7 @@ Click on any shader in the **Examples** gallery to load it.
 
 ## Saving Your Work
 
-### When Logged Out
-Shaders are saved to **browser localStorage**. They persist until you clear browser data.
-
-### When Logged In
+### Cloud Storage (Sign In Required)
 Shaders are saved to the **cloud** with these options:
 
 #### Visibility Settings

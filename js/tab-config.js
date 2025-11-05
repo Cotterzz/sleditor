@@ -35,12 +35,43 @@ export const TAB_CONFIG = {
     },
     
     glsl_fragment: {
-        label: 'Fragment (GLSL)',
+        label: 'Raw (GLSL)',
         icon: '🔺',
         dbKey: 'glsl_fragment',
         editor: 'graphics',
         type: 'webgl',
-        language: 'glsl'
+        language: 'glsl',
+        boilerplate: null  // No boilerplate injection
+    },
+    
+    glsl_regular: {
+        label: 'Regular (GLSL)',
+        icon: '🎨',
+        dbKey: 'glsl_regular',
+        editor: 'graphics',
+        type: 'webgl',
+        language: 'glsl',
+        boilerplate: 'regular'  // Inject standard boilerplate
+    },
+    
+    glsl_stoy: {
+        label: 'S-Toy (GLSL)',
+        icon: '🔺',
+        dbKey: 'glsl_stoy',
+        editor: 'graphics',
+        type: 'webgl',
+        language: 'glsl',
+        boilerplate: 'stoy'  // Inject Shadertoy compatibility layer
+    },
+    
+    glsl_golf: {
+        label: 'Golf (GLSL)',
+        icon: '⛳',
+        dbKey: 'glsl_golf',
+        editor: 'graphics',
+        type: 'webgl',
+        language: 'glsl',
+        boilerplate: 'golf'  // Inject code golf macros
     },
     
     // ========================================================================
