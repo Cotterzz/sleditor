@@ -13,6 +13,7 @@ import * as tabs from './tabs.js';
 import * as save from './save.js';
 import * as comments from './comments.js';
 import * as perfMonitor from './performance-monitor.js';
+import * as uniformControls from './uniform-controls.js';
 import * as vim from './vim.js';
 import { getBoilerplate, MINIMAL_JS, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF, MINIMAL_WGSL } from './examples.js';
 import { HELP_SECTIONS } from './help-sections.js';
@@ -22,6 +23,7 @@ import * as shaderManagement from './shader-management.js';
 import * as compiler from './compiler.js';
 import * as audio from './audio.js';
 import * as routing from './routing.js';
+import { UniformBuilder } from './uniforms.js';
 import * as community from './community.js';
 
 // Expose modules globally for inline functions and backwards compatibility
@@ -157,6 +159,7 @@ function setupUI() {
     document.getElementById('addPassBtn').addEventListener('click', tabs.showAddPassMenu);
     document.getElementById('optionsBtn').addEventListener('click', tabs.showOptionsMenu);
     document.getElementById('perfMonitorBtn').addEventListener('click', () => perfMonitor.togglePanel());
+    document.getElementById('uniformControlsBtn').addEventListener('click', () => uniformControls.toggle());
     // Help button - draggable divider
     const helpToggleBtn = document.getElementById('helpToggleBtn');
     helpToggleBtn.addEventListener('mousedown', (e) => ui.startHelpDrag(e));
@@ -461,6 +464,9 @@ async function init() {
     // Initialize performance monitor
     perfMonitor.init();
     
+    // Initialize uniform controls
+    uniformControls.init();
+    
     // Add mini visualization to stats button
     const perfBtn = document.getElementById('perfMonitorBtn');
     const miniCanvas = perfMonitor.createMiniVisualization();
@@ -468,6 +474,9 @@ async function init() {
     
     // Initialize audio FIRST
     audio.initWebAudio();
+    
+    // Initialize uniform builder (needed for uniform controls)
+    state.uniformBuilder = new UniformBuilder();
     
     // Initialize Monaco with empty initial code (actual shader will load after init)
     const initialCode = {

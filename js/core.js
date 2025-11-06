@@ -97,6 +97,7 @@ export const state = {
     phaseStateBuffer: null,
     audioBufferGPU: null,
     audioBuffersReadback: [null, null],
+    uniformBuilder: null,  // Shared UniformBuilder instance for uniform controls
     
     // Canvas resizing
     isResizing: false,

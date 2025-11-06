@@ -103,6 +103,22 @@ export class UniformBuilder {
                 gl.uniform1f(loc, this.f32[7 + i]);
             }
         }
+        
+        // Custom int uniforms (u_customInt0 to u_customInt2 map to buffer indices 22-24)
+        for (let i = 0; i < 3; i++) {
+            const loc = locations[`u_customInt${i}`];
+            if (loc) {
+                gl.uniform1i(loc, this.i32[22 + i]);
+            }
+        }
+        
+        // Custom bool uniforms (u_customBool0 to u_customBool1 map to buffer indices 25-26)
+        for (let i = 0; i < 2; i++) {
+            const loc = locations[`u_customBool${i}`];
+            if (loc) {
+                gl.uniform1i(loc, this.i32[25 + i]);
+            }
+        }
     }
     
     /**

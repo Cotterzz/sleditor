@@ -112,8 +112,8 @@ function renderWebGLMode(rawTime, gl, ctx) {
     
     updateCounterDisplays(state.visualFrame, elapsedSec);
 
-    // Build uniforms using abstraction layer
-    const uniforms = new UniformBuilder();
+    // Use shared uniform builder (so uniform controls can modify it)
+    const uniforms = state.uniformBuilder;
     uniforms.setTime(elapsedSec);
     uniforms.setAudioTime(ctx.currentTime, state.nextAudioTime, state.nextAudioTime % 1);
     uniforms.setAudioFrame(state.audioFrame);
@@ -161,8 +161,8 @@ function renderGPUMode(rawTime, device, ctx) {
     
     updateCounterDisplays(state.visualFrame, elapsedSec);
 
-    // Build uniforms using abstraction layer
-    const uniforms = new UniformBuilder();
+    // Use shared uniform builder (so uniform controls can modify it)
+    const uniforms = state.uniformBuilder;
     uniforms.setTime(elapsedSec);
     uniforms.setAudioTime(ctx.currentTime, state.nextAudioTime, state.nextAudioTime % 1);
     uniforms.setAudioFrame(state.audioFrame);
@@ -288,8 +288,8 @@ export function renderOnce() {
         return;
     }
     
-    // Build uniforms using abstraction layer
-    const uniforms = new UniformBuilder();
+    // Use shared uniform builder
+    const uniforms = state.uniformBuilder;
     uniforms.setTime(elapsedSec);
     uniforms.setAudioTime(ctx.currentTime, state.nextAudioTime, state.nextAudioTime % 1);
     uniforms.setAudioFrame(state.audioFrame);

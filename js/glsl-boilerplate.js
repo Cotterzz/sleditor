@@ -39,6 +39,15 @@ uniform float u_custom12;
 uniform float u_custom13;
 uniform float u_custom14;
 
+// Integer custom uniforms
+uniform int u_customInt0;
+uniform int u_customInt1;
+uniform int u_customInt2;
+
+// Boolean custom uniforms (0 = false, 1 = true)
+uniform int u_customBool0;
+uniform int u_customBool1;
+
 // === Math Constants ===
 #define PI 3.1415926535897932
 #define TAU 6.283185307179586
@@ -72,6 +81,11 @@ uniform float u_custom11;
 uniform float u_custom12;
 uniform float u_custom13;
 uniform float u_custom14;
+uniform int u_customInt0;
+uniform int u_customInt1;
+uniform int u_customInt2;
+uniform bool u_customBool0;
+uniform bool u_customBool1;
 
 // === Shadertoy Compatibility Layer ===
 #define iTime u_time
@@ -105,6 +119,26 @@ uniform float u_time;
 uniform vec2 u_resolution;
 uniform vec2 u_mouse;
 uniform int u_frame;
+uniform float u_custom0;
+uniform float u_custom1;
+uniform float u_custom2;
+uniform float u_custom3;
+uniform float u_custom4;
+uniform float u_custom5;
+uniform float u_custom6;
+uniform float u_custom7;
+uniform float u_custom8;
+uniform float u_custom9;
+uniform float u_custom10;
+uniform float u_custom11;
+uniform float u_custom12;
+uniform float u_custom13;
+uniform float u_custom14;
+uniform int u_customInt0;
+uniform int u_customInt1;
+uniform int u_customInt2;
+uniform int u_customBool0;
+uniform int u_customBool1;
 
 // === Ultra-Compact Macros for Code Golf ===
 #define M void main()
