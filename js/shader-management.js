@@ -292,7 +292,9 @@ export function enterEditMode(isFork = false) {
     
     // Get current values
     let currentTitle = titleDisplay.textContent || 'Untitled';
-    let currentDesc = descDisplay.textContent || '';
+    // For description, get the raw markdown from the database shader if available
+    // Otherwise fall back to the text content (for new shaders)
+    let currentDesc = state.currentDatabaseShader?.description || descInput.value || '';
     
     // If forking, prefix title
     if (isFork && state.currentDatabaseShader) {
@@ -308,6 +310,9 @@ export function enterEditMode(isFork = false) {
     descInput.style.display = 'block';
     descInput.value = currentDesc;
     
+    // NOTE: Golf URLs don't call enterEditMode() at all, so this check is unnecessary
+    // and was causing all shaders to become non-editable after viewing a golf URL
+    /*
     // If this is an anonymous golf URL, make fields read-only
     if (state.isAnonymousGolfURL) {
         titleInput.disabled = true;
@@ -325,6 +330,15 @@ export function enterEditMode(isFork = false) {
         titleInput.style.cursor = 'text';
         descInput.style.cursor = 'text';
     }
+    */
+    
+    // Always ensure fields are enabled in edit mode
+    titleInput.disabled = false;
+    descInput.disabled = false;
+    titleInput.style.opacity = '1';
+    descInput.style.opacity = '1';
+    titleInput.style.cursor = 'text';
+    descInput.style.cursor = 'text';
     
     // Show visibility controls
     if (visibilityControls) {
@@ -357,6 +371,14 @@ export function exitEditMode() {
     
     descInput.style.display = 'none';
     descDisplay.style.display = 'block';
+    
+    // Render description as markdown
+    const descText = descInput.value || '';
+    if (typeof marked !== 'undefined' && descText) {
+        descDisplay.innerHTML = marked.parse(descText);
+    } else {
+        descDisplay.textContent = descText;
+    }
     
     // Hide visibility controls
     if (visibilityControls) {
@@ -540,7 +562,14 @@ export async function saveShaderInline() {
         const titleDisplay = document.getElementById('shaderTitleDisplay');
         const descDisplay = document.getElementById('shaderDescriptionDisplay');
         if (titleDisplay) titleDisplay.textContent = title;
-        if (descDisplay) descDisplay.textContent = description;
+        if (descDisplay) {
+            // Render description as markdown
+            if (typeof marked !== 'undefined' && description) {
+                descDisplay.innerHTML = marked.parse(description);
+            } else {
+                descDisplay.textContent = description;
+            }
+        }
         
         // Update URL with slug
         if (result.shader.slug) {

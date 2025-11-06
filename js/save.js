@@ -479,7 +479,14 @@ export function loadDatabaseShader(shader) {
     const descEl = document.getElementById('shaderDescriptionDisplay');
     if (titleEl) titleEl.textContent = shader.title || 'Untitled';
     if (creatorEl) creatorEl.textContent = shader.creator_name ? `by ${shader.creator_name}` : '';
-    if (descEl) descEl.textContent = shader.description || '';
+    if (descEl) {
+        const descText = shader.description || '';
+        if (typeof marked !== 'undefined' && descText) {
+            descEl.innerHTML = marked.parse(descText);
+        } else {
+            descEl.textContent = descText;
+        }
+    }
     
     // Update views and likes UI (call window function if available)
     if (window.updateViewsAndLikes) {

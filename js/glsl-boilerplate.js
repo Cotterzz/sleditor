@@ -76,7 +76,7 @@ uniform float u_custom14;
 // === Shadertoy Compatibility Layer ===
 #define iTime u_time
 #define iTimeDelta (1.0 / 60.0)
-#define iFrame float(u_frame)
+#define iFrame u_frame
 #define iResolution vec3(u_resolution, 1.0)
 #define iMouse (u_mouse.xyxy*u_resolution.xyxy)
 

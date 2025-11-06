@@ -87,7 +87,7 @@ export const state = {
     canvasWidth: 512,
     canvasHeight: 512,
     pixelScale: 1,  // 1=high, 2=medium, 4=low resolution
-    renderMode: 0,  // 0=pixelated, 1=smooth, 2=crisp-edges
+    renderMode: 0,  // 0=pixelated, 1=smooth
     gpuContext: null,
     bindGroupLayout: null,
     graphicsPipeline: null,

@@ -585,6 +585,18 @@ export function updateRenderMode() {
     const activeCanvas = state.graphicsBackend === 'webgl' ? state.canvasWebGL : state.canvasWebGPU;
     const icon = document.getElementById('renderModeIcon');
     
+    console.log('updateRenderMode called:', {
+        renderMode: state.renderMode,
+        graphicsBackend: state.graphicsBackend,
+        activeCanvas: activeCanvas?.id,
+        iconElement: icon
+    });
+    
+    if (!activeCanvas) {
+        console.warn('updateRenderMode: No active canvas available');
+        return;
+    }
+    
     // Remove all render mode classes
     activeCanvas.classList.remove('render-pixelated', 'render-smooth');
     
@@ -593,10 +605,12 @@ export function updateRenderMode() {
         activeCanvas.classList.add('render-pixelated');
         icon.textContent = '▦';
         icon.title = 'Render mode: Pixelated (click to cycle)';
+        console.log('  -> Set to mode 0 (pixelated), icon: ▦');
     } else {
         activeCanvas.classList.add('render-smooth');
         icon.textContent = '▩';
         icon.title = 'Render mode: Smooth (Bilinear) (click to cycle)';
+        console.log('  -> Set to mode 1 (smooth), icon: ▩');
     }
 }
 

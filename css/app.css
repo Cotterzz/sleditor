@@ -437,6 +437,15 @@ button.paused:hover {
 .success { color: #4ec9b0; }
 .info { color: #9cdcfe; }
 
+/* Light mode adjustments */
+html:not([data-theme="dark"]) .info {
+    color: #0078d4;  /* Darker blue for better visibility in light mode */
+}
+
+html:not([data-theme="dark"]) .success {
+    color: #0d8a6b;  /* Darker green for better visibility in light mode */
+}
+
 #canvasContainer {
     position: relative;
     display: flex;
@@ -455,7 +464,12 @@ button.paused:hover {
     /* image-rendering set dynamically via JS */
 }
 
-/* Canvas render modes */
+/* Canvas render modes - default to pixelated */
+canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
 canvas.render-pixelated {
     image-rendering: pixelated;
     image-rendering: crisp-edges;
@@ -758,13 +772,27 @@ canvas.render-smooth {
 
 /* GitHub link */
 .topbar-github {
-    background: #24292e;
-    color: white;
+    background: #f0f0f0;
+    color: rgb(0, 0, 0);
 }
 
 .topbar-github:hover {
-    background: #1a1e22;
+    background: #e0e0e0;
 }
+
+
+
+/* Email link */
+.topbar-email {
+    background: #f0f0f0;
+    color: #0078d4;
+}
+
+.topbar-email:hover {
+    background: #e0e0e0;
+}
+
+
 
 /* User section buttons */
 .topbar-user-btn {

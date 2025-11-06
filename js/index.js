@@ -149,9 +149,6 @@ function setupUI() {
     document.addEventListener('mousemove', ui.doHelpDrag);
     document.addEventListener('mouseup', ui.stopHelpDrag);
     
-    // Initialize render mode
-    ui.updateRenderMode();
-    
     // Event listeners
     document.getElementById('playPauseBtn').addEventListener('click', ui.togglePlayPause);
     document.getElementById('restartBtn').addEventListener('click', () => ui.restart(true));
@@ -283,7 +280,9 @@ function setupUI() {
     
     // Render mode cycling
     document.getElementById('renderModeIcon').addEventListener('click', () => {
+        console.log('Render mode button clicked, current mode:', state.renderMode);
         state.renderMode = (state.renderMode + 1) % 2;
+        console.log('  -> New mode:', state.renderMode);
         ui.updateRenderMode();
     });
     
@@ -618,6 +617,9 @@ async function init() {
     // IMPORTANT: Start render loop BEFORE setting isRunning = true
     console.log('Starting render loop, canvas size:', state.canvasWebGPU.width, 'x', state.canvasWebGPU.height);
         render.start();
+    
+    // Initialize render mode (must be AFTER graphics backend is set)
+    ui.updateRenderMode();
     
     // Now set up playback state
     state.isRunning = true;
