@@ -178,11 +178,21 @@ export async function handleHashChange() {
             }
         }
     } 
-    // If hash is cleared, load first example
+    // If hash is cleared, load default example
     else if (!urlHash || urlHash === '#') {
-        const examplesResult = await backend.loadExamples();
-        if (examplesResult.success && examplesResult.shaders.length > 0) {
-            save.loadDatabaseShader(examplesResult.shaders[0]);
+        // Load specific default shader by slug
+        const defaultSlug = 'x4yrjxhgw';
+        const defaultResult = await backend.loadShader(defaultSlug);
+        
+        if (defaultResult.success) {
+            save.loadDatabaseShader(defaultResult.shader);
+        } else {
+            // Fallback to first example if default not found
+            console.warn('Failed to load default shader, falling back to first example');
+            const examplesResult = await backend.loadExamples();
+            if (examplesResult.success && examplesResult.shaders.length > 0) {
+                save.loadDatabaseShader(examplesResult.shaders[0]);
+            }
         }
     }
 }

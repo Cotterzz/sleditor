@@ -603,12 +603,23 @@ async function init() {
         window.history.replaceState(null, '', window.location.pathname);
     }
     
-    // If no URL shader or failed to load, get first example from database
+    // If no URL shader or failed to load, load default example from database
     if (!shaderToLoad) {
-        const examplesResult = await backend.loadExamples();
-        if (examplesResult.success && examplesResult.shaders.length > 0) {
-            shaderToLoad = examplesResult.shaders[0];
-            console.log('Loading first example:', shaderToLoad.title);
+        // Load specific default shader by slug
+        const defaultSlug = 'x4yrjxhgw';
+        const defaultResult = await backend.loadShader(defaultSlug);
+        
+        if (defaultResult.success) {
+            shaderToLoad = defaultResult.shader;
+            console.log('Loading default example:', shaderToLoad.title);
+        } else {
+            // Fallback to first example if default not found
+            console.warn('Failed to load default shader, falling back to first example');
+            const examplesResult = await backend.loadExamples();
+            if (examplesResult.success && examplesResult.shaders.length > 0) {
+                shaderToLoad = examplesResult.shaders[0];
+                console.log('Loading first example:', shaderToLoad.title);
+            }
         }
     }
     
