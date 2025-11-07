@@ -10,6 +10,7 @@ let isFullscreen = false;
 let hideControlsTimeout = null;
 const HIDE_DELAY = 3000; // 3 seconds
 let previousCanvasHeight = null; // Store height before fullscreen
+let previousPixelScale = null; // Store pixel scale before fullscreen
 
 /**
  * Initialize fullscreen functionality
@@ -58,6 +59,25 @@ export async function enterFullscreen() {
     
     // Store current height before going fullscreen
     previousCanvasHeight = canvasContainer.offsetHeight;
+    
+    // Store pixel scale and boost to 2 if it's currently at 1 for performance
+    previousPixelScale = state.pixelScale;
+    if (state.pixelScale === 1) {
+        state.pixelScale = 2;
+        ui.updateCanvasSize(state.canvasWidth, state.canvasHeight, false);
+        
+        // Update both sliders to reflect the new scale
+        // pixelScale 2 is at index 1 in the scales array
+        document.getElementById('pixelScaleSlider').value = '1';
+        document.getElementById('fsPixelScaleSlider').value = '1';
+    } else {
+        // Sync fullscreen slider with current value
+        const scales = [1, 2, 3, 4, 6, 8];
+        const currentIndex = scales.indexOf(state.pixelScale);
+        if (currentIndex !== -1) {
+            document.getElementById('fsPixelScaleSlider').value = currentIndex.toString();
+        }
+    }
     
     try {
         if (canvasContainer.requestFullscreen) {
@@ -132,6 +152,22 @@ function onFullscreenChange() {
             // Trigger resize observer to update canvas size
             ui.updateCanvasSize(canvasContainer.offsetWidth, previousCanvasHeight, false);
             previousCanvasHeight = null;
+        }
+        
+        // Restore pixel scale if it was changed
+        if (previousPixelScale !== null) {
+            state.pixelScale = previousPixelScale;
+            ui.updateCanvasSize(state.canvasWidth, state.canvasHeight, false);
+            
+            // Update slider to reflect restored scale
+            const scales = [1, 2, 3, 4, 6, 8];
+            const restoredIndex = scales.indexOf(previousPixelScale);
+            if (restoredIndex !== -1) {
+                document.getElementById('pixelScaleSlider').value = restoredIndex.toString();
+            }
+            
+            console.log('Restored pixel scale to:', previousPixelScale);
+            previousPixelScale = null;
         }
         
         // Move uniform panel back to body
@@ -212,7 +248,7 @@ function syncControls() {
     const fsPixelScaleSlider = document.getElementById('fsPixelScaleSlider');
     fsPixelScaleSlider.addEventListener('input', (e) => {
         const scaleIndex = parseInt(e.target.value);
-        const scales = [1/8, 1/6, 1/4, 1/3, 1/2, 1, 2, 3, 4, 6, 8];
+        const scales = [1, 2, 3, 4, 6, 8];
         state.pixelScale = scales[scaleIndex];
         ui.updateCanvasSize(state.canvasWidth, state.canvasHeight, true);
         // Sync with regular slider
