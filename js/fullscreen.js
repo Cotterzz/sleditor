@@ -28,11 +28,11 @@ export function init() {
     
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'f' || e.key === 'F') {
-            if (!isFullscreen) {
-                enterFullscreen();
-            }
+        // Only trigger if not typing in an input/textarea
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+            return;
         }
+        
         if (e.key === 'Escape' && isFullscreen) {
             exitFullscreen();
         }
