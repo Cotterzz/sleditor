@@ -227,6 +227,12 @@ function updateFPSDisplay() {
     if (fpsEl) {
         fpsEl.textContent = state.fps;
     }
+    
+    // Update fullscreen display if in fullscreen
+    const fsFpsEl = document.getElementById('fsFps');
+    if (fsFpsEl) {
+        fsFpsEl.textContent = state.fps;
+    }
 }
 
 function updateCounterDisplays(frame, time) {
@@ -238,6 +244,17 @@ function updateCounterDisplays(frame, time) {
     }
     if (timeEl) {
         timeEl.textContent = time.toFixed(2) + 's';
+    }
+    
+    // Update fullscreen displays
+    const fsFrameEl = document.getElementById('fsFrame');
+    const fsTimeEl = document.getElementById('fsTime');
+    
+    if (fsFrameEl) {
+        fsFrameEl.textContent = frame;
+    }
+    if (fsTimeEl) {
+        fsTimeEl.textContent = time.toFixed(2) + 's';
     }
 }
 

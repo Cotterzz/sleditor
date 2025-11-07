@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>EDITOR</title>
     <link rel="stylesheet" href="css/app.css">
+    <link rel="stylesheet" href="css/fullscreen.css">
     <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
     <link rel="shortcut icon" href="/favicon/favicon.ico" />
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
@@ -184,6 +185,28 @@
             <div id="canvasContainer">
             <canvas id="canvasWebGPU" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block;"></canvas>
             <canvas id="canvasWebGL" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none;"></canvas>
+            
+            <!-- Fullscreen overlay controls (hidden by default, shown when fullscreen) -->
+            <div id="fullscreenControls" style="display: none;">
+                <button id="fsExitBtn" title="Exit fullscreen (Esc)">✕</button>
+                <button id="fsPlayPauseBtn" class="playing">⏸</button>
+                <button id="fsRestartBtn" title="Restart">⟳</button>
+                <button id="fsUniformsBtn" title="Uniform Controls">🎚️</button>
+                <div class="fs-slider-group">
+                    <span>🔊</span>
+                    <input type="range" id="fsVolumeSlider" min="0" max="100" value="50">
+                </div>
+                <div class="fs-slider-group">
+                    <span title="Pixel Scale">▦</span>
+                    <input type="range" id="fsPixelScaleSlider" min="0" max="10" value="5" step="1">
+                </div>
+                <div class="fs-stats">
+                    <span id="fsResolution">512×512×1</span>
+                    <span>FPS: <span id="fsFps">0</span></span>
+                    <span>Frame: <span id="fsFrame">0</span></span>
+                    <span>Time: <span id="fsTime">0.00s</span></span>
+                </div>
+            </div>
             </div>
             
             <!-- Horizontal divider for vertical canvas resizing -->
@@ -192,14 +215,17 @@
             </div>
             
             <div id="controls">
+                <!-- 2x2 Control Button Grid -->
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
-                <button id="playPauseBtn" class="playing">⏸</button>
-                <button id="restartBtn" title="Restart from beginning">⟳</button>
-            </div>
+                    <button id="playPauseBtn" class="playing" title="Play/Pause (Space)">⏸</button>
+                    <button id="restartBtn" title="Restart from beginning">⟳</button>
+                    <button id="fullscreenBtn" title="Enter fullscreen (F)">⛶</button>
+                    <button id="uniformControlsBtn" class="uiBtn" title="Uniform Controls">🎚️</button>
+                </div>
                 <div class="sliderContainer">
                     <input type="range" id="volumeSlider" class="verticalSlider" min="0" max="100" value="50" orient="vertical">
                     <div style="font-size: 16px;">🔊</div>
-            </div>
+                </div>
                 <div class="sliderContainer">
                     <input type="range" id="pixelScaleSlider" class="verticalSlider" min="0" max="5" value="0" step="1" orient="vertical">
                     <div id="renderModeIcon" style="font-size: 16px; cursor: pointer; user-select: none;" title="Click to cycle render modes">▦</div>
@@ -212,8 +238,6 @@
                 </div>
                 <!-- Spacer to push views/likes to the right -->
                 <div style="flex: 1;"></div>
-                <!-- Uniform Controls Button -->
-                <button id="uniformControlsBtn" class="uiBtn" title="Uniform Controls" style="font-size: 16px; padding: 4px 8px;">🎚️</button>
                 <!-- Views and Likes -->
                 <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-end; color: var(--text-secondary); font-size: 12px; padding-right: 5px;">
                     <div style="display: flex; align-items: center; gap: 4px;">

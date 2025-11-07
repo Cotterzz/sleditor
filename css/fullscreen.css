@@ -1,0 +1,115 @@
+/* ============================================================================
+   FULLSCREEN MODE
+   ============================================================================ */
+
+/* Fullscreen overlay controls */
+#fullscreenControls {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 10000;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* Show controls when fullscreen */
+#canvasContainer:fullscreen #fullscreenControls {
+    display: flex !important;
+}
+
+/* Hide controls on inactivity */
+#canvasContainer:fullscreen.hide-controls #fullscreenControls {
+    opacity: 0;
+    transform: translateY(100%);
+    pointer-events: none;
+}
+
+/* Fullscreen buttons */
+#fullscreenControls button {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+}
+
+#fullscreenControls button:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent-color);
+}
+
+#fullscreenControls button:active {
+    transform: scale(0.95);
+}
+
+/* Exit button styling */
+#fsExitBtn {
+    background: #d32f2f;
+    border-color: #b71c1c;
+    color: white;
+}
+
+#fsExitBtn:hover {
+    background: #f44336;
+}
+
+/* Fullscreen slider groups */
+.fs-slider-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-secondary);
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.fs-slider-group span {
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.fs-slider-group input[type="range"] {
+    width: 80px;
+}
+
+/* Fullscreen stats */
+.fs-stats {
+    display: flex;
+    gap: 12px;
+    margin-left: auto;
+    background: var(--bg-secondary);
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.fs-stats span {
+    white-space: nowrap;
+}
+
+/* Cursor hiding in fullscreen */
+#canvasContainer:fullscreen {
+    cursor: default;
+}
+
+#canvasContainer:fullscreen.hide-controls {
+    cursor: none;
+}
+
+/* Ensure uniform controls panel is accessible in fullscreen */
+#uniformControlsPanel {
+    z-index: 10001; /* Above fullscreen controls */
+}
+

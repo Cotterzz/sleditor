@@ -75,6 +75,20 @@ export function updatePlayPauseButton() {
         btn.classList.remove('playing');
         btn.classList.add('paused');
     }
+    
+    // Update fullscreen play/pause button
+    const fsBtn = document.getElementById('fsPlayPauseBtn');
+    if (fsBtn) {
+        if (state.isPlaying) {
+            fsBtn.textContent = '⏸';
+            fsBtn.classList.add('playing');
+            fsBtn.classList.remove('paused');
+        } else {
+            fsBtn.textContent = '▶';
+            fsBtn.classList.remove('playing');
+            fsBtn.classList.add('paused');
+        }
+    }
 }
 
 export function restart(userInitiated = false) {
@@ -543,6 +557,12 @@ export async function updateCanvasSize(width, height, recompile = true) {
     
     document.getElementById('resolutionDisplay').textContent = 
         `${renderWidth} × ${renderHeight} × ${state.pixelScale}`;
+    
+    // Update fullscreen resolution display
+    const fsResolutionEl = document.getElementById('fsResolution');
+    if (fsResolutionEl) {
+        fsResolutionEl.textContent = `${renderWidth}×${renderHeight}×${state.pixelScale}`;
+    }
     
     // Skip recompilation if editors aren't initialized yet (happens during startup)
     if (recompile && state.graphicsEditor) {
