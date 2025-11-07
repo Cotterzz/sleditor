@@ -46,6 +46,15 @@ struct Uniforms {
     custom12: f32,          // 19 - api.uniforms.setCustomFloat(12, ...)
     custom13: f32,          // 20 - api.uniforms.setCustomFloat(13, ...)
     custom14: f32,          // 21 - api.uniforms.setCustomFloat(14, ...)
+    
+    // Integer custom uniforms
+    customInt0: i32,        // 22 - api.uniforms.setCustomInt(0, ...)
+    customInt1: i32,        // 23 - api.uniforms.setCustomInt(1, ...)
+    customInt2: i32,        // 24 - api.uniforms.setCustomInt(2, ...)
+    
+    // Boolean custom uniforms (0 = false, 1 = true)
+    customBool0: i32,       // 25 - api.uniforms.setCustomBool(0, ...)
+    customBool1: i32,       // 26 - api.uniforms.setCustomBool(1, ...)
 }
 
 @binding(0) @group(0) var<uniform> uniforms: Uniforms;

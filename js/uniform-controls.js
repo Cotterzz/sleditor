@@ -216,12 +216,12 @@ function createIntSlider(index) {
     const maxInput = container.querySelector(`#uniformInt${index}Max`);
     minInput.onchange = () => {
         uniformSettings.ints[index].min = parseInt(minInput.value);
-        slider.min = minInput.value;
+        // Don't change slider.min - it stays 0-100, we scale in updateIntUniform
         updateIntUniform(index, slider);
     };
     maxInput.onchange = () => {
         uniformSettings.ints[index].max = parseInt(maxInput.value);
-        slider.max = maxInput.value;
+        // Don't change slider.max - it stays 0-100, we scale in updateIntUniform
         updateIntUniform(index, slider);
     };
     

@@ -136,6 +136,16 @@ export async function compile(fragmentSource) {
         for (let i = 0; i < 15; i++) {
             uniforms[`u_custom${i}`] = gl.getUniformLocation(program, `u_custom${i}`);
         }
+        
+        // Get custom int uniform locations (u_customInt0 through u_customInt2)
+        for (let i = 0; i < 3; i++) {
+            uniforms[`u_customInt${i}`] = gl.getUniformLocation(program, `u_customInt${i}`);
+        }
+        
+        // Get custom bool uniform locations (u_customBool0 through u_customBool1)
+        for (let i = 0; i < 2; i++) {
+            uniforms[`u_customBool${i}`] = gl.getUniformLocation(program, `u_customBool${i}`);
+        }
 
         // Update state
         state.glProgram = program;

@@ -44,7 +44,7 @@ uniform int u_customInt0;
 uniform int u_customInt1;
 uniform int u_customInt2;
 
-// Boolean custom uniforms (0 = false, 1 = true)
+// Boolean custom uniforms (0 = false, 1 = true in GLSL)
 uniform int u_customBool0;
 uniform int u_customBool1;
 
@@ -84,8 +84,8 @@ uniform float u_custom14;
 uniform int u_customInt0;
 uniform int u_customInt1;
 uniform int u_customInt2;
-uniform bool u_customBool0;
-uniform bool u_customBool1;
+uniform int u_customBool0;
+uniform int u_customBool1;
 
 // === Shadertoy Compatibility Layer ===
 #define iTime u_time
