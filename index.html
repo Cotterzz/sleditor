@@ -66,17 +66,16 @@
                                  bottom: 0;
                                  z-index: 10;">
         <!-- Top Bar -->
-        <div id="topBar" style="display: flex; align-items: center; 
-                             background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); 
-                             height: 30px; gap: 10px;">
+        <div id="topBar" class="flex-row gap-xl" style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); 
+                             height: 30px;">
             <!-- Logo + Title (Left) -->
-        <div style="display: flex; align-items: center; gap: 2px; padding-left: 2px;">
+        <div class="flex-row gap-xs pl-1">
             <img src="favicon/topbar.png" alt="SL" style="height: 20px; opacity: 0.9;padding-top: 1px;" />
-            <span style="font-weight: 600; font-size: 14px; color: var(--text-primary); letter-spacing: 0.5px;">EDITOR</span>
+            <span class="font-semibold text-md" style="color: var(--text-primary); letter-spacing: 0.5px;">EDITOR</span>
         </div>
         
         <!-- Action Buttons (Over Dev Section) -->
-        <div style="display: flex; align-items: center; gap: 6px; flex: 0 0 auto; margin-left: 15px;">
+        <div class="flex-row gap-md flex-0" style="margin-left: 15px;">
             <button id="addPassBtn" class="topbar-btn">
                 + Add Pass
             </button>
@@ -94,7 +93,7 @@
         </button>
         
         <!-- Social Links (Center) -->
-        <div style="flex: 1; display: flex; justify-content: center; gap: 8px;">
+        <div class="flex-1 flex-center gap-lg">
             <a href="https://discord.gg/embXuftRKx" target="_blank" rel="noopener noreferrer" 
                class="topbar-social-link topbar-discord">
                 <svg width="14" height="14" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -130,16 +129,16 @@
         </div>
         
         <!-- Auth Section (Right) -->
-        <div id="authSection" style="display: flex; align-items: center; padding-right: 2px;">
+        <div id="authSection" class="flex-row pr-1">
             <!-- Logged in (hidden by default) -->
-            <div id="userMenu" style="display: none; align-items: center; gap: 2px;">
-                <span id="username" style="color: var(--text-primary); font-size: 12px;"></span>
+            <div id="userMenu" class="flex-row gap-xs" style="display: none;">
+                <span id="username" class="text-sm" style="color: var(--text-primary);"></span>
                 <img id="userAvatar" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-color);" alt="User" />
-                <button id="signOutBtn" class="uiBtn" style="font-size: 12px; padding: 4px 10px; height: 24px; border-radius: 3px">Sign Out</button>
+                <button id="signOutBtn" class="uiBtn text-sm" style="padding: 4px 10px; height: 24px; border-radius: 3px">Sign Out</button>
             </div>
             
             <!-- Sign in button (default) -->
-            <button id="signInBtn" class="uiBtn" style="font-size: 12px; padding: 0px 4px; height: 24px; display: flex; align-items: center; gap: 0px; border-radius: 3px">
+            <button id="signInBtn" class="uiBtn text-sm flex-row" style="padding: 0px 4px; height: 24px; gap: 0px; border-radius: 3px">
                 <span>Sign In</span>
                 <span style="font-size: 16px;">👤</span>
             </button>
@@ -149,7 +148,7 @@
     <!-- Main Container (Content below top bar) -->
     <div id="container" style="height: calc(100% - 30px);">
         <div id="devPanel">
-<div id="editorTabs" style="display: flex; margin-bottom: 0px; gap: 5px; align-items: center;">
+<div id="editorTabs" class="flex-row gap-sm" style="margin-bottom: 0px;">
     <!-- Tabs will be dynamically added here -->
 </div>
 <div id="boilerplateContainer" class="editor-panel" style="display: none;">
@@ -163,8 +162,8 @@
 </div>
 <div id="helpContainer" class="editor-panel" style="display: none;">
 </div>
-            <div style="display: flex; align-items: center; gap: 1px;">
-                <div style="flex: 1;">
+            <div class="flex-row gap-xs">
+                <div class="flex-1">
                     <div id="errorDisplay" class="info"></div>
                 </div>
                 <button id="reloadBtn" class="uiBtn" title="Reload shaders (F5 / Ctrl+S)">⌬</button>
@@ -230,22 +229,22 @@
                     <input type="range" id="pixelScaleSlider" class="verticalSlider" min="0" max="5" value="0" step="1" orient="vertical">
                     <div id="renderModeIcon" style="font-size: 16px; cursor: pointer; user-select: none;" title="Click to cycle render modes">▦</div>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 3px; color: var(--text-secondary); font-size: 12px;">
+                <div class="flex-col gap-sm text-sm" style="color: var(--text-secondary);">
                     <div id="resolutionDisplay">512 × 512 × 1</div>
                     <div>FPS: <span id="fpsCounter">0</span></div>
                     <div>Frame: <span id="frameCounter">0</span></div>
                     <div>Time: <span id="timeCounter">0.00s</span></div>
                 </div>
                 <!-- Spacer to push views/likes to the right -->
-                <div style="flex: 1;"></div>
+                <div class="flex-1"></div>
                 <!-- Views and Likes -->
-                <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-end; color: var(--text-secondary); font-size: 12px; padding-right: 5px;">
-                    <div style="display: flex; align-items: center; gap: 4px;">
-                        <span style="font-size: 14px;">👁️</span>
+                <div class="flex-col gap-md text-sm pr-1" style="align-items: flex-end; color: var(--text-secondary);">
+                    <div class="flex-row gap-sm">
+                        <span class="text-md">👁️</span>
                         <span id="viewCount">0</span>
                     </div>
-                    <button id="likeButton" style="display: flex; align-items: center; gap: 4px; background: none; border: none; color: var(--text-secondary); font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 4px; transition: all 0.2s;" title="Like this shader">
-                        <span id="likeIcon" style="font-size: 14px;">🤍</span>
+                    <button id="likeButton" class="flex-row gap-sm text-sm" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px 6px; border-radius: 4px; transition: all 0.2s;" title="Like this shader">
+                        <span id="likeIcon" class="text-md">🤍</span>
                         <span id="likeText">Like</span>
                         <span id="likeCount">0</span>
                     </button>
@@ -293,7 +292,7 @@
         </div>
         
         <!-- Right Panel Container (acts as galleryPanel for divider) -->
-        <div id="galleryPanel" style="display: flex; flex-direction: column; overflow: hidden;">
+        <div id="galleryPanel" class="flex-col" style="overflow: hidden;">
             <!-- Top-level tabs: Comments / Gallery -->
             <div class="top-level-tabs-container">
                 <button id="topTabComments" class="top-level-tab" data-panel="comments">
@@ -305,12 +304,12 @@
             </div>
             
             <!-- Comments Panel (hidden by default) -->
-            <div id="commentsPanel" style="display: none; flex-direction: column; flex: 1; overflow: hidden;">
+            <div id="commentsPanel" class="flex-col flex-1" style="display: none; overflow: hidden;">
                 <!-- Comments will be populated here by comments.js -->
             </div>
             
             <!-- Gallery Section (visible by default) -->
-            <div id="gallerySection" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+            <div id="gallerySection" class="flex-col flex-1" style="overflow: hidden;">
                 <div id="galleryTabs" class="gallery-tabs-container">
                     <button class="gallery-tab active" data-tab="my">
                         <span id="myTabTitle">My Shaders</span>
@@ -325,7 +324,7 @@
                         <span id="examplesTabRefresh" class="gallery-refresh-btn" title="Refresh gallery">⟳</span>
                     </button>
                 </div>
-                <div id="galleryContent" style="flex: 1; overflow-y: auto;">
+                <div id="galleryContent" class="flex-1" style="overflow-y: auto;">
                 <!-- Gallery items will be populated here -->
                 </div>
             </div>
@@ -333,8 +332,8 @@
     </div>
 
     <!-- Sign In Modal -->
-    <div id="signInModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-                                 background: rgba(0,0,0,0.7); z-index: 10000; align-items: center; justify-content: center;">
+    <div id="signInModal" class="flex-center" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+                                 background: rgba(0,0,0,0.7); z-index: 10000;">
         <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; 
                     padding: 30px; max-width: 400px; width: 90%;">
             <h2 style="margin: 0 0 20px 0; color: var(--text-primary);">Sign In</h2>
@@ -344,7 +343,7 @@
                                          font-size: 14px; line-height: 1.4;"></div>
             
             <!-- OAuth Buttons -->
-            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+            <div class="flex-col gap-xl" style="margin-bottom: 20px;">
                 <button id="signInGitHub" class="uiBtn" style="padding: 10px; font-size: 14px;">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle; margin-right: 8px;">
                         <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>

@@ -20,6 +20,57 @@ body.light-mode {
     --shadow-color: #8888cc;
 }
 
+/* ============================================================================
+   UTILITY CLASSES
+   ============================================================================ */
+
+/* Flexbox utilities */
+.flex-row {
+    display: flex;
+    align-items: center;
+}
+
+.flex-col {
+    display: flex;
+    flex-direction: column;
+}
+
+.flex-center {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Gap utilities */
+.gap-xs { gap: 2px; }
+.gap-sm { gap: 4px; }
+.gap-md { gap: 6px; }
+.gap-lg { gap: 8px; }
+.gap-xl { gap: 12px; }
+
+/* Flex sizing */
+.flex-1 { flex: 1; }
+.flex-0 { flex: 0 0 auto; }
+
+/* Spacing utilities */
+.p-1 { padding: 4px; }
+.p-2 { padding: 8px; }
+.pl-1 { padding-left: 4px; }
+.pl-2 { padding-left: 8px; }
+.pr-1 { padding-right: 4px; }
+.pr-2 { padding-right: 8px; }
+.pt-1 { padding-top: 4px; }
+
+/* Text utilities */
+.text-xs { font-size: 11px; }
+.text-sm { font-size: 12px; }
+.text-md { font-size: 14px; }
+.font-semibold { font-weight: 600; }
+
+/* ============================================================================
+   GENERAL STYLES
+   ============================================================================ */
+
 /* Fix for mobile browsers - use 100% instead of 100vh */
 html, body {
     height: 100%;

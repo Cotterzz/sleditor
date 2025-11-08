@@ -329,13 +329,18 @@ export async function initMonaco(callback, initialCode, helpContent) {
 
 function setupKeyboardShortcuts() {
     const addShortcuts = (editor) => {
-        // These will be bound to global functions in index.html
+        // F5 = Reload/Recompile shader
         editor.addCommand(monaco.KeyCode.F5, () => {
             if (window.reloadShader) window.reloadShader();
         });
+        
+        // Ctrl+S = Save shader (click the save button)
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-            if (window.reloadShader) window.reloadShader();
+            const saveBtn = document.getElementById('saveShaderBtn');
+            if (saveBtn) saveBtn.click();
         });
+        
+        // Ctrl+Space = Play/Pause
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => {
             if (window.togglePlayPause) window.togglePlayPause();
         });
