@@ -13,9 +13,7 @@ const PROVIDERS = {
         hasFree: true,
         models: [
             { id: 'groq:llama-3.3-70b', name: 'Llama 3.3 70B', modelId: 'llama-3.3-70b-versatile', recommended: true },
-            { id: 'groq:llama-3.1-8b', name: 'Llama 3.1 8B (Fast)', modelId: 'llama-3.1-8b-instant' },
-            { id: 'groq:mixtral-8x7b', name: 'Mixtral 8x7B', modelId: 'mixtral-8x7b-32768' },
-            { id: 'groq:llama3-70b', name: 'Llama 3 70B', modelId: 'llama3-70b-8192' }
+            { id: 'groq:llama-3.1-8b', name: 'Llama 3.1 8B (Fast)', modelId: 'llama-3.1-8b-instant' }
         ]
     },
     'gemini': {

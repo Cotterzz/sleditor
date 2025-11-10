@@ -20,16 +20,6 @@ const MODELS = {
         provider: 'groq',
         modelId: 'llama-3.1-8b-instant'
     },
-    'groqm': {
-        name: 'Mixtral 8x7B',
-        provider: 'groq',
-        modelId: 'mixtral-8x7b-32768'
-    },
-    'groql': {
-        name: 'Llama 3 70B',
-        provider: 'groq',
-        modelId: 'llama3-70b-8192'
-    },
     'gemini': {
         name: 'Gemini 2.0 Flash',
         provider: 'gemini',
@@ -456,20 +446,23 @@ async function getDefaultModel() {
         
         if (error || !data) return null;
         
-        // Convert DB model ID to our model key (e.g., 'groq:llama-3.3-70b' -> 'groq')
-        const modelId = data.default_model;
-        if (!modelId) return null;
+        // DB stores IDs like 'groq:llama-3.3-70b'
+        // We need to map these to our model keys like 'groq', 'groqf', etc.
+        const dbModelId = data.default_model;
+        if (!dbModelId) return null;
         
-        // Find matching model key
-        for (const key in MODELS) {
-            const model = MODELS[key];
-            const fullId = `${model.provider}:${model.modelId.split('-')[0]}`;
-            if (modelId.startsWith(fullId) || modelId === key) {
-                return key;
-            }
-        }
+        // Manual mapping from DB IDs to model keys
+        const dbIdToModelKey = {
+            'groq:llama-3.3-70b': 'groq',
+            'groq:llama-3.1-8b': 'groqf',
+            'gemini:2.0-flash': 'gemini',
+            'cohere:command-r-plus-08-2024': 'cohere',
+            'cohere:command-r-08-2024': 'coheref',
+            'cohere:command-r7b-12-2024': 'coheresm',
+            'cohere:command-a-03-2025': 'coherea'
+        };
         
-        return null;
+        return dbIdToModelKey[dbModelId] || null;
     } catch (error) {
         console.error('Failed to get default model:', error);
         return null;
