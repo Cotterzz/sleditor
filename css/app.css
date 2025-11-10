@@ -943,7 +943,7 @@ canvas.render-smooth {
 
 .shader-description-display {
     font-size: 12px;
-    color: var(--text-secondary);
+    color: var(--text-primary);
     line-height: 1.4;
     margin-bottom: 10px;
 }

@@ -317,6 +317,9 @@ export async function initMonaco(callback, initialCode, helpContent) {
             // Setup keyboard shortcuts
             setupKeyboardShortcuts();
             
+            // Setup Golf mode character count updater
+            setupGolfCharCounter();
+            
             if (callback) callback();
             resolve();
         });
@@ -351,6 +354,20 @@ function setupKeyboardShortcuts() {
     addShortcuts(state.audioEditor);
     addShortcuts(state.jsEditor);
     addShortcuts(state.helpEditor);
+}
+
+// ============================================================================
+// Golf Mode Character Counter
+// ============================================================================
+
+function setupGolfCharCounter() {
+    // Listen to graphics editor changes (used by Golf mode)
+    state.graphicsEditor.onDidChangeModelContent(() => {
+        // Import tabs module dynamically to avoid circular dependency
+        import('./tabs.js').then(tabs => {
+            tabs.updateGolfCharCount();
+        });
+    });
 }
 
 // ============================================================================

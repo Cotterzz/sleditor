@@ -10,6 +10,27 @@ import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive } 
 // Tab Rendering
 // ============================================================================
 
+/**
+ * Count characters in code, excluding comments and trailing whitespace
+ * @param {string} code - The code to count
+ * @returns {number} - Character count excluding comments
+ */
+function countCodeChars(code) {
+    // Remove single-line comments (// ...) including the newline at the end
+    let withoutComments = code.replace(/\/\/.*?(\r?\n|$)/g, '');
+    
+    // Remove multi-line comments (/* ... */)
+    withoutComments = withoutComments.replace(/\/\*[\s\S]*?\*\//g, '');
+    
+    // Remove leading/trailing whitespace from the entire code
+    withoutComments = withoutComments.trim();
+    
+    // Remove multiple consecutive newlines (keep single newlines as they might be needed)
+    withoutComments = withoutComments.replace(/\n\n+/g, '\n');
+    
+    return withoutComments.length;
+}
+
 export function renderTabs() {
     const tabsContainer = document.getElementById('editorTabs');
     
@@ -20,7 +41,17 @@ export function renderTabs() {
     state.activeTabs.forEach(tabName => {
         const button = document.createElement('button');
         button.className = 'editorTab' + (state.currentTab === tabName ? ' active' : '');
-        button.textContent = `${getTabIcon(tabName)} ${getTabLabel(tabName)}`;
+        button.id = `tab-${tabName}`; // Add ID for later updates
+        
+        // For Golf mode, add character count
+        if (tabName === 'glsl_golf') {
+            const code = state.graphicsEditor?.getValue() || '';
+            const charCount = countCodeChars(code);
+            button.innerHTML = `${getTabIcon(tabName)} ${getTabLabel(tabName)} <strong>[${charCount}c]</strong>`;
+        } else {
+            button.textContent = `${getTabIcon(tabName)} ${getTabLabel(tabName)}`;
+        }
+        
         button.onclick = () => switchTab(tabName);
         
         // Add close button (graphics is still mandatory, can't be closed)
@@ -38,6 +69,29 @@ export function renderTabs() {
         
         tabsContainer.appendChild(button);
     });
+}
+
+/**
+ * Update Golf tab label with current character count
+ * Called on every editor change when in Golf mode
+ */
+export function updateGolfCharCount() {
+    if (state.currentTab !== 'glsl_golf') return;
+    
+    const button = document.getElementById('tab-glsl_golf');
+    if (!button) return;
+    
+    const code = state.graphicsEditor?.getValue() || '';
+    const charCount = countCodeChars(code);
+    
+    // Preserve the close button by only updating the text content
+    const closeBtn = button.querySelector('span');
+    button.innerHTML = `${getTabIcon('glsl_golf')} ${getTabLabel('glsl_golf')} <strong>[${charCount}c]</strong>`;
+    
+    // Re-append the close button if it existed
+    if (closeBtn) {
+        button.appendChild(closeBtn);
+    }
 }
 
 // ============================================================================
