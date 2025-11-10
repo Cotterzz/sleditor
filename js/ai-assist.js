@@ -503,8 +503,15 @@ export async function processAIRequest(code, editorId) {
         // No shortcut and no model - use default
         modelKey = await getDefaultModel();
         if (!modelKey) {
-            showAIModal('No default model set. Please configure in AI settings (⚡ button) or use #slai + shortcut.', true);
-            return true;
+            // No default set or default is invalid - fallback to first model (slai0)
+            const firstModelKey = Object.keys(MODELS)[0];
+            if (firstModelKey) {
+                console.warn('No default model set, falling back to:', firstModelKey);
+                modelKey = firstModelKey;
+            } else {
+                showAIModal('No models available. Please configure in AI settings (⚡ button).', true);
+                return true;
+            }
         }
     }
     
