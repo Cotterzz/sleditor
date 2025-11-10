@@ -16,6 +16,7 @@ import * as perfMonitor from './performance-monitor.js';
 import * as uniformControls from './uniform-controls.js';
 import * as fullscreen from './fullscreen.js';
 import * as vim from './vim.js';
+import * as aiAssistSettings from './ai-assist-settings.js';
 import { getBoilerplate, MINIMAL_JS, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF, MINIMAL_WGSL } from './examples.js';
 import { HELP_SECTIONS } from './help-sections.js';
 import * as tabConfig from './tab-config.js';
@@ -470,6 +471,7 @@ async function init() {
     
     // Initialize fullscreen mode
     fullscreen.init();
+    aiAssistSettings.init();
     
     // Add mini visualization to stats button
     const perfBtn = document.getElementById('perfMonitorBtn');

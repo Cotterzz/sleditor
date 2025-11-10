@@ -51,6 +51,11 @@ export function getBandwidthStats() {
     };
 }
 
+// Expose supabase client for Edge Function calls
+export function getSupabaseClient() {
+    return supabase;
+}
+
 export function init() {
     // Check if credentials are set
     if (SUPABASE_URL === 'YOUR_SUPABASE_URL_HERE') {

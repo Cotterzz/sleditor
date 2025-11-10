@@ -14,6 +14,7 @@ import * as editor from './editor.js';
 import * as jsRuntime from './js-runtime.js';
 import { getBoilerplate, MINIMAL_JS } from './examples.js';
 import { getBoilerplateForTab, getBoilerplateLineCount } from './glsl-boilerplate.js';
+import * as aiAssist from './ai-assist.js';
 
 // ============================================================================
 // GLSL Compilation Path
@@ -21,6 +22,18 @@ import { getBoilerplateForTab, getBoilerplateLineCount } from './glsl-boilerplat
 
 export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
     try {
+        // Get current editor code
+        const currentCode = state.graphicsEditor ? state.graphicsEditor.getValue() : '';
+        
+        // Check for AI assist request in all GLSL modes
+        if (state.currentTab.startsWith('glsl_')) {
+            const hasAIRequest = await aiAssist.processAIRequest(currentCode, state.currentTab);
+            if (hasAIRequest) {
+                // AI request was processed, don't compile
+                return false;
+            }
+        }
+        
         logStatus('Compiling GLSL...', 'info');
         editor.clearAllErrors();
         
