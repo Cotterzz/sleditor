@@ -10,11 +10,6 @@ const EDGE_FUNCTION_URL = 'https://vnsdnskppjwktvksxxvp.supabase.co/functions/v1
 
 // Model configurations (client-side only for UI/detection)
 const MODELS = {
-    'gemini': {
-        name: 'Gemini 2.0 Flash',
-        provider: 'gemini',
-        modelId: 'gemini-2.0-flash-exp'
-    },
     'groq': {
         name: 'Llama 3.3 70B (Recommended)',
         provider: 'groq',
@@ -34,6 +29,31 @@ const MODELS = {
         name: 'Llama 3 70B',
         provider: 'groq',
         modelId: 'llama3-70b-8192'
+    },
+    'gemini': {
+        name: 'Gemini 2.0 Flash',
+        provider: 'gemini',
+        modelId: 'gemini-2.0-flash-exp'
+    },
+    'cohere': {
+        name: 'Command R+ 08-2024',
+        provider: 'cohere',
+        modelId: 'command-r-plus-08-2024'
+    },
+    'coheref': {
+        name: 'Command R 08-2024',
+        provider: 'cohere',
+        modelId: 'command-r-08-2024'
+    },
+    'coheresm': {
+        name: 'Command R7B 12-2024',
+        provider: 'cohere',
+        modelId: 'command-r7b-12-2024'
+    },
+    'coherea': {
+        name: 'Command A 03-2025',
+        provider: 'cohere',
+        modelId: 'command-a-03-2025'
     }
 };
 
@@ -252,6 +272,15 @@ async function callAIEdgeFunction(provider, modelId, prompt) {
         if (data.data.choices && data.data.choices.length > 0) {
             return data.data.choices[0].message.content;
         }
+    } else if (provider === 'cohere') {
+        // Cohere v1 response format
+        if (data.data.text) {
+            return data.data.text;
+        }
+        // Fallback for other possible formats
+        if (data.data.message && data.data.message.content) {
+            return data.data.message.content[0]?.text || data.data.message.content;
+        }
     }
     
     throw new Error('Unexpected response format from AI provider');
@@ -362,7 +391,7 @@ function showAIModal(message, isError = false) {
     const spinnerEl = document.getElementById('aiModalSpinner');
     const closeBtn = document.getElementById('aiModalClose');
     
-    messageEl.textContent = message;
+    messageEl.innerHTML = message;
     messageEl.style.color = isError ? '#ff4444' : 'var(--text-primary)';
     
     if (isError) {
@@ -497,8 +526,9 @@ export async function processAIRequest(code, editorId) {
     const originalCode = code;
     
     try {
-        // Show loading modal with model name
-        showAIModal(`Asking ${modelConfig.name}...`);
+        // Show loading modal with provider and model name
+        const providerName = modelConfig.provider.charAt(0).toUpperCase() + modelConfig.provider.slice(1);
+        showAIModal(`Asking ${providerName}...<br><small style="font-size: 0.8em; opacity: 0.8;">${modelConfig.name}</small>`);
         
         // Build prompt with mode-specific context
         const prompt = buildPrompt(code, aiPrompt.prompt, editorId);

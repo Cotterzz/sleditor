@@ -162,7 +162,7 @@ serve(async (req) => {
         })
       });
       
-    } else if (provider === 'groq' || provider === 'openrouter' || provider === 'cohere') {
+    } else if (provider === 'groq' || provider === 'openrouter') {
       // OpenAI-compatible providers use Bearer auth
       apiResponse = await fetch(providerConfig.api_url, {
         method: 'POST',
@@ -182,6 +182,21 @@ serve(async (req) => {
           ],
           temperature: 0.7,
           max_tokens: 2000
+        })
+      });
+      
+    } else if (provider === 'cohere') {
+      // Cohere v1 Chat API format
+      apiResponse = await fetch(providerConfig.api_url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${decryptedKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: model || 'command-r-plus-08-2024', // Default to flagship model
+          message: prompt, // Cohere uses 'message' string, not 'messages' array
+          chat_history: [] // Required empty array for chat context
         })
       });
       

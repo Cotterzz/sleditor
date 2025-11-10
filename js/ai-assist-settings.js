@@ -25,6 +25,17 @@ const PROVIDERS = {
         models: [
             { id: 'gemini:2.0-flash', name: 'Gemini 2.0 Flash', modelId: 'gemini-2.0-flash-exp', recommended: true }
         ]
+    },
+    'cohere': {
+        name: 'Cohere',
+        description: 'Command models (Free tier available)',
+        hasFree: true,
+        models: [
+            { id: 'cohere:command-r-plus-08-2024', name: 'Command R+ 08-2024', modelId: 'command-r-plus-08-2024', recommended: true },
+            { id: 'cohere:command-r-08-2024', name: 'Command R 08-2024', modelId: 'command-r-08-2024' },
+            { id: 'cohere:command-r7b-12-2024', name: 'Command R7B 12-2024 (Small)', modelId: 'command-r7b-12-2024' },
+            { id: 'cohere:command-a-03-2025', name: 'Command A 03-2025 (Flagship)', modelId: 'command-a-03-2025' }
+        ]
     }
 };
 
@@ -249,7 +260,8 @@ function renderSettings() {
             <p style="margin: 0 0 15px 0; color: var(--text-secondary); font-size: 13px; line-height: 1.6;">
                 <strong>To obtain API keys, visit:</strong><br>
                 Groq: <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color: var(--accent-color);">https://console.groq.com/keys</a><br>
-                Gemini: <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener" style="color: var(--accent-color);">https://aistudio.google.com/api-keys</a>
+                Gemini: <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener" style="color: var(--accent-color);">https://aistudio.google.com/api-keys</a><br>
+                Cohere: <a href="https://dashboard.cohere.com/api-keys" target="_blank" rel="noopener" style="color: var(--accent-color);">https://dashboard.cohere.com/api-keys</a>
             </p>
     `;
     
