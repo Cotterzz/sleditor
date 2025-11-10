@@ -137,29 +137,42 @@ export async function signUpWithEmail(email, password, displayName) {
         return { success: false };
     }
     
-    const { data, error } = await supabase.auth.signUp({
-        email: email,
-        password: password,
-        options: {
-            emailRedirectTo: window.location.origin,
-            data: {
-                display_name: displayName  // Store display name in user metadata
+    try {
+        // Add 10 second timeout
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Signup timeout - server not responding')), 10000)
+        );
+        
+        const signupPromise = supabase.auth.signUp({
+            email: email,
+            password: password,
+            options: {
+                emailRedirectTo: window.location.origin,
+                data: {
+                    display_name: displayName  // Store display name in user metadata
+                }
             }
+        });
+        
+        const result = await Promise.race([signupPromise, timeoutPromise]);
+        const { data, error } = result;
+        
+        if (error) {
+            window.showAuthMessage?.(`Sign up failed: ${error.message}`, 'error');
+            return { success: false, error };
         }
-    });
-    
-    if (error) {
-        window.showAuthMessage?.(`Sign up failed: ${error.message}`, 'error');
+        
+        // Show prominent success message in modal
+        window.showAuthMessage?.(
+            '✓ Account created! Please check your email to confirm your account. ' +
+            'Check your spam folder if you don\'t see it.',
+            'success'
+        );
+        return { success: true };
+    } catch (error) {
+        window.showAuthMessage?.(`Sign up error: ${error.message}`, 'error');
         return { success: false, error };
     }
-    
-    // Show prominent success message in modal
-    window.showAuthMessage?.(
-        '✓ Account created! Please check your email to confirm your account. ' +
-        'Check your spam folder if you don\'t see it.',
-        'success'
-    );
-    return { success: true };
 }
 
 // Sign out

@@ -691,12 +691,11 @@ export function showAuthMessage(message, type = 'info') {
     
     if (authMessage && authMessageText) {
         authMessageText.textContent = message;
-        authMessage.className = `auth-message ${type}`;
         authMessage.style.display = 'block';
         
-        // Auto-hide success messages after 5 seconds
+        // Auto-hide success messages after 30 seconds
         if (type === 'success') {
-            setTimeout(hideAuthMessage, 5000);
+            setTimeout(hideAuthMessage, 30000);
         }
     }
 }

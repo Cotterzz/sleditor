@@ -265,7 +265,10 @@ function setupUI() {
         }
         
         const result = await backend.signUpWithEmail(email, password, displayName);
-        // Don't close modal on success - user needs to see the "check your email" message
+        
+        // Modal will stay open to show success/error message
+        // If there was an error, the message is already shown by backend.signUpWithEmail
+        console.log('Signup result:', result);
     });
     
     // Volume control
