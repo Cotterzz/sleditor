@@ -179,18 +179,10 @@ export const MINIMAL_GLSL_STOY = `void mainImage(out vec4 fragColor, in vec2 fra
     fragColor = vec4(col, 1.0);
 }`;
 
-export const MINIMAL_GLSL_GOLF = `//M = void main()
-//T is u_time (float)
-//U is gl_fragCoord (vec4)
-//R is u_resolution (vec2)
-//O is fragColor (vec4)
-//F is float
-//I is int
-//V2 is vec2
-//V3 is vec3
-//V4 is vec4
-//u_frame (int) and u_mouse (vec2) arent abbreviated yet.
-M{V2 u=U.xy/R;O=V4(u,sin(T),1.);}`;
+export const MINIMAL_GLSL_GOLF = `// Macros: M=main T=time R=resolution U=fragCoord O=fragColor F=float I=int
+// V2=vec2 V=vec3 V3=vec3 V4=vec4 D=dot S=sin C=cos H=tanh N=normalize L=length
+// A=abs X=mix Y=min Z=max M2=mat2 M3=mat3 M4=mat4 W=for J=ceil K=round P=floor Q=fract
+M{V2 u=U.xy/R;O=V4(u,S(T),1.);}`;
 
 export const MINIMAL_WGSL = `// Simple WGSL graphics shader
 @compute @workgroup_size(8, 8, 1)

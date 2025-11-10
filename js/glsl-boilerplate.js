@@ -148,9 +148,28 @@ uniform int u_customBool1;
 #define F float
 #define I int
 #define V2 vec2
+#define V vec3
 #define V3 vec3
 #define V4 vec4
 #define O fragColor
+#define D dot
+#define S sin
+#define C cos
+#define H tanh
+#define N normalize
+#define L length
+#define A abs
+#define X mix
+#define Y min
+#define Z max
+#define M2 mat2
+#define M3 mat3
+#define M4 mat4
+#define W for
+#define J ceil
+#define K round
+#define P floor
+#define Q fract
 
 // === Output ===
 out V4 O;
