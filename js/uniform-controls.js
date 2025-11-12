@@ -166,7 +166,7 @@ function createPanel() {
     const header = document.createElement('div');
     header.className = 'uniform-controls-header';
     header.style.cssText = `
-        padding: 8px 12px;
+        padding: 4px 6px;
         background: var(--bg-secondary);
         border-bottom: 1px solid var(--border-color);
         cursor: move;
@@ -176,8 +176,8 @@ function createPanel() {
         align-items: center;
     `;
     header.innerHTML = `
-        <span>🎚️ Uniform Controls</span>
-        <button id="uniformControlsClose" style="background: none; border: none; color: var(--text-primary); cursor: pointer; font-size: 16px; padding: 0;">✕</button>
+        <span style="font-size: 10px;">🎚️ Uniforms</span>
+        <button id="uniformControlsClose" style="background: none; border: none; color: var(--text-primary); cursor: pointer; font-size: 14px; padding: 0;">✕</button>
     `;
     panel.appendChild(header);
     
@@ -185,7 +185,7 @@ function createPanel() {
     const content = document.createElement('div');
     content.id = 'uniformControlsContent';
     content.style.cssText = `
-        padding: 12px;
+        padding: 6px;
         overflow-y: auto;
         flex: 1;
     `;
@@ -215,9 +215,9 @@ function rebuildPanel() {
         content.appendChild(sliderEl);
     });
     
-    // Add "Add Slider" buttons section
+    // Add buttons section - all on one line
     const addSection = document.createElement('div');
-    addSection.style.cssText = 'margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);';
+    addSection.style.cssText = 'margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border-color); display: flex; gap: 3px; justify-content: space-between;';
     
     // Count how many of each type we have
     const floatCount = activeSliders.filter(s => s.type === 'float').length;
@@ -227,9 +227,9 @@ function rebuildPanel() {
     // Add Float button
     if (floatCount < 15) {
         const addFloatBtn = document.createElement('button');
-        addFloatBtn.textContent = `+ Add Float (${floatCount}/15)`;
+        addFloatBtn.textContent = `+Float(${floatCount}/15)`;
         addFloatBtn.className = 'uiBtn';
-        addFloatBtn.style.cssText = 'width: 100%; padding: 6px; margin-bottom: 6px;';
+        addFloatBtn.style.cssText = 'flex: 1; padding: 2px 3px; font-size: 9px;';
         addFloatBtn.onclick = () => addSlider('float');
         addSection.appendChild(addFloatBtn);
     }
@@ -237,9 +237,9 @@ function rebuildPanel() {
     // Add Int button
     if (intCount < 3) {
         const addIntBtn = document.createElement('button');
-        addIntBtn.textContent = `+ Add Int (${intCount}/3)`;
+        addIntBtn.textContent = `+Int(${intCount}/3)`;
         addIntBtn.className = 'uiBtn';
-        addIntBtn.style.cssText = 'width: 100%; padding: 6px; margin-bottom: 6px;';
+        addIntBtn.style.cssText = 'flex: 1; padding: 2px 3px; font-size: 9px;';
         addIntBtn.onclick = () => addSlider('int');
         addSection.appendChild(addIntBtn);
     }
@@ -247,22 +247,16 @@ function rebuildPanel() {
     // Add Bool button
     if (boolCount < 2) {
         const addBoolBtn = document.createElement('button');
-        addBoolBtn.textContent = `+ Add Bool (${boolCount}/2)`;
+        addBoolBtn.textContent = `+Bool(${boolCount}/2)`;
         addBoolBtn.className = 'uiBtn';
-        addBoolBtn.style.cssText = 'width: 100%; padding: 6px; margin-bottom: 6px;';
+        addBoolBtn.style.cssText = 'flex: 1; padding: 2px 3px; font-size: 9px;';
         addBoolBtn.onclick = () => addSlider('bool');
         addSection.appendChild(addBoolBtn);
     }
     
-    content.appendChild(addSection);
-    
-    // Reset All button
-    const resetBtn = document.createElement('button');
-    resetBtn.textContent = 'Reset Values';
-    resetBtn.className = 'uiBtn';
-    resetBtn.style.cssText = 'width: 100%; padding: 6px; margin-top: 6px;';
-    resetBtn.onclick = resetAllValues;
-    content.appendChild(resetBtn);
+    if (addSection.children.length > 0) {
+        content.appendChild(addSection);
+    }
 }
 
 /**
@@ -316,7 +310,7 @@ function removeSlider(listIndex) {
  */
 function createSlider(sliderConfig, listIndex) {
     const container = document.createElement('div');
-    container.style.cssText = 'margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);';
+    container.style.cssText = 'margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--border-color);';
     
     if (sliderConfig.type === 'bool') {
         return createBoolSlider(sliderConfig, listIndex, container);
@@ -331,67 +325,73 @@ function createSlider(sliderConfig, listIndex) {
  * Create a float slider
  */
 function createFloatSlider(sliderConfig, listIndex, container) {
-    // Title input and remove button
-    const titleRow = document.createElement('div');
-    titleRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 4px; align-items: center;';
+    // Line 1: Title, Value, Uniform Name, Remove
+    const topRow = document.createElement('div');
+    topRow.style.cssText = 'display: flex; gap: 3px; margin-bottom: 2px; align-items: center;';
     
     const titleInput = document.createElement('input');
     titleInput.type = 'text';
     titleInput.value = sliderConfig.title;
-    titleInput.placeholder = 'Slider title';
-    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; font-size: 11px; border-radius: 2px;';
+    titleInput.placeholder = 'Title';
+    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px 3px; font-size: 9px; border-radius: 2px; min-width: 0;';
     titleInput.oninput = () => {
         sliderConfig.title = titleInput.value;
     };
     
+    const valueSpan = document.createElement('span');
+    valueSpan.id = `uniformValue_${listIndex}`;
+    valueSpan.style.cssText = 'color: var(--accent-color); font-size: 9px; font-weight: bold; min-width: 35px; text-align: right;';
+    valueSpan.textContent = sliderConfig.value.toFixed(3);
+    
+    const uniformSpan = document.createElement('span');
+    uniformSpan.style.cssText = 'color: var(--text-secondary); font-size: 8px; min-width: 45px;';
+    uniformSpan.textContent = `u_custom${sliderConfig.index}`;
+    
     const removeBtn = document.createElement('button');
     removeBtn.textContent = '✕';
-    removeBtn.title = 'Remove slider';
-    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 2px 6px; border-radius: 2px; font-size: 12px;';
+    removeBtn.title = 'Remove';
+    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 1px 4px; border-radius: 2px; font-size: 10px;';
     removeBtn.onclick = () => removeSlider(listIndex);
     
-    titleRow.appendChild(titleInput);
-    titleRow.appendChild(removeBtn);
-    container.appendChild(titleRow);
+    topRow.appendChild(titleInput);
+    topRow.appendChild(valueSpan);
+    topRow.appendChild(uniformSpan);
+    topRow.appendChild(removeBtn);
+    container.appendChild(topRow);
     
-    // Uniform name and value display
-    const valueRow = document.createElement('div');
-    valueRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 10px;';
-    valueRow.innerHTML = `
-        <span style="color: var(--text-secondary);">u_custom${sliderConfig.index}</span>
-        <span id="uniformValue_${listIndex}" style="color: var(--accent-color); font-weight: bold;">${sliderConfig.value.toFixed(3)}</span>
-    `;
-    container.appendChild(valueRow);
+    // Line 2: Min, Slider, Max
+    const sliderRow = document.createElement('div');
+    sliderRow.style.cssText = 'display: flex; gap: 3px; align-items: center;';
     
-    // Min/Max inputs
-    const rangeRow = document.createElement('div');
-    rangeRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 4px; font-size: 10px;';
-    rangeRow.innerHTML = `
-        <label style="color: var(--text-secondary);">min: <input type="number" id="uniformMin_${listIndex}" value="${sliderConfig.min}" step="0.1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
-        <label style="color: var(--text-secondary);">max: <input type="number" id="uniformMax_${listIndex}" value="${sliderConfig.max}" step="0.1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
-    `;
-    container.appendChild(rangeRow);
+    const minInput = document.createElement('input');
+    minInput.type = 'number';
+    minInput.id = `uniformMin_${listIndex}`;
+    minInput.value = sliderConfig.min;
+    minInput.step = '0.1';
+    minInput.style.cssText = 'width: 38px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 1px 2px; font-size: 9px; border-radius: 2px;';
     
-    // Slider
     const slider = document.createElement('input');
     slider.type = 'range';
     slider.min = '0';
     slider.max = '1000';
     const t = (sliderConfig.value - sliderConfig.min) / (sliderConfig.max - sliderConfig.min);
     slider.value = Math.round(t * 1000).toString();
-    slider.style.cssText = 'width: 100%;';
+    slider.style.cssText = 'flex: 1;';
     slider.oninput = () => {
         const t = parseFloat(slider.value) / 1000;
         const value = sliderConfig.min + t * (sliderConfig.max - sliderConfig.min);
         sliderConfig.value = value;
-        document.getElementById(`uniformValue_${listIndex}`).textContent = value.toFixed(3);
+        valueSpan.textContent = value.toFixed(3);
         applyFloatUniform(sliderConfig.index, value);
     };
-    container.appendChild(slider);
     
-    // Update range inputs
-    const minInput = container.querySelector(`#uniformMin_${listIndex}`);
-    const maxInput = container.querySelector(`#uniformMax_${listIndex}`);
+    const maxInput = document.createElement('input');
+    maxInput.type = 'number';
+    maxInput.id = `uniformMax_${listIndex}`;
+    maxInput.value = sliderConfig.max;
+    maxInput.step = '0.1';
+    maxInput.style.cssText = 'width: 38px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 1px 2px; font-size: 9px; border-radius: 2px;';
+    
     minInput.onchange = () => {
         sliderConfig.min = parseFloat(minInput.value);
         slider.oninput(); // Recalculate value
@@ -401,6 +401,11 @@ function createFloatSlider(sliderConfig, listIndex, container) {
         slider.oninput(); // Recalculate value
     };
     
+    sliderRow.appendChild(minInput);
+    sliderRow.appendChild(slider);
+    sliderRow.appendChild(maxInput);
+    container.appendChild(sliderRow);
+    
     return container;
 }
 
@@ -408,48 +413,51 @@ function createFloatSlider(sliderConfig, listIndex, container) {
  * Create an int slider
  */
 function createIntSlider(sliderConfig, listIndex, container) {
-    // Title input and remove button
-    const titleRow = document.createElement('div');
-    titleRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 4px; align-items: center;';
+    // Line 1: Title, Value, Uniform Name, Remove
+    const topRow = document.createElement('div');
+    topRow.style.cssText = 'display: flex; gap: 3px; margin-bottom: 2px; align-items: center;';
     
     const titleInput = document.createElement('input');
     titleInput.type = 'text';
     titleInput.value = sliderConfig.title;
-    titleInput.placeholder = 'Slider title';
-    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; font-size: 11px; border-radius: 2px;';
+    titleInput.placeholder = 'Title';
+    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px 3px; font-size: 9px; border-radius: 2px; min-width: 0;';
     titleInput.oninput = () => {
         sliderConfig.title = titleInput.value;
     };
     
+    const valueSpan = document.createElement('span');
+    valueSpan.id = `uniformValue_${listIndex}`;
+    valueSpan.style.cssText = 'color: var(--accent-color); font-size: 9px; font-weight: bold; min-width: 35px; text-align: right;';
+    valueSpan.textContent = sliderConfig.value.toString();
+    
+    const uniformSpan = document.createElement('span');
+    uniformSpan.style.cssText = 'color: var(--text-secondary); font-size: 8px; min-width: 45px;';
+    uniformSpan.textContent = `u_customInt${sliderConfig.index}`;
+    
     const removeBtn = document.createElement('button');
     removeBtn.textContent = '✕';
-    removeBtn.title = 'Remove slider';
-    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 2px 6px; border-radius: 2px; font-size: 12px;';
+    removeBtn.title = 'Remove';
+    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 1px 4px; border-radius: 2px; font-size: 10px;';
     removeBtn.onclick = () => removeSlider(listIndex);
     
-    titleRow.appendChild(titleInput);
-    titleRow.appendChild(removeBtn);
-    container.appendChild(titleRow);
+    topRow.appendChild(titleInput);
+    topRow.appendChild(valueSpan);
+    topRow.appendChild(uniformSpan);
+    topRow.appendChild(removeBtn);
+    container.appendChild(topRow);
     
-    // Uniform name and value display
-    const valueRow = document.createElement('div');
-    valueRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 10px;';
-    valueRow.innerHTML = `
-        <span style="color: var(--text-secondary);">u_customInt${sliderConfig.index}</span>
-        <span id="uniformValue_${listIndex}" style="color: var(--accent-color); font-weight: bold;">${sliderConfig.value}</span>
-    `;
-    container.appendChild(valueRow);
+    // Line 2: Min, Slider, Max
+    const sliderRow = document.createElement('div');
+    sliderRow.style.cssText = 'display: flex; gap: 3px; align-items: center;';
     
-    // Min/Max inputs
-    const rangeRow = document.createElement('div');
-    rangeRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 4px; font-size: 10px;';
-    rangeRow.innerHTML = `
-        <label style="color: var(--text-secondary);">min: <input type="number" id="uniformMin_${listIndex}" value="${sliderConfig.min}" step="1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
-        <label style="color: var(--text-secondary);">max: <input type="number" id="uniformMax_${listIndex}" value="${sliderConfig.max}" step="1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
-    `;
-    container.appendChild(rangeRow);
+    const minInput = document.createElement('input');
+    minInput.type = 'number';
+    minInput.id = `uniformMin_${listIndex}`;
+    minInput.value = sliderConfig.min;
+    minInput.step = '1';
+    minInput.style.cssText = 'width: 38px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 1px 2px; font-size: 9px; border-radius: 2px;';
     
-    // Slider
     const slider = document.createElement('input');
     slider.type = 'range';
     slider.min = '0';
@@ -457,19 +465,22 @@ function createIntSlider(sliderConfig, listIndex, container) {
     const t = (sliderConfig.value - sliderConfig.min) / (sliderConfig.max - sliderConfig.min);
     slider.value = Math.round(t * 100).toString();
     slider.step = '1';
-    slider.style.cssText = 'width: 100%;';
+    slider.style.cssText = 'flex: 1;';
     slider.oninput = () => {
         const t = parseFloat(slider.value) / 100;
         const value = Math.round(sliderConfig.min + t * (sliderConfig.max - sliderConfig.min));
         sliderConfig.value = value;
-        document.getElementById(`uniformValue_${listIndex}`).textContent = value;
+        valueSpan.textContent = value.toString();
         applyIntUniform(sliderConfig.index, value);
     };
-    container.appendChild(slider);
     
-    // Update range inputs
-    const minInput = container.querySelector(`#uniformMin_${listIndex}`);
-    const maxInput = container.querySelector(`#uniformMax_${listIndex}`);
+    const maxInput = document.createElement('input');
+    maxInput.type = 'number';
+    maxInput.id = `uniformMax_${listIndex}`;
+    maxInput.value = sliderConfig.max;
+    maxInput.step = '1';
+    maxInput.style.cssText = 'width: 38px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 1px 2px; font-size: 9px; border-radius: 2px;';
+    
     minInput.onchange = () => {
         sliderConfig.min = parseInt(minInput.value);
         slider.oninput(); // Recalculate value
@@ -479,6 +490,11 @@ function createIntSlider(sliderConfig, listIndex, container) {
         slider.oninput(); // Recalculate value
     };
     
+    sliderRow.appendChild(minInput);
+    sliderRow.appendChild(slider);
+    sliderRow.appendChild(maxInput);
+    container.appendChild(sliderRow);
+    
     return container;
 }
 
@@ -486,48 +502,43 @@ function createIntSlider(sliderConfig, listIndex, container) {
  * Create a bool checkbox
  */
 function createBoolSlider(sliderConfig, listIndex, container) {
-    // Title input and remove button
-    const titleRow = document.createElement('div');
-    titleRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 4px; align-items: center;';
+    // Line 1: Title, Checkbox, Uniform Name, Remove
+    const row = document.createElement('div');
+    row.style.cssText = 'display: flex; gap: 3px; align-items: center;';
     
     const titleInput = document.createElement('input');
     titleInput.type = 'text';
     titleInput.value = sliderConfig.title;
-    titleInput.placeholder = 'Checkbox title';
-    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; font-size: 11px; border-radius: 2px;';
+    titleInput.placeholder = 'Title';
+    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px 3px; font-size: 9px; border-radius: 2px; min-width: 0;';
     titleInput.oninput = () => {
         sliderConfig.title = titleInput.value;
     };
     
-    const removeBtn = document.createElement('button');
-    removeBtn.textContent = '✕';
-    removeBtn.title = 'Remove checkbox';
-    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 2px 6px; border-radius: 2px; font-size: 12px;';
-    removeBtn.onclick = () => removeSlider(listIndex);
-    
-    titleRow.appendChild(titleInput);
-    titleRow.appendChild(removeBtn);
-    container.appendChild(titleRow);
-    
-    // Checkbox and uniform name
-    const checkboxRow = document.createElement('div');
-    checkboxRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-top: 4px;';
-    
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = sliderConfig.value;
+    checkbox.style.cssText = 'margin: 0;';
     checkbox.onchange = () => {
         sliderConfig.value = checkbox.checked;
         applyBoolUniform(sliderConfig.index, checkbox.checked);
     };
     
-    const label = document.createElement('span');
-    label.style.cssText = 'color: var(--text-secondary); font-size: 10px;';
-    label.textContent = `u_customBool${sliderConfig.index}`;
+    const uniformSpan = document.createElement('span');
+    uniformSpan.style.cssText = 'color: var(--text-secondary); font-size: 8px; min-width: 55px;';
+    uniformSpan.textContent = `u_customBool${sliderConfig.index}`;
     
-    checkboxRow.appendChild(checkbox);
-    checkboxRow.appendChild(label);
-    container.appendChild(checkboxRow);
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove';
+    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 1px 4px; border-radius: 2px; font-size: 10px;';
+    removeBtn.onclick = () => removeSlider(listIndex);
+    
+    row.appendChild(titleInput);
+    row.appendChild(checkbox);
+    row.appendChild(uniformSpan);
+    row.appendChild(removeBtn);
+    container.appendChild(row);
     
     return container;
 }
