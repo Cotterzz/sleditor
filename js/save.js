@@ -6,6 +6,7 @@ import { state, logStatus } from './core.js';
 import * as backend from './backend.js';
 import * as tabs from './tabs.js';
 import { getTabIcon, getTabLabel, dbKeyToTabName, getEditorForTab } from './tab-config.js';
+import * as uniformControls from './uniform-controls.js';
 
 // ============================================================================
 // Thumbnail Capture
@@ -534,6 +535,15 @@ export function loadDatabaseShader(shader) {
     const firstTab = state.activeTabs[0];
     if (firstTab) {
         tabs.switchTab(firstTab);
+    }
+    
+    // Load uniform controls configuration if present
+    if (shader.uniform_config) {
+        console.log('Loading uniform configuration:', shader.uniform_config);
+        uniformControls.loadUniformConfig(shader.uniform_config);
+    } else {
+        // No uniform config - load default (1 float slider, hidden)
+        uniformControls.loadUniformConfig(null);
     }
     
     // Recompile

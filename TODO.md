@@ -2,19 +2,15 @@
 
 ## CURRENT ISSUES/WORK
 
-AI integration
+improve uniform sliders
+
+AI:
 ai insert
 ai chat
-edge server function(s)
-move api keys to backend
-move api key to user account
 huggingface
-cohere
-JS integration
-wgsl integration
-audioworklet integration
+JS, wgsl, audioworklet
 
-New logo
+finish New logo
 
 CSS refactoring
 

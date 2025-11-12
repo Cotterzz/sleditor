@@ -12,6 +12,7 @@
 import { state, logStatus } from './core.js';
 import * as tabs from './tabs.js';
 import * as backend from './backend.js';
+import * as uniformControls from './uniform-controls.js';
 
 // Expose for index.html to use
 window.shaderManagement = {
@@ -446,6 +447,9 @@ export async function saveOwnedShader() {
         }
     });
     
+    // Collect uniform controls configuration
+    shaderData.uniform_config = uniformControls.getUniformConfig();
+    
     // Capture and upload thumbnail
     try {
         const blob = await backend.captureThumbnailBlob();
@@ -524,6 +528,9 @@ export async function saveShaderInline() {
             shaderData.code[tabConfig.dbKey] = editor.getValue();
         }
     });
+    
+    // Collect uniform controls configuration
+    shaderData.uniform_config = uniformControls.getUniformConfig();
     
     // Capture and upload thumbnail
     try {

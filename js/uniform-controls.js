@@ -10,11 +10,16 @@ let dragOffsetX = 0;
 let dragOffsetY = 0;
 let isVisible = false;
 
-// Uniform settings (min/max ranges, default to 0-1 for floats)
-const uniformSettings = {
-    floats: Array(15).fill().map(() => ({ min: 0, max: 1, value: 0 })),
-    ints: Array(3).fill().map(() => ({ min: 0, max: 100, value: 0 })),
-    bools: Array(2).fill().map(() => ({ value: false }))
+// Active sliders configuration
+let activeSliders = [];
+
+// Default starting configuration (1 float slider)
+const defaultConfig = {
+    sliders: [
+        { type: 'float', index: 0, min: 0, max: 1, value: 0, title: 'Custom 0' }
+    ],
+    panelVisible: false,
+    panelPosition: { x: 80, y: 10 } // percentage
 };
 
 /**
@@ -23,16 +28,115 @@ const uniformSettings = {
 export function init() {
     createPanel();
     setupDragListeners();
+    loadUniformConfig(defaultConfig);
+}
+
+/**
+ * Show panel
+ */
+export function show() {
+    if (!panel) init();
+    isVisible = true;
+    panel.style.display = 'flex';
+}
+
+/**
+ * Hide panel
+ */
+export function hide() {
+    if (!panel) init();
+    isVisible = false;
+    panel.style.display = 'none';
 }
 
 /**
  * Toggle panel visibility
  */
 export function toggle() {
+    if (isVisible) {
+        hide();
+    } else {
+        show();
+    }
+}
+
+/**
+ * Set panel position using percentages
+ * @param {number} xPercent - X position as percentage (0-100)
+ * @param {number} yPercent - Y position as percentage (0-100)
+ */
+export function setPanelPosition(xPercent, yPercent) {
     if (!panel) init();
+    panel.style.left = `${xPercent}%`;
+    panel.style.top = `${yPercent}%`;
+    panel.style.right = 'auto';
+}
+
+/**
+ * Get current panel position as percentages
+ * @returns {Object} { x: xPercent, y: yPercent }
+ */
+function getPanelPosition() {
+    if (!panel) return { x: 80, y: 10 };
     
-    isVisible = !isVisible;
-    panel.style.display = isVisible ? 'flex' : 'none';
+    const rect = panel.getBoundingClientRect();
+    const xPercent = (rect.left / window.innerWidth) * 100;
+    const yPercent = (rect.top / window.innerHeight) * 100;
+    
+    return { 
+        x: Math.max(0, Math.min(100, xPercent)), 
+        y: Math.max(0, Math.min(100, yPercent))
+    };
+}
+
+/**
+ * Get current uniform configuration for saving
+ * @returns {Object} Configuration object with sliders, panelVisible, panelPosition
+ */
+export function getUniformConfig() {
+    return {
+        sliders: activeSliders.map(slider => ({
+            type: slider.type,
+            index: slider.index,
+            min: slider.min,
+            max: slider.max,
+            value: slider.value,
+            title: slider.title
+        })),
+        panelVisible: isVisible,
+        panelPosition: getPanelPosition()
+    };
+}
+
+/**
+ * Load uniform configuration (from database)
+ * @param {Object} config - Configuration object
+ */
+export function loadUniformConfig(config) {
+    if (!config || !config.sliders) {
+        config = defaultConfig;
+    }
+    
+    // Reset active sliders
+    activeSliders = config.sliders.map(s => ({ ...s }));
+    
+    // Rebuild the panel content
+    rebuildPanel();
+    
+    // Apply values to uniform buffer
+    applyAllUniformValues();
+    
+    // Set panel position
+    if (config.panelPosition) {
+        setPanelPosition(config.panelPosition.x, config.panelPosition.y);
+    }
+    
+    // Set visibility
+    if (config.panelVisible) {
+        show();
+    } else {
+        hide();
+    }
 }
 
 /**
@@ -43,8 +147,8 @@ function createPanel() {
     panel.id = 'uniformControlsPanel';
     panel.style.cssText = `
         position: fixed;
-        top: 100px;
-        right: 20px;
+        top: 10%;
+        left: 80%;
         width: 400px;
         max-height: 80vh;
         background: var(--bg-primary);
@@ -86,37 +190,6 @@ function createPanel() {
         flex: 1;
     `;
     
-    // Float sliders
-    for (let i = 0; i < 15; i++) {
-        content.appendChild(createFloatSlider(i));
-    }
-    
-    // Int sliders
-    for (let i = 0; i < 3; i++) {
-        content.appendChild(createIntSlider(i));
-    }
-    
-    // Bool checkboxes
-    for (let i = 0; i < 2; i++) {
-        content.appendChild(createBoolCheckbox(i));
-    }
-    
-    // Reset button
-    const resetBtn = document.createElement('button');
-    resetBtn.textContent = 'Reset All';
-    resetBtn.style.cssText = `
-        width: 100%;
-        padding: 6px;
-        margin-top: 8px;
-        background: var(--bg-secondary);
-        border: 1px solid var(--border-color);
-        color: var(--text-primary);
-        border-radius: 3px;
-        cursor: pointer;
-    `;
-    resetBtn.onclick = resetAll;
-    content.appendChild(resetBtn);
-    
     panel.appendChild(content);
     document.body.appendChild(panel);
     
@@ -128,206 +201,397 @@ function createPanel() {
 }
 
 /**
- * Create a float slider control
+ * Rebuild panel content with current active sliders
  */
-function createFloatSlider(index) {
+function rebuildPanel() {
+    const content = document.getElementById('uniformControlsContent');
+    if (!content) return;
+    
+    content.innerHTML = '';
+    
+    // Render each active slider
+    activeSliders.forEach((slider, listIndex) => {
+        const sliderEl = createSlider(slider, listIndex);
+        content.appendChild(sliderEl);
+    });
+    
+    // Add "Add Slider" buttons section
+    const addSection = document.createElement('div');
+    addSection.style.cssText = 'margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);';
+    
+    // Count how many of each type we have
+    const floatCount = activeSliders.filter(s => s.type === 'float').length;
+    const intCount = activeSliders.filter(s => s.type === 'int').length;
+    const boolCount = activeSliders.filter(s => s.type === 'bool').length;
+    
+    // Add Float button
+    if (floatCount < 15) {
+        const addFloatBtn = document.createElement('button');
+        addFloatBtn.textContent = `+ Add Float (${floatCount}/15)`;
+        addFloatBtn.className = 'uiBtn';
+        addFloatBtn.style.cssText = 'width: 100%; padding: 6px; margin-bottom: 6px;';
+        addFloatBtn.onclick = () => addSlider('float');
+        addSection.appendChild(addFloatBtn);
+    }
+    
+    // Add Int button
+    if (intCount < 3) {
+        const addIntBtn = document.createElement('button');
+        addIntBtn.textContent = `+ Add Int (${intCount}/3)`;
+        addIntBtn.className = 'uiBtn';
+        addIntBtn.style.cssText = 'width: 100%; padding: 6px; margin-bottom: 6px;';
+        addIntBtn.onclick = () => addSlider('int');
+        addSection.appendChild(addIntBtn);
+    }
+    
+    // Add Bool button
+    if (boolCount < 2) {
+        const addBoolBtn = document.createElement('button');
+        addBoolBtn.textContent = `+ Add Bool (${boolCount}/2)`;
+        addBoolBtn.className = 'uiBtn';
+        addBoolBtn.style.cssText = 'width: 100%; padding: 6px; margin-bottom: 6px;';
+        addBoolBtn.onclick = () => addSlider('bool');
+        addSection.appendChild(addBoolBtn);
+    }
+    
+    content.appendChild(addSection);
+    
+    // Reset All button
+    const resetBtn = document.createElement('button');
+    resetBtn.textContent = 'Reset Values';
+    resetBtn.className = 'uiBtn';
+    resetBtn.style.cssText = 'width: 100%; padding: 6px; margin-top: 6px;';
+    resetBtn.onclick = resetAllValues;
+    content.appendChild(resetBtn);
+}
+
+/**
+ * Add a new slider of the specified type
+ */
+function addSlider(type) {
+    // Find next available index for this type
+    const existingIndices = activeSliders
+        .filter(s => s.type === type)
+        .map(s => s.index);
+    
+    let nextIndex = 0;
+    const maxIndex = type === 'float' ? 15 : type === 'int' ? 3 : 2;
+    
+    for (let i = 0; i < maxIndex; i++) {
+        if (!existingIndices.includes(i)) {
+            nextIndex = i;
+            break;
+        }
+    }
+    
+    // Create new slider config
+    const newSlider = {
+        type,
+        index: nextIndex,
+        min: type === 'float' ? 0 : type === 'int' ? 0 : undefined,
+        max: type === 'float' ? 1 : type === 'int' ? 100 : undefined,
+        value: type === 'float' ? 0 : type === 'int' ? 0 : false,
+        title: type === 'bool' ? `Bool ${nextIndex}` : `Custom ${nextIndex}`
+    };
+    
+    activeSliders.push(newSlider);
+    rebuildPanel();
+}
+
+/**
+ * Remove a slider
+ */
+function removeSlider(listIndex) {
+    if (activeSliders.length <= 1) {
+        alert('You must have at least one slider');
+        return;
+    }
+    
+    activeSliders.splice(listIndex, 1);
+    rebuildPanel();
+}
+
+/**
+ * Create a slider element
+ */
+function createSlider(sliderConfig, listIndex) {
     const container = document.createElement('div');
     container.style.cssText = 'margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);';
     
-    // Label and value display
-    const topRow = document.createElement('div');
-    topRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;';
-    topRow.innerHTML = `
-        <span style="color: var(--text-primary); font-weight: bold;">u_custom${index}</span>
-        <span id="uniformFloat${index}Value" style="color: var(--accent-color);">${uniformSettings.floats[index].value.toFixed(3)}</span>
+    if (sliderConfig.type === 'bool') {
+        return createBoolSlider(sliderConfig, listIndex, container);
+    } else if (sliderConfig.type === 'int') {
+        return createIntSlider(sliderConfig, listIndex, container);
+    } else {
+        return createFloatSlider(sliderConfig, listIndex, container);
+    }
+}
+
+/**
+ * Create a float slider
+ */
+function createFloatSlider(sliderConfig, listIndex, container) {
+    // Title input and remove button
+    const titleRow = document.createElement('div');
+    titleRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 4px; align-items: center;';
+    
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.value = sliderConfig.title;
+    titleInput.placeholder = 'Slider title';
+    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; font-size: 11px; border-radius: 2px;';
+    titleInput.oninput = () => {
+        sliderConfig.title = titleInput.value;
+    };
+    
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove slider';
+    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 2px 6px; border-radius: 2px; font-size: 12px;';
+    removeBtn.onclick = () => removeSlider(listIndex);
+    
+    titleRow.appendChild(titleInput);
+    titleRow.appendChild(removeBtn);
+    container.appendChild(titleRow);
+    
+    // Uniform name and value display
+    const valueRow = document.createElement('div');
+    valueRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 10px;';
+    valueRow.innerHTML = `
+        <span style="color: var(--text-secondary);">u_custom${sliderConfig.index}</span>
+        <span id="uniformValue_${listIndex}" style="color: var(--accent-color); font-weight: bold;">${sliderConfig.value.toFixed(3)}</span>
     `;
-    container.appendChild(topRow);
+    container.appendChild(valueRow);
     
     // Min/Max inputs
     const rangeRow = document.createElement('div');
     rangeRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 4px; font-size: 10px;';
     rangeRow.innerHTML = `
-        <label style="color: var(--text-secondary);">min: <input type="number" id="uniformFloat${index}Min" value="${uniformSettings.floats[index].min}" step="0.1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
-        <label style="color: var(--text-secondary);">max: <input type="number" id="uniformFloat${index}Max" value="${uniformSettings.floats[index].max}" step="0.1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
+        <label style="color: var(--text-secondary);">min: <input type="number" id="uniformMin_${listIndex}" value="${sliderConfig.min}" step="0.1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
+        <label style="color: var(--text-secondary);">max: <input type="number" id="uniformMax_${listIndex}" value="${sliderConfig.max}" step="0.1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
     `;
     container.appendChild(rangeRow);
     
     // Slider
     const slider = document.createElement('input');
     slider.type = 'range';
-    slider.id = `uniformFloat${index}Slider`;
     slider.min = '0';
     slider.max = '1000';
-    slider.value = '0';
+    const t = (sliderConfig.value - sliderConfig.min) / (sliderConfig.max - sliderConfig.min);
+    slider.value = Math.round(t * 1000).toString();
     slider.style.cssText = 'width: 100%;';
-    slider.oninput = () => updateFloatUniform(index, slider);
+    slider.oninput = () => {
+        const t = parseFloat(slider.value) / 1000;
+        const value = sliderConfig.min + t * (sliderConfig.max - sliderConfig.min);
+        sliderConfig.value = value;
+        document.getElementById(`uniformValue_${listIndex}`).textContent = value.toFixed(3);
+        applyFloatUniform(sliderConfig.index, value);
+    };
     container.appendChild(slider);
     
     // Update range inputs
-    const minInput = container.querySelector(`#uniformFloat${index}Min`);
-    const maxInput = container.querySelector(`#uniformFloat${index}Max`);
+    const minInput = container.querySelector(`#uniformMin_${listIndex}`);
+    const maxInput = container.querySelector(`#uniformMax_${listIndex}`);
     minInput.onchange = () => {
-        uniformSettings.floats[index].min = parseFloat(minInput.value);
-        updateFloatUniform(index, slider);
+        sliderConfig.min = parseFloat(minInput.value);
+        slider.oninput(); // Recalculate value
     };
     maxInput.onchange = () => {
-        uniformSettings.floats[index].max = parseFloat(maxInput.value);
-        updateFloatUniform(index, slider);
+        sliderConfig.max = parseFloat(maxInput.value);
+        slider.oninput(); // Recalculate value
     };
     
     return container;
 }
 
 /**
- * Create an int slider control
+ * Create an int slider
  */
-function createIntSlider(index) {
-    const container = document.createElement('div');
-    container.style.cssText = 'margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);';
+function createIntSlider(sliderConfig, listIndex, container) {
+    // Title input and remove button
+    const titleRow = document.createElement('div');
+    titleRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 4px; align-items: center;';
     
-    const topRow = document.createElement('div');
-    topRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;';
-    topRow.innerHTML = `
-        <span style="color: var(--text-primary); font-weight: bold;">u_customInt${index}</span>
-        <span id="uniformInt${index}Value" style="color: var(--accent-color);">${uniformSettings.ints[index].value}</span>
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.value = sliderConfig.title;
+    titleInput.placeholder = 'Slider title';
+    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; font-size: 11px; border-radius: 2px;';
+    titleInput.oninput = () => {
+        sliderConfig.title = titleInput.value;
+    };
+    
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove slider';
+    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 2px 6px; border-radius: 2px; font-size: 12px;';
+    removeBtn.onclick = () => removeSlider(listIndex);
+    
+    titleRow.appendChild(titleInput);
+    titleRow.appendChild(removeBtn);
+    container.appendChild(titleRow);
+    
+    // Uniform name and value display
+    const valueRow = document.createElement('div');
+    valueRow.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 10px;';
+    valueRow.innerHTML = `
+        <span style="color: var(--text-secondary);">u_customInt${sliderConfig.index}</span>
+        <span id="uniformValue_${listIndex}" style="color: var(--accent-color); font-weight: bold;">${sliderConfig.value}</span>
     `;
-    container.appendChild(topRow);
+    container.appendChild(valueRow);
     
+    // Min/Max inputs
     const rangeRow = document.createElement('div');
     rangeRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 4px; font-size: 10px;';
     rangeRow.innerHTML = `
-        <label style="color: var(--text-secondary);">min: <input type="number" id="uniformInt${index}Min" value="${uniformSettings.ints[index].min}" step="1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
-        <label style="color: var(--text-secondary);">max: <input type="number" id="uniformInt${index}Max" value="${uniformSettings.ints[index].max}" step="1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
+        <label style="color: var(--text-secondary);">min: <input type="number" id="uniformMin_${listIndex}" value="${sliderConfig.min}" step="1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
+        <label style="color: var(--text-secondary);">max: <input type="number" id="uniformMax_${listIndex}" value="${sliderConfig.max}" step="1" style="width: 50px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px;"></label>
     `;
     container.appendChild(rangeRow);
     
+    // Slider
     const slider = document.createElement('input');
     slider.type = 'range';
-    slider.id = `uniformInt${index}Slider`;
     slider.min = '0';
     slider.max = '100';
-    slider.value = '0';
+    const t = (sliderConfig.value - sliderConfig.min) / (sliderConfig.max - sliderConfig.min);
+    slider.value = Math.round(t * 100).toString();
     slider.step = '1';
     slider.style.cssText = 'width: 100%;';
-    slider.oninput = () => updateIntUniform(index, slider);
+    slider.oninput = () => {
+        const t = parseFloat(slider.value) / 100;
+        const value = Math.round(sliderConfig.min + t * (sliderConfig.max - sliderConfig.min));
+        sliderConfig.value = value;
+        document.getElementById(`uniformValue_${listIndex}`).textContent = value;
+        applyIntUniform(sliderConfig.index, value);
+    };
     container.appendChild(slider);
     
-    const minInput = container.querySelector(`#uniformInt${index}Min`);
-    const maxInput = container.querySelector(`#uniformInt${index}Max`);
+    // Update range inputs
+    const minInput = container.querySelector(`#uniformMin_${listIndex}`);
+    const maxInput = container.querySelector(`#uniformMax_${listIndex}`);
     minInput.onchange = () => {
-        uniformSettings.ints[index].min = parseInt(minInput.value);
-        // Don't change slider.min - it stays 0-100, we scale in updateIntUniform
-        updateIntUniform(index, slider);
+        sliderConfig.min = parseInt(minInput.value);
+        slider.oninput(); // Recalculate value
     };
     maxInput.onchange = () => {
-        uniformSettings.ints[index].max = parseInt(maxInput.value);
-        // Don't change slider.max - it stays 0-100, we scale in updateIntUniform
-        updateIntUniform(index, slider);
+        sliderConfig.max = parseInt(maxInput.value);
+        slider.oninput(); // Recalculate value
     };
     
     return container;
 }
 
 /**
- * Create a bool checkbox control
+ * Create a bool checkbox
  */
-function createBoolCheckbox(index) {
-    const container = document.createElement('div');
-    container.style.cssText = 'margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);';
+function createBoolSlider(sliderConfig, listIndex, container) {
+    // Title input and remove button
+    const titleRow = document.createElement('div');
+    titleRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 4px; align-items: center;';
     
-    const label = document.createElement('label');
-    label.style.cssText = 'display: flex; align-items: center; gap: 8px; cursor: pointer;';
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.value = sliderConfig.title;
+    titleInput.placeholder = 'Checkbox title';
+    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; font-size: 11px; border-radius: 2px;';
+    titleInput.oninput = () => {
+        sliderConfig.title = titleInput.value;
+    };
+    
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove checkbox';
+    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 2px 6px; border-radius: 2px; font-size: 12px;';
+    removeBtn.onclick = () => removeSlider(listIndex);
+    
+    titleRow.appendChild(titleInput);
+    titleRow.appendChild(removeBtn);
+    container.appendChild(titleRow);
+    
+    // Checkbox and uniform name
+    const checkboxRow = document.createElement('div');
+    checkboxRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-top: 4px;';
     
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    checkbox.id = `uniformBool${index}Checkbox`;
-    checkbox.checked = uniformSettings.bools[index].value;
-    checkbox.onchange = () => updateBoolUniform(index, checkbox);
+    checkbox.checked = sliderConfig.value;
+    checkbox.onchange = () => {
+        sliderConfig.value = checkbox.checked;
+        applyBoolUniform(sliderConfig.index, checkbox.checked);
+    };
     
-    const text = document.createElement('span');
-    text.style.cssText = 'color: var(--text-primary); font-weight: bold;';
-    text.textContent = `u_customBool${index}`;
+    const label = document.createElement('span');
+    label.style.cssText = 'color: var(--text-secondary); font-size: 10px;';
+    label.textContent = `u_customBool${sliderConfig.index}`;
     
-    label.appendChild(checkbox);
-    label.appendChild(text);
-    container.appendChild(label);
+    checkboxRow.appendChild(checkbox);
+    checkboxRow.appendChild(label);
+    container.appendChild(checkboxRow);
     
     return container;
 }
 
 /**
- * Update float uniform value
+ * Apply float uniform value to buffer
  */
-function updateFloatUniform(index, slider) {
-    const settings = uniformSettings.floats[index];
-    const t = parseFloat(slider.value) / 1000; // 0-1
-    const value = settings.min + t * (settings.max - settings.min);
-    settings.value = value;
-    
-    // Update display
-    document.getElementById(`uniformFloat${index}Value`).textContent = value.toFixed(3);
-    
-    // Update uniform buffer
+function applyFloatUniform(index, value) {
+    if (!state.uniformBuilder) return; // Not initialized yet
     const { f32 } = state.uniformBuilder.getArrays();
     f32[7 + index] = value;
 }
 
 /**
- * Update int uniform value
+ * Apply int uniform value to buffer
  */
-function updateIntUniform(index, slider) {
-    const settings = uniformSettings.ints[index];
-    const value = parseInt(slider.value);
-    const scaledValue = Math.round(settings.min + (value / 100) * (settings.max - settings.min));
-    settings.value = scaledValue;
-    
-    // Update display
-    document.getElementById(`uniformInt${index}Value`).textContent = scaledValue;
-    
-    // Update uniform buffer
+function applyIntUniform(index, value) {
+    if (!state.uniformBuilder) return; // Not initialized yet
     const { i32 } = state.uniformBuilder.getArrays();
-    i32[22 + index] = scaledValue;
+    i32[22 + index] = value;
 }
 
 /**
- * Update bool uniform value
+ * Apply bool uniform value to buffer
  */
-function updateBoolUniform(index, checkbox) {
-    const value = checkbox.checked;
-    uniformSettings.bools[index].value = value;
-    
-    // Update uniform buffer
+function applyBoolUniform(index, value) {
+    if (!state.uniformBuilder) return; // Not initialized yet
     const { i32 } = state.uniformBuilder.getArrays();
     i32[25 + index] = value ? 1 : 0;
 }
 
 /**
- * Reset all uniforms to defaults
+ * Apply all current uniform values to buffer
  */
-function resetAll() {
-    // Reset float uniforms
-    for (let i = 0; i < 15; i++) {
-        uniformSettings.floats[i].value = 0;
-        const slider = document.getElementById(`uniformFloat${i}Slider`);
-        if (slider) slider.value = '0';
-        updateFloatUniform(i, slider);
-    }
+function applyAllUniformValues() {
+    activeSliders.forEach(slider => {
+        if (slider.type === 'float') {
+            applyFloatUniform(slider.index, slider.value);
+        } else if (slider.type === 'int') {
+            applyIntUniform(slider.index, slider.value);
+        } else if (slider.type === 'bool') {
+            applyBoolUniform(slider.index, slider.value);
+        }
+    });
+}
+
+/**
+ * Reset all uniform values to their defaults (based on min/max)
+ */
+function resetAllValues() {
+    activeSliders.forEach((slider, listIndex) => {
+        if (slider.type === 'float') {
+            slider.value = 0;
+            applyFloatUniform(slider.index, 0);
+        } else if (slider.type === 'int') {
+            slider.value = 0;
+            applyIntUniform(slider.index, 0);
+        } else if (slider.type === 'bool') {
+            slider.value = false;
+            applyBoolUniform(slider.index, false);
+        }
+    });
     
-    // Reset int uniforms
-    for (let i = 0; i < 3; i++) {
-        uniformSettings.ints[i].value = 0;
-        const slider = document.getElementById(`uniformInt${i}Slider`);
-        if (slider) slider.value = '0';
-        updateIntUniform(i, slider);
-    }
-    
-    // Reset bool uniforms
-    for (let i = 0; i < 2; i++) {
-        uniformSettings.bools[i].value = false;
-        const checkbox = document.getElementById(`uniformBool${i}Checkbox`);
-        if (checkbox) checkbox.checked = false;
-        updateBoolUniform(i, checkbox);
-    }
+    rebuildPanel();
 }
 
 /**
@@ -354,7 +618,7 @@ function onMouseMove(e) {
     
     panel.style.left = x + 'px';
     panel.style.top = y + 'px';
-    panel.style.right = 'auto'; // Remove right positioning
+    panel.style.right = 'auto';
 }
 
 function onMouseUp() {
@@ -363,4 +627,3 @@ function onMouseUp() {
         panel.style.cursor = 'default';
     }
 }
-
