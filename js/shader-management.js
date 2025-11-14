@@ -13,6 +13,7 @@ import { state, logStatus } from './core.js';
 import * as tabs from './tabs.js';
 import * as backend from './backend.js';
 import * as uniformControls from './uniform-controls.js';
+import * as channels from './channels.js';
 
 // Expose for index.html to use
 window.shaderManagement = {
@@ -66,6 +67,9 @@ export function createNewShader(type, MINIMAL_GLSL, MINIMAL_WGSL, reloadShader) 
     // Temporarily disable dirty tracking
     const wasInitializing = state.isInitializing;
     state.isInitializing = true;
+    
+    // Reset channels to default state
+    channels.resetChannels();
     
     // Set up tabs and code based on type
     if (type === 'glsl' || type === 'glsl_regular' || type === 'glsl_stoy' || type === 'glsl_golf') {
@@ -447,6 +451,12 @@ export async function saveOwnedShader() {
         }
     });
     
+    // Collect channel configuration
+    const channelConfig = channels.getChannelConfig();
+    if (channelConfig.channels.length > 1) { // More than just main channel
+        shaderData.code['_channel_meta'] = JSON.stringify(channelConfig);
+    }
+    
     // Collect uniform controls configuration
     shaderData.uniform_config = uniformControls.getUniformConfig();
     
@@ -528,6 +538,12 @@ export async function saveShaderInline() {
             shaderData.code[tabConfig.dbKey] = editor.getValue();
         }
     });
+    
+    // Collect channel configuration
+    const channelConfig = channels.getChannelConfig();
+    if (channelConfig.channels.length > 1) { // More than just main channel
+        shaderData.code['_channel_meta'] = JSON.stringify(channelConfig);
+    }
     
     // Collect uniform controls configuration
     shaderData.uniform_config = uniformControls.getUniformConfig();

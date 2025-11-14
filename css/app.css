@@ -138,6 +138,12 @@ body {
     transition: width 0.3s ease;
 }
 
+/* Push status bar to bottom of devPanel */
+#devPanel > .flex-row.gap-xs {
+    margin-top: auto;  /* Push to bottom */
+    flex-shrink: 0;    /* Don't shrink */
+}
+
 #displayPanel {
     width: 30%;
     min-width: 250px;
@@ -505,6 +511,14 @@ html:not([data-theme="dark"]) .success {
     /*border: 1px solid var(--border-color);*/
     background: var(--bg-tertiary);
     overflow: hidden;
+}
+
+/* Both WebGL and WebGPU canvases */
+#canvasWebGPU,
+#canvasWebGL {
+    display: block;
+    /* Width and height set dynamically via JS to quantized values */
+    /* This ensures pixel-perfect rendering without stretching artifacts */
 }
 
 #canvas {

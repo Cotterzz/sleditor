@@ -120,6 +120,10 @@ export async function handleHashChange() {
         state.isDirty = false;
         state.isInitializing = true;
         
+        // Reset channels
+        const channels = await import('./channels.js');
+        channels.resetChannels();
+        
         // Set up golf tab
         state.activeTabs = ['glsl_golf'];
         state.currentTab = 'glsl_golf';

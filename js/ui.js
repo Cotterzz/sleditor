@@ -543,11 +543,18 @@ export async function updateCanvasSize(width, height, recompile = true) {
     const renderWidth = Math.floor(width / state.pixelScale);
     const renderHeight = Math.floor(height / state.pixelScale);
     
-    // Update both canvases
+    // Update both canvases - buffer dimensions
     state.canvasWebGPU.width = renderWidth;
     state.canvasWebGPU.height = renderHeight;
     state.canvasWebGL.width = renderWidth;
     state.canvasWebGL.height = renderHeight;
+    
+    // Set canvas CSS dimensions to quantized values (for pixel-perfect rendering)
+    // The canvas will be centered in the container with letterboxing if needed
+    state.canvasWebGPU.style.width = width + 'px';
+    state.canvasWebGPU.style.height = height + 'px';
+    state.canvasWebGL.style.width = width + 'px';
+    state.canvasWebGL.style.height = height + 'px';
     
     // Update canvas container size
     const canvasContainer = document.getElementById('canvasContainer');

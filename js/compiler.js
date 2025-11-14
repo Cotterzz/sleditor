@@ -72,10 +72,21 @@ export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
         
         // Inject boilerplate if needed
         const boilerplate = getBoilerplateForTab(currentGLSLTab);
-        const fullSource = boilerplate + userCode;
+        
+        // Inject channel uniforms
+        const requiredChannels = channels.parseChannelUsage(userCode);
+        let channelUniforms = '';
+        requiredChannels.forEach(chNum => {
+            channelUniforms += `uniform sampler2D iChannel${chNum};\n`;
+        });
+        
+        const fullSource = boilerplate + channelUniforms + userCode;
         
         if (boilerplate) {
             console.log(`  Injecting ${getBoilerplateLineCount(currentGLSLTab)} lines of boilerplate for ${currentGLSLTab}`);
+        }
+        if (requiredChannels.length > 0) {
+            console.log(`  Injecting ${requiredChannels.length} channel uniforms:`, requiredChannels);
         }
         
         // Compile GLSL shader
@@ -83,10 +94,12 @@ export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
         if (!compileResult.success) {
             // Adjust error line numbers if boilerplate was injected
             let errors = compileResult.errors;
-            if (boilerplate) {
+            if (boilerplate || channelUniforms) {
                 const boilerplateLines = getBoilerplateLineCount(currentGLSLTab);
+                const channelLines = requiredChannels.length;
+                const totalInjectedLines = boilerplateLines + channelLines;
                 errors = errors.map(err => {
-                    const userLine = Math.max(1, err.lineNum - boilerplateLines);
+                    const userLine = Math.max(1, err.lineNum - totalInjectedLines);
                     return {
                         ...err,
                         lineNum: userLine,

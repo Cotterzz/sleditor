@@ -4,7 +4,9 @@
 
 import { state, logStatus } from './core.js';
 import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET } from './examples.js';
-import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive } from './tab-config.js';
+import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, getChannelNumber, createImageChannelTabName } from './tab-config.js';
+import * as mediaSelector from './ui/media-selector.js';
+import * as channels from './channels.js';
 
 // ============================================================================
 // Tab Rendering
@@ -105,6 +107,51 @@ export function switchTab(tabName) {
     
     state.currentTab = tabName;
     
+    // Handle channel tabs separately
+    if (isImageChannel(tabName) || isVideoChannel(tabName)) {
+        // Hide ALL editor containers first
+        document.getElementById('graphicsContainer').style.display = 'none';
+        document.getElementById('audioContainer').style.display = 'none';
+        document.getElementById('jsEditorContainer').style.display = 'none';
+        
+        // Hide ALL channel containers
+        document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"]').forEach(c => {
+            c.style.display = 'none';
+        });
+        
+        // Get or create channel container
+        let channelContainer = document.getElementById(`${tabName}Container`);
+        if (!channelContainer) {
+            channelContainer = document.createElement('div');
+            channelContainer.id = `${tabName}Container`;
+            channelContainer.className = 'editor-panel';
+            // Don't set display inline - let CSS class handle flex behavior
+            channelContainer.style.display = 'flex';
+            channelContainer.style.flexDirection = 'column';
+            document.getElementById('devPanel').appendChild(channelContainer);
+            
+            // Add loading indicator
+            channelContainer.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">Loading media selector...</div>';
+            
+            // Load media selector
+            const channelNumber = getChannelNumber(tabName);
+            const channelType = isImageChannel(tabName) ? 'image' : 'video';
+            mediaSelector.createMediaSelector(tabName, channelType, channelNumber).then(selector => {
+                // Clear container and add selector (prevents duplicates)
+                channelContainer.innerHTML = '';
+                channelContainer.appendChild(selector);
+            });
+        } else {
+            // Show existing container
+            channelContainer.style.display = 'block';
+        }
+        
+        // Update tabs
+        renderTabs();
+        return;
+    }
+    
+    // Regular code editor tabs
     const containers = {
         graphics: document.getElementById('graphicsContainer'),
         glsl_fragment: document.getElementById('graphicsContainer'),  // GLSL uses graphics container
@@ -127,9 +174,14 @@ export function switchTab(tabName) {
         js: state.jsEditor
     };
     
-    // Hide all containers (use unique set to avoid hiding/showing same container twice)
-    const uniqueContainers = [...new Set(Object.values(containers))];
-    uniqueContainers.forEach(c => c.style.display = 'none');
+    // Hide all containers
+    const allContainers = [...new Set(Object.values(containers))];
+    allContainers.forEach(c => c.style.display = 'none');
+    
+    // Hide channel containers
+    document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"]').forEach(c => {
+        c.style.display = 'none';
+    });
     
     // Show selected container
     if (containers[tabName]) {
@@ -202,6 +254,40 @@ export function addTab(tabName) {
     switchTab(tabName);
 }
 
+/**
+ * Add an image channel
+ */
+export async function addImageChannel() {
+    // Create channel first, then get the actual channel number it was assigned
+    const channelNumber = await channels.createChannel('image', {
+        mediaId: null,
+        tabName: null // Will be set below
+    });
+    
+    if (channelNumber === -1) {
+        console.error('Failed to create image channel');
+        return;
+    }
+    
+    // Create tab name with the actual channel number
+    const tabName = createImageChannelTabName(channelNumber);
+    
+    // Update the channel's tab name
+    const channel = channels.getChannel(channelNumber);
+    if (channel) {
+        channel.tabName = tabName;
+    }
+    
+    // Add tab to active tabs
+    state.activeTabs.push(tabName);
+    
+    // Refresh UI
+    renderTabs();
+    switchTab(tabName);
+    
+    console.log(`✓ Image channel tab added: ${tabName} (ch${channelNumber})`);
+}
+
 export function removeTab(tabName) {
     // Can't remove graphics (it's mandatory)
     if (tabName === 'graphics') {
@@ -265,7 +351,8 @@ export function showAddPassMenu() {
         { name: 'glsl_fragment', label: '🔺 Raw (GLSL)' },
         { name: 'audio_gpu', label: '🔊 Audio (WGSL)' },
         { name: 'audio_worklet', label: '🎵 Audio (Worklet)' },
-        { name: 'js', label: '⚡ JavaScript' }
+        { name: 'js', label: '⚡ JavaScript' },
+        { name: '_image_channel', label: '🖼️ Image Channel' } // Special action
     ];
     
     menu.innerHTML = '';
@@ -302,8 +389,13 @@ export function showAddPassMenu() {
         option.onmouseleave = () => {
             option.style.background = 'transparent';
         };
-        option.onclick = () => {
-            addTab(tab.name);
+        option.onclick = async () => {
+            // Handle image channel as special action
+            if (tab.name === '_image_channel') {
+                await addImageChannel();
+            } else {
+                addTab(tab.name);
+            }
             menu.style.display = 'none';
         };
         

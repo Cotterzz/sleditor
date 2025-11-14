@@ -27,6 +27,8 @@ import * as audio from './audio.js';
 import * as routing from './routing.js';
 import { UniformBuilder } from './uniforms.js';
 import * as community from './community.js';
+import * as channels from './channels.js';
+import * as mediaLoader from './media-loader.js';
 
 // Expose modules globally for inline functions and backwards compatibility
 window.tabConfig = tabConfig;
@@ -463,6 +465,10 @@ async function init() {
     setupUI();
     setupSaveButton();
     
+    // Initialize media and channels
+    await mediaLoader.loadMediaCatalog();
+    channels.init();
+    
     // Initialize backend (Supabase auth)
     backend.init();
     
@@ -543,6 +549,9 @@ async function init() {
         
         // Mark as anonymous golf URL view (read-only)
         state.isAnonymousGolfURL = true;
+        
+        // Reset channels for new shader
+        channels.resetChannels();
         
         // Set up golf tab
         state.activeTabs = ['glsl_golf'];

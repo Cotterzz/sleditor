@@ -138,11 +138,65 @@ export function getTabConfig(tabName) {
 }
 
 /**
+ * Check if tab name is an image channel
+ * @param {string} tabName - Tab name
+ * @returns {boolean}
+ */
+export function isImageChannel(tabName) {
+    return tabName.startsWith('image_ch');
+}
+
+/**
+ * Check if tab name is a video channel
+ * @param {string} tabName - Tab name
+ * @returns {boolean}
+ */
+export function isVideoChannel(tabName) {
+    return tabName.startsWith('video_ch');
+}
+
+/**
+ * Check if tab name is a buffer channel
+ * @param {string} tabName - Tab name
+ * @returns {boolean}
+ */
+export function isBufferChannel(tabName) {
+    return tabName.startsWith('buffer_ch');
+}
+
+/**
+ * Check if tab name is any channel type
+ * @param {string} tabName - Tab name
+ * @returns {boolean}
+ */
+export function isChannel(tabName) {
+    return isImageChannel(tabName) || isVideoChannel(tabName) || isBufferChannel(tabName);
+}
+
+/**
+ * Get channel number from tab name
+ * @param {string} tabName - Tab name (e.g., 'image_ch1')
+ * @returns {number} Channel number or -1 if not a channel
+ */
+export function getChannelNumber(tabName) {
+    const match = tabName.match(/_(ch\d+)$/);
+    if (match) {
+        return parseInt(match[1].substring(2));
+    }
+    return -1;
+}
+
+/**
  * Get tab icon by name
  * @param {string} tabName - Internal tab name
  * @returns {string} Icon emoji
  */
 export function getTabIcon(tabName) {
+    // Handle dynamic channel tabs
+    if (isImageChannel(tabName)) return '🖼️';
+    if (isVideoChannel(tabName)) return '🎥';
+    if (isBufferChannel(tabName)) return '🎚️';
+    
     const config = TAB_CONFIG[tabName];
     return config ? config.icon : '📝';
 }
@@ -153,6 +207,20 @@ export function getTabIcon(tabName) {
  * @returns {string} Display label
  */
 export function getTabLabel(tabName) {
+    // Handle dynamic channel tabs
+    if (isImageChannel(tabName)) {
+        const chNum = getChannelNumber(tabName);
+        return `Image(ch${chNum})`;
+    }
+    if (isVideoChannel(tabName)) {
+        const chNum = getChannelNumber(tabName);
+        return `Video(ch${chNum})`;
+    }
+    if (isBufferChannel(tabName)) {
+        const chNum = getChannelNumber(tabName);
+        return `Buffer(ch${chNum})`;
+    }
+    
     const config = TAB_CONFIG[tabName];
     return config ? config.label : tabName;
 }
@@ -163,6 +231,9 @@ export function getTabLabel(tabName) {
  * @returns {string} Database key
  */
 export function getTabDbKey(tabName) {
+    // Channel tabs use their tab name as db key
+    if (isChannel(tabName)) return tabName;
+    
     const config = TAB_CONFIG[tabName];
     return config ? config.dbKey : tabName;
 }
@@ -241,10 +312,42 @@ export function tabsAreMutuallyExclusive(tab1, tab2) {
  * @returns {Object|null} Monaco editor instance
  */
 export function getEditorForTab(tabName, state) {
+    // Channel tabs don't use Monaco editors
+    if (isImageChannel(tabName) || isVideoChannel(tabName)) {
+        return null;
+    }
+    
     const config = TAB_CONFIG[tabName];
     if (!config) return null;
     
     const editorName = config.editor + 'Editor';
     return state[editorName] || null;
+}
+
+/**
+ * Create image channel tab name
+ * @param {number} channelNumber - Channel number
+ * @returns {string} Tab name
+ */
+export function createImageChannelTabName(channelNumber) {
+    return `image_ch${channelNumber}`;
+}
+
+/**
+ * Create video channel tab name
+ * @param {number} channelNumber - Channel number
+ * @returns {string} Tab name
+ */
+export function createVideoChannelTabName(channelNumber) {
+    return `video_ch${channelNumber}`;
+}
+
+/**
+ * Create buffer channel tab name
+ * @param {number} channelNumber - Channel number
+ * @returns {string} Tab name
+ */
+export function createBufferChannelTabName(channelNumber) {
+    return `buffer_ch${channelNumber}`;
 }
 

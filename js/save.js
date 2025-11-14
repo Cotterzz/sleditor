@@ -7,6 +7,7 @@ import * as backend from './backend.js';
 import * as tabs from './tabs.js';
 import { getTabIcon, getTabLabel, dbKeyToTabName, getEditorForTab } from './tab-config.js';
 import * as uniformControls from './uniform-controls.js';
+import * as channels from './channels.js';
 
 // ============================================================================
 // Thumbnail Capture
@@ -440,7 +441,7 @@ function createGalleryItem(data, isOwned = false) {
 // Load Database Shader
 // ============================================================================
 
-export function loadDatabaseShader(shader) {
+export async function loadDatabaseShader(shader) {
     console.log('Loading database shader:', shader);
     
     // Check if shader requires WebGPU
@@ -535,6 +536,22 @@ export function loadDatabaseShader(shader) {
     const firstTab = state.activeTabs[0];
     if (firstTab) {
         tabs.switchTab(firstTab);
+    }
+    
+    // Load channel configuration if present
+    if (shader.code && shader.code['_channel_meta']) {
+        console.log('Loading channel configuration');
+        try {
+            const channelConfig = JSON.parse(shader.code['_channel_meta']);
+            await channels.loadChannelConfig(channelConfig);
+            // Re-render tabs after channels are loaded
+            tabs.renderTabs();
+        } catch (error) {
+            console.error('Failed to load channel config:', error);
+        }
+    } else {
+        // No channel config - reset to defaults
+        channels.resetChannels();
     }
     
     // Load uniform controls configuration if present

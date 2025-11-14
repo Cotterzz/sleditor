@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { state, CONFIG, DERIVED } from '../core.js';
+import * as channels from '../channels.js';
 
 // ============================================================================
 // Initialization
@@ -226,6 +227,25 @@ export function renderFrame(uniformBuilder) {
         // Clear canvas
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // Bind channel textures AFTER gl.useProgram
+        const code = state.graphicsEditor?.getValue() || '';
+        const requiredChannels = channels.parseChannelUsage(code);
+        
+        requiredChannels.forEach(chNum => {
+            const channel = channels.getChannel(chNum);
+            if (channel && channel.texture) {
+                // Bind texture to texture unit
+                gl.activeTexture(gl.TEXTURE0 + chNum);
+                gl.bindTexture(gl.TEXTURE_2D, channel.texture);
+                
+                // Set uniform
+                const loc = gl.getUniformLocation(state.glProgram, `iChannel${chNum}`);
+                if (loc !== null) {
+                    gl.uniform1i(loc, chNum);
+                }
+            }
+        });
 
         // Apply uniforms using the uniform builder
         uniformBuilder.applyWebGL(gl, state.glUniforms);

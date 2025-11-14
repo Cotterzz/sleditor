@@ -129,7 +129,7 @@ function renderWebGLMode(rawTime, gl, ctx) {
         return;
     }
     
-    // Render with WebGL backend
+    // Render with WebGL backend (channel binding happens inside)
     webgl.renderFrame(uniforms);
 }
 
