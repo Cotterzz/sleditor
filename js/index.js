@@ -208,6 +208,8 @@ function setupUI() {
         });
     });
     
+    ui.initChannelViewer();
+    
     // Gallery tab switching
     document.querySelectorAll('.gallery-tab').forEach(tab => {
         tab.addEventListener('click', (e) => {

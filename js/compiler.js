@@ -15,21 +15,73 @@ import * as jsRuntime from './js-runtime.js';
 import { getBoilerplate, MINIMAL_JS } from './examples.js';
 import { getBoilerplateForTab, getBoilerplateLineCount } from './glsl-boilerplate.js';
 import * as aiAssist from './ai-assist.js';
+import * as channels from './channels.js';
+import { getActiveGlslTab, syncCurrentGraphicsTabCode } from './tabs.js';
+import { setCompileOverlay, setCompileTime } from './ui.js';
+
+const PASS_LABELS = {
+    main: 'Main (ch0)'
+};
+
+function buildPassPlan(currentGLSLTab) {
+    const passes = [];
+    const bufferChannels = channels.getBufferExecutionOrder();
+    bufferChannels.forEach(ch => {
+        passes.push({
+            type: 'buffer',
+            tabName: ch.tabName,
+            channelNumber: ch.number,
+            label: ch.name || `Buffer(ch${ch.number})`
+        });
+    });
+    
+    passes.push({
+        type: 'main',
+        tabName: currentGLSLTab,
+        channelNumber: 0,
+        label: PASS_LABELS.main
+    });
+    
+    return passes;
+}
+
+function getPassSource(pass) {
+    if (!pass) return '';
+    if (pass.type === 'main') {
+        return state.tabCodeCache[pass.tabName] ??
+            state.graphicsEditor?.getValue() ??
+            '';
+    }
+    return state.tabCodeCache[pass.tabName] ?? '';
+}
+
+function adjustGLSLErrors(errors, boilerplateLines, channelUniformLines) {
+    if (!errors?.length) return errors;
+    const totalInjectedLines = (boilerplateLines || 0) + (channelUniformLines || 0);
+    if (totalInjectedLines === 0) {
+        return errors;
+    }
+    return errors.map(err => ({
+        ...err,
+        lineNum: Math.max(1, err.lineNum - totalInjectedLines)
+    }));
+}
 
 // ============================================================================
 // GLSL Compilation Path
 // ============================================================================
 
 export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
+    const compileToken = ++state.currentCompileToken;
+    state.isRecompiling = true;
+    setCompileOverlay(true);
+    await waitForNextFrame();
     try {
-        // Get current editor code
         const currentCode = state.graphicsEditor ? state.graphicsEditor.getValue() : '';
         
-        // Check for AI assist request in all GLSL modes
         if (state.currentTab.startsWith('glsl_')) {
             const hasAIRequest = await aiAssist.processAIRequest(currentCode, state.currentTab);
             if (hasAIRequest) {
-                // AI request was processed, don't compile
                 return false;
             }
         }
@@ -56,67 +108,81 @@ export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
             }
         }
         
+        // Ensure ping-pong textures and framebuffer exist even if WebGL was initialized elsewhere
+        channels.initMainBufferTextures();
+        webgl.initBufferResources();
+        
         // Always ensure WebGL canvas is visible when compiling GLSL
         state.canvasWebGL.style.display = 'block';
         state.canvasWebGPU.style.display = 'none';
         
         const startTotal = performance.now();
         
-        // Determine which GLSL tab is active
-        const currentGLSLTab = state.activeTabs.find(tab => 
-            tab === 'glsl_fragment' || tab === 'glsl_regular' || tab === 'glsl_stoy' || tab === 'glsl_golf'
-        );
-        
-        // Get fragment shader code from editor
-        const userCode = state.graphicsEditor.getValue();
-        
-        // Inject boilerplate if needed
-        const boilerplate = getBoilerplateForTab(currentGLSLTab);
-        
-        // Inject channel uniforms
-        const requiredChannels = channels.parseChannelUsage(userCode);
-        let channelUniforms = '';
-        requiredChannels.forEach(chNum => {
-            channelUniforms += `uniform sampler2D iChannel${chNum};\n`;
-        });
-        
-        const fullSource = boilerplate + channelUniforms + userCode;
-        
-        if (boilerplate) {
-            console.log(`  Injecting ${getBoilerplateLineCount(currentGLSLTab)} lines of boilerplate for ${currentGLSLTab}`);
-        }
-        if (requiredChannels.length > 0) {
-            console.log(`  Injecting ${requiredChannels.length} channel uniforms:`, requiredChannels);
-        }
-        
-        // Compile GLSL shader
-        const compileResult = await webgl.compile(fullSource);
-        if (!compileResult.success) {
-            // Adjust error line numbers if boilerplate was injected
-            let errors = compileResult.errors;
-            if (boilerplate || channelUniforms) {
-                const boilerplateLines = getBoilerplateLineCount(currentGLSLTab);
-                const channelLines = requiredChannels.length;
-                const totalInjectedLines = boilerplateLines + channelLines;
-                errors = errors.map(err => {
-                    const userLine = Math.max(1, err.lineNum - totalInjectedLines);
-                    return {
-                        ...err,
-                        lineNum: userLine,
-                        message: err.message  // Keep original message
-                    };
-                });
-            }
-            
-            editor.setGLSLErrors(errors);
-            
-            const errorMsg = errors.map(e => 
-                `Line ${e.lineNum}: ${e.message}`
-            ).join('\n');
-            
-            logStatus('✗ GLSL compilation failed:\n' + errorMsg, 'error');
+        const currentGLSLTab = getActiveGlslTab();
+        if (!currentGLSLTab) {
+            logStatus('✗ No GLSL tab active. Add a GLSL tab to compile.', 'error');
             return false;
         }
+        
+        const boilerplate = getBoilerplateForTab(currentGLSLTab);
+        const boilerplateLines = getBoilerplateLineCount(currentGLSLTab);
+        
+        syncCurrentGraphicsTabCode();
+        
+        const passPlan = buildPassPlan(currentGLSLTab);
+        if (passPlan.length === 0) {
+            logStatus('✗ No GLSL passes to compile', 'error');
+            return false;
+        }
+        
+        const compiledPasses = [];
+        for (const pass of passPlan) {
+            const source = getPassSource(pass);
+            const requiredChannels = channels.parseChannelUsage(source);
+            let channelUniforms = '';
+            requiredChannels.forEach(chNum => {
+                channelUniforms += `uniform sampler2D iChannel${chNum};\n`;
+            });
+            
+            const fullSource = (boilerplate || '') + channelUniforms + source;
+            
+            const compileResult = await webgl.compileProgram(fullSource);
+            if (!compileResult.success) {
+                const adjustedErrors = adjustGLSLErrors(compileResult.errors, boilerplateLines, requiredChannels.length);
+                const shouldShowInEditor = pass.type === 'main' || state.currentTab === pass.tabName;
+                if (shouldShowInEditor) {
+                    editor.setGLSLErrors(adjustedErrors);
+                }
+                
+                const errorMsg = adjustedErrors.map(e => `Line ${e.lineNum}: ${e.message}`).join('\n');
+                logStatus(`✗ ${pass.label} compilation failed:\n` + errorMsg, 'error');
+                return false;
+            }
+            
+            const channelUniformLocations = {};
+            requiredChannels.forEach(chNum => {
+                channelUniformLocations[chNum] = state.glContext?.getUniformLocation(compileResult.program, `iChannel${chNum}`);
+            });
+            
+            compiledPasses.push({
+                ...pass,
+                program: compileResult.program,
+                uniforms: compileResult.uniforms,
+                requiredChannels,
+                channelUniformLocations
+            });
+        }
+        
+        if (compileToken !== state.currentCompileToken) {
+            webgl.disposePassPrograms(compiledPasses);
+            queueCompileRerun(hasAudioWorklet, skipAudioWorkletReload);
+            return false;
+        }
+        
+        webgl.disposePassPrograms(state.webglPasses);
+        state.webglPasses = compiledPasses;
+        state.graphicsBackend = 'webgl';
+        state.glProgram = compiledPasses.find(pass => pass.type === 'main')?.program || null;
         
         // Load AudioWorklet if present
         let audioSuccess = true;
@@ -152,29 +218,57 @@ export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
         }
         
         const totalTime = performance.now() - startTotal;
+        const mainSource = getPassSource(passPlan.find(pass => pass.type === 'main'));
+        console.log('Compiled passes:', compiledPasses.map(p => p.label));
         
-        // For Golf mode, add character count to status message
+        setCompileTime(totalTime);
+        
         let statusMessage = `✓ Compiled in ${totalTime.toFixed(1)}ms`;
         if (currentGLSLTab === 'glsl_golf') {
-            const charCount = userCode.length;
-            statusMessage += ` | ${charCount} chars`;
+            statusMessage += ` | ${mainSource.length} chars`;
         }
         logStatus(statusMessage, 'success');
         
-        // Call user init
         jsRuntime.callInit();
         
-        // If paused, render a single frame to show the compiled shader
         if (!state.isPlaying) {
             render.renderOnce();
         }
         
         return true;
     } catch (err) {
-        logStatus('✗ ' + err.message, 'error');
-        console.error('GLSL compilation error:', err);
+        if (compileToken === state.currentCompileToken) {
+            logStatus('✗ ' + err.message, 'error');
+            console.error('GLSL compilation error:', err);
+        }
         return false;
+    } finally {
+        if (state.currentCompileToken === compileToken) {
+            state.isRecompiling = false;
+            setCompileOverlay(false);
+        }
     }
+}
+
+function queueCompileRerun(hasAudioWorklet, skipAudioWorkletReload) {
+    if (state.isRecompiling) return;
+    setTimeout(() => {
+        const currentTab = getActiveGlslTab();
+        if (!currentTab) {
+            state.isRecompiling = false;
+            setCompileOverlay(false);
+            return;
+        }
+        state.isRecompiling = true;
+        setCompileOverlay(true);
+        compileGLSL(hasAudioWorklet, skipAudioWorkletReload);
+    }, 50);
+}
+
+function waitForNextFrame() {
+    return new Promise(resolve => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+    });
 }
 
 // ============================================================================

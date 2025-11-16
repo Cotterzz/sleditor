@@ -14,6 +14,8 @@ import * as tabs from './tabs.js';
 import * as backend from './backend.js';
 import * as uniformControls from './uniform-controls.js';
 import * as channels from './channels.js';
+import { getTabConfig, getEditorForTab, isBufferChannel } from './tab-config.js';
+import * as webgl from './backends/webgl.js';
 
 // Expose for index.html to use
 window.shaderManagement = {
@@ -47,6 +49,7 @@ export function createNewShader(type, MINIMAL_GLSL, MINIMAL_WGSL, reloadShader) 
     state.currentDatabaseShader = null;
     state.isDirty = false;
     state.isAnonymousGolfURL = false;  // Clear read-only flag for new shaders
+    resetEditorState();
     
     // Clear URL hash
     window.history.pushState(null, '', window.location.pathname);
@@ -70,6 +73,7 @@ export function createNewShader(type, MINIMAL_GLSL, MINIMAL_WGSL, reloadShader) 
     
     // Reset channels to default state
     channels.resetChannels();
+    resetEditorState();
     
     // Set up tabs and code based on type
     if (type === 'glsl' || type === 'glsl_regular' || type === 'glsl_stoy' || type === 'glsl_golf') {
@@ -273,6 +277,19 @@ export function showNewShaderMenu() {
     }, 0);
 }
 
+function resetEditorState() {
+    state.tabCodeCache = {};
+    state.webglPasses = [];
+    state.glProgram = null;
+    state.glUniforms = null;
+    if (state.graphicsEditor) {
+        state.graphicsEditor.setValue('');
+    }
+    webgl.disposePassPrograms();
+}
+
+export { resetEditorState };
+
 // ============================================================================
 // Edit Mode
 // ============================================================================
@@ -428,6 +445,8 @@ export async function saveOwnedShader() {
         return;
     }
     
+    tabs.syncCurrentGraphicsTabCode();
+    
     const shaderData = {
         id: state.currentDatabaseShader.id,
         title: state.currentDatabaseShader.title,
@@ -440,14 +459,14 @@ export async function saveOwnedShader() {
     
     // Collect code from editors using tab config
     state.activeTabs.forEach(tabName => {
-        if (tabName === 'boilerplate') return; // Skip boilerplate
+        if (tabName === 'boilerplate') return;
         
-        const tabConfig = window.tabConfig.getTabConfig(tabName);
-        if (!tabConfig) return;
-        
-        const editor = window.tabConfig.getEditorForTab(tabName, state);
-        if (editor) {
-            shaderData.code[tabConfig.dbKey] = editor.getValue();
+        const tabInfo = getTabConfig(tabName);
+        const editor = tabInfo ? getEditorForTab(tabName, state) : null;
+        if (editor && tabInfo) {
+            shaderData.code[tabInfo.dbKey] = editor.getValue();
+        } else if (isBufferChannel(tabName)) {
+            shaderData.code[tabName] = state.tabCodeCache[tabName] ?? '';
         }
     });
     
@@ -512,6 +531,8 @@ export async function saveShaderInline() {
     // Get visibility
     const visibility = document.getElementById('visibilityPrivate').checked ? 'private' : 'published';
     
+    tabs.syncCurrentGraphicsTabCode();
+    
     const shaderData = {
         title,
         description,
@@ -528,14 +549,14 @@ export async function saveShaderInline() {
     
     // Collect code from editors using tab config
     state.activeTabs.forEach(tabName => {
-        if (tabName === 'boilerplate') return; // Skip boilerplate
+        if (tabName === 'boilerplate') return;
         
-        const tabConfig = window.tabConfig.getTabConfig(tabName);
-        if (!tabConfig) return;
-        
-        const editor = window.tabConfig.getEditorForTab(tabName, state);
-        if (editor) {
-            shaderData.code[tabConfig.dbKey] = editor.getValue();
+        const tabInfo = getTabConfig(tabName);
+        const editor = tabInfo ? getEditorForTab(tabName, state) : null;
+        if (editor && tabInfo) {
+            shaderData.code[tabInfo.dbKey] = editor.getValue();
+        } else if (isBufferChannel(tabName)) {
+            shaderData.code[tabName] = state.tabCodeCache[tabName] ?? '';
         }
     });
     

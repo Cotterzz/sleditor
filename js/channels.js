@@ -12,23 +12,138 @@ const channelState = {
     selectedOutputChannel: 0 // Which channel to display
 };
 
+function emitChannelChangeEvent(detail = {}) {
+    if (typeof window !== 'undefined' && window.dispatchEvent) {
+        window.dispatchEvent(new CustomEvent('channels-changed', { detail }));
+    }
+}
+
+/**
+ * Create a WebGL texture for buffer rendering
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ * @param {number} width - Texture width
+ * @param {number} height - Texture height
+ * @returns {WebGLTexture} Created texture
+ */
+function createBufferTexture(gl, width, height) {
+    // Always try to enable float render targets (RGBA32F); fall back to RGBA16F if unavailable
+    const floatExt = gl.getExtension('EXT_color_buffer_float');
+    if (!floatExt) {
+        console.warn('EXT_color_buffer_float not available - using RGBA16F for buffer textures');
+    }
+    
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    
+    const internalFormat = floatExt ? gl.RGBA32F : gl.RGBA16F;
+    gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, gl.RGBA, gl.FLOAT, null);
+    
+    // Buffers are used primarily for data passing, so default to NEAREST filtering.
+    // If users request smoother sampling (linear/mipmap/aniso), we'll revisit and
+    // re-enable the extension checks + live options UI.
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    
+    return texture;
+}
+
+function getBufferChannelsSortedLeftToRight() {
+    const buffers = channelState.channels.filter(ch => ch.type === 'buffer' && ch.number !== 0);
+    return buffers.sort((a, b) => {
+        const aIndex = a.tabName ? state.activeTabs.indexOf(a.tabName) : Number.MAX_SAFE_INTEGER;
+        const bIndex = b.tabName ? state.activeTabs.indexOf(b.tabName) : Number.MAX_SAFE_INTEGER;
+        return aIndex - bIndex;
+    });
+}
+
+function ensureChannelTexturesInternal(channel, width, height) {
+    if (!channel || channel.type !== 'buffer') {
+        return channel;
+    }
+    
+    const gl = state.glContext;
+    if (!gl) {
+        console.warn('Cannot create buffer textures - WebGL not ready');
+        return null;
+    }
+    
+    const targetWidth = width || state.canvasWidth;
+    const targetHeight = height || state.canvasHeight;
+    
+    if (!channel.textures) {
+        channel.textures = [
+            createBufferTexture(gl, targetWidth, targetHeight),
+            createBufferTexture(gl, targetWidth, targetHeight)
+        ];
+        channel.currentPing = 0;
+        channel.resolution = { width: targetWidth, height: targetHeight };
+        console.log(`✓ Buffer textures created for ch${channel.number} (${targetWidth}×${targetHeight})`);
+    }
+    
+    return channel;
+}
+
 /**
  * Initialize channels system
  */
 export function init() {
     console.log('Initializing channels system');
     
-    // Create main buffer channel (ch0)
+    // Create main buffer channel (ch0) without textures yet
+    // Textures will be created by initMainBufferTextures() after WebGL is ready
     channelState.channels.push({
         number: 0,
         type: 'buffer',
         name: 'Main(ch0)',
         tabName: null, // Set when shader loads
         resolution: { width: state.canvasWidth, height: state.canvasHeight },
-        textures: null, // Created in webgl.js
-        framebuffer: null,
+        textures: null, // Will be created by initMainBufferTextures()
+        framebuffer: null, // Created in webgl.js
         currentPing: 0
     });
+    
+    emitChannelChangeEvent();
+}
+
+/**
+ * Initialize ping-pong textures for main buffer (ch0)
+ * Must be called AFTER WebGL context is initialized
+ * @returns {boolean} Success
+ */
+export function initMainBufferTextures() {
+    const gl = state.glContext;
+    if (!gl) {
+        console.warn('Cannot init main buffer textures - WebGL not ready');
+        return false;
+    }
+    
+    const ch0 = channelState.channels.find(ch => ch.number === 0);
+    if (!ch0) {
+        console.error('Main buffer channel (ch0) not found!');
+        return false;
+    }
+    
+    // If already initialized, skip
+    if (ch0.textures) {
+        console.log('Main buffer textures already initialized');
+        return true;
+    }
+    
+    const width = state.canvasWidth;
+    const height = state.canvasHeight;
+    
+    // Create ping-pong texture pair
+    const texture0 = createBufferTexture(gl, width, height);
+    const texture1 = createBufferTexture(gl, width, height);
+    
+    ch0.textures = [texture0, texture1];
+    ch0.resolution = { width, height };
+    ch0.currentPing = 0;
+    
+    console.log(`✓ Main buffer textures initialized (${width}×${height}, ping-pong pair)`);
+    return true;
 }
 
 /**
@@ -108,14 +223,16 @@ export async function createChannel(type, data) {
         console.log('Video channels not yet implemented');
         return -1;
     } else if (type === 'buffer') {
-        // Buffer support - Phase 2
-        console.log('Buffer channels not yet implemented');
-        return -1;
+        channel.resolution = { width: state.canvasWidth, height: state.canvasHeight };
+        channel.textures = null; // Created lazily when rendering
+        channel.framebuffer = null;
+        console.log(`Buffer channel stub created: ch${channelNumber}`);
     }
     
     channelState.channels.push(channel);
     channelState.nextChannelNumber++; // Only increment after successful creation
     console.log(`✓ Channel created: ch${channelNumber} (${type})`);
+    emitChannelChangeEvent({ action: 'create', channel });
     
     return channelNumber;
 }
@@ -134,16 +251,29 @@ export function deleteChannel(channelNumber) {
     const channel = channelState.channels[index];
     
     // Cleanup WebGL resources
-    if (channel.texture) {
-        const gl = state.graphicsBackend === 'webgl' ? state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl') : null;
-        if (gl) {
-            gl.deleteTexture(channel.texture);
-        }
+    const gl = state.graphicsBackend === 'webgl' ? state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl') : null;
+    
+    if (channel.texture && gl) {
+        gl.deleteTexture(channel.texture);
+    }
+    
+    if (channel.textures && gl) {
+        channel.textures.forEach(tex => {
+            if (tex) {
+                gl.deleteTexture(tex);
+            }
+        });
+        channel.textures = null;
     }
     
     // Remove from array
     channelState.channels.splice(index, 1);
+    if (channelState.selectedOutputChannel === channelNumber) {
+        channelState.selectedOutputChannel = 0;
+    }
+    
     console.log(`✓ Channel deleted: ch${channelNumber}`);
+    emitChannelChangeEvent({ action: 'delete', channelNumber });
 }
 
 /**
@@ -287,8 +417,12 @@ export function getChannels() {
  * @returns {Array} Channels in execution order
  */
 export function getExecutionOrder() {
-    // Phase 1: Only main pass
-    return channelState.channels.filter(ch => ch.type === 'buffer');
+    return getBufferChannelsSortedLeftToRight();
+}
+
+export function getBufferExecutionOrder() {
+    const ordered = getBufferChannelsSortedLeftToRight();
+    return ordered.slice().reverse();
 }
 
 /**
@@ -328,6 +462,7 @@ export function getChannelConfig() {
             tabName: ch.tabName,
             mediaId: ch.mediaId,
             mediaPath: ch.mediaPath,
+            resolution: ch.resolution,
             // Include texture options
             vflip: ch.vflip,
             wrap: ch.wrap,
@@ -346,6 +481,96 @@ export function resetChannels() {
     channelState.nextChannelNumber = 1;
     channelState.selectedOutputChannel = 0;
     console.log('✓ Channels reset');
+    emitChannelChangeEvent({ action: 'reset' });
+}
+
+/**
+ * Resize main buffer textures when canvas size changes
+ * @param {number} width - New width
+ * @param {number} height - New height
+ * @returns {boolean} Success
+ */
+export function resizeMainBuffer(width, height) {
+    const ch0 = channelState.channels.find(ch => ch.number === 0);
+    if (!ch0) {
+        console.error('Main buffer channel (ch0) not found!');
+        return false;
+    }
+    
+    if (!ch0.textures) {
+        // Not initialized yet, just update resolution
+        ch0.resolution = { width, height };
+        return true;
+    }
+    
+    const gl = state.glContext;
+    if (!gl) {
+        console.warn('Cannot resize main buffer - WebGL not available');
+        return false;
+    }
+    
+    // Delete old textures
+    gl.deleteTexture(ch0.textures[0]);
+    gl.deleteTexture(ch0.textures[1]);
+    
+    // Create new textures at new size
+    ch0.textures[0] = createBufferTexture(gl, width, height);
+    ch0.textures[1] = createBufferTexture(gl, width, height);
+    ch0.resolution = { width, height };
+    ch0.currentPing = 0; // Reset ping-pong
+    
+    console.log(`✓ Main buffer resized to ${width}×${height}`);
+    return true;
+}
+
+export function resizeAllBufferChannels(width, height) {
+    const gl = state.glContext;
+    channelState.channels.forEach(ch => {
+        if (ch.type !== 'buffer' || ch.number === 0) {
+            return;
+        }
+        
+        ch.resolution = { width, height };
+        
+        if (ch.textures && gl) {
+            gl.deleteTexture(ch.textures[0]);
+            gl.deleteTexture(ch.textures[1]);
+            ch.textures[0] = createBufferTexture(gl, width, height);
+            ch.textures[1] = createBufferTexture(gl, width, height);
+            ch.currentPing = 0;
+            console.log(`✓ Buffer ch${ch.number} resized to ${width}×${height}`);
+        }
+    });
+}
+
+/**
+ * Clear main buffer textures (for restart)
+ * @returns {boolean} Success
+ */
+export function clearMainBuffer() {
+    const ch0 = channelState.channels.find(ch => ch.number === 0);
+    if (!ch0) {
+        return false;
+    }
+    
+    if (!state.glContext) {
+        ch0.textures = null;
+        ch0.currentPing = 0;
+        console.warn('clearMainBuffer: WebGL not ready, deferring texture recreation');
+        return false;
+    }
+    
+    resizeMainBuffer(state.canvasWidth, state.canvasHeight);
+    console.log('✓ Main buffer cleared');
+    return true;
+}
+
+export function ensureBufferTextures(channelNumber) {
+    const channel = getChannel(channelNumber);
+    if (!channel || channel.type !== 'buffer') {
+        return channel;
+    }
+    return ensureChannelTexturesInternal(channel);
 }
 
 /**
@@ -429,15 +654,33 @@ export async function loadChannelConfig(config) {
                     state.activeTabs.push(ch.tabName);
                 }
             }
+        } else if (ch.type === 'buffer') {
+            channelState.channels.push({
+                number: ch.number,
+                type: 'buffer',
+                name: ch.name || `Buffer(ch${ch.number})`,
+                tabName: ch.tabName || `buffer_ch${ch.number}`,
+                resolution: ch.resolution || { width: state.canvasWidth, height: state.canvasHeight },
+                textures: null,
+                framebuffer: null,
+                currentPing: 0
+            });
+            if (ch.tabName && !state.activeTabs.includes(ch.tabName)) {
+                state.activeTabs.push(ch.tabName);
+            }
         }
-        // Other types in future phases
     }
     
     // Set nextChannelNumber to the next available after all loaded channels
     const maxChannelNumber = Math.max(...channelState.channels.map(ch => ch.number), 0);
     channelState.nextChannelNumber = maxChannelNumber + 1;
     
+    if (!getChannel(channelState.selectedOutputChannel)) {
+        channelState.selectedOutputChannel = 0;
+    }
+    
     console.log(`✓ Loaded ${config.channels.length - 1} channel(s), next channel will be ch${channelState.nextChannelNumber}`);
+    emitChannelChangeEvent({ action: 'load' });
 }
 
 /**
@@ -445,8 +688,10 @@ export async function loadChannelConfig(config) {
  * @param {number} channelNumber - Channel to display
  */
 export function setSelectedOutputChannel(channelNumber) {
-    if (getChannel(channelNumber)) {
+    const channel = getChannel(channelNumber);
+    if (channel) {
         channelState.selectedOutputChannel = channelNumber;
+        emitChannelChangeEvent({ action: 'select', channelNumber });
         console.log(`✓ Output channel set to ch${channelNumber}`);
     } else {
         console.warn(`Channel ${channelNumber} not found`);
@@ -461,11 +706,49 @@ export function getSelectedOutputChannel() {
     return channelState.selectedOutputChannel;
 }
 
-// Expose for debugging
-window.channels = {
-    getChannels,
-    getChannel,
-    getChannelConfig,
-    parseChannelUsage
-};
+
+export function getAvailableViewerChannels() {
+    return [...channelState.channels]
+        .sort((a, b) => a.number - b.number)
+        .map(ch => ({
+            number: ch.number,
+            type: ch.type,
+            label: ch.name || `${ch.type.charAt(0).toUpperCase() + ch.type.slice(1)}(ch${ch.number})`
+        }));
+}
+
+export function getChannelTextureForDisplay(channelNumber) {
+    const channel = getChannel(channelNumber) || getChannel(0);
+    if (!channel) return null;
+    
+    if (channel.type === 'buffer') {
+        ensureBufferTextures(channel.number);
+        return channel.textures ? channel.textures[channel.currentPing] : null;
+    }
+    
+    if (channel.type === 'image' || channel.type === 'video') {
+        return channel.texture || null;
+    }
+    
+    if (channel.number === 0) {
+        ensureChannelTexturesInternal(channel);
+        return channel.textures ? channel.textures[channel.currentPing] : null;
+    }
+    
+    return null;
+}
+
+// Expose limited debugging helpers
+if (typeof window !== 'undefined') {
+    window.channelsDebug = {
+        getChannels,
+        getChannel,
+        getChannelConfig,
+        parseChannelUsage,
+        getAvailableViewerChannels,
+        setSelectedOutputChannel,
+        getSelectedOutputChannel,
+        getChannelTextureForDisplay
+    };
+}
 

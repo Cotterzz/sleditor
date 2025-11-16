@@ -34,6 +34,14 @@ export async function init(canvas) {
         gl.disable(gl.CULL_FACE);
         gl.disable(gl.BLEND);
         
+        // Enable float texture rendering extension (required for RGBA32F framebuffers)
+        const floatExt = gl.getExtension('EXT_color_buffer_float');
+        if (floatExt) {
+            console.log('✓ EXT_color_buffer_float enabled - using RGBA32F');
+        } else {
+            console.log('⚠ EXT_color_buffer_float not available - will use RGBA16F');
+        }
+        
         // Store in state
         state.glContext = gl;
         state.hasWebGL = true;
@@ -62,11 +70,33 @@ function createFullscreenQuad(gl) {
     state.glQuadBuffer = buffer;
 }
 
+/**
+ * Initialize buffer resources (framebuffer for offscreen rendering)
+ * Must be called AFTER init() and after channels.initMainBufferTextures()
+ */
+export function initBufferResources() {
+    const gl = state.glContext;
+    if (!gl) {
+        console.warn('Cannot init buffer resources - WebGL not ready');
+        return false;
+    }
+    
+    if (state.glFramebuffer) {
+        return true;
+    }
+    
+    // Create framebuffer for offscreen rendering
+    state.glFramebuffer = gl.createFramebuffer();
+    
+    console.log('✓ WebGL framebuffer initialized');
+    return true;
+}
+
 // ============================================================================
 // Shader Compilation
 // ============================================================================
 
-export async function compile(fragmentSource) {
+export async function compileProgram(fragmentSource) {
     const gl = state.glContext;
     if (!gl) {
         return {
@@ -148,12 +178,7 @@ export async function compile(fragmentSource) {
             uniforms[`u_customBool${i}`] = gl.getUniformLocation(program, `u_customBool${i}`);
         }
 
-        // Update state
-        state.glProgram = program;
-        state.glUniforms = uniforms;
-        state.graphicsBackend = 'webgl';
-
-        return { success: true, program };
+        return { success: true, program, uniforms };
     } catch (err) {
         return {
             success: false,
@@ -211,87 +236,181 @@ function parseGLSLErrors(infoLog, source) {
 
 export function renderFrame(uniformBuilder) {
     const gl = state.glContext;
-
-    if (!gl || !state.glProgram) {
-        console.warn('WebGL not ready for rendering');
+    if (!gl || !state.glFramebuffer || !state.webglPasses?.length) {
         return;
     }
-
+    
     try {
-        // Use program
-        gl.useProgram(state.glProgram);
-
-        // Set viewport
-        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-
-        // Clear canvas
-        gl.clearColor(0, 0, 0, 1);
-        gl.clear(gl.COLOR_BUFFER_BIT);
-
-        // Bind channel textures AFTER gl.useProgram
-        const code = state.graphicsEditor?.getValue() || '';
-        const requiredChannels = channels.parseChannelUsage(code);
-        
-        requiredChannels.forEach(chNum => {
-            const channel = channels.getChannel(chNum);
-            if (channel && channel.texture) {
-                // Bind texture to texture unit
-                gl.activeTexture(gl.TEXTURE0 + chNum);
-                gl.bindTexture(gl.TEXTURE_2D, channel.texture);
-                
-                // Set uniform
-                const loc = gl.getUniformLocation(state.glProgram, `iChannel${chNum}`);
-                if (loc !== null) {
-                    gl.uniform1i(loc, chNum);
-                }
+        channels.ensureBufferTextures(0);
+        for (const pass of state.webglPasses) {
+            if (pass.type === 'buffer') {
+                renderBufferPass(gl, uniformBuilder, pass);
+            } else if (pass.type === 'main') {
+                renderBufferPass(gl, uniformBuilder, pass);
             }
-        });
-
-        // Apply uniforms using the uniform builder
-        uniformBuilder.applyWebGL(gl, state.glUniforms);
-
-        // Also set frame counter
-        if (state.glUniforms.u_frame) {
-            gl.uniform1i(state.glUniforms.u_frame, state.visualFrame);
         }
-
-        // Setup vertex attributes
-        gl.bindBuffer(gl.ARRAY_BUFFER, state.glQuadBuffer);
-        const a_position = gl.getAttribLocation(state.glProgram, 'a_position');
-        if (a_position >= 0) {
-            gl.enableVertexAttribArray(a_position);
-            gl.vertexAttribPointer(a_position, 2, gl.FLOAT, false, 0, 0);
-        }
-
-        // Draw fullscreen quad
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-        // Cleanup
-        if (a_position >= 0) {
-            gl.disableVertexAttribArray(a_position);
-        }
+        displaySelectedChannel(gl);
     } catch (err) {
-        console.error('WebGL render error:', err);
-        console.error('Stack:', err.stack);
+        console.error('WebGL multi-pass render error:', err);
+        console.error(err.stack);
     }
+}
+
+function renderBufferPass(gl, uniformBuilder, pass) {
+    const channel = channels.getChannel(pass.channelNumber);
+    if (!channel) {
+        return;
+    }
+    
+    channels.ensureBufferTextures(pass.channelNumber);
+    if (!channel.textures) {
+        return;
+    }
+    
+    const readTexture = channel.textures[channel.currentPing];
+    const writeTexture = channel.textures[1 - channel.currentPing];
+    
+    gl.bindFramebuffer(gl.FRAMEBUFFER, state.glFramebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, writeTexture, 0);
+    
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
+        console.error('Framebuffer incomplete:', status);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        return;
+    }
+    
+    gl.useProgram(pass.program);
+    gl.viewport(0, 0, channel.resolution.width, channel.resolution.height);
+    
+    bindChannelTextures(gl, pass, readTexture);
+    applyPassUniforms(gl, pass, uniformBuilder, channel.resolution);
+    drawFullscreenQuad(gl, pass.program);
+    
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    
+    channel.currentPing = 1 - channel.currentPing;
+}
+
+function bindChannelTextures(gl, pass, readTexture) {
+    pass.requiredChannels.forEach(chNum => {
+        const texture = getChannelTexture(chNum, pass, readTexture);
+        const loc = pass.channelUniformLocations?.[chNum];
+        if (!texture || loc == null) {
+            return;
+        }
+        gl.activeTexture(gl.TEXTURE0 + chNum);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.uniform1i(loc, chNum);
+    });
+}
+
+function getChannelTexture(channelNumber, pass, readTexture) {
+    if (channelNumber === pass.channelNumber && readTexture) {
+        return readTexture;
+    }
+    
+    const channel = channels.getChannel(channelNumber);
+    if (!channel) return null;
+    
+    if (channel.type === 'image' || channel.type === 'video') {
+        return channel.texture || null;
+    }
+    
+    if (channel.type === 'buffer') {
+        channels.ensureBufferTextures(channel.number);
+        if (!channel.textures) {
+            return null;
+        }
+        return channel.textures[channel.currentPing];
+    }
+    
+    return null;
+}
+
+function applyPassUniforms(gl, pass, uniformBuilder, resolution) {
+    uniformBuilder.applyWebGL(gl, pass.uniforms);
+    
+    if (pass.uniforms.u_resolution && resolution) {
+        gl.uniform2f(pass.uniforms.u_resolution, resolution.width, resolution.height);
+    }
+    
+    if (pass.uniforms.u_frame) {
+        gl.uniform1i(pass.uniforms.u_frame, state.visualFrame);
+    }
+}
+
+function drawFullscreenQuad(gl, program) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, state.glQuadBuffer);
+    const a_position = gl.getAttribLocation(program, 'a_position');
+    if (a_position >= 0) {
+        gl.enableVertexAttribArray(a_position);
+        gl.vertexAttribPointer(a_position, 2, gl.FLOAT, false, 0, 0);
+    }
+    
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    
+    if (a_position >= 0) {
+        gl.disableVertexAttribArray(a_position);
+    }
+}
+
+function displaySelectedChannel(gl) {
+    const selected = channels.getSelectedOutputChannel();
+    let channel = channels.getChannel(selected) || channels.getChannel(0);
+    let texture = channels.getChannelTextureForDisplay(selected);
+    
+    if (!texture && selected !== 0) {
+        channel = channels.getChannel(0);
+        texture = channels.getChannelTextureForDisplay(0);
+    }
+    
+    if (!texture || !channel) return;
+    
+    const resolution = channel.resolution || { width: gl.canvas.width, height: gl.canvas.height };
+    
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, state.glFramebuffer);
+    gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+    gl.blitFramebuffer(
+        0, 0, resolution.width, resolution.height,
+        0, 0, gl.canvas.width, gl.canvas.height,
+        gl.COLOR_BUFFER_BIT,
+        gl.NEAREST
+    );
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
 }
 
 // ============================================================================
 // Cleanup
 // ============================================================================
 
+export function disposePassPrograms(passList = state.webglPasses) {
+    const gl = state.glContext;
+    if (!gl || !passList) return;
+    passList.forEach(pass => {
+        if (pass?.program) {
+            gl.deleteProgram(pass.program);
+        }
+    });
+}
+
 export function cleanup() {
     const gl = state.glContext;
     if (!gl) return;
 
-    if (state.glProgram) {
-        gl.deleteProgram(state.glProgram);
-        state.glProgram = null;
-    }
+    disposePassPrograms(state.webglPasses);
+    state.webglPasses = [];
+    state.glProgram = null;
 
     if (state.glQuadBuffer) {
         gl.deleteBuffer(state.glQuadBuffer);
         state.glQuadBuffer = null;
+    }
+
+    if (state.glFramebuffer) {
+        gl.deleteFramebuffer(state.glFramebuffer);
+        state.glFramebuffer = null;
     }
 
     state.glUniforms = null;

@@ -3,8 +3,8 @@
 // ============================================================================
 
 import { state, logStatus } from './core.js';
-import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET } from './examples.js';
-import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, getChannelNumber, createImageChannelTabName } from './tab-config.js';
+import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF } from './examples.js';
+import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isBufferChannel, getChannelNumber, createImageChannelTabName, createBufferChannelTabName } from './tab-config.js';
 import * as mediaSelector from './ui/media-selector.js';
 import * as channels from './channels.js';
 
@@ -31,6 +31,75 @@ function countCodeChars(code) {
     withoutComments = withoutComments.replace(/\n\n+/g, '\n');
     
     return withoutComments.length;
+}
+
+export const GLSL_TAB_ORDER = ['glsl_stoy', 'glsl_regular', 'glsl_golf', 'glsl_fragment'];
+
+function usesGraphicsEditor(tabName) {
+    if (!tabName) return false;
+    return tabName === 'graphics' ||
+        tabName.startsWith('glsl_') ||
+        isBufferChannel(tabName);
+}
+
+function saveCurrentGraphicsTabCode() {
+    if (!state.graphicsEditor) return;
+    const currentTab = state.currentTab;
+    if (!usesGraphicsEditor(currentTab)) return;
+    state.tabCodeCache[currentTab] = state.graphicsEditor.getValue();
+}
+
+export function getActiveGlslTab() {
+    for (const tabName of GLSL_TAB_ORDER) {
+        if (state.activeTabs.includes(tabName)) {
+            return tabName;
+        }
+    }
+    return null;
+}
+
+function getMinimalCodeForGlslTab(tabName) {
+    switch (tabName) {
+        case 'glsl_regular':
+            return MINIMAL_GLSL_REGULAR;
+        case 'glsl_golf':
+            return MINIMAL_GLSL_GOLF;
+        case 'glsl_fragment':
+            return MINIMAL_GLSL;
+        case 'glsl_stoy':
+        default:
+            return MINIMAL_GLSL_STOY;
+    }
+}
+
+function getDefaultBufferCode() {
+    const baseTab = getActiveGlslTab();
+    if (baseTab) {
+        return getMinimalCodeForGlslTab(baseTab);
+    }
+    // Fallback if no GLSL tab is active
+    return MINIMAL_GLSL_STOY;
+}
+
+function loadGraphicsTabCode(tabName) {
+    if (!state.graphicsEditor || !usesGraphicsEditor(tabName)) return;
+    if (state.tabCodeCache[tabName] === undefined) {
+        if (isBufferChannel(tabName)) {
+            state.tabCodeCache[tabName] = getDefaultBufferCode();
+        } else {
+            // For built-in tabs, default to current editor content if cache missing
+            state.tabCodeCache[tabName] = state.graphicsEditor.getValue();
+            return;
+        }
+    }
+    const cached = state.tabCodeCache[tabName];
+    if (state.graphicsEditor.getValue() !== cached) {
+        state.graphicsEditor.setValue(cached);
+    }
+}
+
+export function syncCurrentGraphicsTabCode() {
+    saveCurrentGraphicsTabCode();
 }
 
 export function renderTabs() {
@@ -105,6 +174,12 @@ export function switchTab(tabName) {
         return;
     }
     
+    if (state.currentTab === tabName) {
+        return;
+    }
+    
+    saveCurrentGraphicsTabCode();
+    
     state.currentTab = tabName;
     
     // Handle channel tabs separately
@@ -163,6 +238,10 @@ export function switchTab(tabName) {
         js: document.getElementById('jsEditorContainer')
     };
     
+    if (isBufferChannel(tabName)) {
+        containers[tabName] = document.getElementById('graphicsContainer');
+    }
+    
     const editors = {
         graphics: state.graphicsEditor,
         glsl_fragment: state.graphicsEditor,  // GLSL uses graphics editor
@@ -173,6 +252,10 @@ export function switchTab(tabName) {
         audio_worklet: state.audioEditor,  // Both audio tabs use same editor
         js: state.jsEditor
     };
+    
+    if (isBufferChannel(tabName)) {
+        editors[tabName] = state.graphicsEditor;
+    }
     
     // Hide all containers
     const allContainers = [...new Set(Object.values(containers))];
@@ -194,10 +277,16 @@ export function switchTab(tabName) {
     } else if (tabName === 'glsl_fragment' && state.graphicsEditor) {
         // Use custom GLSL language definition (registered in editor.js)
         monaco.editor.setModelLanguage(state.graphicsEditor.getModel(), 'glsl');
+    } else if ((tabName === 'glsl_regular' || tabName === 'glsl_stoy' || tabName === 'glsl_golf' || isBufferChannel(tabName)) && state.graphicsEditor) {
+        monaco.editor.setModelLanguage(state.graphicsEditor.getModel(), 'glsl');
     } else if (tabName === 'audio_gpu' && state.audioEditor) {
         monaco.editor.setModelLanguage(state.audioEditor.getModel(), 'wgsl');
     } else if (tabName === 'audio_worklet' && state.audioEditor) {
         monaco.editor.setModelLanguage(state.audioEditor.getModel(), 'javascript');
+    }
+    
+    if (usesGraphicsEditor(tabName)) {
+        loadGraphicsTabCode(tabName);
     }
     
     // Force layout update
@@ -288,6 +377,37 @@ export async function addImageChannel() {
     console.log(`✓ Image channel tab added: ${tabName} (ch${channelNumber})`);
 }
 
+export async function addBufferChannelTab() {
+    const baseGlslTab = getActiveGlslTab();
+    if (!baseGlslTab) {
+        logStatus('Add a GLSL tab before creating buffer passes', 'error');
+        return;
+    }
+    
+    const channelNumber = await channels.createChannel('buffer', {
+        tabName: null
+    });
+    
+    if (channelNumber === -1) {
+        console.error('Failed to create buffer channel');
+        return;
+    }
+    
+    const tabName = createBufferChannelTabName(channelNumber);
+    const channel = channels.getChannel(channelNumber);
+    if (channel) {
+        channel.tabName = tabName;
+    }
+    
+    state.tabCodeCache[tabName] = getMinimalCodeForGlslTab(baseGlslTab);
+    
+    state.activeTabs.push(tabName);
+    renderTabs();
+    switchTab(tabName);
+    
+    console.log(`✓ Buffer channel tab added: ${tabName} (ch${channelNumber})`);
+}
+
 export function removeTab(tabName) {
     // Can't remove graphics (it's mandatory)
     if (tabName === 'graphics') {
@@ -298,6 +418,17 @@ export function removeTab(tabName) {
     if (index === -1) return;
     
     state.activeTabs.splice(index, 1);
+    
+    if (usesGraphicsEditor(tabName)) {
+        delete state.tabCodeCache[tabName];
+    }
+    
+    if (isBufferChannel(tabName)) {
+        const chNum = getChannelNumber(tabName);
+        if (chNum >= 0) {
+            channels.deleteChannel(chNum);
+        }
+    }
     
     // If removing an audio tab, clear audio type and stop audio
     if (tabName === 'audio_gpu' || tabName === 'audio_worklet') {
@@ -352,7 +483,8 @@ export function showAddPassMenu() {
         { name: 'audio_gpu', label: '🔊 Audio (WGSL)' },
         { name: 'audio_worklet', label: '🎵 Audio (Worklet)' },
         { name: 'js', label: '⚡ JavaScript' },
-        { name: '_image_channel', label: '🖼️ Image Channel' } // Special action
+        { name: '_image_channel', label: '🖼️ Image Channel' }, // Special action
+        { name: '_buffer_channel', label: '🎚️ Buffer Pass' }
     ];
     
     menu.innerHTML = '';
@@ -371,7 +503,8 @@ export function showAddPassMenu() {
         // - GLSL tabs if already have another GLSL tab active
         const isDisabled = (tab.name === 'audio_gpu' && (hasAudioWorklet || hasGLSL)) || 
                           (tab.name === 'audio_worklet' && hasAudioGpu) ||
-                          ((tab.name === 'glsl_fragment' || tab.name === 'glsl_regular' || tab.name === 'glsl_stoy' || tab.name === 'glsl_golf') && hasGLSL);
+                          ((tab.name === 'glsl_fragment' || tab.name === 'glsl_regular' || tab.name === 'glsl_stoy' || tab.name === 'glsl_golf') && hasGLSL) ||
+                          (tab.name === '_buffer_channel' && !getActiveGlslTab());
         
         const option = document.createElement('div');
         option.textContent = tab.label + (isActive ? ' ✓' : '');
@@ -393,6 +526,8 @@ export function showAddPassMenu() {
             // Handle image channel as special action
             if (tab.name === '_image_channel') {
                 await addImageChannel();
+            } else if (tab.name === '_buffer_channel') {
+                await addBufferChannelTab();
             } else {
                 addTab(tab.name);
             }

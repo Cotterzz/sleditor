@@ -209,6 +209,7 @@
                     <span>FPS: <span id="fsFps">0</span></span>
                     <span>Frame: <span id="fsFrame">0</span></span>
                     <span>Time: <span id="fsTime">0.00s</span></span>
+                    <span>Compile: <span id="fsCompileTime">0.0ms</span></span>
                 </div>
             </div>
             </div>
@@ -234,11 +235,16 @@
                     <input type="range" id="pixelScaleSlider" class="verticalSlider" min="0" max="5" value="0" step="1" orient="vertical">
                     <div id="renderModeIcon" style="font-size: 16px; cursor: pointer; user-select: none;" title="Click to cycle render modes">▦</div>
                 </div>
+                <div class="channel-viewer-select">
+                    <label for="channelViewerSelect">View</label>
+                    <select id="channelViewerSelect"></select>
+                </div>
                 <div class="flex-col gap-sm text-sm" style="color: var(--text-secondary);">
                     <div id="resolutionDisplay">512 × 512 × 1</div>
                     <div>FPS: <span id="fpsCounter">0</span></div>
                     <div>Frame: <span id="frameCounter">0</span></div>
                     <div>Time: <span id="timeCounter">0.00s</span></div>
+                    <div>Compile: <span id="compileTimeDisplay">0.0ms</span></div>
                 </div>
                 <!-- Spacer to push views/likes to the right -->
                 <div class="flex-1"></div>

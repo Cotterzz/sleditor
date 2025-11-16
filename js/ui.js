@@ -17,6 +17,11 @@ import * as render from './render.js';
 import * as editor from './editor.js';
 import * as compiler from './compiler.js';
 import * as comments from './comments.js';
+import * as channels from './channels.js';
+import * as webgl from './backends/webgl.js';
+
+let compileOverlay;
+let compileOverlayText;
 
 // ============================================================================
 // Theme
@@ -29,7 +34,6 @@ export function applyTheme() {
         document.body.classList.add('light-mode');
     }
     
-    // Update Monaco theme if editors exist
     if (state.graphicsEditor) {
         editor.setTheme(state.isDarkMode);
     }
@@ -39,6 +43,63 @@ export function toggleTheme() {
     state.isDarkMode = !state.isDarkMode;
     saveSettings({ isDarkMode: state.isDarkMode });
     applyTheme();
+}
+
+export function setupUI() {
+    createCompileOverlay();
+    setCompileTime(0);
+}
+function createCompileOverlay() {
+    if (compileOverlay) return;
+    compileOverlay = document.createElement('div');
+    compileOverlay.id = 'compileOverlay';
+    compileOverlay.style.position = 'absolute';
+    compileOverlay.style.top = '0';
+    compileOverlay.style.left = '0';
+    compileOverlay.style.right = '0';
+    compileOverlay.style.bottom = '0';
+    compileOverlay.style.background = 'rgba(0,0,0,0.4)';
+    compileOverlay.style.display = 'none';
+    compileOverlay.style.alignItems = 'center';
+    compileOverlay.style.justifyContent = 'center';
+    compileOverlay.style.color = '#fff';
+    compileOverlay.style.fontSize = '14px';
+    compileOverlay.style.zIndex = '50';
+    
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner';
+    compileOverlayText = document.createElement('div');
+    compileOverlayText.textContent = 'Compiling...';
+    compileOverlay.appendChild(spinner);
+    compileOverlay.appendChild(compileOverlayText);
+    
+    const canvasContainer = document.getElementById('canvasContainer');
+    if (canvasContainer) {
+        canvasContainer.appendChild(compileOverlay);
+    }
+}
+
+export function setCompileOverlay(visible, message = 'Compiling...') {
+    if (!compileOverlay) {
+        createCompileOverlay();
+    }
+    if (!compileOverlay) return;
+    compileOverlay.style.display = visible ? 'flex' : 'none';
+    if (compileOverlayText) {
+        compileOverlayText.textContent = message;
+    }
+}
+
+export function setCompileTime(milliseconds) {
+    const formatted = Number.isFinite(milliseconds) ? `${milliseconds.toFixed(1)}ms` : '—';
+    const el = document.getElementById('compileTimeDisplay');
+    if (el) {
+        el.textContent = formatted;
+    }
+    const fsEl = document.getElementById('fsCompileTime');
+    if (fsEl) {
+        fsEl.textContent = formatted;
+    }
 }
 
 // ============================================================================
@@ -99,6 +160,12 @@ export function restart(userInitiated = false) {
     state.pausedTime = 0;
     state.visualFrame = 0;
     state.audioFrame = 0;
+    
+    // Clear main buffer feedback textures if WebGL is active
+    if (state.glContext) {
+        channels.clearMainBuffer();
+        channels.resizeAllBufferChannels(state.canvasWidth, state.canvasHeight);
+    }
     
     // If currently paused, set lastPauseTime to NOW so unpause timing works correctly
     if (!state.isPlaying) {
@@ -571,6 +638,12 @@ export async function updateCanvasSize(width, height, recompile = true) {
         fsResolutionEl.textContent = `${renderWidth}×${renderHeight}×${state.pixelScale}`;
     }
     
+    // Resize buffer textures if WebGL is active
+    if (state.glContext) {
+        channels.resizeMainBuffer(renderWidth, renderHeight);
+        channels.resizeAllBufferChannels(renderWidth, renderHeight);
+    }
+    
     // Skip recompilation if editors aren't initialized yet (happens during startup)
     if (recompile && state.graphicsEditor) {
         // Check if we're using WebGPU (which needs recompilation for workgroup size)
@@ -638,6 +711,54 @@ export function updateRenderMode() {
         icon.textContent = '▩';
         icon.title = 'Render mode: Smooth (Bilinear) (click to cycle)';
         console.log('  -> Set to mode 1 (smooth), icon: ▩');
+    }
+}
+
+// ============================================================================
+// Channel Viewer
+// ============================================================================
+
+let channelViewerSelect = null;
+
+export function initChannelViewer() {
+    channelViewerSelect = document.getElementById('channelViewerSelect');
+    if (!channelViewerSelect) return;
+    
+    channelViewerSelect.addEventListener('change', handleChannelViewerChange);
+    window.addEventListener('channels-changed', refreshChannelViewerOptions);
+    refreshChannelViewerOptions();
+}
+
+function refreshChannelViewerOptions() {
+    if (!channelViewerSelect) return;
+    
+    const channelsList = channels.getAvailableViewerChannels();
+    const currentSelection = channels.getSelectedOutputChannel();
+    
+    channelViewerSelect.innerHTML = '';
+    channelsList.forEach(ch => {
+        const option = document.createElement('option');
+        option.value = ch.number;
+        option.textContent = ch.label;
+        channelViewerSelect.appendChild(option);
+    });
+    
+    const hasCurrent = channelsList.some(ch => ch.number === currentSelection);
+    const targetValue = hasCurrent ? currentSelection : (channelsList[0]?.number ?? 0);
+    channelViewerSelect.value = targetValue;
+    
+    if (!hasCurrent && channelsList.length > 0) {
+        channels.setSelectedOutputChannel(targetValue);
+    }
+}
+
+function handleChannelViewerChange() {
+    if (!channelViewerSelect) return;
+    const selected = parseInt(channelViewerSelect.value, 10);
+    if (Number.isNaN(selected)) return;
+    channels.setSelectedOutputChannel(selected);
+    if (!state.isPlaying) {
+        render.renderOnce();
     }
 }
 

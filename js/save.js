@@ -5,9 +5,10 @@
 import { state, logStatus } from './core.js';
 import * as backend from './backend.js';
 import * as tabs from './tabs.js';
-import { getTabIcon, getTabLabel, dbKeyToTabName, getEditorForTab } from './tab-config.js';
+import { getTabIcon, getTabLabel, dbKeyToTabName, getEditorForTab, isBufferChannel } from './tab-config.js';
 import * as uniformControls from './uniform-controls.js';
 import * as channels from './channels.js';
+import { resetEditorState } from './shader-management.js';
 
 // ============================================================================
 // Thumbnail Capture
@@ -495,7 +496,7 @@ export async function loadDatabaseShader(shader) {
         window.updateViewsAndLikes(shader);
     }
     
-    // Set active tabs from code_types (filter out legacy 'help' and 'boilerplate' tabs)
+    resetEditorState();
     state.activeTabs = (shader.code_types || []).filter(t => t !== 'help' && t !== 'boilerplate');
     
     // Load code into editors
@@ -506,18 +507,22 @@ export async function loadDatabaseShader(shader) {
             
             // Map DB key to tab name (handles legacy naming)
             const tabName = mapLegacyCodeKey(dbKey, shader.code_types);
-            const editor = getEditorForTab(tabName, state);
+        if (isBufferChannel(tabName)) {
+            state.tabCodeCache[tabName] = code;
+            return;
+        }
+        
+        const editor = getEditorForTab(tabName, state);
+        if (editor) {
+            editor.setValue(code);
+            state.tabCodeCache[tabName] = code;
             
-            if (editor) {
-                editor.setValue(code);
-                
-                // Set correct language for audio editor
-                if (tabName === 'audio_worklet') {
-                    monaco.editor.setModelLanguage(editor.getModel(), 'javascript');
-                } else if (tabName === 'audio_gpu') {
-                    monaco.editor.setModelLanguage(editor.getModel(), 'wgsl');
-                }
+            if (tabName === 'audio_worklet') {
+                monaco.editor.setModelLanguage(editor.getModel(), 'javascript');
+            } else if (tabName === 'audio_gpu') {
+                monaco.editor.setModelLanguage(editor.getModel(), 'wgsl');
             }
+        }
         });
     }
     

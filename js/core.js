@@ -72,8 +72,10 @@ export const state = {
     
     // WebGL state (future)
     glContext: null,
-    glProgram: null,
-    glUniforms: null,
+    glProgram: null, // Legacy field (main program) - kept for compatibility
+    glUniforms: null, // Legacy field
+    glFramebuffer: null,
+    webglPasses: [],
     
     // Audio state
     audioContext: null,
@@ -132,6 +134,7 @@ export const state = {
     isRunning: false,      // System initialized and ready
     isPlaying: true,       // Currently playing (default true)
     isRecompiling: false,  // Temporarily pause rendering during shader recompilation
+    currentCompileToken: 0,
 
     // Monaco editors
     boilerplateEditor: null,
@@ -144,6 +147,7 @@ export const state = {
     currentTab: 'glsl_fragment',
     currentExample: 'glsl_hello',
     currentAudioType: null,  // 'gpu' or 'worklet' - tracks which audio tab is active
+    tabCodeCache: {},        // Code per tab for editors sharing Monaco instances
     
     // Save/Load tracking
     isDirty: false,  // Track unsaved changes
@@ -160,6 +164,14 @@ export const state = {
     mouseX: 0.5,
     mouseY: 0.5,
 };
+
+if (typeof window !== 'undefined') {
+    window.appState = state;
+}
+
+if (typeof window !== 'undefined') {
+    window.appState = state;
+}
 
 // Update DERIVED values based on audio context
 export function updateDerived(audioContext) {
