@@ -18,8 +18,12 @@ precision highp float;
 // === Built-in Uniforms (automatically set each frame) ===
 uniform float u_time;        // Seconds since start
 uniform vec2 u_resolution;   // Canvas width, height in pixels
-uniform vec2 u_mouse;        // Mouse position (normalized 0.0-1.0)
+uniform vec2 u_mouse;        // Drag/last mouse-down position (pixels)
+uniform vec2 u_click;        // Click origin (Shadertoy style, pixels w/ sign)
+uniform vec2 u_hover;        // Current hover position (pixels)
 uniform int u_frame;         // Frame counter
+uniform float u_pixel;       // Pixel scale (1.0 = native)
+uniform vec4 u_date;         // year-1, month-1, day, seconds since midnight
 
 // === Custom Uniforms (set from JavaScript) ===
 // Use api.uniforms.setCustomFloat(slot, value) in JS tab
@@ -65,7 +69,11 @@ precision highp float;
 uniform float u_time;
 uniform vec2 u_resolution;
 uniform vec2 u_mouse;
+uniform vec2 u_click;
+uniform vec2 u_hover;
 uniform int u_frame;
+uniform float u_pixel;
+uniform vec4 u_date;
 uniform float u_custom0;
 uniform float u_custom1;
 uniform float u_custom2;
@@ -91,11 +99,9 @@ uniform int u_customBool1;
 #define iTime u_time
 #define iTimeDelta (1.0 / 60.0)
 #define iFrame u_frame
-#define iResolution vec3(u_resolution, 1.0)
-#define iMouse (u_mouse.xyxy*u_resolution.xyxy)
-
-// Placeholder values for unsupported Shadertoy features
-#define iDate vec4(0.0)
+#define iResolution vec3(u_resolution, u_pixel)
+#define iMouse vec4(u_mouse, u_click)
+#define iDate u_date
 #define iSampleRate 48000.0
 
 // === Output ===
@@ -118,7 +124,11 @@ precision highp float;
 uniform float u_time;
 uniform vec2 u_resolution;
 uniform vec2 u_mouse;
+uniform vec2 u_click;
+uniform vec2 u_hover;
 uniform int u_frame;
+uniform float u_pixel;
+uniform vec4 u_date;
 uniform float u_custom0;
 uniform float u_custom1;
 uniform float u_custom2;

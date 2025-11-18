@@ -160,7 +160,11 @@ export async function compileProgram(fragmentSource) {
             u_time: gl.getUniformLocation(program, 'u_time'),
             u_resolution: gl.getUniformLocation(program, 'u_resolution'),
             u_mouse: gl.getUniformLocation(program, 'u_mouse'),
+            u_click: gl.getUniformLocation(program, 'u_click'),
+            u_hover: gl.getUniformLocation(program, 'u_hover'),
             u_frame: gl.getUniformLocation(program, 'u_frame'),
+            u_pixel: gl.getUniformLocation(program, 'u_pixel'),
+            u_date: gl.getUniformLocation(program, 'u_date'),
         };
 
         // Get custom uniform locations (u_custom0 through u_custom14)

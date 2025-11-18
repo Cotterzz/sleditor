@@ -20,7 +20,11 @@ export class UniformBuilder {
             audioFractTime: 0,
             audioFrame: 0,
             resolution: [0, 0],
-            mouse: [0, 0],
+            mouseDrag: [0, 0],
+            mouseClick: [0, 0],
+            mouseHover: [0, 0],
+            pixel: 1,
+            date: [0, 0, 0, 0],
         };
         
         // Raw buffer for WebGPU
@@ -53,16 +57,32 @@ export class UniformBuilder {
         // WebGPU doesn't need this (reads from texture size)
     }
     
-    setMouse(x, y) {
-        this.data.mouse = [x, y];
-        // Write to buffer for WGSL (indices 5-6)
-        this.f32[5] = x;
-        this.f32[6] = y;
+    setMouseDrag(x = 0, y = 0) {
+        this.data.mouseDrag = [x, y];
+    }
+
+    setMouseClick(x = 0, y = 0) {
+        this.data.mouseClick = [x, y];
+    }
+
+    setMouseHover(pixelX = 0, pixelY = 0, normX = 0, normY = 0) {
+        this.data.mouseHover = [pixelX, pixelY];
+        this.f32[5] = normX;
+        this.f32[6] = normY;
     }
     
     setFrame(value) {
         this.data.frame = value;
         // Frame counter isn't in the uniform buffer for WGSL, but GLSL needs it
+    }
+
+    setPixelSize(value = 1) {
+        const safeValue = Number.isFinite(value) && value > 0 ? value : 1;
+        this.data.pixel = safeValue;
+    }
+
+    setDate(yearMinusOne, monthMinusOne, day, seconds) {
+        this.data.date = [yearMinusOne, monthMinusOne, day, seconds];
     }
     
     /**
@@ -89,11 +109,28 @@ export class UniformBuilder {
         }
         if (locations.u_mouse) {
             gl.uniform2f(locations.u_mouse, 
-                this.data.mouse[0], 
-                this.data.mouse[1]);
+                this.data.mouseDrag[0], 
+                this.data.mouseDrag[1]);
         }
         if (locations.u_frame) {
             gl.uniform1i(locations.u_frame, this.data.frame || 0);
+        }
+        if (locations.u_click) {
+            gl.uniform2f(locations.u_click, 
+                this.data.mouseClick[0], 
+                this.data.mouseClick[1]);
+        }
+        if (locations.u_hover) {
+            gl.uniform2f(locations.u_hover, 
+                this.data.mouseHover[0], 
+                this.data.mouseHover[1]);
+        }
+        if (locations.u_pixel) {
+            gl.uniform1f(locations.u_pixel, this.data.pixel ?? 1.0);
+        }
+        if (locations.u_date) {
+            const d = this.data.date || [0, 0, 0, 0];
+            gl.uniform4f(locations.u_date, d[0], d[1], d[2], d[3]);
         }
         
         // Custom uniforms (u_custom0 to u_custom14 map to buffer indices 7-21)

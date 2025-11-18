@@ -36,6 +36,8 @@ window.ui = ui;
 window.shaderManagement = shaderManagement;
 window.HELP_SECTIONS = HELP_SECTIONS;
 
+let pointerEventsAttached = false;
+
 // ============================================================================
 // Helper function for createNewShader that needs reloadShader reference
 // ============================================================================
@@ -287,6 +289,9 @@ function setupUI() {
         const scaleIndex = parseInt(e.target.value);
         const scales = [1, 2, 3, 4, 6, 8];
         state.pixelScale = scales[scaleIndex];
+        if (state.uniformBuilder) {
+            state.uniformBuilder.setPixelSize(state.pixelScale);
+        }
         ui.updateCanvasSize(state.canvasWidth, state.canvasHeight, true);
     });
     
@@ -298,13 +303,7 @@ function setupUI() {
         ui.updateRenderMode();
     });
     
-    // Mouse tracking (use whichever canvas is visible)
-    document.addEventListener('mousemove', (e) => {
-        const activeCanvas = state.graphicsBackend === 'webgl' ? state.canvasWebGL : state.canvasWebGPU;
-        const rect = activeCanvas.getBoundingClientRect();
-        state.mouseX = (e.clientX - rect.left) / rect.width;
-        state.mouseY = 1.0 - (e.clientY - rect.top) / rect.height; // Flip Y
-    });
+    setupPointerEvents();
     
     // Handle visibility change - resync audio timing when tab becomes visible
     document.addEventListener('visibilitychange', () => {
@@ -345,6 +344,122 @@ function setupUI() {
             return ''; // Some browsers need a return value
         }
     });
+}
+
+function setupPointerEvents() {
+    if (pointerEventsAttached) return;
+    const canvases = [state.canvasWebGL, state.canvasWebGPU];
+    canvases.forEach(canvas => attachPointerListeners(canvas));
+    pointerEventsAttached = true;
+}
+
+function attachPointerListeners(canvas) {
+    if (!canvas) return;
+    const options = { passive: false };
+    canvas.addEventListener('pointerdown', handlePointerDown, options);
+    canvas.addEventListener('pointermove', handlePointerMove, options);
+    canvas.addEventListener('pointerup', handlePointerUp, options);
+    canvas.addEventListener('pointercancel', handlePointerUp, options);
+    canvas.addEventListener('pointerleave', handlePointerLeave, options);
+}
+
+function handlePointerDown(event) {
+    if (!event.isPrimary) return;
+    if (event.button !== undefined && event.button !== 0) return;
+    
+    const canvas = event.currentTarget;
+    const pos = getPointerPosition(canvas, event);
+    if (!pos) return;
+    event.preventDefault();
+    
+    state.activePointerId = event.pointerId;
+    if (canvas.setPointerCapture) {
+        try {
+            canvas.setPointerCapture(event.pointerId);
+        } catch (err) {
+            // Ignore capture errors
+        }
+    }
+    
+    state.mouseIsDown = true;
+    state.mouseDragX = pos.pixelX;
+    state.mouseDragY = pos.pixelY;
+    state.mouseLastDownX = pos.pixelX;
+    state.mouseLastDownY = pos.pixelY;
+    state.mouseClickX = pos.pixelX;
+    state.mouseClickY = pos.pixelY;
+    state.mouseClickPhase = 'pressed';
+    updateHoverState(pos);
+}
+
+function handlePointerMove(event) {
+    if (!event.isPrimary && state.activePointerId !== event.pointerId) return;
+    const canvas = event.currentTarget;
+    const pos = getPointerPosition(canvas, event);
+    if (!pos) return;
+    
+    updateHoverState(pos);
+    
+    if (state.activePointerId === event.pointerId && state.mouseIsDown) {
+        state.mouseDragX = pos.pixelX;
+        state.mouseDragY = pos.pixelY;
+        state.mouseLastDownX = pos.pixelX;
+        state.mouseLastDownY = pos.pixelY;
+    }
+}
+
+function handlePointerUp(event) {
+    if (state.activePointerId !== event.pointerId) return;
+    const canvas = event.currentTarget;
+    if (canvas.releasePointerCapture) {
+        try {
+            canvas.releasePointerCapture(event.pointerId);
+        } catch (err) {
+            // Ignore release errors
+        }
+    }
+    
+    const pos = getPointerPosition(canvas, event);
+    if (pos) {
+        updateHoverState(pos);
+    }
+    
+    state.activePointerId = null;
+    state.mouseIsDown = false;
+    state.mouseClickPhase = 'released';
+}
+
+function handlePointerLeave(event) {
+    if (state.mouseIsDown && state.activePointerId === event.pointerId) {
+        return;
+    }
+}
+
+function getPointerPosition(canvas, event) {
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    
+    const rawX = (event.clientX - rect.left) / rect.width;
+    const rawY = (event.clientY - rect.top) / rect.height;
+    if (!Number.isFinite(rawX) || !Number.isFinite(rawY)) return null;
+    
+    const normX = Math.min(1, Math.max(0, rawX));
+    const normY = Math.min(1, Math.max(0, 1 - rawY));
+    
+    const width = canvas.width || state.canvasWidth;
+    const height = canvas.height || state.canvasHeight;
+    const pixelX = normX * width;
+    const pixelY = normY * height;
+    
+    return { pixelX, pixelY, normX, normY };
+}
+
+function updateHoverState(pos) {
+    state.mouseHoverX = pos.pixelX;
+    state.mouseHoverY = pos.pixelY;
+    state.mouseX = pos.normX;
+    state.mouseY = pos.normY;
 }
 
 // ============================================================================
@@ -494,6 +609,7 @@ async function init() {
     
     // Initialize uniform builder (needed for uniform controls)
     state.uniformBuilder = new UniformBuilder();
+    state.uniformBuilder.setPixelSize(state.pixelScale || 1);
     
     // Initialize Monaco with empty initial code (actual shader will load after init)
     const initialCode = {

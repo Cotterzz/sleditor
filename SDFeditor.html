@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="author" content="John Cotterell">
+    <title>SDF Builder</title>
+    <link href="https://fonts.googleapis.com/css?family=Abel|Quicksand:500|Source+Code+Pro" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #rootnode {
+            font-size: 20px;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+
+        .node {
+            font-family: 'Quicksand', sans-serif;
+            font-size: .9em;
+            padding: 8px 12px;
+            border: 2px solid #cccccc;
+            border-radius: 5px;
+            background: #eeeeee;
+            position: absolute;
+            z-index: 9;
+            cursor: default;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .node.scene {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #5a67d8;
+            color: white;
+        }
+
+        .node.operation {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-color: #ed64a6;
+            color: white;
+        }
+
+        .node.primitive {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            border-color: #38b2ac;
+            color: white;
+        }
+
+        .node.selected {
+            box-shadow: 0 0 0 3px #ffd700;
+        }
+
+        .node.invalid {
+            opacity: 0.5;
+        }
+
+        .nodetitle {
+            font-weight: 500;
+            pointer-events: none;
+        }
+
+        #sidebar {
+            font-family: 'Abel', sans-serif;
+            font-size: 16px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 200px;
+            height: 100%;
+            background: #2d3748;
+            color: white;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        #sidebar h3 {
+            margin: 15px 0 10px 0;
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #a0aec0;
+            border-bottom: 1px solid #4a5568;
+            padding-bottom: 5px;
+        }
+
+        .menu-item {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 4px;
+            cursor: grab;
+            transition: background 0.2s;
+        }
+
+        .menu-item:hover {
+            background: #4a5568;
+        }
+
+        .menu-item.primitive {
+            border-left: 3px solid #4facfe;
+        }
+
+        .menu-item.operation {
+            border-left: 3px solid #f5576c;
+        }
+
+        #paramPanel {
+            font-family: 'Abel', sans-serif;
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 280px;
+            height: 100%;
+            background: #2d3748;
+            color: white;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+
+        #paramPanel.visible {
+            display: block;
+        }
+
+        #paramPanel h3 {
+            margin: 0 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #4a5568;
+        }
+
+        .param-group {
+            margin-bottom: 15px;
+        }
+
+        .param-group label {
+            display: block;
+            font-size: 12px;
+            color: #a0aec0;
+            margin-bottom: 5px;
+        }
+
+        .param-group input[type="range"] {
+            width: 100%;
+            margin-bottom: 3px;
+        }
+
+        .param-group .value-display {
+            font-size: 11px;
+            color: #718096;
+            text-align: right;
+        }
+
+        .param-section {
+            margin-bottom: 20px;
+        }
+
+        .param-section-title {
+            font-size: 13px;
+            color: #ed64a6;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+#exportShader {
+    position: fixed;
+    left: 340px;
+    bottom: 230px;
+    padding: 8px 16px;
+    background: #68d391;
+    color: #1a202c;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    z-index: 51;
+    font-family: 'Abel', sans-serif;
+}
+
+#exportShader:hover {
+    background: #9ae6b4;
+}
+#glCanvas {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+        #codeOutput {
+            font-family: 'Source Code Pro', monospace;
+            font-size: 11px;
+            position: fixed;
+            left: 220px;
+            bottom: 20px;
+            width: 400px;
+            height: 200px;
+            background: #1a202c;
+            color: #68d391;
+            padding: 10px;
+            border-radius: 8px;
+            overflow: auto;
+            z-index: 50;
+            white-space: pre;
+            display: none;
+        }
+
+        #toggleCode {
+            position: fixed;
+            left: 220px;
+            bottom: 230px;
+            padding: 8px 16px;
+            background: #4a5568;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 51;
+            font-family: 'Abel', sans-serif;
+        }
+
+        #toggleCode:hover {
+            background: #718096;
+        }
+
+        svg {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        #drawing {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h3>Primitives</h3>
+    <div class="menu-item primitive" data-type="Sphere">Sphere</div>
+    <div class="menu-item primitive" data-type="Box">Box</div>
+    <div class="menu-item primitive" data-type="Torus">Torus</div>
+    <div class="menu-item primitive" data-type="Cylinder">Cylinder</div>
+    <div class="menu-item primitive" data-type="Plane">Plane</div>
+    
+    <h3>Operations</h3>
+    <div class="menu-item operation" data-type="opUnion">Union</div>
+    <div class="menu-item operation" data-type="opSmoothUnion">Smooth Union</div>
+    <div class="menu-item operation" data-type="opSubtraction">Subtraction</div>
+    <div class="menu-item operation" data-type="opSmoothSubtraction">Smooth Subtract</div>
+    <div class="menu-item operation" data-type="opIntersection">Intersection</div>
+    <div class="menu-item operation" data-type="opSmoothIntersection">Smooth Intersect</div>
+</div>
+
+<div id="paramPanel">
+    <h3 id="paramNodeName">Parameters</h3>
+    <div id="paramContent"></div>
+</div>
+
+<div id="drawing"></div>
+<div id="rootnode">
+    <div class="node scene" id="scene" data-type="Scene" style="left: 50%; top: 30%;">
+        <div class="nodetitle">Scene</div>
+    </div>
+</div>
+
+<canvas id="glCanvas"></canvas>
+<button id="toggleCode">Show GLSL</button>
+<button id="exportShader">Export Shadertoy</button>
+<pre id="codeOutput"></pre>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.7.1/svg.min.js"></script>
+<script>
+// Node type definitions
+const NODE_TYPES = {
+    Scene: {
+        category: 'scene',
+        maxChildren: 99,
+        params: {}
+    },
+    Sphere: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radius: { default: 0.5, min: 0.05, max: 3, step: 0.05 }
+        }
+    },
+    Box: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            sizeX: { default: 0.5, min: 0.05, max: 3, step: 0.05 },
+            sizeY: { default: 0.5, min: 0.05, max: 3, step: 0.05 },
+            sizeZ: { default: 0.5, min: 0.05, max: 3, step: 0.05 }
+        }
+    },
+    Torus: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            majorRadius: { default: 0.5, min: 0.1, max: 2, step: 0.05 },
+            minorRadius: { default: 0.2, min: 0.05, max: 1, step: 0.05 }
+        }
+    },
+    Cylinder: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radius: { default: 0.3, min: 0.05, max: 2, step: 0.05 },
+            height: { default: 1.0, min: 0.1, max: 5, step: 0.1 }
+        }
+    },
+    Plane: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            height: { default: 0, min: -5, max: 5, step: 0.1 }
+        }
+    },
+    opUnion: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {}
+    },
+    opSmoothUnion: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {
+            k: { default: 0.3, min: 0.01, max: 1, step: 0.01 }
+        }
+    },
+    opSubtraction: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {}
+    },
+    opSmoothSubtraction: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {
+            k: { default: 0.3, min: 0.01, max: 1, step: 0.01 }
+        }
+    },
+    opIntersection: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {}
+    },
+    opSmoothIntersection: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {
+            k: { default: 0.3, min: 0.01, max: 1, step: 0.01 }
+        }
+    }
+};
+
+const TRANSFORM_PARAMS = {
+    posX: { default: 0, min: -5, max: 5, step: 0.1 },
+    posY: { default: 0, min: -5, max: 5, step: 0.1 },
+    posZ: { default: 0, min: -5, max: 5, step: 0.1 },
+    rotX: { default: 0, min: -180, max: 180, step: 1 },
+    rotY: { default: 0, min: -180, max: 180, step: 1 },
+    rotZ: { default: 0, min: -180, max: 180, step: 1 }
+};
+
+// State
+let dragging = false;
+let dragged = null;
+let detached = false;
+let dragFromMenu = false;
+let pos1, pos2, pos3, pos4;
+let selectedNode = null;
+let nodeCounter = 0;
+
+const draw = SVG('drawing').size('100%', '100%');
+let nodesArray = [];
+let lines = [];
+
+// WebGL state
+let gl, program;
+let uniformLocations = {};
+let vertexBuffer = null;
+
+// Initialize
+function init() {
+    scanNodes();
+    addLines();
+    initializeNodeParams();
+    setupEventListeners();
+    initWebGL();
+    recompilePreview();
+}
+
+function scanNodes() {
+    const nodesObject = document.getElementsByClassName("node");
+    nodesArray = [];
+    for (let i = 0; i < nodesObject.length; i++) {
+        nodesArray.push(nodesObject[i]);
+        if (!nodesObject[i].id || nodesObject[i].id === '') {
+            nodesObject[i].id = 'node_' + nodeCounter++;
+        }
+    }
+}
+
+function initializeNodeParams() {
+    nodesArray.forEach(node => {
+        if (!node.dataset.params) {
+            const nodeType = node.dataset.type;
+            const typeDef = NODE_TYPES[nodeType];
+            const params = {};
+            
+            if (typeDef && typeDef.params) {
+                for (const [key, val] of Object.entries(typeDef.params)) {
+                    params[key] = val.default;
+                }
+            }
+            
+            if (nodeType !== 'Scene') {
+                for (const [key, val] of Object.entries(TRANSFORM_PARAMS)) {
+                    params[key] = val.default;
+                }
+            }
+            
+            node.dataset.params = JSON.stringify(params);
+        }
+    });
+}
+
+function addLines() {
+    for (let i = 0; i < nodesArray.length; i++) {
+        addLine(i);
+    }
+}
+
+function addLine(num) {
+    const node = nodesArray[num];
+    const box1 = node.getBoundingClientRect();
+    const box2 = node.parentNode.getBoundingClientRect();
+    const x1 = box1.left + (box1.width / 2);
+    const y1 = box1.top + (box1.height / 2);
+    const x2 = box2.left + (box2.width / 2);
+    const y2 = box2.top + (box2.height / 2);
+    
+    if (lines[num]) {
+        lines[num].plot([['M', x1, y1], ['C', x1, y2, x2, y1, x2, y2]]);
+    } else {
+        lines[num] = draw.path([['M', x1, y1], ['C', x1, y2, x2, y1, x2, y2]])
+            .fill('none')
+            .stroke({ width: 2, color: "#888888" });
+    }
+    
+    if (!node.parentNode.classList.contains("node")) {
+        lines[num].hide();
+    } else {
+        lines[num].show();
+    }
+}
+function generateShadertoyShader() {
+    const sdfCode = generateExportGLSL();
+    
+    return `// Generated with SDF Builder
+// Paste into Shadertoy
+
+${sdfCode}
+
+vec3 calcNormal(vec3 p) {
+    vec2 e = vec2(0.001, 0.0);
+    return normalize(vec3(
+        sceneSDF(p + e.xyy) - sceneSDF(p - e.xyy),
+        sceneSDF(p + e.yxy) - sceneSDF(p - e.yxy),
+        sceneSDF(p + e.yyx) - sceneSDF(p - e.yyx)
+    ));
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
+    
+    vec3 ro = vec3(0.0, 0.0, 3.0);
+    vec3 rd = normalize(vec3(uv, -1.0));
+    
+    float t = 0.0;
+    vec3 col = vec3(1.0);
+    
+    for (int i = 0; i < 100; i++) {
+        vec3 p = ro + rd * t;
+        float d = sceneSDF(p);
+        
+        if (d < 0.001) {
+            vec3 n = calcNormal(p);
+            vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
+            float diff = max(dot(n, lightDir), 0.0);
+            float amb = 0.3;
+            col = vec3(0.85, 0.75, 0.7) * (diff + amb);
+            break;
+        }
+        
+        if (t > 20.0) break;
+        t += d;
+    }
+    
+    fragColor = vec4(col, 1.0);
+}
+`;
+}
+
+function downloadShadertoyShader() {
+    const shaderCode = generateShadertoyShader();
+    const blob = new Blob([shaderCode], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sdf_shader.glsl';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+function updateLine(node) {
+    const nodeIndex = nodesArray.indexOf(node);
+    if (nodeIndex >= 0) {
+        addLine(nodeIndex);
+    }
+    
+    const children = node.querySelectorAll('.node');
+    children.forEach(child => {
+        const childIndex = nodesArray.indexOf(child);
+        if (childIndex >= 0) {
+            addLine(childIndex);
+        }
+    });
+}
+
+function setupEventListeners() {
+    document.addEventListener('mousedown', onDocumentMouseDown, false);
+    document.addEventListener('mousemove', onDocumentMouseMove, false);
+    document.addEventListener('mouseup', onDocumentMouseUp, false);
+    document.addEventListener('contextmenu', e => e.preventDefault(), false);
+    
+    window.addEventListener('resize', () => {
+        updateLine(document.getElementById("rootnode"));
+        if (gl) {
+            gl.canvas.width = window.innerWidth;
+            gl.canvas.height = window.innerHeight;
+            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+            if (program) {
+                gl.useProgram(program);
+                const resLoc = gl.getUniformLocation(program, 'resolution');
+                gl.uniform2f(resLoc, gl.canvas.width, gl.canvas.height);
+                renderPreview();
+            }
+        }
+    }, false);
+    
+    document.querySelectorAll('.menu-item').forEach(item => {
+        item.addEventListener('mousedown', onMenuItemMouseDown, false);
+    });
+    
+    document.getElementById('toggleCode').addEventListener('click', () => {
+        console.log("SHOWCODE");
+        const codeOutput = document.getElementById('codeOutput');
+        const btn = document.getElementById('toggleCode');
+        if (codeOutput.style.display === 'none' || codeOutput.style.display === '') {
+            codeOutput.style.display = 'block';
+            btn.textContent = 'Hide GLSL';
+            codeOutput.textContent = generateExportGLSL();
+        } else {
+            codeOutput.style.display = 'none';
+            btn.textContent = 'Show GLSL';
+        }
+    });
+
+    document.getElementById('exportShader').addEventListener('click', () => {
+    // Try to copy to clipboard first
+    const shaderCode = generateShadertoyShader();
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(shaderCode).then(() => {
+            alert('Shadertoy shader copied to clipboard!');
+        }).catch(() => {
+            // Fallback to download
+            downloadShadertoyShader();
+        });
+    } else {
+        // Fallback to download
+        downloadShadertoyShader();
+    }
+});
+}
+
+function onMenuItemMouseDown(event) {
+    event.preventDefault();
+    const nodeType = event.target.dataset.type;
+    
+    const newNode = createNode(nodeType);
+    document.getElementById("rootnode").appendChild(newNode);
+    nodesArray.push(newNode);
+    
+    newNode.style.left = event.clientX - 50 + "px";
+    newNode.style.top = event.clientY - 15 + "px";
+    
+    addLine(nodesArray.length - 1);
+    
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    dragging = true;
+    dragged = newNode;
+    detached = true;
+    dragFromMenu = true;
+}
+
+function createNode(nodeType) {
+    const typeDef = NODE_TYPES[nodeType];
+    const newNode = document.createElement("DIV");
+    const newText = document.createElement("DIV");
+    
+    newText.className = "nodetitle";
+    newText.textContent = nodeType;
+    
+    newNode.className = "node " + typeDef.category;
+    newNode.id = 'node_' + nodeCounter++;
+    newNode.dataset.type = nodeType;
+    
+    const params = {};
+    if (typeDef.params) {
+        for (const [key, val] of Object.entries(typeDef.params)) {
+            params[key] = val.default;
+        }
+    }
+    for (const [key, val] of Object.entries(TRANSFORM_PARAMS)) {
+        params[key] = val.default;
+    }
+    newNode.dataset.params = JSON.stringify(params);
+    
+    newNode.appendChild(newText);
+    return newNode;
+}
+
+function getNodeChildren(node) {
+    return Array.from(node.children).filter(child => child.classList.contains('node'));
+}
+
+function canAcceptChild(parentNode) {
+    const parentType = parentNode.dataset.type;
+    const typeDef = NODE_TYPES[parentType];
+    if (!typeDef) return false;
+    
+    const currentChildren = getNodeChildren(parentNode);
+    return currentChildren.length < typeDef.maxChildren;
+}
+
+function attachNodeToParent(child, parent) {
+    if (!canAcceptChild(parent)) {
+        document.getElementById("rootnode").appendChild(child);
+        child.style.left = (((pos3) / window.innerWidth) * 100) + "%";
+        child.style.top = (((pos4) / window.innerHeight) * 100) + "%";
+        return false;
+    }
+    
+    parent.appendChild(child);
+    child.style.left = getNodeChildren(parent).length > 1 ? "100px" : "0px";
+    child.style.top = "80px";
+    updateLine(child);
+    recompilePreview(); // Structure changed - recompile
+    return true;
+}
+
+function selectNode(node) {
+    if (selectedNode) {
+        selectedNode.classList.remove('selected');
+    }
+    
+    if (node && node.dataset.type !== 'Scene') {
+        selectedNode = node;
+        node.classList.add('selected');
+        showParamPanel(node);
+    } else {
+        selectedNode = null;
+        hideParamPanel();
+    }
+}
+
+function showParamPanel(node) {
+    const panel = document.getElementById('paramPanel');
+    const content = document.getElementById('paramContent');
+    const nodeName = document.getElementById('paramNodeName');
+    
+    const nodeType = node.dataset.type;
+    const typeDef = NODE_TYPES[nodeType];
+    const params = JSON.parse(node.dataset.params);
+    
+    nodeName.textContent = nodeType;
+    content.innerHTML = '';
+    
+    if (typeDef.params && Object.keys(typeDef.params).length > 0) {
+        const section = document.createElement('div');
+        section.className = 'param-section';
+        section.innerHTML = '<div class="param-section-title">Shape Parameters</div>';
+        
+        for (const [key, def] of Object.entries(typeDef.params)) {
+            section.appendChild(createParamSlider(node, key, def, params[key]));
+        }
+        content.appendChild(section);
+    }
+    
+    const transformSection = document.createElement('div');
+    transformSection.className = 'param-section';
+    transformSection.innerHTML = '<div class="param-section-title">Transform</div>';
+    
+    for (const [key, def] of Object.entries(TRANSFORM_PARAMS)) {
+        transformSection.appendChild(createParamSlider(node, key, def, params[key]));
+    }
+    content.appendChild(transformSection);
+    
+    panel.classList.add('visible');
+}
+
+function createParamSlider(node, key, def, value) {
+    const group = document.createElement('div');
+    group.className = 'param-group';
+    
+    const label = document.createElement('label');
+    label.textContent = key;
+    
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = def.min;
+    slider.max = def.max;
+    slider.step = def.step;
+    slider.value = value;
+    
+    const valueDisplay = document.createElement('div');
+    valueDisplay.className = 'value-display';
+    valueDisplay.textContent = value.toFixed(2);
+    
+    slider.addEventListener('input', () => {
+        const params = JSON.parse(node.dataset.params);
+        params[key] = parseFloat(slider.value);
+        node.dataset.params = JSON.stringify(params);
+        valueDisplay.textContent = parseFloat(slider.value).toFixed(2);
+        updatePreviewUniforms(); // Just update uniforms - no recompile!
+    });
+    
+    group.appendChild(label);
+    group.appendChild(slider);
+    group.appendChild(valueDisplay);
+    
+    return group;
+}
+
+function hideParamPanel() {
+    document.getElementById('paramPanel').classList.remove('visible');
+}
+
+function onDocumentMouseDown(event) {
+    const target = event.target;
+    
+    if (target.closest('#sidebar') || target.closest('#paramPanel') || 
+        target.closest('#glCanvas') || target.closest('#codeOutput') ||
+        target.closest('#toggleCode')) {
+        return;
+    }
+    
+    if (target.classList.contains("node") || target.parentNode.classList.contains("node")) {
+        event.preventDefault();
+        const node = target.classList.contains("node") ? target : target.parentNode;
+        
+        pos3 = event.clientX;
+        pos4 = event.clientY;
+        
+        selectNode(node);
+        startNodeDrag(node, event.button);
+    } else {
+        selectNode(null);
+    }
+}
+
+function onDocumentMouseMove(event) {
+    if (dragging) {
+        event.preventDefault();
+        pos1 = pos3 - event.clientX;
+        pos2 = pos4 - event.clientY;
+        pos3 = event.clientX;
+        pos4 = event.clientY;
+        nodeDrag();
+    }
+}
+
+function onDocumentMouseUp(event) {
+    if (dragging) {
+        event.preventDefault();
+        
+        if (detached) {
+            dragged.hidden = true;
+            const elemBelow = document.elementFromPoint(event.clientX, event.clientY);
+            dragged.hidden = false;
+            
+            let attached = false;
+            if (elemBelow) {
+                let targetNode = null;
+                if (elemBelow.classList.contains("node")) {
+                    targetNode = elemBelow;
+                } else if (elemBelow.parentNode && elemBelow.parentNode.classList.contains("node")) {
+                    targetNode = elemBelow.parentNode;
+                }
+                
+                if (targetNode && targetNode !== dragged && !dragged.contains(targetNode)) {
+                    attached = attachNodeToParent(dragged, targetNode);
+                }
+            }
+            
+            if (!attached && dragged.parentNode.id === "rootnode") {
+                dragged.style.left = (((dragged.offsetLeft) / window.innerWidth) * 100) + "%";
+                dragged.style.top = (((dragged.offsetTop) / window.innerHeight) * 100) + "%";
+                recompilePreview(); // Node detached - structure changed
+            }
+        }
+        
+        stopNodeDrag();
+    }
+}
+
+function startNodeDrag(node, button) {
+    dragging = true;
+    dragged = node;
+    detached = node.parentNode.id === "rootnode" || button === 2;
+    
+    if (button === 2 && node.parentNode.id !== "rootnode") {
+        const box1 = node.getBoundingClientRect();
+        document.getElementById("rootnode").appendChild(node);
+        node.style.left = box1.left + "px";
+        node.style.top = box1.top + "px";
+        updateLine(node);
+        recompilePreview(); // Node detached - structure changed
+    }
+}
+
+function nodeDrag() {
+    dragged.style.top = (dragged.offsetTop - pos2) + "px";
+    dragged.style.left = (dragged.offsetLeft - pos1) + "px";
+    updateLine(dragged);
+}
+
+function stopNodeDrag() {
+    dragging = false;
+    detached = false;
+    dragFromMenu = false;
+    dragged = null;
+}
+
+// Helper to traverse all nodes connected to scene
+function traverseSceneNodes(callback) {
+    const sceneNode = document.getElementById('scene');
+    
+    function traverse(node) {
+        if (node.dataset.type !== 'Scene') {
+            callback(node);
+        }
+        getNodeChildren(node).forEach(child => traverse(child));
+    }
+    
+    traverse(sceneNode);
+}
+
+function getNodeVarName(node) {
+    return 'd_' + node.id.replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+// ===========================================
+// EXPORT GLSL - Hardcoded values (for output)
+// ===========================================
+function generateExportGLSL() {
+    const sceneNode = document.getElementById('scene');
+    const children = getNodeChildren(sceneNode);
+    
+    let code = getSDFPreamble();
+    
+    if (children.length === 0) {
+        code += `float sceneSDF(vec3 p) {
+    return 1000.0; // Empty scene
+}`;
+    } else if (children.length === 1) {
+        code += `
+float sceneSDF(vec3 p) {
+${generateExportNodeCode(children[0], 'p')}
+    return ${getNodeVarName(children[0])};
+}`;
+    } else {
+        let nodeCode = '';
+        children.forEach(child => {
+            nodeCode += generateExportNodeCode(child, 'p');
+        });
+        
+        let unionExpr = getNodeVarName(children[0]);
+        for (let i = 1; i < children.length; i++) {
+            unionExpr = `min(${unionExpr}, ${getNodeVarName(children[i])})`;
+        }
+        
+        code += `
+float sceneSDF(vec3 p) {
+${nodeCode}
+    return ${unionExpr};
+}`;
+    }
+    
+    return code;
+}
+
+function generateExportNodeCode(node, pointVar) {
+    const nodeType = node.dataset.type;
+    const params = JSON.parse(node.dataset.params);
+    const varName = getNodeVarName(node);
+    const typeDef = NODE_TYPES[nodeType];
+    
+    let code = '';
+    const transformedPoint = varName + '_p';
+    const rad = Math.PI / 180;
+    
+    code += `    vec3 ${transformedPoint} = ${pointVar};\n`;
+    code += `    ${transformedPoint} -= vec3(${params.posX.toFixed(3)}, ${params.posY.toFixed(3)}, ${params.posZ.toFixed(3)});\n`;
+    if (params.rotX !== 0) code += `    ${transformedPoint} *= rotateX(${(params.rotX * rad).toFixed(4)});\n`;
+    if (params.rotY !== 0) code += `    ${transformedPoint} *= rotateY(${(params.rotY * rad).toFixed(4)});\n`;
+    if (params.rotZ !== 0) code += `    ${transformedPoint} *= rotateZ(${(params.rotZ * rad).toFixed(4)});\n`;
+    
+    if (typeDef.category === 'primitive') {
+        switch (nodeType) {
+            case 'Sphere':
+                code += `    float ${varName} = sdSphere(${transformedPoint}, ${params.radius.toFixed(3)});\n`;
+                break;
+            case 'Box':
+                code += `    float ${varName} = sdBox(${transformedPoint}, vec3(${params.sizeX.toFixed(3)}, ${params.sizeY.toFixed(3)}, ${params.sizeZ.toFixed(3)}));\n`;
+                break;
+            case 'Torus':
+                code += `    float ${varName} = sdTorus(${transformedPoint}, vec2(${params.majorRadius.toFixed(3)}, ${params.minorRadius.toFixed(3)}));\n`;
+                break;
+            case 'Cylinder':
+                code += `    float ${varName} = sdCylinder(${transformedPoint}, ${params.radius.toFixed(3)}, ${params.height.toFixed(3)});\n`;
+                break;
+            case 'Plane':
+                code += `    float ${varName} = sdPlane(${transformedPoint}, ${params.height.toFixed(3)});\n`;
+                break;
+        }
+    } else if (typeDef.category === 'operation') {
+        const children = getNodeChildren(node);
+        
+        if (children.length < 2) {
+            code += `    float ${varName} = 1000.0; // Incomplete operation\n`;
+        } else {
+            code += generateExportNodeCode(children[0], transformedPoint);
+            code += generateExportNodeCode(children[1], transformedPoint);
+            
+            const child1Var = getNodeVarName(children[0]);
+            const child2Var = getNodeVarName(children[1]);
+            
+            switch (nodeType) {
+                case 'opUnion':
+                    code += `    float ${varName} = min(${child1Var}, ${child2Var});\n`;
+                    break;
+                case 'opSmoothUnion':
+                    code += `    float ${varName} = opSmoothUnion(${child1Var}, ${child2Var}, ${params.k.toFixed(3)});\n`;
+                    break;
+                case 'opSubtraction':
+                    code += `    float ${varName} = max(-${child1Var}, ${child2Var});\n`;
+                    break;
+                case 'opSmoothSubtraction':
+                    code += `    float ${varName} = opSmoothSubtraction(${child1Var}, ${child2Var}, ${params.k.toFixed(3)});\n`;
+                    break;
+                case 'opIntersection':
+                    code += `    float ${varName} = max(${child1Var}, ${child2Var});\n`;
+                    break;
+                case 'opSmoothIntersection':
+                    code += `    float ${varName} = opSmoothIntersection(${child1Var}, ${child2Var}, ${params.k.toFixed(3)});\n`;
+                    break;
+            }
+        }
+    }
+    
+    return code;
+}
+
+// ===========================================
+// PREVIEW GLSL - Uniform-based (for live edit)
+// ===========================================
+function generatePreviewGLSL() {
+    const sceneNode = document.getElementById('scene');
+    const children = getNodeChildren(sceneNode);
+    
+    let code = getSDFPreamble();
+    
+    // Generate uniform declarations
+    code += '\n// Node uniforms\n';
+    traverseSceneNodes(node => {
+        const prefix = getNodeVarName(node);
+        const nodeType = node.dataset.type;
+        const typeDef = NODE_TYPES[nodeType];
+        
+        code += `uniform vec3 ${prefix}_pos;\n`;
+        code += `uniform vec3 ${prefix}_rot;\n`;
+        
+        if (typeDef.params) {
+            for (const key of Object.keys(typeDef.params)) {
+                code += `uniform float ${prefix}_${key};\n`;
+            }
+        }
+    });
+    
+    code += '\n';
+    
+    if (children.length === 0) {
+        code += `float sceneSDF(vec3 p) {
+    return 1000.0; // Empty scene
+}`;
+    } else if (children.length === 1) {
+        code += `
+float sceneSDF(vec3 p) {
+${generatePreviewNodeCode(children[0], 'p')}
+    return ${getNodeVarName(children[0])};
+}`;
+    } else {
+        let nodeCode = '';
+        children.forEach(child => {
+            nodeCode += generatePreviewNodeCode(child, 'p');
+        });
+        
+        let unionExpr = getNodeVarName(children[0]);
+        for (let i = 1; i < children.length; i++) {
+            unionExpr = `min(${unionExpr}, ${getNodeVarName(children[i])})`;
+        }
+        
+        code += `
+float sceneSDF(vec3 p) {
+${nodeCode}
+    return ${unionExpr};
+}`;
+    }
+    
+    return code;
+}
+
+function generatePreviewNodeCode(node, pointVar) {
+    const nodeType = node.dataset.type;
+    const varName = getNodeVarName(node);
+    const prefix = varName;
+    const typeDef = NODE_TYPES[nodeType];
+    
+    let code = '';
+    const transformedPoint = varName + '_p';
+    
+    code += `    vec3 ${transformedPoint} = ${pointVar};\n`;
+    code += `    ${transformedPoint} -= ${prefix}_pos;\n`;
+    code += `    ${transformedPoint} *= rotateX(${prefix}_rot.x);\n`;
+    code += `    ${transformedPoint} *= rotateY(${prefix}_rot.y);\n`;
+    code += `    ${transformedPoint} *= rotateZ(${prefix}_rot.z);\n`;
+    
+    if (typeDef.category === 'primitive') {
+        switch (nodeType) {
+            case 'Sphere':
+                code += `    float ${varName} = sdSphere(${transformedPoint}, ${prefix}_radius);\n`;
+                break;
+            case 'Box':
+                code += `    float ${varName} = sdBox(${transformedPoint}, vec3(${prefix}_sizeX, ${prefix}_sizeY, ${prefix}_sizeZ));\n`;
+                break;
+            case 'Torus':
+                code += `    float ${varName} = sdTorus(${transformedPoint}, vec2(${prefix}_majorRadius, ${prefix}_minorRadius));\n`;
+                break;
+            case 'Cylinder':
+                code += `    float ${varName} = sdCylinder(${transformedPoint}, ${prefix}_radius, ${prefix}_height);\n`;
+                break;
+            case 'Plane':
+                code += `    float ${varName} = sdPlane(${transformedPoint}, ${prefix}_height);\n`;
+                break;
+        }
+    } else if (typeDef.category === 'operation') {
+        const children = getNodeChildren(node);
+        
+        if (children.length < 2) {
+            code += `    float ${varName} = 1000.0; // Incomplete operation\n`;
+        } else {
+            code += generatePreviewNodeCode(children[0], transformedPoint);
+            code += generatePreviewNodeCode(children[1], transformedPoint);
+            
+            const child1Var = getNodeVarName(children[0]);
+            const child2Var = getNodeVarName(children[1]);
+            
+            switch (nodeType) {
+                case 'opUnion':
+                    code += `    float ${varName} = min(${child1Var}, ${child2Var});\n`;
+                    break;
+                case 'opSmoothUnion':
+                    code += `    float ${varName} = opSmoothUnion(${child1Var}, ${child2Var}, ${prefix}_k);\n`;
+                    break;
+                case 'opSubtraction':
+                    code += `    float ${varName} = max(-${child1Var}, ${child2Var});\n`;
+                    break;
+                case 'opSmoothSubtraction':
+                    code += `    float ${varName} = opSmoothSubtraction(${child1Var}, ${child2Var}, ${prefix}_k);\n`;
+                    break;
+                case 'opIntersection':
+                    code += `    float ${varName} = max(${child1Var}, ${child2Var});\n`;
+                    break;
+                case 'opSmoothIntersection':
+                    code += `    float ${varName} = opSmoothIntersection(${child1Var}, ${child2Var}, ${prefix}_k);\n`;
+                    break;
+            }
+        }
+    }
+    
+    return code;
+}
+
+function getSDFPreamble() {
+    return `// SDF Primitives and Operations
+float sdSphere(vec3 p, float r) {
+    return length(p) - r;
+}
+
+float sdBox(vec3 p, vec3 b) {
+    vec3 q = abs(p) - b;
+    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+float sdTorus(vec3 p, vec2 t) {
+    vec2 q = vec2(length(p.xz) - t.x, p.y);
+    return length(q) - t.y;
+}
+
+float sdCylinder(vec3 p, float r, float h) {
+    vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
+    return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+}
+
+float sdPlane(vec3 p, float h) {
+    return p.y - h;
+}
+
+float opSmoothUnion(float d1, float d2, float k) {
+    float h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
+    return mix(d2, d1, h) - k * h * (1.0 - h);
+}
+
+float opSmoothSubtraction(float d1, float d2, float k) {
+    float h = clamp(0.5 - 0.5 * (d2 + d1) / k, 0.0, 1.0);
+    return mix(d2, -d1, h) + k * h * (1.0 - h);
+}
+
+float opSmoothIntersection(float d1, float d2, float k) {
+    float h = clamp(0.5 - 0.5 * (d2 - d1) / k, 0.0, 1.0);
+    return mix(d2, d1, h) + k * h * (1.0 - h);
+}
+
+mat3 rotateX(float a) {
+    float c = cos(a), s = sin(a);
+    return mat3(1, 0, 0, 0, c, -s, 0, s, c);
+}
+
+mat3 rotateY(float a) {
+    float c = cos(a), s = sin(a);
+    return mat3(c, 0, s, 0, 1, 0, -s, 0, c);
+}
+
+mat3 rotateZ(float a) {
+    float c = cos(a), s = sin(a);
+    return mat3(c, -s, 0, s, c, 0, 0, 0, 1);
+}
+
+`;
+}
+
+// ===========================================
+// WebGL
+// ===========================================
+function initWebGL() {
+    const canvas = document.getElementById('glCanvas');
+    gl = canvas.getContext('webgl');
+    
+    if (!gl) {
+        console.error('WebGL not supported');
+        return;
+    }
+    
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    
+    // Create vertex buffer once
+    const vertices = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+    vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+}
+
+function createShaderProgram(sdfCode) {
+    const vertexShaderSource = `
+        attribute vec2 position;
+        void main() {
+            gl_Position = vec4(position, 0.0, 1.0);
+        }
+    `;
+    
+    const fragmentShaderSource = `
+        precision highp float;
+        uniform vec2 resolution;
+        uniform float time;
+        
+        ${sdfCode}
+        
+        vec3 calcNormal(vec3 p) {
+            vec2 e = vec2(0.001, 0.0);
+            return normalize(vec3(
+                sceneSDF(p + e.xyy) - sceneSDF(p - e.xyy),
+                sceneSDF(p + e.yxy) - sceneSDF(p - e.yxy),
+                sceneSDF(p + e.yyx) - sceneSDF(p - e.yyx)
+            ));
+        }
+        
+        void main() {
+            vec2 uv = (gl_FragCoord.xy - 0.5 * resolution) / resolution.y;
+            
+            vec3 ro = vec3(0.0, 0.0, 3.0);
+            vec3 rd = normalize(vec3(uv, -1.0));
+            
+            float t = 0.0;
+            vec3 col = vec3(1.0);
+            
+            for (int i = 0; i < 100; i++) {
+                vec3 p = ro + rd * t;
+                float d = sceneSDF(p);
+                
+                if (d < 0.001) {
+                    vec3 n = calcNormal(p);
+                    vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
+                    float diff = max(dot(n, lightDir), 0.0);
+                    float amb = 0.3;
+                    col = vec3(0.85, 0.75, 0.7) * (diff + amb);
+                    break;
+                }
+                
+                if (t > 20.0) break;
+                t += d;
+            }
+            
+            gl_FragColor = vec4(col, 1.0);
+        }
+    `;
+    
+    const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vertexShader, vertexShaderSource);
+    gl.compileShader(vertexShader);
+    
+    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+        console.error('Vertex shader error:', gl.getShaderInfoLog(vertexShader));
+        return null;
+    }
+    
+    const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fragmentShader, fragmentShaderSource);
+    gl.compileShader(fragmentShader);
+    
+    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+        console.error('Fragment shader error:', gl.getShaderInfoLog(fragmentShader));
+        return null;
+    }
+    
+    const prog = gl.createProgram();
+    gl.attachShader(prog, vertexShader);
+    gl.attachShader(prog, fragmentShader);
+    gl.linkProgram(prog);
+    
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        console.error('Program link error:', gl.getProgramInfoLog(prog));
+        return null;
+    }
+    
+    return prog;
+}
+
+function cacheUniformLocations() {
+    uniformLocations = {};
+    
+    traverseSceneNodes(node => {
+        const prefix = getNodeVarName(node);
+        const nodeType = node.dataset.type;
+        const typeDef = NODE_TYPES[nodeType];
+        
+        uniformLocations[`${prefix}_pos`] = gl.getUniformLocation(program, `${prefix}_pos`);
+        uniformLocations[`${prefix}_rot`] = gl.getUniformLocation(program, `${prefix}_rot`);
+        
+        if (typeDef.params) {
+            for (const key of Object.keys(typeDef.params)) {
+                uniformLocations[`${prefix}_${key}`] = gl.getUniformLocation(program, `${prefix}_${key}`);
+            }
+        }
+    });
+}
+
+function updatePreviewUniforms() {
+    if (!gl || !program) return;
+
+    // Update export code display if visible
+    const codeOutput = document.getElementById('codeOutput');
+    if (codeOutput.style.display === 'block') {
+        codeOutput.textContent = generateExportGLSL();
+    }
+    
+    gl.useProgram(program);
+    
+    traverseSceneNodes(node => {
+        const prefix = getNodeVarName(node);
+        const params = JSON.parse(node.dataset.params);
+        const nodeType = node.dataset.type;
+        const typeDef = NODE_TYPES[nodeType];
+        
+        // Set transform uniforms
+        const posLoc = uniformLocations[`${prefix}_pos`];
+        if (posLoc) {
+            gl.uniform3f(posLoc, params.posX, params.posY, params.posZ);
+        }
+        
+        const rotLoc = uniformLocations[`${prefix}_rot`];
+        if (rotLoc) {
+            const rad = Math.PI / 180;
+            gl.uniform3f(rotLoc, params.rotX * rad, params.rotY * rad, params.rotZ * rad);
+        }
+        
+        // Set type-specific uniforms
+        if (typeDef.params) {
+            for (const key of Object.keys(typeDef.params)) {
+                const loc = uniformLocations[`${prefix}_${key}`];
+                if (loc) {
+                    gl.uniform1f(loc, params[key]);
+                }
+            }
+        }
+    });
+    
+    renderPreview();
+}
+
+function recompilePreview() {
+    if (!gl) return;
+    
+    const previewGLSL = generatePreviewGLSL();
+    
+    // Update export code display if visible
+    const codeOutput = document.getElementById('codeOutput');
+    if (codeOutput.style.display === 'block') {
+        codeOutput.textContent = generateExportGLSL();
+    }
+    
+    if (program) {
+        gl.deleteProgram(program);
+    }
+    
+    program = createShaderProgram(previewGLSL);
+    if (!program) return;
+    
+    gl.useProgram(program);
+    
+    // Setup vertex attributes
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    const positionAttrib = gl.getAttribLocation(program, 'position');
+    gl.enableVertexAttribArray(positionAttrib);
+    gl.vertexAttribPointer(positionAttrib, 2, gl.FLOAT, false, 0, 0);
+    
+    // Set resolution uniform
+    const resolutionUniform = gl.getUniformLocation(program, 'resolution');
+    gl.uniform2f(resolutionUniform, gl.canvas.width, gl.canvas.height);
+    
+    // Cache uniform locations and update values
+    cacheUniformLocations();
+    updatePreviewUniforms();
+}
+
+function renderPreview() {
+    if (!gl || !program) return;
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+init();
+</script>
+</body>
+</html>

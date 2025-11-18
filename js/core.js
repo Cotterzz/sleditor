@@ -163,6 +163,17 @@ export const state = {
     userEnterframe: null,
     mouseX: 0.5,
     mouseY: 0.5,
+    mouseHoverX: 0,
+    mouseHoverY: 0,
+    mouseDragX: 0,
+    mouseDragY: 0,
+    mouseLastDownX: 0,
+    mouseLastDownY: 0,
+    mouseClickX: 0,
+    mouseClickY: 0,
+    mouseClickPhase: 'idle', // 'idle' | 'pressed' | 'held' | 'released'
+    mouseIsDown: false,
+    activePointerId: null,
 };
 
 if (typeof window !== 'undefined') {

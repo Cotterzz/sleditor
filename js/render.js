@@ -118,7 +118,7 @@ function renderWebGLMode(rawTime, gl, ctx) {
     uniforms.setAudioTime(ctx.currentTime, state.nextAudioTime, state.nextAudioTime % 1);
     uniforms.setAudioFrame(state.audioFrame);
     uniforms.setResolution(state.canvasWebGL.width, state.canvasWebGL.height);
-    uniforms.setMouse(state.mouseX, state.mouseY);
+    updateExtendedUniforms(uniforms);
     uniforms.setFrame(state.visualFrame);
     
     // Call user's enterframe BEFORE rendering (so uniforms can be set)
@@ -167,7 +167,7 @@ function renderGPUMode(rawTime, device, ctx) {
     uniforms.setAudioTime(ctx.currentTime, state.nextAudioTime, state.nextAudioTime % 1);
     uniforms.setAudioFrame(state.audioFrame);
     uniforms.setResolution(state.canvasWebGPU.width, state.canvasWebGPU.height);
-    uniforms.setMouse(state.mouseX, state.mouseY);
+    updateExtendedUniforms(uniforms);
     uniforms.setFrame(state.visualFrame);
     
     // Call user's enterframe BEFORE rendering (so uniforms can be set)
@@ -180,6 +180,62 @@ function renderGPUMode(rawTime, device, ctx) {
     
     // Render with WebGPU backend
     webgpu.renderFrame(uniforms.getBuffer(), ctx);
+}
+
+function updateExtendedUniforms(uniforms) {
+    uniforms.setPixelSize(state.pixelScale || 1);
+
+    const dragX = state.mouseIsDown ? state.mouseDragX : state.mouseLastDownX;
+    const dragY = state.mouseIsDown ? state.mouseDragY : state.mouseLastDownY;
+    uniforms.setMouseDrag(
+        Number.isFinite(dragX) ? dragX : 0,
+        Number.isFinite(dragY) ? dragY : 0
+    );
+    
+    const hoverX = Number.isFinite(state.mouseHoverX) ? state.mouseHoverX : (Number.isFinite(dragX) ? dragX : 0);
+    const hoverY = Number.isFinite(state.mouseHoverY) ? state.mouseHoverY : (Number.isFinite(dragY) ? dragY : 0);
+    uniforms.setMouseHover(
+        hoverX,
+        hoverY,
+        Number.isFinite(state.mouseX) ? state.mouseX : 0,
+        Number.isFinite(state.mouseY) ? state.mouseY : 0
+    );
+    
+    const clickX = Number.isFinite(state.mouseClickX) ? state.mouseClickX : 0;
+    const clickY = Number.isFinite(state.mouseClickY) ? state.mouseClickY : 0;
+    let clickZ = clickX;
+    let clickW = clickY;
+    
+    if (state.mouseIsDown) {
+        if (state.mouseClickPhase === 'pressed') {
+            clickZ = clickX;
+            clickW = clickY;
+            state.mouseClickPhase = 'held';
+        } else {
+            clickZ = clickX;
+            clickW = -Math.abs(clickY);
+        }
+    } else {
+        clickZ = -Math.abs(clickX);
+        clickW = -Math.abs(clickY);
+        if (state.mouseClickPhase === 'released') {
+            state.mouseClickPhase = 'idle';
+        }
+    }
+    uniforms.setMouseClick(clickZ, clickW);
+
+    const now = new Date();
+    const seconds =
+        now.getHours() * 3600 +
+        now.getMinutes() * 60 +
+        now.getSeconds() +
+        now.getMilliseconds() / 1000;
+    uniforms.setDate(
+        now.getFullYear() - 1,
+        now.getMonth(),
+        now.getDate(),
+        seconds
+    );
 }
 
 // ============================================================================
@@ -314,7 +370,7 @@ export function renderOnce() {
     // Use appropriate canvas based on active backend
     const activeCanvas = state.graphicsBackend === 'webgl' ? state.canvasWebGL : state.canvasWebGPU;
     uniforms.setResolution(activeCanvas.width, activeCanvas.height);
-    uniforms.setMouse(state.mouseX, state.mouseY);
+    updateExtendedUniforms(uniforms);
     uniforms.setFrame(state.visualFrame);
     
     // Call user's enterframe

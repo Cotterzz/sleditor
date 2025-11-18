@@ -1,0 +1,97 @@
+DONE:
+WGSL compute texture output
+WGSL compute to audio buffer
+Monaco text editing
+AudioWorkletProcessor output
+JS pass for frame logic (currently restricted)
+Variable Pixel size up to 8x
+Variable canvas size in 16px increments
+Variable canvas aspect ratio
+Vim support
+GLSL frag shader support
+Detect WebGPU support, improved experience for non enabled browsers
+Unique url for each shader, navigation between shaders without page reload
+Fully working backend - auth and saving shaders
+Built-in, user and community galleries
+Comments section for each shader with markdown
+View count and likes with real time updates via websockets
+Right-click emoji menu in comments
+Boilerplated audioworklet for simplicity and security
+Help section pulldown above topbar
+GLSL Boilerplate mode as well as existing raw GLSL
+GLSL Shadertoy compatibility mode with familiar uniforms
+GLSL Golf mode - keywords abbreviated to single caps letter in boilerplate
+Golf code in url sleditor.com/#g<code>
+Vanity url for golf code: gsl.golf
+Markdown shader description
+Uniform slider panel to adjust custom uniforms 
+Fullscreen mode with ui autohide and uniform sliders
+Ctrl-S save shortcut as requested
+AI assist with #slai command - groq and gemini models
+Cohere LLM api for AI-Assist
+Golf char limit update on keypress, count ignores comments
+Persistent slider settings & position saved with shader
+Image pass with built in images
+Repeat, Clamp, Mirror and v-flip textures
+Anisotropic Filtering of texture
+User loading custom images from GitHub
+Multiple buffer passes
+Main pass can read own output
+Unified channel system
+View different channels in main viewer
+Multiple fonts in shadertoy compatible format
+
+Currently: Shadertoy import
+Requires first:
+   Video Support
+   Audio input
+   GLSL Audio (continuous)
+   Webcam/mic input
+(cubemap and volume will be in a later phase)
+
+
+TODO:
+User loaded video
+User loaded audio
+import code with built-in libraries
+custom user libraries
+shared user libraries
+user notifications - likes and comments.
+user profile - description. display name pfp
+Gallery search
+shader tags and categories
+user gallery folders
+Series of tutorial shaders with customised interactivity for lessons
+Export shader as webpage
+export gallery of shaders as webpage
+Gallery/portfolio mode for viewing only, different ui
+Secure sandboxed JS for full functionality/sharing and better support for apps/games
+Gaming api - controller support and console mode for presenting game shaders
+Game export for desktop
+Customisable DOM panel for ui outside the shader
+OpenRouter api for multi model AI-assist
+Huggingface api for multi model AI-assist
+Claude/OpenAI/Grok apis for AI-assist if demand is there
+More advance co-pilot with conversation memory and cross model context
+Different assist modes with insert, chat and evaluate commands
+Send shader output to model for evaluation/feedback
+Send metrics and errors to model for evaluation/debugging
+Automatically chaining model requests for advanced jobs
+Subscription service for all-in-one LLM api access
+Plugin system for customisable/optional functionality
+Expanded webGPU support - multiple custom passes/entrypoints
+WGSL Frag Shaders
+Video recording
+Midi input
+Advanced shadertoy passes - cubemap and volume
+Mobile support and dedicated UI
+Advanced, windowed UI
+gsl.golf to host its own interface for simple golfed shaders
+Gesture based code input on devices without keyboard
+Vertex shaders
+Mesh input
+Three.js output mode
+Raylib output mode
+P5.js and q5.js output mode
+TSL, HLSL, Slang
+Compiling C and other languages to wasm
