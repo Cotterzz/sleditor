@@ -466,7 +466,67 @@ class Mp4MuxerRecorder {
         });
         this.encoder = new VideoEncoder({
             output: (chunk, meta) => {
-                this.muxer.addVideoChunk(chunk, meta);
+                const patchedMeta = meta ? { ...meta } : {};
+                const fps = this.fps || RECORDING_FPS;
+
+                const sourceDuration = Number(chunk?.duration);
+                let frameDuration = (() => {
+                    if (Number.isFinite(sourceDuration) && sourceDuration > 0) {
+                        return sourceDuration;
+                    }
+                    const denom = fps > 0 ? fps : RECORDING_FPS;
+                    const fallback = Math.round(1_000_000 / denom);
+                    return Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
+                })();
+                if (!Number.isFinite(frameDuration) || frameDuration <= 0) {
+                    frameDuration = Math.round(1_000_000 / (fps > 0 ? fps : RECORDING_FPS));
+                    if (!Number.isFinite(frameDuration) || frameDuration <= 0) {
+                        frameDuration = 16_667;
+                    }
+                }
+
+                const sourceTimestamp = Number(chunk?.timestamp);
+                const frameTimestamp = (() => {
+                    if (Number.isFinite(sourceTimestamp) && sourceTimestamp >= 0) {
+                        return sourceTimestamp;
+                    }
+                    const priorFrames = Math.max(this.frameIndex - 1, 0);
+                    const derived = priorFrames * frameDuration;
+                    return derived >= 0 ? derived : 0;
+                })();
+
+                const needsChunkPatch =
+                    !Number.isFinite(sourceDuration) ||
+                    sourceDuration <= 0 ||
+                    !Number.isFinite(sourceTimestamp) ||
+                    sourceTimestamp < 0;
+
+                let chunkToAdd = chunk;
+                if (needsChunkPatch) {
+                    const dataCopy = new Uint8Array(chunk.byteLength);
+                    chunk.copyTo(dataCopy);
+                    chunkToAdd = new EncodedVideoChunk({
+                        type: chunk.type,
+                        timestamp: frameTimestamp,
+                        duration: frameDuration,
+                        data: dataCopy
+                    });
+                }
+
+                const patchedTimestamp = Number(patchedMeta.timestamp);
+                if (!Number.isFinite(patchedTimestamp) || patchedTimestamp < 0) {
+                    patchedMeta.timestamp = frameTimestamp;
+                } else {
+                    patchedMeta.timestamp = patchedTimestamp;
+                }
+
+                let durationValue = Number(patchedMeta.duration);
+                if (!Number.isFinite(durationValue) || durationValue <= 0) {
+                    durationValue = frameDuration;
+                }
+                patchedMeta.duration = durationValue;
+
+                this.muxer.addVideoChunk(chunkToAdd, patchedMeta);
             },
             error: (e) => console.error('VideoEncoder error', e)
         });
