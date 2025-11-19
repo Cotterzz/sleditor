@@ -1138,4 +1138,41 @@ canvas.render-smooth {
     font-size: 12px;
 }
 
+.recording-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+}
+
+.recording-controls select {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    padding: 2px 6px;
+    font-size: 11px;
+}
+
+#recordingStatus {
+    min-height: 16px;
+    color: var(--text-secondary);
+}
+
+#recordingButton {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 11px;
+    padding: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+#recordingButton:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 

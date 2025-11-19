@@ -236,8 +236,21 @@
                     <div id="renderModeIcon" style="font-size: 16px; cursor: pointer; user-select: none;" title="Click to cycle render modes">▦</div>
                 </div>
                 <div class="channel-viewer-select">
-                    <label for="channelViewerSelect">View</label>
                     <select id="channelViewerSelect"></select>
+                    <div class="recording-controls">
+                        <select id="recordingMethod">
+                            <option value="none">Recording: None</option>
+                            <option value="ffmpeg">Recording: FFmpeg (WASM)</option>
+                            <option value="muxer">Recording: mp4-muxer</option>
+                            <option value="mp4box">Recording: MP4Box.js</option>
+                        </select>
+                        <select id="muxerProfileSelect" style="display: none;">
+                            <option value="540p">Recording: mp4-muxer 540p</option>
+                            <option value="1080p">Recording: mp4-muxer 1080p</option>
+                        </select>
+                        <div id="recordingStatus">Recording disabled</div>
+                        <button id="recordingButton" disabled>Start Recording</button>
+                    </div>
                 </div>
                 <div class="flex-col gap-sm text-sm" style="color: var(--text-secondary);">
                     <div id="resolutionDisplay">512 × 512 × 1</div>

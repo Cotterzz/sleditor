@@ -19,6 +19,7 @@ import * as compiler from './compiler.js';
 import * as comments from './comments.js';
 import * as channels from './channels.js';
 import * as webgl from './backends/webgl.js';
+import * as recording from './recording.js';
 
 let compileOverlay;
 let compileOverlayText;
@@ -727,6 +728,7 @@ export function initChannelViewer() {
     channelViewerSelect.addEventListener('change', handleChannelViewerChange);
     window.addEventListener('channels-changed', refreshChannelViewerOptions);
     refreshChannelViewerOptions();
+    recording.initUI();
 }
 
 function refreshChannelViewerOptions() {

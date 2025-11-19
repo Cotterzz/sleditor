@@ -115,6 +115,12 @@ export const state = {
     startTime: 0,          // When animation started (for time offset)
     pausedTime: 0,         // Total time spent paused
     lastPauseTime: 0,      // When we last paused
+    lastVirtualTime: 0,    // Last time value sent to shaders
+    isRecording: false,
+    recordingFrame: 0,
+    recordingBaseTime: 0,
+    recordingFps: 60,
+    recordingTime: 0,
     
     // FPS tracking
     fps: 0,

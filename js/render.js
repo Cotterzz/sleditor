@@ -8,6 +8,38 @@ import * as webgpu from './backends/webgpu.js';
 import * as webgl from './backends/webgl.js';
 import * as jsRuntime from './js-runtime.js';
 import * as perfMonitor from './performance-monitor.js';
+import * as recording from './recording.js';
+
+const DEFAULT_RECORDING_FPS = 60;
+
+function getEffectiveTime(elapsedSec, advanceFrame = true) {
+    if (state.isRecording) {
+        let baseTime = state.recordingBaseTime;
+        if (!Number.isFinite(baseTime) || baseTime === 0) {
+            baseTime = elapsedSec;
+            state.recordingBaseTime = baseTime;
+        }
+        const fps = state.recordingFps || DEFAULT_RECORDING_FPS;
+        const step = fps > 0 ? 1 / fps : 1 / DEFAULT_RECORDING_FPS;
+        const frameIndex = state.recordingFrame || 0;
+        const syntheticTime = baseTime + frameIndex * step;
+        if (advanceFrame) {
+            state.recordingFrame = frameIndex + 1;
+        }
+        state.lastVirtualTime = syntheticTime;
+        state.recordingTime = syntheticTime;
+        return syntheticTime;
+    }
+
+    if (advanceFrame) {
+        state.recordingFrame = 0;
+    }
+    state.recordingBaseTime = 0;
+    state.recordingFps = DEFAULT_RECORDING_FPS;
+    state.lastVirtualTime = elapsedSec;
+    state.recordingTime = elapsedSec;
+    return elapsedSec;
+}
 
 // ============================================================================
 // Main Render Loop
@@ -70,6 +102,7 @@ function renderNonGPUMode(rawTime) {
     // Calculate elapsed time
     const elapsedMs = rawTime - state.startTime - state.pausedTime;
     const elapsedSec = elapsedMs * 0.001;
+    const effectiveTime = getEffectiveTime(elapsedSec);
     
     // Update counters
     state.visualFrame++;
@@ -80,10 +113,10 @@ function renderNonGPUMode(rawTime) {
         state.fpsLastTime = rawTime;
         updateFPSDisplay();
     }
-    updateCounterDisplays(state.visualFrame, elapsedSec);
+    updateCounterDisplays(state.visualFrame, effectiveTime);
     
     // Call user's enterframe (non-GPU mode - uniforms are no-op)
-    const result = jsRuntime.callEnterframe(elapsedSec, null, null, state.audioContext);
+    const result = jsRuntime.callEnterframe(effectiveTime, null, null, state.audioContext);
     if (!result.success) {
         handleEnterframeError(result);
     }
@@ -97,6 +130,7 @@ function renderWebGLMode(rawTime, gl, ctx) {
     // Calculate elapsed time (accounting for pauses)
     const elapsedMs = rawTime - state.startTime - state.pausedTime;
     const elapsedSec = elapsedMs * 0.001;
+    const effectiveTime = getEffectiveTime(elapsedSec);
     
     // Increment visual frame counter
     state.visualFrame++;
@@ -110,11 +144,11 @@ function renderWebGLMode(rawTime, gl, ctx) {
         updateFPSDisplay();
     }
     
-    updateCounterDisplays(state.visualFrame, elapsedSec);
+    updateCounterDisplays(state.visualFrame, effectiveTime);
 
     // Use shared uniform builder (so uniform controls can modify it)
     const uniforms = state.uniformBuilder;
-    uniforms.setTime(elapsedSec);
+    uniforms.setTime(effectiveTime);
     uniforms.setAudioTime(ctx.currentTime, state.nextAudioTime, state.nextAudioTime % 1);
     uniforms.setAudioFrame(state.audioFrame);
     uniforms.setResolution(state.canvasWebGL.width, state.canvasWebGL.height);
@@ -123,7 +157,7 @@ function renderWebGLMode(rawTime, gl, ctx) {
     
     // Call user's enterframe BEFORE rendering (so uniforms can be set)
     const { f32: uniformF32, i32: uniformI32 } = uniforms.getArrays();
-    const result = jsRuntime.callEnterframe(elapsedSec, uniformF32, uniformI32, ctx);
+    const result = jsRuntime.callEnterframe(effectiveTime, uniformF32, uniformI32, ctx);
     if (!result.success) {
         handleEnterframeError(result);
         return;
@@ -131,6 +165,7 @@ function renderWebGLMode(rawTime, gl, ctx) {
     
     // Render with WebGL backend (channel binding happens inside)
     webgl.renderFrame(uniforms);
+    recording.captureFrame(state.canvasWebGL);
 }
 
 // ============================================================================
@@ -141,6 +176,7 @@ function renderGPUMode(rawTime, device, ctx) {
     // Calculate elapsed time (accounting for pauses)
     const elapsedMs = rawTime - state.startTime - state.pausedTime;
     const elapsedSec = elapsedMs * 0.001;
+    const effectiveTime = getEffectiveTime(elapsedSec);
     
     // Increment visual frame counter
     state.visualFrame++;
@@ -159,11 +195,11 @@ function renderGPUMode(rawTime, device, ctx) {
         updateFPSDisplay();
     }
     
-    updateCounterDisplays(state.visualFrame, elapsedSec);
+    updateCounterDisplays(state.visualFrame, effectiveTime);
 
     // Use shared uniform builder (so uniform controls can modify it)
     const uniforms = state.uniformBuilder;
-    uniforms.setTime(elapsedSec);
+    uniforms.setTime(effectiveTime);
     uniforms.setAudioTime(ctx.currentTime, state.nextAudioTime, state.nextAudioTime % 1);
     uniforms.setAudioFrame(state.audioFrame);
     uniforms.setResolution(state.canvasWebGPU.width, state.canvasWebGPU.height);
@@ -172,7 +208,7 @@ function renderGPUMode(rawTime, device, ctx) {
     
     // Call user's enterframe BEFORE rendering (so uniforms can be set)
     const { f32: uniformF32, i32: uniformI32 } = uniforms.getArrays();
-    const result = jsRuntime.callEnterframe(elapsedSec, uniformF32, uniformI32, ctx);
+    const result = jsRuntime.callEnterframe(effectiveTime, uniformF32, uniformI32, ctx);
     if (!result.success) {
         handleEnterframeError(result);
         return;
@@ -180,6 +216,7 @@ function renderGPUMode(rawTime, device, ctx) {
     
     // Render with WebGPU backend
     webgpu.renderFrame(uniforms.getBuffer(), ctx);
+    recording.captureFrame(state.canvasWebGPU);
 }
 
 function updateExtendedUniforms(uniforms) {
@@ -353,17 +390,18 @@ export function renderOnce() {
     }
     const elapsedMs = rawTime - state.startTime - state.pausedTime;
     const elapsedSec = elapsedMs * 0.001;
+    const effectiveTime = getEffectiveTime(elapsedSec, false);
     
     // Non-graphics mode
     if (!device && !state.glContext) {
         // Call user's enterframe
-        jsRuntime.callEnterframe(elapsedSec, null, null, ctx);
+        jsRuntime.callEnterframe(effectiveTime, null, null, ctx);
         return;
     }
     
     // Use shared uniform builder
     const uniforms = state.uniformBuilder;
-    uniforms.setTime(elapsedSec);
+    uniforms.setTime(effectiveTime);
     uniforms.setAudioTime(ctx.currentTime, state.nextAudioTime, state.nextAudioTime % 1);
     uniforms.setAudioFrame(state.audioFrame);
     
@@ -375,13 +413,15 @@ export function renderOnce() {
     
     // Call user's enterframe
     const { f32: uniformF32, i32: uniformI32 } = uniforms.getArrays();
-    jsRuntime.callEnterframe(elapsedSec, uniformF32, uniformI32, ctx);
+    jsRuntime.callEnterframe(effectiveTime, uniformF32, uniformI32, ctx);
     
     // Render with appropriate backend
     if (state.graphicsBackend === 'webgl' && state.glContext) {
         webgl.renderFrame(uniforms);
+        recording.captureFrame(state.canvasWebGL);
     } else if (state.graphicsBackend === 'webgpu' && device) {
         webgpu.renderFrame(uniforms.getBuffer(), ctx);
+        recording.captureFrame(state.canvasWebGPU);
     }
 }
 

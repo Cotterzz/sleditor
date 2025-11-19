@@ -1,0 +1,201 @@
+ffmpeg v1-------------------
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js"></script>
+import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.7/+esm';
+import { fetchFile } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/+esm';
+
+const ffmpeg = new FFmpeg();
+const canvas = document.getElementById('shaderCanvas');
+const ctx = canvas.getContext('2d');
+
+// Load FFmpeg
+await ffmpeg.load();
+
+// Capture frames
+const frames = [];
+const fps = 60;
+const duration = 5; // seconds
+
+for (let i = 0; i < fps * duration; i++) {
+  // Render your shader frame
+  renderShaderFrame(i / fps);
+  
+  // Capture frame
+  const blob = await new Promise(resolve => 
+    canvas.toBlob(resolve, 'image/png')
+  );
+  frames.push(await blob.arrayBuffer());
+}
+
+// Write frames to FFmpeg
+for (let i = 0; i < frames.length; i++) {
+  ffmpeg.writeFile(`frame${i.toString().padStart(4, '0')}.png`, 
+    new Uint8Array(frames[i])
+  );
+}
+
+// Convert to MP4
+await ffmpeg.exec([
+  '-framerate', fps.toString(),
+  '-i', 'frame%04d.png',
+  '-c:v', 'libx264',
+  '-pix_fmt', 'yuv420p',
+  'output.mp4'
+]);
+
+// Download result
+const data = await ffmpeg.readFile('output.mp4');
+const url = URL.createObjectURL(
+  new Blob([data.buffer], { type: 'video/mp4' })
+);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'shader-recording.mp4';
+a.click();
+
+ffmpeg v2-------------------
+<!-- Load from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/util.js"></script>
+// Initialize FFmpeg
+const { FFmpeg } = FFmpegWASM;
+const { fetchFile } = FFmpegUtil;
+
+const ffmpeg = new FFmpeg();
+
+// Load FFmpeg (this downloads the WASM files - ~30MB)
+await ffmpeg.load({
+  coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
+  wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm'
+});
+
+// Frame-by-frame recording approach
+class ShaderRecorder {
+  constructor(canvas, fps = 30) {
+    this.canvas = canvas;
+    this.fps = fps;
+    this.frames = [];
+    this.frameCount = 0;
+  }
+
+  captureFrame() {
+    // Capture current frame as blob
+    return new Promise(resolve => {
+      this.canvas.toBlob(blob => {
+        this.frames.push(blob);
+        resolve();
+      }, 'image/png');
+    });
+  }
+
+  async compile() {
+    // Write frames to FFmpeg virtual filesystem
+    for (let i = 0; i < this.frames.length; i++) {
+      const frameData = await fetchFile(this.frames[i]);
+      await ffmpeg.writeFile(`frame${i.toString().padStart(5, '0')}.png`, frameData);
+    }
+
+    // Convert frames to MP4
+    await ffmpeg.exec([
+      '-framerate', this.fps.toString(),
+      '-pattern_type', 'glob',
+      '-i', 'frame*.png',
+      '-c:v', 'libx264',
+      '-pix_fmt', 'yuv420p',
+      'output.mp4'
+    ]);
+
+    // Get the result
+    const data = await ffmpeg.readFile('output.mp4');
+    
+    // Clean up virtual filesystem
+    for (let i = 0; i < this.frames.length; i++) {
+      await ffmpeg.deleteFile(`frame${i.toString().padStart(5, '0')}.png`);
+    }
+
+    return new Blob([data], { type: 'video/mp4' });
+  }
+}
+
+// Usage
+const recorder = new ShaderRecorder(canvas, 30);
+
+// In your render loop
+function render() {
+  // ... draw your shader frame ...
+  
+  if (recording) {
+    await recorder.captureFrame();
+  }
+  
+  // Continue at next frame (not real-time)
+  if (recording && currentFrame < totalFrames) {
+    requestAnimationFrame(render);
+  }
+}
+
+// When done recording
+const videoBlob = await recorder.compile();
+const url = URL.createObjectURL(videoBlob);
+const a = document.createElement('a');
+a.href = url;
+a.download = 'shader-video.mp4';
+a.click();
+
+muxer-----------------------------
+//Load mp4-muxer from: https://cdn.jsdelivr.net/npm/mp4-muxer@5.0.0/+esm
+const muxer = new Mp4Muxer.Muxer({
+  target: new Mp4Muxer.ArrayBufferTarget(),
+  video: {
+    codec: 'avc',
+    width: canvas.width,
+    height: canvas.height
+  },
+  fastStart: 'in-memory'
+});
+
+const encoder = new VideoEncoder({
+  output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+  error: e => console.error(e)
+});
+
+encoder.configure({
+  codec: 'avc1.42001f',
+  width: canvas.width,
+  height: canvas.height,
+  bitrate: 2_000_000,
+  framerate: 60
+});
+
+// Encode each frame
+for (let i = 0; i < totalFrames; i++) {
+  renderShaderFrame(i / 60);
+  const frame = new VideoFrame(canvas, {
+    timestamp: i * 16667 // microseconds
+  });
+  encoder.encode(frame);
+  frame.close();
+}
+
+await encoder.flush();
+muxer.finalize();
+const buffer = muxer.target.buffer;
+
+mp4box-----------------------
+// Lighter weight option (~200KB)
+import MP4Box from 'https://cdn.jsdelivr.net/npm/mp4box@0.5.2/+esm';
+
+// Use VideoEncoder API to encode frames
+const encoder = new VideoEncoder({
+  output: (chunk, metadata) => {
+    // Feed to MP4Box
+  },
+  error: e => console.error(e)
+});
+
+encoder.configure({
+  codec: 'avc1.42001E',
+  width: canvas.width,
+  height: canvas.height,
+  bitrate: 2_000_000,
+  framerate: 30,
+});
