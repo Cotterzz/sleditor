@@ -168,23 +168,6 @@
             margin-bottom: 10px;
             text-transform: uppercase;
         }
-#exportShader {
-    position: fixed;
-    left: 340px;
-    bottom: 230px;
-    padding: 8px 16px;
-    background: #68d391;
-    color: #1a202c;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    z-index: 51;
-    font-family: 'Abel', sans-serif;
-}
-
-#exportShader:hover {
-    background: #9ae6b4;
-}
 #glCanvas {
     position: fixed;
     left: 0;
@@ -195,39 +178,96 @@
 }
 
         #codeOutput {
+            position: absolute;
+            left: calc(220px + 20px);
+            top: 20px;
+            width: 360px;
+            height: 240px;
+            background: #1a202c;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+            display: none;
+            z-index: 90;
+            padding: 0;
+            resize: both;
+            overflow: auto;
+        }
+
+        #codeOutput pre {
             font-family: 'Source Code Pro', monospace;
             font-size: 11px;
-            position: fixed;
-            left: 220px;
-            bottom: 20px;
-            width: 400px;
-            height: 200px;
-            background: #1a202c;
+            margin: 0;
+            padding: 12px;
             color: #68d391;
-            padding: 10px;
-            border-radius: 8px;
-            overflow: auto;
-            z-index: 50;
             white-space: pre;
-            display: none;
+            min-width: 100%;
+            min-height: 100%;
+            box-sizing: border-box;
         }
 
-        #toggleCode {
-            position: fixed;
-            left: 220px;
-            bottom: 230px;
-            padding: 8px 16px;
-            background: #4a5568;
-            color: white;
+        #sidebarControls {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #sidebarControls button {
+            width: 100%;
+            padding: 8px 12px;
             border: none;
             border-radius: 4px;
-            cursor: pointer;
-            z-index: 51;
             font-family: 'Abel', sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
         }
 
-        #toggleCode:hover {
-            background: #718096;
+        #sidebarControls #toggleCode {
+            background: #4a5568;
+            color: #fff;
+        }
+
+        #sidebarControls #toggleCode:hover {
+            background: #5a67d8;
+        }
+
+        #sidebarControls #exportShader {
+            background: #68d391;
+            color: #1a202c;
+        }
+
+        #sidebarControls #exportShader:hover {
+            background: #9ae6b4;
+        }
+
+        #recycleBin {
+            position: absolute;
+            left: calc(220px + 20px);
+            bottom: 20px;
+            width: 160px;
+            height: 90px;
+            border: 2px dashed rgba(255, 99, 71, 0.6);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: rgba(63, 34, 34, 0.85);
+            background: rgba(255, 99, 71, 0.08);
+            font-family: 'Abel', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 36px;
+            transition: background 0.2s, transform 0.2s, border-color 0.2s;
+            z-index: 80;
+        }
+
+        #recycleBin.active {
+            background: rgba(255, 99, 71, 0.25);
+            border-color: rgba(255, 255, 255, 0.9);
+            transform: scale(1.05);
         }
 
         svg {
@@ -246,6 +286,10 @@
 <body>
 
 <div id="sidebar">
+    <div id="sidebarControls">
+        <button id="toggleCode">Show GLSL</button>
+        <button id="exportShader">Export Shadertoy</button>
+    </div>
     <h3>Primitives</h3>
     <div class="menu-item primitive" data-type="Sphere">Sphere</div>
     <div class="menu-item primitive" data-type="Box">Box</div>
@@ -269,15 +313,19 @@
 
 <div id="drawing"></div>
 <div id="rootnode">
-    <div class="node scene" id="scene" data-type="Scene" style="left: 50%; top: 30%;">
+    <div class="node scene" id="scene" data-type="Scene" style="left: 50%; top: 5%;">
         <div class="nodetitle">Scene</div>
     </div>
 </div>
 
 <canvas id="glCanvas"></canvas>
-<button id="toggleCode">Show GLSL</button>
-<button id="exportShader">Export Shadertoy</button>
-<pre id="codeOutput"></pre>
+<div id="codeOutput">
+    <pre id="codeOutputContent"></pre>
+</div>
+<div id="recycleBin">
+    <div>♻</div>
+    <small>Recycle</small>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.7.1/svg.min.js"></script>
 <script>
@@ -383,9 +431,17 @@ let pos1, pos2, pos3, pos4;
 let selectedNode = null;
 let nodeCounter = 0;
 
+let dropPreview = null;
+let currentDropTarget = null;
+
 const draw = SVG('drawing').size('100%', '100%');
 let nodesArray = [];
 let lines = [];
+const recycleBin = document.getElementById('recycleBin');
+const recycleRect = () => recycleBin.getBoundingClientRect();
+let recycleActive = false;
+const codeOutput = document.getElementById('codeOutput');
+const codeOutputContent = document.getElementById('codeOutputContent');
 
 // WebGL state
 let gl, program;
@@ -567,17 +623,15 @@ function setupEventListeners() {
         item.addEventListener('mousedown', onMenuItemMouseDown, false);
     });
     
-    document.getElementById('toggleCode').addEventListener('click', () => {
-        console.log("SHOWCODE");
-        const codeOutput = document.getElementById('codeOutput');
-        const btn = document.getElementById('toggleCode');
+    const toggleBtn = document.getElementById('toggleCode');
+    toggleBtn.addEventListener('click', () => {
         if (codeOutput.style.display === 'none' || codeOutput.style.display === '') {
             codeOutput.style.display = 'block';
-            btn.textContent = 'Hide GLSL';
-            codeOutput.textContent = generateExportGLSL();
+            toggleBtn.textContent = 'Hide GLSL';
+            codeOutputContent.textContent = generateExportGLSL();
         } else {
             codeOutput.style.display = 'none';
-            btn.textContent = 'Show GLSL';
+            toggleBtn.textContent = 'Show GLSL';
         }
     });
 
@@ -802,24 +856,7 @@ function onDocumentMouseUp(event) {
         event.preventDefault();
         
         if (detached) {
-            dragged.hidden = true;
-            const elemBelow = document.elementFromPoint(event.clientX, event.clientY);
-            dragged.hidden = false;
-            
-            let attached = false;
-            if (elemBelow) {
-                let targetNode = null;
-                if (elemBelow.classList.contains("node")) {
-                    targetNode = elemBelow;
-                } else if (elemBelow.parentNode && elemBelow.parentNode.classList.contains("node")) {
-                    targetNode = elemBelow.parentNode;
-                }
-                
-                if (targetNode && targetNode !== dragged && !dragged.contains(targetNode)) {
-                    attached = attachNodeToParent(dragged, targetNode);
-                }
-            }
-            
+            const attached = finalizeDrop(event.clientX, event.clientY);
             if (!attached && dragged.parentNode.id === "rootnode") {
                 dragged.style.left = (((dragged.offsetLeft) / window.innerWidth) * 100) + "%";
                 dragged.style.top = (((dragged.offsetTop) / window.innerHeight) * 100) + "%";
@@ -827,6 +864,7 @@ function onDocumentMouseUp(event) {
             }
         }
         
+        clearDropPreview();
         stopNodeDrag();
     }
 }
@@ -850,6 +888,12 @@ function nodeDrag() {
     dragged.style.top = (dragged.offsetTop - pos2) + "px";
     dragged.style.left = (dragged.offsetLeft - pos1) + "px";
     updateLine(dragged);
+    if (detached) {
+        updateDropPreview();
+    } else {
+        clearDropPreview();
+    }
+    updateRecyclePreview();
 }
 
 function stopNodeDrag() {
@@ -857,6 +901,166 @@ function stopNodeDrag() {
     detached = false;
     dragFromMenu = false;
     dragged = null;
+    clearDropPreview();
+    clearRecyclePreview();
+}
+
+function isValidDropTarget(child, target) {
+    if (!target || target === child) return false;
+    if (!target.classList || !target.classList.contains('node')) return false;
+    if (child.contains && child.contains(target)) return false;
+    return canAcceptChild(target);
+}
+
+function getDropZoneRect(node) {
+    const rect = node.getBoundingClientRect();
+    const padding = 10;
+    const width = rect.width * 1.2;
+    const height = rect.height * 2.2;
+    const centerX = rect.left + rect.width / 2;
+    return {
+        left: centerX - width / 2,
+        right: centerX + width / 2,
+        top: rect.bottom + padding,
+        bottom: rect.bottom + padding + height,
+        anchorX: centerX,
+        anchorY: rect.top + rect.height / 2
+    };
+}
+
+function findDropTarget(x, y) {
+    for (const node of nodesArray) {
+        if (!isValidDropTarget(dragged, node)) continue;
+        const zone = getDropZoneRect(node);
+        if (x >= zone.left && x <= zone.right && y >= zone.top && y <= zone.bottom) {
+            return { node, zone };
+        }
+    }
+    return null;
+}
+
+function getPreviewPathData(zone, pointerX, pointerY) {
+    const midY = (zone.anchorY + pointerY) / 2;
+    return [
+        ['M', zone.anchorX, zone.anchorY],
+        ['C', zone.anchorX, midY, pointerX, midY, pointerX, pointerY]
+    ];
+}
+
+function updateDropPreview() {
+    if (!dragged) return;
+    const pointerX = pos3;
+    const pointerY = pos4;
+    if (!Number.isFinite(pointerX) || !Number.isFinite(pointerY)) return;
+    
+    const targetInfo = findDropTarget(pointerX, pointerY);
+    if (!targetInfo) {
+        clearDropPreview();
+        return;
+    }
+    
+    if (currentDropTarget === targetInfo.node) {
+        if (dropPreview) {
+            dropPreview.plot(getPreviewPathData(targetInfo.zone, pointerX, pointerY));
+        }
+        return;
+    }
+    
+    currentDropTarget = targetInfo.node;
+    const pathData = getPreviewPathData(targetInfo.zone, pointerX, pointerY);
+    if (!dropPreview) {
+        dropPreview = draw.path(pathData)
+            .fill('none')
+            .stroke({ width: 2, color: '#f6ad55', dasharray: '6 4', linecap: 'round' });
+        dropPreview.animate(600).ease('<>').attr({ strokeDashoffset: 10 }).loop();
+    } else {
+        dropPreview.plot(pathData);
+    }
+}
+
+function clearDropPreview() {
+    if (dropPreview) {
+        dropPreview.remove();
+        dropPreview = null;
+    }
+    currentDropTarget = null;
+}
+
+function updateRecyclePreview() {
+    if (!dragged) return;
+    const rect = recycleRect();
+    const inBin = pos3 >= rect.left && pos3 <= rect.right && pos4 >= rect.top && pos4 <= rect.bottom;
+    if (inBin && !recycleActive) {
+        recycleActive = true;
+        recycleBin.classList.add('active');
+    } else if (!inBin && recycleActive) {
+        recycleActive = false;
+        recycleBin.classList.remove('active');
+    }
+}
+
+function clearRecyclePreview() {
+    recycleActive = false;
+    recycleBin.classList.remove('active');
+}
+
+function checkRecycleBin(clientX, clientY) {
+    const rect = recycleRect();
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+}
+
+function deleteNodeWithChildren(node) {
+    if (!node || node.id === 'scene') return;
+    if (selectedNode && (selectedNode === node || node.contains(selectedNode))) {
+        selectNode(null);
+    }
+    node.remove();
+    scanNodes();
+    draw.clear();
+    lines = [];
+    dropPreview = null;
+    currentDropTarget = null;
+    addLines();
+    recompilePreview();
+}
+
+function finalizeDrop(clientX, clientY) {
+    if (checkRecycleBin(clientX, clientY)) {
+        deleteNodeWithChildren(dragged);
+        clearDropPreview();
+        clearRecyclePreview();
+        recompilePreview();
+        return true;
+    }
+    
+    if (currentDropTarget && attachNodeToParent(dragged, currentDropTarget)) {
+        clearDropPreview();
+        clearRecyclePreview();
+        return true;
+    }
+    
+    dragged.hidden = true;
+    const elemBelow = document.elementFromPoint(clientX, clientY);
+    dragged.hidden = false;
+    
+    if (elemBelow) {
+        let targetNode = null;
+        if (elemBelow.classList.contains("node")) {
+            targetNode = elemBelow;
+        } else if (elemBelow.parentNode && elemBelow.parentNode.classList.contains("node")) {
+            targetNode = elemBelow.parentNode;
+        }
+        
+        if (isValidDropTarget(dragged, targetNode)) {
+            clearDropPreview();
+            clearRecyclePreview();
+            return attachNodeToParent(dragged, targetNode);
+        }
+    }
+    
+    clearDropPreview();
+    clearRecyclePreview();
+    return false;
 }
 
 // Helper to traverse all nodes connected to scene
@@ -1308,9 +1512,8 @@ function updatePreviewUniforms() {
     if (!gl || !program) return;
 
     // Update export code display if visible
-    const codeOutput = document.getElementById('codeOutput');
     if (codeOutput.style.display === 'block') {
-        codeOutput.textContent = generateExportGLSL();
+        codeOutputContent.textContent = generateExportGLSL();
     }
     
     gl.useProgram(program);
@@ -1353,9 +1556,8 @@ function recompilePreview() {
     const previewGLSL = generatePreviewGLSL();
     
     // Update export code display if visible
-    const codeOutput = document.getElementById('codeOutput');
     if (codeOutput.style.display === 'block') {
-        codeOutput.textContent = generateExportGLSL();
+        codeOutputContent.textContent = generateExportGLSL();
     }
     
     if (program) {
