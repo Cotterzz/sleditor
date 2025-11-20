@@ -46,6 +46,12 @@
             color: white;
         }
 
+        .node.modifier {
+            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            border-color: #f6ad55;
+            color: #2d3748;
+        }
+
         .node.primitive {
             background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
             border-color: #38b2ac;
@@ -108,6 +114,10 @@
 
         .menu-item.operation {
             border-left: 3px solid #f5576c;
+        }
+
+        .menu-item.modifier {
+            border-left: 3px solid #f6ad55;
         }
 
         #paramPanel {
@@ -304,6 +314,14 @@
     <div class="menu-item operation" data-type="opSmoothSubtraction">Smooth Subtract</div>
     <div class="menu-item operation" data-type="opIntersection">Intersection</div>
     <div class="menu-item operation" data-type="opSmoothIntersection">Smooth Intersect</div>
+
+    <h3>Modifiers</h3>
+    <div class="menu-item modifier" data-type="opRound">Round (Bevel)</div>
+    <div class="menu-item modifier" data-type="opOnion">Onion (Shell)</div>
+    <div class="menu-item modifier" data-type="opTwist">Twist</div>
+    <div class="menu-item modifier" data-type="opElongate">Elongate</div>
+    <div class="menu-item modifier" data-type="opCheapBend">Cheap Bend</div>
+    <div class="menu-item modifier" data-type="opSymX">Mirror X</div>
 </div>
 
 <div id="paramPanel">
@@ -410,6 +428,48 @@ const NODE_TYPES = {
         params: {
             k: { default: 0.3, min: 0.01, max: 1, step: 0.01 }
         }
+    },
+    opRound: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {
+            roundRadius: { default: 0.1, min: 0.0, max: 1.0, step: 0.01 }
+        }
+    },
+    opOnion: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {
+            shellThickness: { default: 0.05, min: 0.0, max: 1.0, step: 0.01 }
+        }
+    },
+    opTwist: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {
+            twistAmount: { default: 2.0, min: -20.0, max: 20.0, step: 0.1 }
+        }
+    },
+    opElongate: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {
+            extentX: { default: 0.3, min: 0.0, max: 2.0, step: 0.05 },
+            extentY: { default: 0.3, min: 0.0, max: 2.0, step: 0.05 },
+            extentZ: { default: 0.3, min: 0.0, max: 2.0, step: 0.05 }
+        }
+    },
+    opCheapBend: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {
+            bendAmount: { default: 2.0, min: -20.0, max: 20.0, step: 0.1 }
+        }
+    },
+    opSymX: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {}
     }
 };
 
@@ -1188,6 +1248,67 @@ function generateExportNodeCode(node, pointVar) {
                     break;
             }
         }
+    } else if (typeDef.category === 'modifier') {
+        const children = getNodeChildren(node);
+        if (children.length < 1) {
+            code += `    float ${varName} = 1000.0; // Incomplete modifier\n`;
+        } else {
+            const child = children[0];
+            const childVar = getNodeVarName(child);
+            switch (nodeType) {
+                case 'opRound':
+                    code += generateExportNodeCode(child, transformedPoint);
+                    code += `    float ${varName} = ${childVar} - ${params.roundRadius.toFixed(3)};\n`;
+                    break;
+                case 'opOnion':
+                    code += generateExportNodeCode(child, transformedPoint);
+                    code += `    float ${varName} = abs(${childVar}) - ${params.shellThickness.toFixed(3)};\n`;
+                    break;
+                case 'opTwist': {
+                    const warpPoint = `${varName}_warp`;
+                    const angleVar = `${varName}_angle`;
+                    const matVar = `${varName}_mat`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    float ${angleVar} = ${params.twistAmount.toFixed(3)} * ${warpPoint}.y;\n`;
+                    code += `    mat2 ${matVar} = mat2(cos(${angleVar}), -sin(${angleVar}), sin(${angleVar}), cos(${angleVar}));\n`;
+                    code += `    ${warpPoint}.xz = ${matVar} * ${warpPoint}.xz;\n`;
+                    code += generateExportNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    break;
+                }
+                case 'opElongate': {
+                    const qVar = `${varName}_q`;
+                    const clampVar = `${varName}_clamped`;
+                    code += `    vec3 ${qVar} = abs(${transformedPoint}) - vec3(${params.extentX.toFixed(3)}, ${params.extentY.toFixed(3)}, ${params.extentZ.toFixed(3)});\n`;
+                    code += `    vec3 ${clampVar} = max(${qVar}, vec3(0.0));\n`;
+                    code += generateExportNodeCode(child, clampVar);
+                    code += `    float ${varName} = ${childVar} + min(max(${qVar}.x, max(${qVar}.y, ${qVar}.z)), 0.0);\n`;
+                    break;
+                }
+                case 'opCheapBend': {
+                    const warpPoint = `${varName}_warp`;
+                    const angleVar = `${varName}_angle`;
+                    const matVar = `${varName}_mat`;
+                    const rotated = `${varName}_rot`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    float ${angleVar} = ${params.bendAmount.toFixed(3)} * ${warpPoint}.x;\n`;
+                    code += `    mat2 ${matVar} = mat2(cos(${angleVar}), -sin(${angleVar}), sin(${angleVar}), cos(${angleVar}));\n`;
+                    code += `    vec2 ${rotated} = ${matVar} * ${warpPoint}.xy;\n`;
+                    code += `    ${warpPoint}.xy = ${rotated};\n`;
+                    code += generateExportNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    break;
+                }
+                case 'opSymX': {
+                    const warpPoint = `${varName}_warp`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    ${warpPoint}.x = abs(${warpPoint}.x);\n`;
+                    code += generateExportNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    break;
+                }
+            }
+        }
     }
     
     return code;
@@ -1316,6 +1437,67 @@ function generatePreviewNodeCode(node, pointVar) {
                 case 'opSmoothIntersection':
                     code += `    float ${varName} = opSmoothIntersection(${child1Var}, ${child2Var}, ${prefix}_k);\n`;
                     break;
+            }
+        }
+    } else if (typeDef.category === 'modifier') {
+        const children = getNodeChildren(node);
+        if (children.length < 1) {
+            code += `    float ${varName} = 1000.0; // Incomplete modifier\n`;
+        } else {
+            const child = children[0];
+            const childVar = getNodeVarName(child);
+            switch (nodeType) {
+                case 'opRound':
+                    code += generatePreviewNodeCode(child, transformedPoint);
+                    code += `    float ${varName} = ${childVar} - ${prefix}_roundRadius;\n`;
+                    break;
+                case 'opOnion':
+                    code += generatePreviewNodeCode(child, transformedPoint);
+                    code += `    float ${varName} = abs(${childVar}) - ${prefix}_shellThickness;\n`;
+                    break;
+                case 'opTwist': {
+                    const warpPoint = `${varName}_warp`;
+                    const angleVar = `${varName}_angle`;
+                    const matVar = `${varName}_mat`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    float ${angleVar} = ${prefix}_twistAmount * ${warpPoint}.y;\n`;
+                    code += `    mat2 ${matVar} = mat2(cos(${angleVar}), -sin(${angleVar}), sin(${angleVar}), cos(${angleVar}));\n`;
+                    code += `    ${warpPoint}.xz = ${matVar} * ${warpPoint}.xz;\n`;
+                    code += generatePreviewNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    break;
+                }
+                case 'opElongate': {
+                    const qVar = `${varName}_q`;
+                    const clampVar = `${varName}_clamped`;
+                    code += `    vec3 ${qVar} = abs(${transformedPoint}) - vec3(${prefix}_extentX, ${prefix}_extentY, ${prefix}_extentZ);\n`;
+                    code += `    vec3 ${clampVar} = max(${qVar}, vec3(0.0));\n`;
+                    code += generatePreviewNodeCode(child, clampVar);
+                    code += `    float ${varName} = ${childVar} + min(max(${qVar}.x, max(${qVar}.y, ${qVar}.z)), 0.0);\n`;
+                    break;
+                }
+                case 'opCheapBend': {
+                    const warpPoint = `${varName}_warp`;
+                    const angleVar = `${varName}_angle`;
+                    const matVar = `${varName}_mat`;
+                    const rotated = `${varName}_rot`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    float ${angleVar} = ${prefix}_bendAmount * ${warpPoint}.x;\n`;
+                    code += `    mat2 ${matVar} = mat2(cos(${angleVar}), -sin(${angleVar}), sin(${angleVar}), cos(${angleVar}));\n`;
+                    code += `    vec2 ${rotated} = ${matVar} * ${warpPoint}.xy;\n`;
+                    code += `    ${warpPoint}.xy = ${rotated};\n`;
+                    code += generatePreviewNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    break;
+                }
+                case 'opSymX': {
+                    const warpPoint = `${varName}_warp`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    ${warpPoint}.x = abs(${warpPoint}.x);\n`;
+                    code += generatePreviewNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    break;
+                }
             }
         }
     }

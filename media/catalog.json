@@ -26,11 +26,27 @@
     },
     {
         "id": "noise2",
-        "name": "Blue Noise",
-        "path": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec.png",
-        "thumb": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec.png",
+        "name": "Blue Noise - 256",
+        "path": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec256.png",
+        "thumb": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec256.png",
         "width": 256,
         "height": 256
+    },
+    {
+        "id": "noise3",
+        "name": "Blue Noise - 1024a",
+        "path": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec.png",
+        "thumb": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec.png",
+        "width": 1024,
+        "height": 1024
+    },
+    {
+        "id": "noise4",
+        "name": "Blue Noise - 1024b",
+        "path": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecTIL.png",
+        "thumb": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecTIL.png",
+        "width": 1024,
+        "height": 1024
     },
     {
         "id": "organic2",
