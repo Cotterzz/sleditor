@@ -47,6 +47,7 @@ Expected:
 groq        | Groq            | true | true
 gemini      | Google Gemini   | true | true
 openrouter  | OpenRouter      | true | true
+openrouter_free | OpenRouter (Free Tier) | true | true
 cohere      | Cohere          | true | true
 huggingface | HuggingFace     | true | true
 ```
@@ -58,7 +59,19 @@ FROM ai_models
 ORDER BY provider_id, sort_order;
 ```
 
-Expected: 5 models (4 Groq + 1 Gemini)
+Expected: original 5 models (4 Groq + 1 Gemini) **plus** the OpenRouter inserts from `20250211000001_openrouter_models.sql`:
+- `openrouter:kwaipilot/kat-coder-pro:free`
+- `openrouter:qwen/qwen3-coder:free`
+- `openrouter:qwen/qwen-2.5-coder-32b-instruct:free`
+- `openrouter:meta-llama/llama-3.3-70b-instruct:free`
+- `openrouter:mistralai/mistral-small-3.2-24b-instruct:free`
+- `openrouter:deepseek/deepseek-chat-v3-0324:free`
+- `openrouter:anthropic/claude-3.5-sonnet`
+- `openrouter:openai/gpt-4o-mini`
+- `openrouter:openai/gpt-4o`
+- `openrouter:deepseek/deepseek-coder-v2`
+- `openrouter:deepseek/deepseek-chat`
+- `openrouter:mistralai/mistral-large-2411`
 
 ---
 
@@ -163,10 +176,11 @@ DELETE FROM user_ai_preferences WHERE user_id = 'YOUR_USER_ID';
 
 ✅ All tables created  
 ✅ 5 providers inserted  
-✅ 5 models inserted  
+✅ Groq/Gemini base models **plus** OpenRouter (free + paid) inserts added  
 ✅ RLS policies active  
 ✅ Encryption functions work  
 ✅ Profile trigger works  
+
 
 ---
 

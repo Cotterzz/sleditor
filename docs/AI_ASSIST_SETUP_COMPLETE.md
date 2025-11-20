@@ -50,6 +50,7 @@ supabase functions deploy ai-assist
 4. Deploy
 5. Settings → Secrets → Add `API_KEY_ENCRYPTION_SECRET=test_encryption_key_123`
 
+
 ### Step 3: Test It!
 
 1. Make sure you're logged in
@@ -79,7 +80,7 @@ supabase functions deploy ai-assist
 
 1. **No UI for adding API keys yet** - must use SQL
 2. **No shortcuts** (#slai:1, #slai:2) - coming next
-3. **Only Groq/Gemini** - OpenRouter/Cohere ready but not tested
+3. **Groq, Gemini, OpenRouter (free + full) live** — Cohere ready but not tested
 
 ---
 
@@ -87,7 +88,7 @@ supabase functions deploy ai-assist
 
 1. Build UI for API key management (Settings > AI Assist)
 2. Add shortcuts system
-3. Add OpenRouter support (100+ models with one key!)
+3. Add additional providers (Cohere / HuggingFace)
 4. User preferences UI
 5. Usage tracking/analytics
 

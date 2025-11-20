@@ -19,6 +19,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const openRouterFreeModels = [
+  'kwaipilot/kat-coder-pro:free',
+  'qwen/qwen3-coder:free',
+  'qwen/qwen-2.5-coder-32b-instruct:free',
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'mistralai/mistral-small-3.2-24b-instruct:free',
+  'deepseek/deepseek-chat-v3-0324:free',
+  'openai/gpt-oss-20b:free',
+  'google/gemini-2.0-flash-exp:free'
+];
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -102,7 +113,26 @@ serve(async (req) => {
     console.log('✅ Provider config:', providerConfig.name);
 
     // ========================================================================
-    // 5. Get User's API Key
+    // 5. Validate model constraints (OpenRouter Free Tier)
+    // ========================================================================
+    if (provider === 'openrouter_free') {
+      if (!model) {
+        return new Response(
+          JSON.stringify({ error: 'Model is required when using OpenRouter Free Tier' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!openRouterFreeModels.includes(model)) {
+        return new Response(
+          JSON.stringify({ error: `Model ${model} is not part of the OpenRouter Free Tier list` }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // ========================================================================
+    // 6. Get User's API Key
     // ========================================================================
     const { data: keyData, error: keyError } = await supabase
       .from('user_api_keys')
@@ -124,7 +154,6 @@ serve(async (req) => {
       );
     }
 
-    // Decrypt the API key
     const { data: decryptedKey, error: decryptError } = await supabase
       .rpc('decrypt_api_key', { 
         encrypted_key: keyData.api_key_encrypted,
@@ -162,7 +191,8 @@ serve(async (req) => {
         })
       });
       
-    } else if (provider === 'groq' || provider === 'openrouter') {
+    } else if (provider === 'groq' || provider === 'openrouter' || provider === 'openrouter_free') {
+      const isOpenRouterProvider = provider === 'openrouter' || provider === 'openrouter_free';
       // OpenAI-compatible providers use Bearer auth
       apiResponse = await fetch(providerConfig.api_url, {
         method: 'POST',
@@ -170,7 +200,7 @@ serve(async (req) => {
           'Authorization': `Bearer ${decryptedKey}`,
           'Content-Type': 'application/json',
           // OpenRouter specific headers
-          ...(provider === 'openrouter' && {
+          ...(isOpenRouterProvider && {
             'HTTP-Referer': 'https://sleditor.com',
             'X-Title': 'SLEditor AI Assist'
           })

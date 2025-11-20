@@ -4,38 +4,7 @@
 
 import { state } from './core.js';
 import * as backend from './backend.js';
-
-// Available providers and models (hardcoded for now, will be dynamic later)
-const PROVIDERS = {
-    'groq': {
-        name: 'Groq',
-        description: 'Fast AI inference (Free tier available)',
-        hasFree: true,
-        models: [
-            { id: 'groq:llama-3.3-70b', name: 'Llama 3.3 70B', modelId: 'llama-3.3-70b-versatile', recommended: true },
-            { id: 'groq:llama-3.1-8b', name: 'Llama 3.1 8B (Fast)', modelId: 'llama-3.1-8b-instant' }
-        ]
-    },
-    'gemini': {
-        name: 'Google Gemini',
-        description: 'Google\'s AI (Free tier available)',
-        hasFree: true,
-        models: [
-            { id: 'gemini:2.0-flash', name: 'Gemini 2.0 Flash', modelId: 'gemini-2.0-flash-exp', recommended: true }
-        ]
-    },
-    'cohere': {
-        name: 'Cohere',
-        description: 'Command models (Free tier available)',
-        hasFree: true,
-        models: [
-            { id: 'cohere:command-r-plus-08-2024', name: 'Command R+ 08-2024', modelId: 'command-r-plus-08-2024', recommended: true },
-            { id: 'cohere:command-r-08-2024', name: 'Command R 08-2024', modelId: 'command-r-08-2024' },
-            { id: 'cohere:command-r7b-12-2024', name: 'Command R7B 12-2024 (Small)', modelId: 'command-r7b-12-2024' },
-            { id: 'cohere:command-a-03-2025', name: 'Command A 03-2025 (Flagship)', modelId: 'command-a-03-2025' }
-        ]
-    }
-};
+import { AI_MODEL_PROVIDERS } from './ai-models.js';
 
 let modal = null;
 let userKeys = {}; // Stores which providers user has keys for
@@ -172,20 +141,31 @@ async function loadUserSettings() {
 /**
  * Render settings UI
  */
+function getProviderDefinition(providerId) {
+    return AI_MODEL_PROVIDERS.find(provider => provider.id === providerId);
+}
+
 function renderSettings() {
     const body = document.getElementById('aiAssistBody');
     if (!body) return;
     
     // Build shortcuts list (auto-assign numbers 0-9, then letters a-z)
     const allModels = [];
-    Object.keys(PROVIDERS).forEach(providerId => {
-        const provider = PROVIDERS[providerId];
+    AI_MODEL_PROVIDERS.forEach(provider => {
+        const providerHasKey = userKeys[provider.id] === true;
         provider.models.forEach(model => {
+            const requiresKey = model.requiresKey !== false;
+            const enabled = providerHasKey || !requiresKey;
             allModels.push({
-                ...model,
-                provider: providerId,
+                id: model.dbModelId,
+                name: model.displayName,
+                provider: provider.id,
                 providerName: provider.name,
-                enabled: userKeys[providerId] === true
+                recommended: !!model.recommended,
+                freeAccess: !requiresKey,
+                tags: model.tags || [],
+                enabled,
+                access: model.access || 'user-key'
             });
         });
     });
@@ -215,7 +195,10 @@ function renderSettings() {
     allModels.forEach(model => {
         const selected = defaultModel === model.id ? 'selected' : '';
         const disabled = !model.enabled ? 'disabled' : '';
-        html += `<option value="${model.id}" ${selected} ${disabled}>${model.shortcut}: ${model.providerName} - ${model.name}${!model.enabled ? ' (No API key)' : ''}</option>`;
+        const statusBadge = model.freeAccess
+            ? ' (Free tier)'
+            : (!model.enabled ? ' (No API key)' : '');
+        html += `<option value="${model.id}" ${selected} ${disabled}>${model.shortcut}: ${model.providerName} - ${model.name}${statusBadge}</option>`;
     });
     
     html += `
@@ -233,8 +216,15 @@ function renderSettings() {
     `;
     
     allModels.forEach(model => {
-        const statusColor = model.enabled ? 'var(--success-color)' : 'var(--text-secondary)';
-        const statusText = model.enabled ? 'enabled' : 'no key';
+        let statusColor = 'var(--success-color)';
+        let statusText = 'enabled';
+        if (model.freeAccess) {
+            statusColor = 'var(--accent-color)';
+            statusText = 'free tier';
+        } else if (!model.enabled) {
+            statusColor = 'var(--text-secondary)';
+            statusText = 'no key';
+        }
         const recommendedBadge = model.recommended ? ' <strong style="color: var(--accent-color);">recommended</strong>' : '';
         
         html += `
@@ -259,15 +249,23 @@ function renderSettings() {
                 <strong>To obtain API keys, visit:</strong><br>
                 Groq: <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color: var(--accent-color);">https://console.groq.com/keys</a><br>
                 Gemini: <a href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener" style="color: var(--accent-color);">https://aistudio.google.com/api-keys</a><br>
-                Cohere: <a href="https://dashboard.cohere.com/api-keys" target="_blank" rel="noopener" style="color: var(--accent-color);">https://dashboard.cohere.com/api-keys</a>
+                Cohere: <a href="https://dashboard.cohere.com/api-keys" target="_blank" rel="noopener" style="color: var(--accent-color);">https://dashboard.cohere.com/api-keys</a><br>
+                OpenRouter: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style="color: var(--accent-color);">https://openrouter.ai/keys</a>
             </p>
     `;
     
-    Object.keys(PROVIDERS).forEach(providerId => {
-        const provider = PROVIDERS[providerId];
-        const hasKey = userKeys[providerId] === true;
-        const statusColor = hasKey ? 'var(--success-color)' : 'var(--text-secondary)';
-        const statusText = hasKey ? '✓ API Key Configured' : 'No API Key';
+    AI_MODEL_PROVIDERS.forEach(provider => {
+        const hasKey = userKeys[provider.id] === true;
+        const hasFreeModels = provider.models.some(model => model.requiresKey === false);
+        let statusColor = 'var(--text-secondary)';
+        let statusText = 'No API Key';
+        if (hasKey) {
+            statusColor = 'var(--success-color)';
+            statusText = '✓ API Key Configured';
+        } else if (hasFreeModels) {
+            statusColor = 'var(--accent-color)';
+            statusText = 'Free tier ready';
+        }
         const buttonText = hasKey ? 'Update Key' : 'Add Key';
         
         html += `
@@ -276,20 +274,21 @@ function renderSettings() {
                     <div>
                         <h4 style="margin: 0 0 5px 0; color: var(--text-primary);">${provider.name}</h4>
                         <p style="margin: 0; color: var(--text-secondary); font-size: 13px;">${provider.description}</p>
+                        ${provider.freeTierNotes ? `<p style="margin: 5px 0 0 0; color: var(--text-secondary); font-size: 12px;">${provider.freeTierNotes}</p>` : ''}
                     </div>
                     <span style="color: ${statusColor}; font-size: 13px; font-weight: 600;">${statusText}</span>
                 </div>
                 
                 <div style="display: flex; gap: 10px; margin-top: 15px;">
                     <input type="password" 
-                           id="apiKey_${providerId}" 
+                           id="apiKey_${provider.id}" 
                            class="uiInput" 
                            placeholder="Enter API key"
                            style="flex: 1; padding: 8px;">
-                    <button class="uiBtn addKeyBtn" data-provider="${providerId}">${buttonText}</button>
-                    ${hasKey ? `<button class="uiBtn deleteKeyBtn" data-provider="${providerId}" style="background: var(--error-color);">Remove</button>` : ''}
+                    <button class="uiBtn addKeyBtn" data-provider="${provider.id}">${buttonText}</button>
+                    ${hasKey ? `<button class="uiBtn deleteKeyBtn" data-provider="${provider.id}" style="background: var(--error-color);">Remove</button>` : ''}
                 </div>
-                <div id="keyStatus_${providerId}" style="margin-top: 10px; font-size: 13px;"></div>
+                <div id="keyStatus_${provider.id}" style="margin-top: 10px; font-size: 13px;"></div>
             </div>
         `;
     });
@@ -409,7 +408,9 @@ async function addOrUpdateKey(providerId) {
  * Delete API key
  */
 async function deleteKey(providerId) {
-    if (!confirm(`Remove API key for ${PROVIDERS[providerId].name}?`)) {
+    const provider = getProviderDefinition(providerId);
+    const providerName = provider?.name || providerId;
+    if (!confirm(`Remove API key for ${providerName}?`)) {
         return;
     }
     

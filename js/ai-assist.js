@@ -4,48 +4,12 @@
 
 import { state } from './core.js';
 import * as backend from './backend.js';
+import { MODEL_MAP as MODEL_REGISTRY, getModelKeyByDbId } from './ai-models.js';
 
 // Edge Function URL - update this after deployment!
 const EDGE_FUNCTION_URL = 'https://vnsdnskppjwktvksxxvp.supabase.co/functions/v1/ai-assist';
 
-// Model configurations (client-side only for UI/detection)
-const MODELS = {
-    'groq': {
-        name: 'Llama 3.3 70B (Recommended)',
-        provider: 'groq',
-        modelId: 'llama-3.3-70b-versatile'
-    },
-    'groqf': {
-        name: 'Llama 3.1 8B (Fast)',
-        provider: 'groq',
-        modelId: 'llama-3.1-8b-instant'
-    },
-    'gemini': {
-        name: 'Gemini 2.0 Flash',
-        provider: 'gemini',
-        modelId: 'gemini-2.0-flash-exp'
-    },
-    'cohere': {
-        name: 'Command R+ 08-2024',
-        provider: 'cohere',
-        modelId: 'command-r-plus-08-2024'
-    },
-    'coheref': {
-        name: 'Command R 08-2024',
-        provider: 'cohere',
-        modelId: 'command-r-08-2024'
-    },
-    'coheresm': {
-        name: 'Command R7B 12-2024',
-        provider: 'cohere',
-        modelId: 'command-r7b-12-2024'
-    },
-    'coherea': {
-        name: 'Command A 03-2025',
-        provider: 'cohere',
-        modelId: 'command-a-03-2025'
-    }
-};
+const MODELS = MODEL_REGISTRY;
 
 /**
  * Check if code contains an AI prompt
@@ -236,9 +200,9 @@ async function callAIEdgeFunction(provider, modelId, prompt) {
             'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            provider: provider,
+            provider,
             model: modelId,
-            prompt: prompt
+            prompt
         })
     });
 
@@ -258,7 +222,7 @@ async function callAIEdgeFunction(provider, modelId, prompt) {
         if (data.data.candidates && data.data.candidates.length > 0) {
             return data.data.candidates[0].content.parts[0].text;
         }
-    } else if (provider === 'groq' || provider === 'openrouter') {
+    } else if (provider === 'groq' || provider === 'openrouter' || provider === 'openrouter_free') {
         if (data.data.choices && data.data.choices.length > 0) {
             return data.data.choices[0].message.content;
         }
@@ -446,23 +410,10 @@ async function getDefaultModel() {
         
         if (error || !data) return null;
         
-        // DB stores IDs like 'groq:llama-3.3-70b'
-        // We need to map these to our model keys like 'groq', 'groqf', etc.
         const dbModelId = data.default_model;
         if (!dbModelId) return null;
         
-        // Manual mapping from DB IDs to model keys
-        const dbIdToModelKey = {
-            'groq:llama-3.3-70b': 'groq',
-            'groq:llama-3.1-8b': 'groqf',
-            'gemini:2.0-flash': 'gemini',
-            'cohere:command-r-plus-08-2024': 'cohere',
-            'cohere:command-r-08-2024': 'coheref',
-            'cohere:command-r7b-12-2024': 'coheresm',
-            'cohere:command-a-03-2025': 'coherea'
-        };
-        
-        return dbIdToModelKey[dbModelId] || null;
+        return getModelKeyByDbId(dbModelId);
     } catch (error) {
         console.error('Failed to get default model:', error);
         return null;

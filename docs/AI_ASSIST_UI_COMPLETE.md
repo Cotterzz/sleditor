@@ -72,14 +72,14 @@ js/backend.js              - Export getSupabaseClient()
 
 ## Current Providers
 
-**Supported (Free Tier):**
+**Supported (Free Tier Providers):**
 - ✅ Groq (4 models)
 - ✅ Gemini (1 model)
+- ✅ OpenRouter Free Tier (6 curated coding models – user supplies their own OpenRouter key)
 
 **Ready to Add:**
-- Cohere
+- Cohere (UI ready, requires user key)
 - HuggingFace
-- OpenRouter (later, for paid tier)
 
 ---
 
