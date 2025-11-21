@@ -314,8 +314,9 @@ export async function initMonaco(callback, initialCode, helpContent) {
                 lineNumbers: 'off',
             });
             
-            // Setup keyboard shortcuts
+            // Setup keyboard shortcuts and editor actions
             setupKeyboardShortcuts();
+            setupEditorActions();
             
             // Setup Golf mode character count updater
             setupGolfCharCounter();
@@ -366,6 +367,36 @@ function setupGolfCharCounter() {
         // Import tabs module dynamically to avoid circular dependency
         import('./tabs.js').then(tabs => {
             tabs.updateGolfCharCount();
+        });
+    });
+}
+
+// ============================================================================
+// Editor Actions (Context Menu / Command Palette)
+// ============================================================================
+
+function setupEditorActions() {
+    const editors = [
+        state.graphicsEditor,
+        state.audioEditor,
+        state.jsEditor
+    ].filter(Boolean);
+
+    const toggleWordWrap = (editor) => {
+        const current = editor.getRawOptions().wordWrap || 'off';
+        const next = current === 'off' ? 'on' : 'off';
+        editor.updateOptions({ wordWrap: next });
+    };
+
+    editors.forEach((editor) => {
+        editor.addAction({
+            id: 'toggle-word-wrap',
+            label: 'Toggle Word Wrap',
+            keybindings: [],
+            precondition: null,
+            contextMenuGroupId: 'navigation',
+            contextMenuOrder: 1.6,
+            run: toggleWordWrap
         });
     });
 }
