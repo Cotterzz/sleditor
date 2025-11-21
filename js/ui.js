@@ -383,6 +383,7 @@ export function setupPanelDividers() {
     let startDisplayWidth = 0;
     let startGalleryWidth = 0;
     let hasMoved = false;
+    let pendingCollapsePanel = null;
     
     const panelState = {
         devCollapsed: false,
@@ -396,6 +397,7 @@ export function setupPanelDividers() {
         const clientX = e.clientX || (e.touches && e.touches[0].clientX);
         startX = clientX;
         hasMoved = false;
+        pendingCollapsePanel = null;
         
         const containerWidth = container.offsetWidth;
         startDevWidth = (devPanel.offsetWidth / containerWidth) * 100;
@@ -424,12 +426,22 @@ export function setupPanelDividers() {
         
         if (Math.abs(deltaX) > 3) hasMoved = true;
         
+        const collapseThresholdDevPercent = (120 / containerWidth) * 100;
+        const collapseThresholdGalleryPercent = (90 / containerWidth) * 100;
+        
         if (activeDivider === divider1) {
-            let newDevWidth = startDevWidth + deltaPercent;
+            const rawDevWidth = startDevWidth + deltaPercent;
+            let newDevWidth = rawDevWidth;
             let newDisplayWidth = startDisplayWidth - deltaPercent;
             
             const minDevPercent = (300 / containerWidth) * 100;
             const minDisplayPercent = (250 / containerWidth) * 100;
+            
+            if (rawDevWidth <= collapseThresholdDevPercent) {
+                pendingCollapsePanel = 'dev';
+            } else if (pendingCollapsePanel === 'dev') {
+                pendingCollapsePanel = null;
+            }
             
             if (newDevWidth < minDevPercent) {
                 newDevWidth = minDevPercent;
@@ -442,11 +454,18 @@ export function setupPanelDividers() {
             devPanel.style.width = newDevWidth + '%';
             displayPanel.style.width = newDisplayWidth + '%';
         } else if (activeDivider === divider2) {
+            const rawGalleryWidth = startGalleryWidth - deltaPercent;
             let newDisplayWidth = startDisplayWidth + deltaPercent;
-            let newGalleryWidth = startGalleryWidth - deltaPercent;
+            let newGalleryWidth = rawGalleryWidth;
             
             const minDisplayPercent = (250 / containerWidth) * 100;
             const minGalleryPercent = (200 / containerWidth) * 100;
+            
+            if (rawGalleryWidth <= collapseThresholdGalleryPercent) {
+                pendingCollapsePanel = 'gallery';
+            } else if (pendingCollapsePanel === 'gallery') {
+                pendingCollapsePanel = null;
+            }
             
             if (newDisplayWidth < minDisplayPercent) {
                 newDisplayWidth = minDisplayPercent;
@@ -475,19 +494,24 @@ export function setupPanelDividers() {
         galleryPanel.style.transition = '';
         
         if (!hasMoved) {
-            if (divider === divider1) togglePanelCollapse('dev');
-            else if (divider === divider2) togglePanelCollapse('gallery');
+            if (divider === divider1) setPanelCollapse('dev', !panelState.devCollapsed);
+            else if (divider === divider2) setPanelCollapse('gallery', !panelState.galleryCollapsed);
+        } else if (pendingCollapsePanel) {
+            setPanelCollapse(pendingCollapsePanel, true);
         }
+        
+        pendingCollapsePanel = null;
     }
     
-    function togglePanelCollapse(panel) {
+    function setPanelCollapse(panel, collapse) {
         const containerWidth = container.offsetWidth;
         const currentDevWidth = (devPanel.offsetWidth / containerWidth) * 100;
         const currentDisplayWidth = (displayPanel.offsetWidth / containerWidth) * 100;
         const currentGalleryWidth = (galleryPanel.offsetWidth / containerWidth) * 100;
         
         if (panel === 'dev') {
-            panelState.devCollapsed = !panelState.devCollapsed;
+            if (panelState.devCollapsed === collapse) return;
+            panelState.devCollapsed = collapse;
             if (panelState.devCollapsed) {
                 devPanel.style.width = '0%';
                 devPanel.style.minWidth = '0';
@@ -498,7 +522,8 @@ export function setupPanelDividers() {
                 displayPanel.style.width = (currentDisplayWidth + currentDevWidth - 50) + '%';
             }
         } else if (panel === 'gallery') {
-            panelState.galleryCollapsed = !panelState.galleryCollapsed;
+            if (panelState.galleryCollapsed === collapse) return;
+            panelState.galleryCollapsed = collapse;
             if (panelState.galleryCollapsed) {
                 galleryPanel.style.width = '0%';
                 galleryPanel.style.minWidth = '0';

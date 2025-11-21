@@ -135,7 +135,6 @@ body {
     flex-direction: column;
     gap: 0px;
     overflow: hidden;
-    transition: width 0.3s ease;
 }
 
 /* Push status bar to bottom of devPanel */
@@ -151,7 +150,6 @@ body {
     flex-direction: column;
     gap: 0px;
     overflow: hidden;
-    transition: width 0.3s ease;
 }
 
 #galleryPanel {
@@ -161,7 +159,6 @@ body {
     flex-direction: column;
     overflow: hidden;
     background: var(--bg-primary);
-    transition: width 0.3s ease;
 }
 
 /* Collapsed panel state */
