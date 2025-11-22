@@ -4,6 +4,11 @@ const RECORDING_FPS = 60;
 const RECORDING_BITRATE = 8_000_000;
 const DEFAULT_MUXER_PROFILE = '540p';
 
+const H264_DEFAULTS = {
+    fps: 60,
+    bitrate: 8_000_000
+};
+
 const MUXER_PROFILES = {
     '540p': {
         key: '540p',
@@ -118,6 +123,8 @@ let muxerSupportCheckToken = 0;
 let isRecording = false;
 let framesCaptured = 0;
 let activeRecorder = null;
+let processingProgressToken = 0;
+let processingProgressHandle = null;
 
 function getSelectedMuxerProfile() {
     return MUXER_PROFILES[currentMuxerProfile] ?? MUXER_PROFILES[DEFAULT_MUXER_PROFILE];
@@ -449,6 +456,10 @@ async function stopRecording() {
     setRecordingText('Processing…');
     setDevStatus('');
     recordingButton.disabled = true;
+    if (typeof activeRecorder.beginProcessingPhase === 'function') {
+        activeRecorder.beginProcessingPhase();
+    }
+    startProcessingProgress(activeRecorder);
 
     try {
         const blob = await activeRecorder.stop();
@@ -468,6 +479,7 @@ async function stopRecording() {
         setRecordingText(failMsg);
         setDevStatus(failMsg);
     } finally {
+        stopProcessingProgress();
         stopRecordingInternal({ finalizeTime: wasRecording });
         recordingButton.disabled = false;
         recordingButton.textContent = 'Start Recording';
@@ -517,6 +529,35 @@ export function captureFrame(canvas) {
     }
 }
 
+function startProcessingProgress(recorder) {
+    stopProcessingProgress();
+    if (!recorder || typeof recorder.getProcessingProgress !== 'function') {
+        return;
+    }
+    const token = ++processingProgressToken;
+    const update = () => {
+        if (token !== processingProgressToken) return;
+        const info = recorder.getProcessingProgress();
+        if (info && info.processing) {
+            const percent = Math.round(info.progress * 100);
+            const safePercent = Number.isFinite(percent) ? percent : 0;
+            setRecordingText(`Processing… ${safePercent}%`);
+            processingProgressHandle = requestAnimationFrame(update);
+        } else if (info) {
+            setRecordingText(`Processing… 100%`);
+        }
+    };
+    update();
+}
+
+function stopProcessingProgress() {
+    processingProgressToken++;
+    if (processingProgressHandle) {
+        cancelAnimationFrame(processingProgressHandle);
+        processingProgressHandle = null;
+    }
+}
+
 class Mp4MuxerRecorder {
     constructor(canvas, { fps, bitrate, codec }) {
         this.canvas = canvas;
@@ -526,9 +567,15 @@ class Mp4MuxerRecorder {
         this.bitrate = bitrate;
         this.codec = codec || 'avc1.42E01E';
         this.frameIndex = 0;
+        this.outputFrameIndex = 0;
+        this.lastTimestamp = -1;
+        this.pendingFrames = 0;
+        this.pendingFramesAtStop = 0;
         this.encoder = null;
         this.muxer = null;
         this.target = null;
+        this.processedFrames = 0;
+        this.processing = false;
     }
 
     async start() {
@@ -550,6 +597,11 @@ class Mp4MuxerRecorder {
             },
             fastStart: 'in-memory'
         });
+        this.outputFrameIndex = 0;
+        this.lastTimestamp = -1;
+        this.processedFrames = 0;
+        this.pendingFrames = 0;
+        this.pendingFramesAtStop = 0;
         this.encoder = new VideoEncoder({
             output: (chunk, meta) => {
                 const patchedMeta = meta ? { ...meta } : {};
@@ -557,6 +609,7 @@ class Mp4MuxerRecorder {
                     patchedMeta.decoderConfig = meta.decoderConfig;
                 }
                 const fps = this.fps || RECORDING_FPS;
+                const frameNumber = this.outputFrameIndex++;
 
                 const sourceDuration = Number(chunk?.duration);
                 let frameDuration = (() => {
@@ -575,20 +628,23 @@ class Mp4MuxerRecorder {
                 }
 
                 const sourceTimestamp = Number(chunk?.timestamp);
-                const frameTimestamp = (() => {
+                let frameTimestamp = (() => {
                     if (Number.isFinite(sourceTimestamp) && sourceTimestamp >= 0) {
                         return sourceTimestamp;
                     }
-                    const priorFrames = Math.max(this.frameIndex - 1, 0);
-                    const derived = priorFrames * frameDuration;
+                    const derived = frameNumber * frameDuration;
                     return derived >= 0 ? derived : 0;
                 })();
+                const minTimestamp =
+                    this.lastTimestamp >= 0 ? this.lastTimestamp + (frameDuration > 0 ? frameDuration : 1) : 0;
+                let targetTimestamp = Math.max(frameTimestamp, minTimestamp);
 
                 const needsChunkPatch =
                     !Number.isFinite(sourceDuration) ||
                     sourceDuration <= 0 ||
                     !Number.isFinite(sourceTimestamp) ||
-                    sourceTimestamp < 0;
+                    sourceTimestamp < 0 ||
+                    targetTimestamp !== sourceTimestamp;
 
                 let chunkToAdd = chunk;
                 if (needsChunkPatch) {
@@ -596,24 +652,22 @@ class Mp4MuxerRecorder {
                     chunk.copyTo(dataCopy);
                     chunkToAdd = new EncodedVideoChunk({
                         type: chunk.type,
-                        timestamp: frameTimestamp,
+                        timestamp: targetTimestamp,
                         duration: frameDuration,
                         data: dataCopy
                     });
                 }
 
-                const patchedTimestamp = Number(patchedMeta.timestamp);
-                if (!Number.isFinite(patchedTimestamp) || patchedTimestamp < 0) {
-                    patchedMeta.timestamp = frameTimestamp;
-                } else {
-                    patchedMeta.timestamp = patchedTimestamp;
-                }
+                patchedMeta.timestamp = targetTimestamp;
 
                 let durationValue = Number(patchedMeta.duration);
                 if (!Number.isFinite(durationValue) || durationValue <= 0) {
                     durationValue = frameDuration;
                 }
                 patchedMeta.duration = durationValue;
+                this.lastTimestamp = patchedMeta.timestamp;
+                this.processedFrames++;
+                this.pendingFrames = Math.max(this.pendingFrames - 1, 0);
 
                 this.muxer.addVideoChunk(chunkToAdd, patchedMeta);
             },
@@ -630,21 +684,55 @@ class Mp4MuxerRecorder {
 
     captureFrame(canvas) {
         if (!this.encoder) return;
-        const timestamp = Math.round((this.frameIndex / this.fps) * 1_000_000);
+        const timestamp = Math.round((this.frameIndex / (this.fps || RECORDING_FPS)) * 1_000_000);
         const frame = new VideoFrame(canvas, { timestamp });
         this.encoder.encode(frame);
         frame.close();
         this.frameIndex++;
+        this.pendingFrames++;
+    }
+
+    beginProcessingPhase() {
+        if (this.processing) return;
+        this.processing = true;
+        this.pendingFramesAtStop = Math.max(this.pendingFrames, 1);
     }
 
     async stop() {
         if (!this.encoder) return null;
+        if (!this.processing) {
+            this.beginProcessingPhase();
+        }
         await this.encoder.flush();
         this.encoder.close();
         this.encoder = null;
         this.muxer.finalize();
         const buffer = this.target.buffer;
+        this.processing = false;
+        this.pendingFrames = 0;
+        this.pendingFramesAtStop = 0;
         return new Blob([buffer], { type: 'video/mp4' });
+    }
+
+    getProcessingProgress() {
+        if (!this.processing) {
+            return {
+                processed: this.frameIndex,
+                total: this.frameIndex,
+                progress: 1,
+                processing: false
+            };
+        }
+        const total = Math.max(this.pendingFramesAtStop, 1);
+        const remaining = Math.max(this.pendingFrames, 0);
+        const processed = Math.min(total - remaining, total);
+        const progress = Math.min(processed / total, 1);
+        return {
+            processed,
+            total,
+            progress,
+            processing: this.processing
+        };
     }
 
     dispose() {
