@@ -7,19 +7,51 @@ const DEFAULT_MUXER_PROFILE = '540p';
 const MUXER_PROFILES = {
     '540p': {
         key: '540p',
-        label: 'mp4-muxer 540p',
+        label: 'H.264 Baseline 60fps (540p)',
         codec: 'avc1.42E01E', // Baseline profile, Level 3.0 (≤414,720px)
         maxPixels: 414_720,
         bitrate: 5_000_000,
-        fps: RECORDING_FPS
+        fps: 60
     },
     '1080p': {
         key: '1080p',
-        label: 'mp4-muxer 1080p',
+        label: 'H.264 High 30fps (1080p)',
         codec: 'avc1.640028', // High profile, Level 4.0 (≤2,097,152px)
         maxPixels: 2_097_152,
         bitrate: 12_000_000,
-        fps: RECORDING_FPS
+        fps: 30
+    },
+    'vp9_30': {
+        key: 'vp9_30',
+        label: 'VP9 30fps',
+        codec: 'vp09.00.10.08',
+        maxPixels: null,
+        bitrate: 6_000_000,
+        fps: 30
+    },
+    'vp9_60': {
+        key: 'vp9_60',
+        label: 'VP9 60fps',
+        codec: 'vp09.00.10.08',
+        maxPixels: null,
+        bitrate: 10_000_000,
+        fps: 60
+    },
+    'av1_30': {
+        key: 'av1_30',
+        label: 'AV1 30fps',
+        codec: 'av01.0.04M.08',
+        maxPixels: null,
+        bitrate: 4_000_000,
+        fps: 30
+    },
+    'av1_60': {
+        key: 'av1_60',
+        label: 'AV1 60fps',
+        codec: 'av01.0.04M.08',
+        maxPixels: null,
+        bitrate: 8_000_000,
+        fps: 60
     }
 };
 
@@ -122,7 +154,7 @@ function validateMuxerResolution(profile, canvas) {
     if (pixelCount === 0) {
         return { ok: false, message: 'Canvas not ready' };
     }
-    if (pixelCount > profile.maxPixels) {
+    if (profile.maxPixels && pixelCount > profile.maxPixels) {
         return { ok: false, message: 'Resolution not supported' };
     }
     return { ok: true };
@@ -506,18 +538,24 @@ class Mp4MuxerRecorder {
         const module = await Mp4MuxerRecorder.loadModule();
         const { Muxer, ArrayBufferTarget } = module;
         this.target = new ArrayBufferTarget();
+        const muxerCodec = getMuxerCodecIdentifier(this.codec);
         this.muxer = new Muxer({
             target: this.target,
             video: {
-                codec: 'avc',
+                codec: muxerCodec,
                 width: this.width,
-                height: this.height
+                height: this.height,
+                bitrate: this.bitrate,
+                frameRate: this.fps
             },
             fastStart: 'in-memory'
         });
         this.encoder = new VideoEncoder({
             output: (chunk, meta) => {
                 const patchedMeta = meta ? { ...meta } : {};
+                if (meta?.decoderConfig && !patchedMeta.decoderConfig) {
+                    patchedMeta.decoderConfig = meta.decoderConfig;
+                }
                 const fps = this.fps || RECORDING_FPS;
 
                 const sourceDuration = Number(chunk?.duration);
@@ -627,4 +665,14 @@ class Mp4MuxerRecorder {
 }
 
 Mp4MuxerRecorder.modulePromise = null;
+
+function getMuxerCodecIdentifier(codec) {
+    if (!codec) return 'avc';
+    const lower = codec.toLowerCase();
+    if (lower.startsWith('avc1') || lower.startsWith('avc')) return 'avc';
+    if (lower.startsWith('vp09') || lower.startsWith('vp9')) return 'vp9';
+    if (lower.startsWith('av01') || lower.startsWith('av1')) return 'av1';
+    console.warn('Unknown muxer codec identifier, defaulting to avc:', codec);
+    return 'avc';
+}
 

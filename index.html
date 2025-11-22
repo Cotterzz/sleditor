@@ -245,8 +245,12 @@
                             <option value="mp4box">Recording: MP4Box.js</option>
                         </select>
                         <select id="muxerProfileSelect" style="display: none;">
-                            <option value="540p">Recording: mp4-muxer 540p</option>
-                            <option value="1080p">Recording: mp4-muxer 1080p</option>
+                            <option value="540p">H.264 Baseline 60fps (540p)</option>
+                            <option value="1080p">H.264 High 30fps (1080p)</option>
+                            <option value="vp9_30">VP9 30fps</option>
+                            <option value="vp9_60">VP9 60fps</option>
+                            <option value="av1_30">AV1 30fps</option>
+                            <option value="av1_60">AV1 60fps</option>
                         </select>
                         <div id="recordingStatus">Recording disabled</div>
                         <button id="recordingButton" disabled>Start Recording</button>
