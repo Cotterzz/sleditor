@@ -173,6 +173,7 @@ async function evaluateMuxerAvailability() {
             bitrate: profile.bitrate ?? RECORDING_BITRATE,
             framerate: profile.fps ?? RECORDING_FPS
         };
+        logCodecDiagnostics(config);
         const support = await VideoEncoder.isConfigSupported(config);
         if (token !== muxerSupportCheckToken || !isMuxerMethod()) {
             return;
@@ -197,6 +198,56 @@ async function evaluateMuxerAvailability() {
         setDevStatus(msg);
         updateUI(false);
     }
+}
+
+const CODEC_TEST_LIST = [
+    { label: 'H264 Baseline L3.0', codec: 'avc1.42E01E' },
+    { label: 'H264 Baseline L3.1', codec: 'avc1.420032' },
+    { label: 'H264 Baseline L3.2', codec: 'avc1.420033' },
+    { label: 'H264 Main L3.1', codec: 'avc1.4D0032' },
+    { label: 'H264 Main L4.0', codec: 'avc1.4D0040' },
+    { label: 'H264 High L3.1', codec: 'avc1.64001F' },
+    { label: 'H264 High L4.0', codec: 'avc1.640028' },
+    { label: 'H264 High L4.1', codec: 'avc1.640029' },
+    { label: 'VP8', codec: 'vp8' },
+    { label: 'VP9', codec: 'vp09.00.10.08' },
+    { label: 'AV1 Main L4.0', codec: 'av01.0.04M.08' }
+];
+
+async function logCodecDiagnostics(baseConfig) {
+    if (typeof VideoEncoder?.isConfigSupported !== 'function') {
+        return;
+    }
+    const canvas = state.canvasWebGL;
+    if (!canvas) return;
+
+    const summary = [];
+    for (const entry of CODEC_TEST_LIST) {
+        const config = {
+            ...baseConfig,
+            codec: entry.codec
+        };
+        try {
+            const supported = await VideoEncoder.isConfigSupported(config);
+            summary.push({
+                codec: entry.codec,
+                label: entry.label,
+                supported: !!supported?.supported,
+                maxFramerate: supported?.config?.framerate,
+                description: supported?.config?.codec,
+                width: config.width,
+                height: config.height
+            });
+        } catch (err) {
+            summary.push({
+                codec: entry.codec,
+                label: entry.label,
+                supported: false,
+                error: err?.message || err?.name || 'Unknown error'
+            });
+        }
+    }
+    console.table(summary);
 }
 
 export function initUI() {

@@ -532,6 +532,29 @@ let recycleActive = false;
 const codeOutput = document.getElementById('codeOutput');
 const codeOutputContent = document.getElementById('codeOutputContent');
 
+// Simple performance logger (toggle via window.SDF_PERF.enabled)
+const SDF_PERF = {
+    enabled: true
+};
+
+function perfNow() {
+    return performance.now();
+}
+
+function perfLogDuration(label, startTime, extra = '') {
+    if (!SDF_PERF.enabled) return;
+    const duration = performance.now() - startTime;
+    const suffix = extra ? ` | ${extra}` : '';
+    console.log(`[SDFperf] ${label}: ${duration.toFixed(2)}ms${suffix}`);
+}
+
+function perfLogInfo(label, info) {
+    if (!SDF_PERF.enabled) return;
+    console.log(`[SDFperf] ${label}: ${info}`);
+}
+
+window.SDF_PERF = SDF_PERF;
+
 // WebGL state
 let gl, program;
 let uniformLocations = {};
@@ -1166,6 +1189,23 @@ function traverseSceneNodes(callback) {
     traverse(sceneNode);
 }
 
+function getSceneStats() {
+    const sceneNode = document.getElementById('scene');
+    let count = 0;
+    let depth = 0;
+    
+    function traverse(node, currentDepth) {
+        if (node.dataset.type !== 'Scene') {
+            count++;
+            depth = Math.max(depth, currentDepth);
+        }
+        getNodeChildren(node).forEach(child => traverse(child, currentDepth + 1));
+    }
+    
+    traverse(sceneNode, 0);
+    return { nodeCount: count, maxDepth: depth };
+}
+
 function getNodeVarName(node) {
     return 'd_' + node.id.replace(/[^a-zA-Z0-9]/g, '_');
 }
@@ -1174,6 +1214,7 @@ function getNodeVarName(node) {
 // EXPORT GLSL - Hardcoded values (for output)
 // ===========================================
 function generateExportGLSL() {
+    const t0 = perfNow();
     const sceneNode = document.getElementById('scene');
     const children = getNodeChildren(sceneNode);
     
@@ -1207,6 +1248,8 @@ ${nodeCode}
 }`;
     }
     
+    const stats = getSceneStats();
+    perfLogDuration('generateExportGLSL', t0, `nodes=${stats.nodeCount} depth=${stats.maxDepth}`);
     return code;
 }
 
@@ -1361,6 +1404,7 @@ function generateExportNodeCode(node, pointVar) {
 // PREVIEW GLSL - Uniform-based (for live edit)
 // ===========================================
 function generatePreviewGLSL() {
+    const t0 = perfNow();
     const sceneNode = document.getElementById('scene');
     const children = getNodeChildren(sceneNode);
     
@@ -1414,6 +1458,8 @@ ${nodeCode}
 }`;
     }
     
+    const stats = getSceneStats();
+    perfLogDuration('generatePreviewGLSL', t0, `nodes=${stats.nodeCount} depth=${stats.maxDepth}`);
     return code;
 }
 
@@ -1680,6 +1726,7 @@ function initWebGL() {
 }
 
 function createShaderProgram(sdfCode) {
+    const t0 = perfNow();
     const vertexShaderSource = `
         attribute vec2 position;
         void main() {
@@ -1761,10 +1808,13 @@ function createShaderProgram(sdfCode) {
         return null;
     }
     
+    perfLogDuration('createShaderProgram', t0);
     return prog;
 }
 
 function cacheUniformLocations() {
+    const t0 = perfNow();
+    let uniformCount = 0;
     uniformLocations = {};
     
     traverseSceneNodes(node => {
@@ -1775,17 +1825,23 @@ function cacheUniformLocations() {
         uniformLocations[`${prefix}_pos`] = gl.getUniformLocation(program, `${prefix}_pos`);
         uniformLocations[`${prefix}_rot`] = gl.getUniformLocation(program, `${prefix}_rot`);
         uniformLocations[`${prefix}_scale`] = gl.getUniformLocation(program, `${prefix}_scale`);
+        uniformCount += 3;
         
         if (typeDef.params) {
             for (const key of Object.keys(typeDef.params)) {
                 uniformLocations[`${prefix}_${key}`] = gl.getUniformLocation(program, `${prefix}_${key}`);
+                uniformCount++;
             }
         }
     });
+    
+    perfLogDuration('cacheUniformLocations', t0, `uniforms=${uniformCount}`);
 }
 
 function updatePreviewUniforms() {
     if (!gl || !program) return;
+    const t0 = perfNow();
+    let uniformUpdates = 0;
 
     // Update export code display if visible
     if (codeOutput.style.display === 'block') {
@@ -1804,17 +1860,20 @@ function updatePreviewUniforms() {
         const posLoc = uniformLocations[`${prefix}_pos`];
         if (posLoc) {
             gl.uniform3f(posLoc, params.posX, params.posY, params.posZ);
+            uniformUpdates++;
         }
         
         const rotLoc = uniformLocations[`${prefix}_rot`];
         if (rotLoc) {
             const rad = Math.PI / 180;
             gl.uniform3f(rotLoc, params.rotX * rad, params.rotY * rad, params.rotZ * rad);
+            uniformUpdates++;
         }
         
         const scaleLoc = uniformLocations[`${prefix}_scale`];
         if (scaleLoc) {
             gl.uniform1f(scaleLoc, params.scale);
+            uniformUpdates++;
         }
         
         // Set type-specific uniforms
@@ -1823,16 +1882,19 @@ function updatePreviewUniforms() {
                 const loc = uniformLocations[`${prefix}_${key}`];
                 if (loc) {
                     gl.uniform1f(loc, params[key]);
+                    uniformUpdates++;
                 }
             }
         }
     });
     
     renderPreview();
+    perfLogDuration('updatePreviewUniforms', t0, `updates=${uniformUpdates}`);
 }
 
 function recompilePreview() {
     if (!gl) return;
+    const t0 = perfNow();
     
     const previewGLSL = generatePreviewGLSL();
     
@@ -1863,6 +1925,9 @@ function recompilePreview() {
     // Cache uniform locations and update values
     cacheUniformLocations();
     updatePreviewUniforms();
+    
+    const stats = getSceneStats();
+    perfLogDuration('recompilePreview', t0, `nodes=${stats.nodeCount} depth=${stats.maxDepth}`);
 }
 
 function renderPreview() {
