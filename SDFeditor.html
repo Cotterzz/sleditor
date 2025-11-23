@@ -20,7 +20,7 @@
             z-index: 10;
         }
 
-        .node {
+.node {
             font-family: 'Quicksand', sans-serif;
             font-size: .9em;
             padding: 8px 12px;
@@ -33,6 +33,55 @@
             min-width: 80px;
             text-align: center;
         }
+
+.node .detach-wrapper {
+    position: absolute;
+    top: -32px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.35);
+    border: 1px dashed rgba(197, 48, 48, 0.6);
+    opacity: 0;
+    pointer-events: auto;
+}
+
+.detach-wrapper .detach-handle {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.25);
+    background: #fff;
+    color: #c53030;
+    font-size: 13px;
+    line-height: 22px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    opacity: 0;
+    pointer-events: auto;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.detach-wrapper .detach-handle::selection {
+    background: transparent;
+}
+
+.node .detach-wrapper:hover,
+.detach-wrapper.force-visible,
+.detach-wrapper:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+}
 
         .node.scene {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -511,6 +560,33 @@ const TRANSFORM_PARAMS = {
     scale: { default: 1.0, min: 0.1, max: 5.0, step: 0.05 }
 };
 
+function getNodeParams(node) {
+    if (node._sdfParams) return node._sdfParams;
+    const parsed = node.dataset.params ? JSON.parse(node.dataset.params) : {};
+    node._sdfParams = parsed;
+    return parsed;
+}
+
+function setNodeParams(node, params) {
+    node._sdfParams = params;
+    node.dataset.params = JSON.stringify(params);
+}
+
+function ensureDetachHandle(node) {
+    if (node.dataset.type === 'Scene') return;
+    if (!node.querySelector('.detach-wrapper')) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'detach-wrapper';
+        const handle = document.createElement('div');
+        handle.className = 'detach-handle';
+        handle.textContent = '×';
+        wrapper.appendChild(handle);
+        node.appendChild(wrapper);
+    }
+    attachNodeHoverHandlers(node);
+    attachDetachWrapperHandlers(node);
+}
+
 // State
 let dragging = false;
 let dragged = null;
@@ -532,9 +608,21 @@ let recycleActive = false;
 const codeOutput = document.getElementById('codeOutput');
 const codeOutputContent = document.getElementById('codeOutputContent');
 
+// Camera state for preview orbit controls
+const CAMERA_STATE = {
+    yaw: 0,
+    pitch: 0,
+    distance: 4,
+    target: { x: 0, y: 0, z: 0 }
+};
+let cameraUniformLocations = { pos: null, target: null };
+let cameraDragMode = null;
+let cameraLastX = 0;
+let cameraLastY = 0;
+
 // Simple performance logger (toggle via window.SDF_PERF.enabled)
 const SDF_PERF = {
-    enabled: true
+    enabled: false
 };
 
 function perfNow() {
@@ -542,15 +630,10 @@ function perfNow() {
 }
 
 function perfLogDuration(label, startTime, extra = '') {
-    if (!SDF_PERF.enabled) return;
-    const duration = performance.now() - startTime;
-    const suffix = extra ? ` | ${extra}` : '';
-    console.log(`[SDFperf] ${label}: ${duration.toFixed(2)}ms${suffix}`);
+    return startTime;
 }
 
 function perfLogInfo(label, info) {
-    if (!SDF_PERF.enabled) return;
-    console.log(`[SDFperf] ${label}: ${info}`);
 }
 
 window.SDF_PERF = SDF_PERF;
@@ -578,6 +661,7 @@ function scanNodes() {
         if (!nodesObject[i].id || nodesObject[i].id === '') {
             nodesObject[i].id = 'node_' + nodeCounter++;
         }
+        ensureDetachHandle(nodesObject[i]);
     }
 }
 
@@ -600,7 +684,9 @@ function initializeNodeParams() {
                 }
             }
             
-            node.dataset.params = JSON.stringify(params);
+            setNodeParams(node, params);
+        } else {
+            node._sdfParams = JSON.parse(node.dataset.params);
         }
     });
 }
@@ -719,8 +805,8 @@ function setupEventListeners() {
     window.addEventListener('resize', () => {
         updateLine(document.getElementById("rootnode"));
         if (gl) {
-            gl.canvas.width = window.innerWidth;
-            gl.canvas.height = window.innerHeight;
+            gl.canvas.width = Math.floor(window.innerWidth / 2);
+            gl.canvas.height = Math.floor(window.innerHeight / 2);
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
             if (program) {
                 gl.useProgram(program);
@@ -763,6 +849,9 @@ function setupEventListeners() {
         downloadShadertoyShader();
     }
 });
+
+    document.addEventListener('mousedown', onDetachHandleMouseDown);
+    document.addEventListener('wheel', handleCameraWheel, { passive: false });
 }
 
 function onMenuItemMouseDown(event) {
@@ -780,6 +869,8 @@ function onMenuItemMouseDown(event) {
     
     pos3 = event.clientX;
     pos4 = event.clientY;
+    newNode.dataset.dragOffsetX = 50;
+    newNode.dataset.dragOffsetY = 15;
     dragging = true;
     dragged = newNode;
     detached = true;
@@ -790,6 +881,8 @@ function createNode(nodeType) {
     const typeDef = NODE_TYPES[nodeType];
     const newNode = document.createElement("DIV");
     const newText = document.createElement("DIV");
+    const detachWrapper = document.createElement('div');
+    const detachHandle = document.createElement('div');
     
     newText.className = "nodetitle";
     newText.textContent = nodeType;
@@ -807,10 +900,176 @@ function createNode(nodeType) {
     for (const [key, val] of Object.entries(TRANSFORM_PARAMS)) {
         params[key] = val.default;
     }
-    newNode.dataset.params = JSON.stringify(params);
+    setNodeParams(newNode, params);
     
+    if (nodeType !== 'Scene') {
+        detachWrapper.className = 'detach-wrapper';
+        detachHandle.className = 'detach-handle';
+        detachHandle.textContent = '×';
+        detachWrapper.appendChild(detachHandle);
+        newNode.appendChild(detachWrapper);
+    }
+    attachNodeHoverHandlers(newNode);
+    attachDetachWrapperHandlers(newNode);
     newNode.appendChild(newText);
     return newNode;
+}
+
+function attachNodeHoverHandlers(node) {
+    if (node.dataset.type === 'Scene' || node._hoverHandlersAttached) return;
+    node.addEventListener('mouseover', handleNodeMouseOver);
+    node.addEventListener('mouseout', handleNodeMouseOut);
+    node._hoverHandlersAttached = true;
+}
+
+function attachDetachWrapperHandlers(node) {
+    if (node.dataset.type === 'Scene') return;
+    const wrapper = node.querySelector('.detach-wrapper');
+    if (!wrapper || wrapper._hoverHandlersAttached) return;
+    wrapper.addEventListener('mouseenter', () => {
+        node.classList.add('node-hover');
+    });
+    wrapper.addEventListener('mouseleave', (event) => {
+        const related = event.relatedTarget;
+        if (related && (node.contains(related) || wrapper.contains(related))) return;
+        node.classList.remove('node-hover');
+    });
+    wrapper._hoverHandlersAttached = true;
+}
+
+function handleNodeMouseOver(event) {
+    if (event.target !== event.currentTarget) return;
+    event.currentTarget.classList.add('node-hover');
+    const wrapper = event.currentTarget.querySelector('.detach-wrapper');
+    if (wrapper) {
+        wrapper.setAttribute('aria-label', 'Click to detach and drag this node');
+    }
+}
+
+function handleNodeMouseOut(event) {
+    if (event.target !== event.currentTarget) return;
+    const related = event.relatedTarget;
+    if (related && event.currentTarget.contains(related)) return;
+    event.currentTarget.classList.remove('node-hover');
+    const wrapper = event.currentTarget.querySelector('.detach-wrapper');
+    if (wrapper) {
+        wrapper.removeAttribute('aria-label');
+    }
+}
+
+function getCameraPosition() {
+    const dist = Math.max(0.5, CAMERA_STATE.distance);
+    const cosPitch = Math.cos(CAMERA_STATE.pitch);
+    const sinPitch = Math.sin(CAMERA_STATE.pitch);
+    const cosYaw = Math.cos(CAMERA_STATE.yaw);
+    const sinYaw = Math.sin(CAMERA_STATE.yaw);
+    return {
+        x: CAMERA_STATE.target.x + dist * cosPitch * sinYaw,
+        y: CAMERA_STATE.target.y + dist * sinPitch,
+        z: CAMERA_STATE.target.z + dist * cosPitch * cosYaw
+    };
+}
+
+function getCameraBasis() {
+    const pos = getCameraPosition();
+    const target = CAMERA_STATE.target;
+    let forward = normalizeVector({
+        x: target.x - pos.x,
+        y: target.y - pos.y,
+        z: target.z - pos.z
+    });
+    let right = normalizeVector(crossVector(forward, { x: 0, y: 1, z: 0 }));
+    if (lengthVector(right) < 0.001) {
+        right = { x: 1, y: 0, z: 0 };
+    }
+    const up = normalizeVector(crossVector(right, forward));
+    return { forward, right, up };
+}
+
+function updateCameraUniforms() {
+    if (!gl || !program || !cameraUniformLocations.pos || !cameraUniformLocations.target) return;
+    const pos = getCameraPosition();
+    gl.uniform3f(cameraUniformLocations.pos, pos.x, pos.y, pos.z);
+    gl.uniform3f(cameraUniformLocations.target, CAMERA_STATE.target.x, CAMERA_STATE.target.y, CAMERA_STATE.target.z);
+}
+
+function beginCameraDrag(mode, x, y) {
+    cameraDragMode = mode;
+    cameraLastX = x;
+    cameraLastY = y;
+    document.body.style.cursor = mode === 'pan' ? 'move' : 'grab';
+}
+
+function updateCameraDrag(x, y) {
+    if (!cameraDragMode) return;
+    const dx = x - cameraLastX;
+    const dy = y - cameraLastY;
+    cameraLastX = x;
+    cameraLastY = y;
+    const { right, up } = getCameraBasis();
+    if (cameraDragMode === 'orbit') {
+        CAMERA_STATE.yaw -= dx * 0.005;
+        CAMERA_STATE.pitch = clamp(CAMERA_STATE.pitch + dy * 0.003, -1.4, 1.4);
+    } else if (cameraDragMode === 'pan') {
+        const panScale = CAMERA_STATE.distance * 0.002;
+        CAMERA_STATE.target.x -= (dx * panScale) * right.x;
+        CAMERA_STATE.target.y -= (dx * panScale) * right.y;
+        CAMERA_STATE.target.z -= (dx * panScale) * right.z;
+        CAMERA_STATE.target.x += (dy * panScale) * up.x;
+        CAMERA_STATE.target.y += (dy * panScale) * up.y;
+        CAMERA_STATE.target.z += (dy * panScale) * up.z;
+    }
+    updateCameraUniforms();
+    renderPreview();
+}
+
+function endCameraDrag() {
+    cameraDragMode = null;
+    document.body.style.cursor = '';
+}
+
+function handleCameraWheel(event) {
+    if (!isStageInteractionTarget(event.target)) return;
+    event.preventDefault();
+    const zoomFactor = Math.exp(event.deltaY * 0.001);
+    CAMERA_STATE.distance = clamp(CAMERA_STATE.distance * zoomFactor, 0.8, 50);
+    updateCameraUniforms();
+    renderPreview();
+}
+
+function isStageInteractionTarget(target) {
+    if (!target) return false;
+    return !(
+        target.closest('#sidebar') ||
+        target.closest('#paramPanel') ||
+        target.closest('.node') ||
+        target.closest('.menu-item') ||
+        target.closest('#sidebarControls') ||
+        target.closest('#recycleBin') ||
+        target.closest('.detach-wrapper')
+    );
+}
+
+function normalizeVector(v) {
+    const len = lengthVector(v);
+    if (len < 1e-6) return { x: 0, y: 0, z: 0 };
+    return { x: v.x / len, y: v.y / len, z: v.z / len };
+}
+
+function lengthVector(v) {
+    return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+function crossVector(a, b) {
+    return {
+        x: a.y * b.z - a.z * b.y,
+        y: a.z * b.x - a.x * b.z,
+        z: a.x * b.y - a.y * b.x
+    };
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
 }
 
 function getNodeChildren(node) {
@@ -829,17 +1088,52 @@ function canAcceptChild(parentNode) {
 function attachNodeToParent(child, parent) {
     if (!canAcceptChild(parent)) {
         document.getElementById("rootnode").appendChild(child);
-        child.style.left = (((pos3) / window.innerWidth) * 100) + "%";
-        child.style.top = (((pos4) / window.innerHeight) * 100) + "%";
+        positionNodeAtPoint(child, pos3, pos4);
         return false;
     }
     
-    parent.appendChild(child);
-    child.style.left = getNodeChildren(parent).length > 1 ? "100px" : "0px";
-    child.style.top = "80px";
+    reparentNodePreservingPosition(child, parent);
     updateLine(child);
     recompilePreview(); // Structure changed - recompile
     return true;
+}
+
+function reparentNodePreservingPosition(node, newParent) {
+    const nodeRect = node.getBoundingClientRect();
+    const parentRect = newParent.getBoundingClientRect();
+    newParent.appendChild(node);
+    node.style.left = `${nodeRect.left - parentRect.left}px`;
+    node.style.top = `${nodeRect.top - parentRect.top}px`;
+}
+
+function positionNodeAtPoint(node, clientX, clientY) {
+    const parent = node.parentNode || document.getElementById('rootnode');
+    const parentRect = parent.getBoundingClientRect();
+    const offsetX = Number(node.dataset.dragOffsetX ?? node.offsetWidth / 2);
+    const offsetY = Number(node.dataset.dragOffsetY ?? node.offsetHeight / 2);
+    node.style.left = `${clientX - parentRect.left - offsetX}px`;
+    node.style.top = `${clientY - parentRect.top - offsetY}px`;
+}
+
+function detachNodeToRoot(node) {
+    const root = document.getElementById('rootnode');
+    reparentNodePreservingPosition(node, root);
+    updateLine(node);
+    recompilePreview();
+}
+
+function onDetachHandleMouseDown(event) {
+    const wrapper = event.target.closest('.detach-wrapper');
+    if (!wrapper) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const node = wrapper.closest('.node');
+    if (!node || node.dataset.type === 'Scene') return;
+    detachNodeToRoot(node);
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    selectNode(node);
+    startNodeDrag(node);
 }
 
 function selectNode(node) {
@@ -864,7 +1158,7 @@ function showParamPanel(node) {
     
     const nodeType = node.dataset.type;
     const typeDef = NODE_TYPES[nodeType];
-    const params = JSON.parse(node.dataset.params);
+    const params = getNodeParams(node);
     
     nodeName.textContent = nodeType;
     content.innerHTML = '';
@@ -911,9 +1205,9 @@ function createParamSlider(node, key, def, value) {
     valueDisplay.textContent = value.toFixed(2);
     
     slider.addEventListener('input', () => {
-        const params = JSON.parse(node.dataset.params);
+        const params = getNodeParams(node);
         params[key] = parseFloat(slider.value);
-        node.dataset.params = JSON.stringify(params);
+        setNodeParams(node, params);
         valueDisplay.textContent = parseFloat(slider.value).toFixed(2);
         updatePreviewUniforms(); // Just update uniforms - no recompile!
     });
@@ -932,6 +1226,10 @@ function hideParamPanel() {
 function onDocumentMouseDown(event) {
     const target = event.target;
     
+    if (target.closest('.detach-wrapper')) {
+        return;
+    }
+    
     if (target.closest('#sidebar') || target.closest('#paramPanel') || 
         target.closest('#glCanvas') || target.closest('#codeOutput') ||
         target.closest('#toggleCode')) {
@@ -946,13 +1244,25 @@ function onDocumentMouseDown(event) {
         pos4 = event.clientY;
         
         selectNode(node);
-        startNodeDrag(node, event.button);
+        startNodeDrag(node);
     } else {
         selectNode(null);
+        if (isStageInteractionTarget(target)) {
+            if (event.button === 0) {
+                beginCameraDrag('orbit', event.clientX, event.clientY);
+            } else if (event.button === 2) {
+                beginCameraDrag('pan', event.clientX, event.clientY);
+            }
+        }
     }
 }
 
 function onDocumentMouseMove(event) {
+    if (cameraDragMode) {
+        event.preventDefault();
+        updateCameraDrag(event.clientX, event.clientY);
+        return;
+    }
     if (dragging) {
         event.preventDefault();
         pos1 = pos3 - event.clientX;
@@ -964,14 +1274,18 @@ function onDocumentMouseMove(event) {
 }
 
 function onDocumentMouseUp(event) {
+    if (cameraDragMode) {
+        event.preventDefault();
+        endCameraDrag();
+        return;
+    }
     if (dragging) {
         event.preventDefault();
         
         if (detached) {
             const attached = finalizeDrop(event.clientX, event.clientY);
             if (!attached && dragged.parentNode.id === "rootnode") {
-                dragged.style.left = (((dragged.offsetLeft) / window.innerWidth) * 100) + "%";
-                dragged.style.top = (((dragged.offsetTop) / window.innerHeight) * 100) + "%";
+                positionNodeAtPoint(dragged, event.clientX, event.clientY);
                 recompilePreview(); // Node detached - structure changed
             }
         }
@@ -981,24 +1295,21 @@ function onDocumentMouseUp(event) {
     }
 }
 
-function startNodeDrag(node, button) {
+function startNodeDrag(node) {
     dragging = true;
     dragged = node;
-    detached = node.parentNode.id === "rootnode" || button === 2;
-    
-    if (button === 2 && node.parentNode.id !== "rootnode") {
-        const box1 = node.getBoundingClientRect();
-        document.getElementById("rootnode").appendChild(node);
-        node.style.left = box1.left + "px";
-        node.style.top = box1.top + "px";
-        updateLine(node);
-        recompilePreview(); // Node detached - structure changed
-    }
+    detached = node.parentNode.id === "rootnode";
+    const rect = node.getBoundingClientRect();
+    const offsetX = pos3 - rect.left;
+    const offsetY = pos4 - rect.top;
+    node.dataset.dragOffsetX = offsetX;
+    node.dataset.dragOffsetY = offsetY;
 }
 
 function nodeDrag() {
-    dragged.style.top = (dragged.offsetTop - pos2) + "px";
-    dragged.style.left = (dragged.offsetLeft - pos1) + "px";
+    const parentRect = dragged.parentNode.getBoundingClientRect();
+    dragged.style.left = `${pos3 - parentRect.left - dragged.dataset.dragOffsetX}px`;
+    dragged.style.top = `${pos4 - parentRect.top - dragged.dataset.dragOffsetY}px`;
     updateLine(dragged);
     if (detached) {
         updateDropPreview();
@@ -1084,7 +1395,6 @@ function updateDropPreview() {
         dropPreview = draw.path(pathData)
             .fill('none')
             .stroke({ width: 2, color: '#f6ad55', dasharray: '6 4', linecap: 'round' });
-        dropPreview.animate(600).ease('<>').attr({ strokeDashoffset: 10 }).loop();
     } else {
         dropPreview.plot(pathData);
     }
@@ -1255,7 +1565,7 @@ ${nodeCode}
 
 function generateExportNodeCode(node, pointVar) {
     const nodeType = node.dataset.type;
-    const params = JSON.parse(node.dataset.params);
+    const params = getNodeParams(node);
     const varName = getNodeVarName(node);
     const typeDef = NODE_TYPES[nodeType];
     
@@ -1714,8 +2024,10 @@ function initWebGL() {
         return;
     }
     
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    canvas.width = Math.floor(window.innerWidth / 2);
+    canvas.height = Math.floor(window.innerHeight / 2);
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
     gl.viewport(0, 0, canvas.width, canvas.height);
     
     // Create vertex buffer once
@@ -1738,8 +2050,21 @@ function createShaderProgram(sdfCode) {
         precision highp float;
         uniform vec2 resolution;
         uniform float time;
+        uniform vec3 u_cameraPos;
+        uniform vec3 u_cameraTarget;
         
         ${sdfCode}
+        
+        vec3 computeRayDirection(vec2 uv) {
+            vec3 forward = normalize(u_cameraTarget - u_cameraPos);
+            vec3 worldUp = vec3(0.0, 1.0, 0.0);
+            vec3 right = normalize(cross(forward, worldUp));
+            if (length(right) < 0.001) {
+                right = vec3(1.0, 0.0, 0.0);
+            }
+            vec3 up = normalize(cross(right, forward));
+            return normalize(forward + uv.x * right + uv.y * up);
+        }
         
         vec3 calcNormal(vec3 p) {
             vec2 e = vec2(0.001, 0.0);
@@ -1753,8 +2078,8 @@ function createShaderProgram(sdfCode) {
         void main() {
             vec2 uv = (gl_FragCoord.xy - 0.5 * resolution) / resolution.y;
             
-            vec3 ro = vec3(0.0, 0.0, 3.0);
-            vec3 rd = normalize(vec3(uv, -1.0));
+            vec3 ro = u_cameraPos;
+            vec3 rd = computeRayDirection(uv);
             
             float t = 0.0;
             vec3 col = vec3(1.0);
@@ -1808,6 +2133,9 @@ function createShaderProgram(sdfCode) {
         return null;
     }
     
+    cameraUniformLocations.pos = gl.getUniformLocation(prog, 'u_cameraPos');
+    cameraUniformLocations.target = gl.getUniformLocation(prog, 'u_cameraTarget');
+    
     perfLogDuration('createShaderProgram', t0);
     return prog;
 }
@@ -1842,6 +2170,8 @@ function updatePreviewUniforms() {
     if (!gl || !program) return;
     const t0 = perfNow();
     let uniformUpdates = 0;
+    
+    updateCameraUniforms();
 
     // Update export code display if visible
     if (codeOutput.style.display === 'block') {
@@ -1852,7 +2182,7 @@ function updatePreviewUniforms() {
     
     traverseSceneNodes(node => {
         const prefix = getNodeVarName(node);
-        const params = JSON.parse(node.dataset.params);
+        const params = getNodeParams(node);
         const nodeType = node.dataset.type;
         const typeDef = NODE_TYPES[nodeType];
         
@@ -1888,8 +2218,19 @@ function updatePreviewUniforms() {
         }
     });
     
-    renderPreview();
-    perfLogDuration('updatePreviewUniforms', t0, `updates=${uniformUpdates}`);
+    const uniformsEnd = perfLogDuration('updatePreviewUniforms', t0, `updates=${uniformUpdates}`);
+    renderPreview(uniformsEnd);
+}
+
+function renderPreview(prevTimestamp) {
+    if (!gl || !program) return;
+    const t0 = perfNow();
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    const renderEnd = perfLogDuration('renderPreview', t0);
+    if (typeof prevTimestamp === 'number') {
+        const total = renderEnd - prevTimestamp + (prevTimestamp - t0);
+        console.log(`[SDFperf] uniforms+render total: ${total.toFixed(2)}ms`);
+    }
 }
 
 function recompilePreview() {
