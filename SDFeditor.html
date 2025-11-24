@@ -236,6 +236,34 @@
     z-index: 1;
 }
 
+#previewControls {
+    position: fixed;
+    right: 320px;
+    bottom: 20px;
+    background: rgba(0, 0, 0, 0.45);
+    color: #f5f5f5;
+    font-family: 'Abel', sans-serif;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 120;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+#previewControls label {
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 11px;
+    color: #cbd5f5;
+}
+
+#previewControls input[type="range"] {
+    width: 140px;
+}
+
         #codeOutput {
             position: absolute;
             left: calc(220px + 20px);
@@ -395,6 +423,11 @@
 <div id="recycleBin">
     <div>♻</div>
     <small>Recycle</small>
+</div>
+<div id="previewControls">
+    <label for="pixelScaleSlider">Pixel size</label>
+    <input type="range" id="pixelScaleSlider" min="0" max="4" step="1" value="0">
+    <span id="pixelScaleLabel">1x</span>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.7.1/svg.min.js"></script>
@@ -607,6 +640,8 @@ const recycleRect = () => recycleBin.getBoundingClientRect();
 let recycleActive = false;
 const codeOutput = document.getElementById('codeOutput');
 const codeOutputContent = document.getElementById('codeOutputContent');
+const pixelScaleSlider = document.getElementById('pixelScaleSlider');
+const pixelScaleLabel = document.getElementById('pixelScaleLabel');
 
 // Camera state for preview orbit controls
 const CAMERA_STATE = {
@@ -642,6 +677,11 @@ window.SDF_PERF = SDF_PERF;
 let gl, program;
 let uniformLocations = {};
 let vertexBuffer = null;
+const pendingSliderUpdates = new Map();
+let sliderFlushHandle = null;
+
+const PREVIEW_PIXEL_SCALES = [1, 2, 4, 8, 16];
+let previewScaleIndex = 0;
 
 // Initialize
 function init() {
@@ -649,7 +689,15 @@ function init() {
     addLines();
     initializeNodeParams();
     setupEventListeners();
+    if (pixelScaleSlider) {
+        const initial = parseInt(pixelScaleSlider.value, 10);
+        previewScaleIndex = Math.max(0, Math.min(PREVIEW_PIXEL_SCALES.length - 1, isNaN(initial) ? 0 : initial));
+    } else {
+        previewScaleIndex = 0;
+    }
+    updatePixelScaleLabel();
     initWebGL();
+    applyPreviewScale();
     recompilePreview();
 }
 
@@ -804,17 +852,7 @@ function setupEventListeners() {
     
     window.addEventListener('resize', () => {
         updateLine(document.getElementById("rootnode"));
-        if (gl) {
-            gl.canvas.width = Math.floor(window.innerWidth / 2);
-            gl.canvas.height = Math.floor(window.innerHeight / 2);
-            gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-            if (program) {
-                gl.useProgram(program);
-                const resLoc = gl.getUniformLocation(program, 'resolution');
-                gl.uniform2f(resLoc, gl.canvas.width, gl.canvas.height);
-                renderPreview();
-            }
-        }
+        applyPreviewScale();
     }, false);
     
     document.querySelectorAll('.menu-item').forEach(item => {
@@ -852,6 +890,9 @@ function setupEventListeners() {
 
     document.addEventListener('mousedown', onDetachHandleMouseDown);
     document.addEventListener('wheel', handleCameraWheel, { passive: false });
+    if (pixelScaleSlider) {
+        pixelScaleSlider.addEventListener('input', handlePixelScaleInput);
+    }
 }
 
 function onMenuItemMouseDown(event) {
@@ -1205,11 +1246,9 @@ function createParamSlider(node, key, def, value) {
     valueDisplay.textContent = value.toFixed(2);
     
     slider.addEventListener('input', () => {
-        const params = getNodeParams(node);
-        params[key] = parseFloat(slider.value);
-        setNodeParams(node, params);
-        valueDisplay.textContent = parseFloat(slider.value).toFixed(2);
-        updatePreviewUniforms(); // Just update uniforms - no recompile!
+        const numericValue = parseFloat(slider.value);
+        valueDisplay.textContent = numericValue.toFixed(2);
+        queueSliderUpdate(node, key, numericValue);
     });
     
     group.appendChild(label);
@@ -1217,6 +1256,71 @@ function createParamSlider(node, key, def, value) {
     group.appendChild(valueDisplay);
     
     return group;
+}
+
+function queueSliderUpdate(node, key, value) {
+    let entry = pendingSliderUpdates.get(node);
+    if (!entry) {
+        entry = { node, changes: {} };
+        pendingSliderUpdates.set(node, entry);
+    }
+    entry.changes[key] = value;
+    if (!sliderFlushHandle) {
+        sliderFlushHandle = requestAnimationFrame(() => {
+            sliderFlushHandle = null;
+            flushPendingSliderUpdates();
+        });
+    }
+}
+
+function flushPendingSliderUpdates() {
+    if (!pendingSliderUpdates.size) return;
+    pendingSliderUpdates.forEach(({ node, changes }) => {
+        const params = getNodeParams(node);
+        Object.assign(params, changes);
+        setNodeParams(node, params);
+    });
+    pendingSliderUpdates.clear();
+    updatePreviewUniforms();
+}
+
+function getPreviewScale() {
+    return PREVIEW_PIXEL_SCALES[previewScaleIndex] || 1;
+}
+
+function updatePixelScaleLabel() {
+    if (!pixelScaleLabel) return;
+    pixelScaleLabel.textContent = `${getPreviewScale()}x`;
+}
+
+function applyPreviewScale() {
+    const canvas = document.getElementById('glCanvas');
+    if (!canvas) return;
+    const scale = getPreviewScale();
+    canvas.width = Math.max(64, Math.floor(window.innerWidth / scale));
+    canvas.height = Math.max(64, Math.floor(window.innerHeight / scale));
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    if (gl) {
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        if (program) {
+            gl.useProgram(program);
+            const resLoc = gl.getUniformLocation(program, 'resolution');
+            if (resLoc) {
+                gl.uniform2f(resLoc, canvas.width, canvas.height);
+            }
+            renderPreview();
+        }
+    }
+}
+
+function handlePixelScaleInput(event) {
+    const raw = parseInt(event.target.value, 10);
+    const clamped = Math.max(0, Math.min(PREVIEW_PIXEL_SCALES.length - 1, isNaN(raw) ? 0 : raw));
+    if (clamped === previewScaleIndex) return;
+    previewScaleIndex = clamped;
+    updatePixelScaleLabel();
+    applyPreviewScale();
 }
 
 function hideParamPanel() {
@@ -1232,7 +1336,7 @@ function onDocumentMouseDown(event) {
     
     if (target.closest('#sidebar') || target.closest('#paramPanel') || 
         target.closest('#glCanvas') || target.closest('#codeOutput') ||
-        target.closest('#toggleCode')) {
+        target.closest('#toggleCode') || target.closest('#previewControls')) {
         return;
     }
     
@@ -1583,29 +1687,22 @@ function generateExportNodeCode(node, pointVar) {
     code += `    ${transformedPoint} /= ${scaleVar};\n`;
     
     if (typeDef.category === 'primitive') {
-        switch (nodeType) {
-            case 'Sphere':
-                code += `    float ${varName} = sdSphere(${transformedPoint}, ${params.radius.toFixed(3)});\n`;
-                break;
-            case 'Box':
-                code += `    float ${varName} = sdBox(${transformedPoint}, vec3(${params.sizeX.toFixed(3)}, ${params.sizeY.toFixed(3)}, ${params.sizeZ.toFixed(3)}));\n`;
-                break;
-            case 'Torus':
-                code += `    float ${varName} = sdTorus(${transformedPoint}, vec2(${params.majorRadius.toFixed(3)}, ${params.minorRadius.toFixed(3)}));\n`;
-                break;
-            case 'Cylinder':
-                code += `    float ${varName} = sdCylinder(${transformedPoint}, ${params.radius.toFixed(3)}, ${params.height.toFixed(3)});\n`;
-                break;
-            case 'Plane':
-                code += `    float ${varName} = sdPlane(${transformedPoint}, ${params.height.toFixed(3)});\n`;
-                break;
-            case 'Pyramid':
-                code += `    float ${varName} = sdPyramid(${transformedPoint}, ${params.height.toFixed(3)});\n`;
-                break;
-            case 'VesicaSegment':
-                code += `    float ${varName} = sdVesicaSegment(${transformedPoint}, vec3(${params.ax.toFixed(3)}, ${params.ay.toFixed(3)}, ${params.az.toFixed(3)}), vec3(${params.bx.toFixed(3)}, ${params.by.toFixed(3)}, ${params.bz.toFixed(3)}), ${params.width.toFixed(3)});\n`;
-                break;
+        const distVar = `${varName}_dist`;
+        const boundExpr = getPrimitiveBoundExpr(nodeType, params);
+        const distExpr = getPrimitiveDistanceExpr(nodeType, transformedPoint, params);
+        code += `    float ${distVar};\n`;
+        if (boundExpr) {
+            const skipVar = `${varName}_skip`;
+            code += `    float ${skipVar} = length(${transformedPoint}) - (${boundExpr});\n`;
+            code += `    if (${skipVar} > 2.0) {\n`;
+            code += `        ${distVar} = ${skipVar};\n`;
+            code += `    } else {\n`;
+            code += `        ${distVar} = ${distExpr};\n`;
+            code += `    }\n`;
+        } else {
+            code += `    ${distVar} = ${distExpr};\n`;
         }
+        code += `    float ${varName} = ${distVar};\n`;
     } else if (typeDef.category === 'operation') {
         const children = getNodeChildren(node);
         
@@ -1771,6 +1868,76 @@ ${nodeCode}
     const stats = getSceneStats();
     perfLogDuration('generatePreviewGLSL', t0, `nodes=${stats.nodeCount} depth=${stats.maxDepth}`);
     return code;
+}
+
+function getPrimitiveDistanceExpr(nodeType, pointVar, params) {
+    switch (nodeType) {
+        case 'Sphere':
+            return `sdSphere(${pointVar}, ${Number(params.radius ?? 0.5).toFixed(3)})`;
+        case 'Box':
+            return `sdBox(${pointVar}, vec3(${Number(params.sizeX ?? 0.5).toFixed(3)}, ${Number(params.sizeY ?? 0.5).toFixed(3)}, ${Number(params.sizeZ ?? 0.5).toFixed(3)}))`;
+        case 'Torus':
+            return `sdTorus(${pointVar}, vec2(${Number(params.majorRadius ?? 0.5).toFixed(3)}, ${Number(params.minorRadius ?? 0.2).toFixed(3)}))`;
+        case 'Cylinder':
+            return `sdCylinder(${pointVar}, ${Number(params.radius ?? 0.3).toFixed(3)}, ${Number(params.height ?? 1.0).toFixed(3)})`;
+        case 'Plane':
+            return `sdPlane(${pointVar}, ${Number(params.height ?? 0.0).toFixed(3)})`;
+        case 'Pyramid':
+            return `sdPyramid(${pointVar}, ${Number(params.height ?? 1.0).toFixed(3)})`;
+        case 'VesicaSegment': {
+            const ax = Number(params.ax ?? -0.5).toFixed(3);
+            const ay = Number(params.ay ?? 0.0).toFixed(3);
+            const az = Number(params.az ?? 0.0).toFixed(3);
+            const bx = Number(params.bx ?? 0.5).toFixed(3);
+            const by = Number(params.by ?? 0.0).toFixed(3);
+            const bz = Number(params.bz ?? 0.0).toFixed(3);
+            const width = Number(params.width ?? 0.25).toFixed(3);
+            return `sdVesicaSegment(${pointVar}, vec3(${ax}, ${ay}, ${az}), vec3(${bx}, ${by}, ${bz}), ${width})`;
+        }
+        default:
+            return '1000.0';
+    }
+}
+
+function getPrimitiveBoundExpr(nodeType, params) {
+    switch (nodeType) {
+        case 'Sphere':
+            return `${Number(params.radius ?? 0.5).toFixed(3)}`;
+        case 'Box': {
+            const sx = Number(params.sizeX ?? 0.5);
+            const sy = Number(params.sizeY ?? 0.5);
+            const sz = Number(params.sizeZ ?? 0.5);
+            const diag = Math.sqrt(sx * sx + sy * sy + sz * sz);
+            return `${diag.toFixed(3)}`;
+        }
+        case 'Torus': {
+            const major = Number(params.majorRadius ?? 0.5);
+            const minor = Number(params.minorRadius ?? 0.2);
+            return `${(major + minor).toFixed(3)}`;
+        }
+        case 'Cylinder': {
+            const r = Number(params.radius ?? 0.3);
+            const h = Number(params.height ?? 1.0);
+            return `${Math.sqrt(r * r + h * h).toFixed(3)}`;
+        }
+        case 'Pyramid':
+            return `${Number(params.height ?? 1.0).toFixed(3)}`;
+        case 'VesicaSegment': {
+            const ax = Number(params.ax ?? -0.5);
+            const ay = Number(params.ay ?? 0.0);
+            const az = Number(params.az ?? 0.0);
+            const bx = Number(params.bx ?? 0.5);
+            const by = Number(params.by ?? 0.0);
+            const bz = Number(params.bz ?? 0.0);
+            const width = Number(params.width ?? 0.25);
+            const length = Math.sqrt(
+                Math.pow(bx - ax, 2) + Math.pow(by - ay, 2) + Math.pow(bz - az, 2)
+            );
+            return `${(0.5 * length + width).toFixed(3)}`;
+        }
+        default:
+            return null;
+    }
 }
 
 function generatePreviewNodeCode(node, pointVar) {
@@ -2023,12 +2190,6 @@ function initWebGL() {
         console.error('WebGL not supported');
         return;
     }
-    
-    canvas.width = Math.floor(window.innerWidth / 2);
-    canvas.height = Math.floor(window.innerHeight / 2);
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
-    gl.viewport(0, 0, canvas.width, canvas.height);
     
     // Create vertex buffer once
     const vertices = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
