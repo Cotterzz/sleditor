@@ -195,6 +195,28 @@
             border-bottom: 1px solid #4a5568;
         }
 
+#paramPanel.disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+#paramPanelNotice {
+    display: none;
+    font-size: 12px;
+    color: #f6ad55;
+    margin-bottom: 10px;
+}
+
+#paramPanel.disabled #paramPanelNotice {
+    display: block;
+}
+
+.panel-placeholder {
+    color: #a0aec0;
+    font-style: italic;
+    font-size: 12px;
+}
+
         .param-group {
             margin-bottom: 15px;
         }
@@ -264,6 +286,14 @@
     width: 140px;
 }
 
+#previewControls .auto-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #cbd5f5;
+}
+
         #recompileButton {
             position: fixed;
             top: 20px;
@@ -291,6 +321,10 @@
             transform: translateY(0);
         }
 
+#recompileButton:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
         #sidebarControls {
             margin-bottom: 20px;
         }
@@ -391,6 +425,7 @@
 
 <div id="paramPanel">
     <h3 id="paramNodeName">Parameters</h3>
+    <div id="paramPanelNotice">Recompile to edit parameters</div>
     <div id="paramContent"></div>
 </div>
 
@@ -410,6 +445,10 @@
     <label for="pixelScaleSlider">Pixel size</label>
     <input type="range" id="pixelScaleSlider" min="0" max="4" step="1" value="0">
     <span id="pixelScaleLabel">1x</span>
+    <label class="auto-toggle">
+        <input type="checkbox" id="autoCompileToggle">
+        Auto
+    </label>
 </div>
 <button id="recompileButton" title="Recompile Preview">⟳</button>
 
@@ -623,6 +662,12 @@ const recycleRect = () => recycleBin.getBoundingClientRect();
 let recycleActive = false;
 const pixelScaleSlider = document.getElementById('pixelScaleSlider');
 const pixelScaleLabel = document.getElementById('pixelScaleLabel');
+const recompileButton = document.getElementById('recompileButton');
+const autoCompileToggle = document.getElementById('autoCompileToggle');
+const paramPanel = document.getElementById('paramPanel');
+const paramPanelNotice = document.getElementById('paramPanelNotice');
+const paramNodeName = document.getElementById('paramNodeName');
+const paramContent = document.getElementById('paramContent');
 
 // Camera state for preview orbit controls
 const CAMERA_STATE = {
@@ -663,6 +708,108 @@ let sliderFlushHandle = null;
 
 const PREVIEW_PIXEL_SCALES = [1, 2, 4, 8, 16];
 let previewScaleIndex = 0;
+let graphDirty = false;
+let autoCompile = false;
+let autoCompilePending = false;
+let currentParamNode = null;
+let paramControlsEnabled = true;
+
+function updateRecompileButtonState() {
+    if (!recompileButton) return;
+    recompileButton.disabled = !graphDirty;
+}
+
+function setParamControlsEnabled(enabled) {
+    paramControlsEnabled = enabled;
+    if (paramPanel) {
+        paramPanel.classList.toggle('disabled', !enabled);
+    }
+    if (paramPanelNotice) {
+        paramPanelNotice.style.display = enabled ? 'none' : 'block';
+    }
+    const sliders = paramPanel ? paramPanel.querySelectorAll('input[type="range"]') : [];
+    sliders.forEach(slider => {
+        slider.disabled = !enabled;
+    });
+}
+
+function ensureValidParamNode(node) {
+    if (node && document.body.contains(node) && node.dataset.type !== 'Scene') {
+        return node;
+    }
+    return null;
+}
+
+function getFirstEditableNode() {
+    if (nodesArray.length) {
+        for (const node of nodesArray) {
+            if (node && node.dataset && node.dataset.type && node.dataset.type !== 'Scene') {
+                return node;
+            }
+        }
+    }
+    const root = document.getElementById('rootnode');
+    if (!root) return null;
+    return root.querySelector('.node:not(#scene)');
+}
+
+function scheduleAutoCompile() {
+    if (autoCompilePending) return;
+    autoCompilePending = true;
+    requestAnimationFrame(() => {
+        autoCompilePending = false;
+        if (autoCompile && graphDirty) {
+            recompilePreview();
+        }
+    });
+}
+
+function handleGraphChanged() {
+    graphDirty = true;
+    updateRecompileButtonState();
+    pendingSliderUpdates.clear();
+    currentParamNode = ensureValidParamNode(currentParamNode);
+    setParamControlsEnabled(false);
+    if (autoCompile) {
+        scheduleAutoCompile();
+    }
+}
+
+function renderCurrentParamPanel() {
+    if (!paramPanel || !paramContent || !paramNodeName) return;
+    paramPanel.classList.add('visible');
+    let node = ensureValidParamNode(currentParamNode);
+    if (!node) {
+        currentParamNode = null;
+        paramNodeName.textContent = 'Parameters';
+        paramContent.innerHTML = `<div class="panel-placeholder">Select a node to edit parameters.</div>`;
+        setParamControlsEnabled(paramControlsEnabled);
+        return;
+    }
+    currentParamNode = node;
+    const nodeType = node.dataset.type;
+    const typeDef = NODE_TYPES[nodeType];
+    const params = getNodeParams(node);
+    paramNodeName.textContent = nodeType;
+    paramContent.innerHTML = '';
+    if (typeDef && typeDef.params && Object.keys(typeDef.params).length > 0) {
+        const section = document.createElement('div');
+        section.className = 'param-section';
+        section.innerHTML = '<div class="param-section-title">Shape Parameters</div>';
+        for (const [key, def] of Object.entries(typeDef.params)) {
+            section.appendChild(createParamSlider(node, key, def, params[key]));
+        }
+        paramContent.appendChild(section);
+    }
+    const transformSection = document.createElement('div');
+    transformSection.className = 'param-section';
+    transformSection.innerHTML = '<div class="param-section-title">Transform</div>';
+    for (const [key, def] of Object.entries(TRANSFORM_PARAMS)) {
+        transformSection.appendChild(createParamSlider(node, key, def, params[key]));
+    }
+    paramContent.appendChild(transformSection);
+    setParamControlsEnabled(paramControlsEnabled);
+}
 
 // Initialize
 function init() {
@@ -670,6 +817,13 @@ function init() {
     addLines();
     initializeNodeParams();
     setupEventListeners();
+    if (paramPanel) {
+        paramPanel.classList.add('visible');
+    }
+    currentParamNode = getFirstEditableNode();
+    renderCurrentParamPanel();
+    setParamControlsEnabled(true);
+    updateRecompileButtonState();
     if (pixelScaleSlider) {
         const initial = parseInt(pixelScaleSlider.value, 10);
         previewScaleIndex = Math.max(0, Math.min(PREVIEW_PIXEL_SCALES.length - 1, isNaN(initial) ? 0 : initial));
@@ -862,11 +1016,21 @@ function setupEventListeners() {
     if (pixelScaleSlider) {
         pixelScaleSlider.addEventListener('input', handlePixelScaleInput);
     }
-    const recompileButton = document.getElementById('recompileButton');
     if (recompileButton) {
         recompileButton.addEventListener('click', () => {
-            recompilePreview();
+            if (graphDirty) {
+                recompilePreview();
+            }
         });
+    }
+    if (autoCompileToggle) {
+        autoCompileToggle.addEventListener('change', (event) => {
+            autoCompile = !!event.target.checked;
+            if (autoCompile && graphDirty) {
+                scheduleAutoCompile();
+            }
+        });
+        autoCompile = !!autoCompileToggle.checked;
     }
 }
 
@@ -882,6 +1046,7 @@ function onMenuItemMouseDown(event) {
     newNode.style.top = event.clientY - 15 + "px";
     
     addLine(nodesArray.length - 1);
+    handleGraphChanged();
     
     pos3 = event.clientX;
     pos4 = event.clientY;
@@ -1110,7 +1275,7 @@ function attachNodeToParent(child, parent) {
     
     reparentNodePreservingPosition(child, parent);
     updateLine(child);
-    recompilePreview(); // Structure changed - recompile
+    handleGraphChanged();
     return true;
 }
 
@@ -1135,7 +1300,7 @@ function detachNodeToRoot(node) {
     const root = document.getElementById('rootnode');
     reparentNodePreservingPosition(node, root);
     updateLine(node);
-    recompilePreview();
+    handleGraphChanged();
 }
 
 function onDetachHandleMouseDown(event) {
@@ -1163,43 +1328,15 @@ function selectNode(node) {
         showParamPanel(node);
     } else {
         selectedNode = null;
-        hideParamPanel();
+        renderCurrentParamPanel();
     }
 }
 
 function showParamPanel(node) {
-    const panel = document.getElementById('paramPanel');
-    const content = document.getElementById('paramContent');
-    const nodeName = document.getElementById('paramNodeName');
-    
-    const nodeType = node.dataset.type;
-    const typeDef = NODE_TYPES[nodeType];
-    const params = getNodeParams(node);
-    
-    nodeName.textContent = nodeType;
-    content.innerHTML = '';
-    
-    if (typeDef.params && Object.keys(typeDef.params).length > 0) {
-        const section = document.createElement('div');
-        section.className = 'param-section';
-        section.innerHTML = '<div class="param-section-title">Shape Parameters</div>';
-        
-        for (const [key, def] of Object.entries(typeDef.params)) {
-            section.appendChild(createParamSlider(node, key, def, params[key]));
-        }
-        content.appendChild(section);
+    if (node && node.dataset.type !== 'Scene') {
+        currentParamNode = node;
     }
-    
-    const transformSection = document.createElement('div');
-    transformSection.className = 'param-section';
-    transformSection.innerHTML = '<div class="param-section-title">Transform</div>';
-    
-    for (const [key, def] of Object.entries(TRANSFORM_PARAMS)) {
-        transformSection.appendChild(createParamSlider(node, key, def, params[key]));
-    }
-    content.appendChild(transformSection);
-    
-    panel.classList.add('visible');
+    renderCurrentParamPanel();
 }
 
 function createParamSlider(node, key, def, value) {
@@ -1215,6 +1352,7 @@ function createParamSlider(node, key, def, value) {
     slider.max = def.max;
     slider.step = def.step;
     slider.value = value;
+    slider.disabled = !paramControlsEnabled;
     
     const valueDisplay = document.createElement('div');
     valueDisplay.className = 'value-display';
@@ -1234,6 +1372,7 @@ function createParamSlider(node, key, def, value) {
 }
 
 function queueSliderUpdate(node, key, value) {
+    if (!paramControlsEnabled) return;
     let entry = pendingSliderUpdates.get(node);
     if (!entry) {
         entry = { node, changes: {} };
@@ -1296,10 +1435,6 @@ function handlePixelScaleInput(event) {
     previewScaleIndex = clamped;
     updatePixelScaleLabel();
     applyPreviewScale();
-}
-
-function hideParamPanel() {
-    document.getElementById('paramPanel').classList.remove('visible');
 }
 
 function onDocumentMouseDown(event) {
@@ -1366,7 +1501,7 @@ function onDocumentMouseUp(event) {
             const attached = finalizeDrop(event.clientX, event.clientY);
             if (!attached && dragged.parentNode.id === "rootnode") {
                 positionNodeAtPoint(dragged, event.clientX, event.clientY);
-                recompilePreview(); // Node detached - structure changed
+                handleGraphChanged();
             }
         }
         
@@ -1523,7 +1658,7 @@ function deleteNodeWithChildren(node) {
     dropPreview = null;
     currentDropTarget = null;
     addLines();
-    recompilePreview();
+    handleGraphChanged();
 }
 
 function finalizeDrop(clientX, clientY) {
@@ -1531,7 +1666,6 @@ function finalizeDrop(clientX, clientY) {
         deleteNodeWithChildren(dragged);
         clearDropPreview();
         clearRecyclePreview();
-        recompilePreview();
         return true;
     }
     
@@ -2395,6 +2529,12 @@ function recompilePreview() {
     // Cache uniform locations and update values
     cacheUniformLocations();
     updatePreviewUniforms();
+    graphDirty = false;
+    autoCompilePending = false;
+    updateRecompileButtonState();
+    setParamControlsEnabled(true);
+    currentParamNode = ensureValidParamNode(currentParamNode) || getFirstEditableNode();
+    renderCurrentParamPanel();
     
     const stats = getSceneStats();
     perfLogDuration('recompilePreview', t0, `nodes=${stats.nodeCount} depth=${stats.maxDepth}`);
