@@ -264,40 +264,35 @@
     width: 140px;
 }
 
-        #codeOutput {
-            position: absolute;
-            left: calc(220px + 20px);
+        #recompileButton {
+            position: fixed;
             top: 20px;
-            width: 360px;
-            height: 240px;
-            background: #1a202c;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-            display: none;
-            z-index: 90;
-            padding: 0;
-            resize: both;
-            overflow: auto;
+            right: 320px;
+            width: 48px;
+            height: 48px;
+            border: none;
+            border-radius: 50%;
+            background: #5a67d8;
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+            transition: transform 0.1s ease, background 0.2s ease;
+            z-index: 140;
         }
 
-        #codeOutput pre {
-            font-family: 'Source Code Pro', monospace;
-            font-size: 11px;
-            margin: 0;
-            padding: 12px;
-            color: #68d391;
-            white-space: pre;
-            min-width: 100%;
-            min-height: 100%;
-            box-sizing: border-box;
+        #recompileButton:hover {
+            background: #7f9cf5;
+            transform: translateY(-2px);
+        }
+
+        #recompileButton:active {
+            transform: translateY(0);
         }
 
         #sidebarControls {
             margin-bottom: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
         }
 
         #sidebarControls button {
@@ -309,15 +304,6 @@
             font-size: 14px;
             cursor: pointer;
             transition: background 0.2s, transform 0.1s;
-        }
-
-        #sidebarControls #toggleCode {
-            background: #4a5568;
-            color: #fff;
-        }
-
-        #sidebarControls #toggleCode:hover {
-            background: #5a67d8;
         }
 
         #sidebarControls #exportShader {
@@ -374,7 +360,6 @@
 
 <div id="sidebar">
     <div id="sidebarControls">
-        <button id="toggleCode">Show GLSL</button>
         <button id="exportShader">Export Shadertoy</button>
     </div>
     <h3>Primitives</h3>
@@ -417,9 +402,6 @@
 </div>
 
 <canvas id="glCanvas"></canvas>
-<div id="codeOutput">
-    <pre id="codeOutputContent"></pre>
-</div>
 <div id="recycleBin">
     <div>♻</div>
     <small>Recycle</small>
@@ -429,6 +411,7 @@
     <input type="range" id="pixelScaleSlider" min="0" max="4" step="1" value="0">
     <span id="pixelScaleLabel">1x</span>
 </div>
+<button id="recompileButton" title="Recompile Preview">⟳</button>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.7.1/svg.min.js"></script>
 <script>
@@ -638,8 +621,6 @@ let lines = [];
 const recycleBin = document.getElementById('recycleBin');
 const recycleRect = () => recycleBin.getBoundingClientRect();
 let recycleActive = false;
-const codeOutput = document.getElementById('codeOutput');
-const codeOutputContent = document.getElementById('codeOutputContent');
 const pixelScaleSlider = document.getElementById('pixelScaleSlider');
 const pixelScaleLabel = document.getElementById('pixelScaleLabel');
 
@@ -859,18 +840,6 @@ function setupEventListeners() {
         item.addEventListener('mousedown', onMenuItemMouseDown, false);
     });
     
-    const toggleBtn = document.getElementById('toggleCode');
-    toggleBtn.addEventListener('click', () => {
-        if (codeOutput.style.display === 'none' || codeOutput.style.display === '') {
-            codeOutput.style.display = 'block';
-            toggleBtn.textContent = 'Hide GLSL';
-            codeOutputContent.textContent = generateExportGLSL();
-        } else {
-            codeOutput.style.display = 'none';
-            toggleBtn.textContent = 'Show GLSL';
-        }
-    });
-
     document.getElementById('exportShader').addEventListener('click', () => {
     // Try to copy to clipboard first
     const shaderCode = generateShadertoyShader();
@@ -892,6 +861,12 @@ function setupEventListeners() {
     document.addEventListener('wheel', handleCameraWheel, { passive: false });
     if (pixelScaleSlider) {
         pixelScaleSlider.addEventListener('input', handlePixelScaleInput);
+    }
+    const recompileButton = document.getElementById('recompileButton');
+    if (recompileButton) {
+        recompileButton.addEventListener('click', () => {
+            recompilePreview();
+        });
     }
 }
 
@@ -1335,8 +1310,9 @@ function onDocumentMouseDown(event) {
     }
     
     if (target.closest('#sidebar') || target.closest('#paramPanel') || 
-        target.closest('#glCanvas') || target.closest('#codeOutput') ||
-        target.closest('#toggleCode') || target.closest('#previewControls')) {
+        target.closest('#glCanvas') ||
+        target.closest('#previewControls') ||
+        target.closest('#recompileButton')) {
         return;
     }
     
@@ -2335,10 +2311,6 @@ function updatePreviewUniforms() {
     updateCameraUniforms();
 
     // Update export code display if visible
-    if (codeOutput.style.display === 'block') {
-        codeOutputContent.textContent = generateExportGLSL();
-    }
-    
     gl.useProgram(program);
     
     traverseSceneNodes(node => {
@@ -2401,10 +2373,6 @@ function recompilePreview() {
     const previewGLSL = generatePreviewGLSL();
     
     // Update export code display if visible
-    if (codeOutput.style.display === 'block') {
-        codeOutputContent.textContent = generateExportGLSL();
-    }
-    
     if (program) {
         gl.deleteProgram(program);
     }
