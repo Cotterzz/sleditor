@@ -4,6 +4,7 @@
 
 import { state } from './core.js';
 import * as mediaLoader from './media-loader.js';
+import * as audioInput from './audio-input.js';
 
 // Channel state
 const channelState = {
@@ -222,6 +223,64 @@ export async function createChannel(type, data) {
         // Video support - Phase 3
         console.log('Video channels not yet implemented');
         return -1;
+    } else if (type === 'audio') {
+        // Load audio texture
+        let gl = state.glContext;
+        if (!gl) {
+            console.warn('state.glContext not set, trying to get from canvas...');
+            gl = state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl');
+        }
+        
+        if (!gl) {
+            console.error('WebGL context not available for audio channel');
+            return -1;
+        }
+        
+        console.log(`Creating audio channel ${channelNumber}: WebGL context available:`, !!gl);
+        
+        // Store audio mode preference
+        channel.audioMode = data.audioMode || 'shadertoy';
+        
+        try {
+            if (data.mediaId) {
+                // User selected a specific audio file
+                const mediaInfo = mediaLoader.getMediaInfo(data.mediaId);
+                if (mediaInfo) {
+                    const audioData = await audioInput.loadAudioChannel(gl, mediaInfo.path, channel.audioMode);
+                    channel.texture = audioData.texture;
+                    channel.audioData = audioData;
+                    channel.resolution = { width: audioData.width, height: audioData.height };
+                    channel.mediaId = data.mediaId;
+                    channel.mediaPath = mediaInfo.path;
+                    console.log(`✓ Audio channel loaded: ${mediaInfo.name} (${audioData.width}×${audioData.height})`);
+                } else {
+                    console.warn(`Audio media not found: ${data.mediaId}, using silent fallback`);
+                    // Create empty audio texture as fallback
+                    const { texture, width, height } = audioInput.createAudioTexture(gl, channel.audioMode);
+                    channel.texture = texture;
+                    channel.resolution = { width, height };
+                }
+            } else {
+                // No audio selected yet - create empty texture
+                const { texture, width, height } = audioInput.createAudioTexture(gl, channel.audioMode);
+                channel.texture = texture;
+                channel.resolution = { width, height };
+                channel.mediaId = null;
+            }
+        } catch (error) {
+            console.error('Failed to load audio:', error);
+            // Fallback to empty texture
+            const { texture, width, height } = audioInput.createAudioTexture(gl, channel.audioMode);
+            channel.texture = texture;
+            channel.resolution = { width, height };
+        }
+        
+        // Auto-play if shader is running and audio start unlocked
+        if (channel.audioData && state.isPlaying && state.audioStartUnlocked) {
+            audioInput.playAudioChannel(channel.audioData).catch(err => {
+                console.warn(`Failed to auto-play audio channel ch${channelNumber}:`, err);
+            });
+        }
     } else if (type === 'buffer') {
         channel.resolution = { width: state.canvasWidth, height: state.canvasHeight };
         channel.textures = null; // Created lazily when rendering
@@ -249,6 +308,11 @@ export function deleteChannel(channelNumber) {
     }
     
     const channel = channelState.channels[index];
+    
+    // Cleanup audio resources
+    if (channel.type === 'audio' && channel.audioData) {
+        audioInput.cleanupAudioChannel(channel.audioData);
+    }
     
     // Cleanup WebGL resources
     const gl = state.graphicsBackend === 'webgl' ? state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl') : null;
@@ -289,14 +353,66 @@ export async function updateChannelMedia(channelNumber, mediaId) {
         return false;
     }
     
-    if (channel.type !== 'image') {
-        console.warn(`Only image channels can be updated (ch${channelNumber} is ${channel.type})`);
-        return false;
-    }
-    
     const gl = state.glContext || state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl');
     if (!gl) {
         console.error('WebGL context not available');
+        return false;
+    }
+    
+    // Handle audio channels
+    if (channel.type === 'audio') {
+        // Cleanup old audio
+        if (channel.audioData) {
+            audioInput.cleanupAudioChannel(channel.audioData);
+        }
+        
+        // Delete old texture
+        if (channel.texture) {
+            gl.deleteTexture(channel.texture);
+        }
+        
+        try {
+            if (mediaId) {
+                const mediaInfo = mediaLoader.getMediaInfo(mediaId);
+                if (mediaInfo) {
+                    const audioMode = channel.audioMode || 'shadertoy';
+                    const audioData = await audioInput.loadAudioChannel(gl, mediaInfo.path, audioMode);
+                    channel.texture = audioData.texture;
+                    channel.audioData = audioData;
+                    channel.resolution = { width: audioData.width, height: audioData.height };
+                    channel.mediaId = mediaId;
+                    channel.mediaPath = mediaInfo.path;
+                    console.log(`✓ Audio channel updated: ch${channelNumber} → ${mediaInfo.name}`);
+                    return true;
+                } else {
+                    console.warn(`Audio media not found: ${mediaId}`);
+                    const { texture, width, height } = audioInput.createAudioTexture(gl, channel.audioMode || 'shadertoy');
+                    channel.texture = texture;
+                    channel.resolution = { width, height };
+                    channel.mediaId = null;
+                    return false;
+                }
+            } else {
+                // Clear to empty audio texture
+                const { texture, width, height } = audioInput.createAudioTexture(gl, channel.audioMode || 'shadertoy');
+                channel.texture = texture;
+                channel.resolution = { width, height };
+                channel.mediaId = null;
+                console.log(`✓ Audio channel cleared: ch${channelNumber}`);
+                return true;
+            }
+        } catch (error) {
+            console.error('Failed to update audio channel:', error);
+            const { texture, width, height } = audioInput.createAudioTexture(gl, channel.audioMode || 'shadertoy');
+            channel.texture = texture;
+            channel.resolution = { width, height };
+            return false;
+        }
+    }
+    
+    // Handle image channels
+    if (channel.type !== 'image') {
+        console.warn(`Unsupported channel type for media update (ch${channelNumber} is ${channel.type})`);
         return false;
     }
     
@@ -463,11 +579,13 @@ export function getChannelConfig() {
             mediaId: ch.mediaId,
             mediaPath: ch.mediaPath,
             resolution: ch.resolution,
-            // Include texture options
+            // Include texture options (for images)
             vflip: ch.vflip,
             wrap: ch.wrap,
             filter: ch.filter,
-            anisotropic: ch.anisotropic
+            anisotropic: ch.anisotropic,
+            // Include audio options
+            audioMode: ch.audioMode
         }))
     };
 }
@@ -476,6 +594,29 @@ export function getChannelConfig() {
  * Reset channel state (for new shaders)
  */
 export function resetChannels() {
+    // Cleanup all channels except main
+    channelState.channels.forEach(ch => {
+        if (ch.number !== 0) {
+            // Cleanup audio resources
+            if (ch.type === 'audio' && ch.audioData) {
+                audioInput.cleanupAudioChannel(ch.audioData);
+            }
+            
+            // Cleanup WebGL textures
+            const gl = state.glContext;
+            if (gl) {
+                if (ch.texture) {
+                    gl.deleteTexture(ch.texture);
+                }
+                if (ch.textures) {
+                    ch.textures.forEach(tex => {
+                        if (tex) gl.deleteTexture(tex);
+                    });
+                }
+            }
+        }
+    });
+    
     // Clear all channels except main
     channelState.channels = channelState.channels.filter(ch => ch.number === 0);
     channelState.nextChannelNumber = 1;
@@ -584,6 +725,29 @@ export async function loadChannelConfig(config) {
         return;
     }
     
+    // Cleanup existing channels (except main) before clearing
+    channelState.channels.forEach(ch => {
+        if (ch.number !== 0) {
+            // Cleanup audio resources
+            if (ch.type === 'audio' && ch.audioData) {
+                audioInput.cleanupAudioChannel(ch.audioData);
+            }
+            
+            // Cleanup WebGL textures
+            const gl = state.glContext;
+            if (gl) {
+                if (ch.texture) {
+                    gl.deleteTexture(ch.texture);
+                }
+                if (ch.textures) {
+                    ch.textures.forEach(tex => {
+                        if (tex) gl.deleteTexture(tex);
+                    });
+                }
+            }
+        }
+    });
+    
     // Clear existing channels (except main)
     channelState.channels = channelState.channels.filter(ch => ch.number === 0);
     
@@ -592,17 +756,22 @@ export async function loadChannelConfig(config) {
     // Sort channels by number to recreate them in order
     const sortedChannels = [...config.channels].sort((a, b) => a.number - b.number);
     
-    // Ensure WebGL is initialized before creating image channels
-    const needsWebGL = sortedChannels.some(ch => ch.number !== 0 && ch.type === 'image');
-    if (needsWebGL && !state.glContext) {
-        console.log('Initializing WebGL for image channels...');
-        const webgl = await import('./backends/webgl.js');
-        const webglResult = await webgl.init(state.canvasWebGL);
-        if (!webglResult.success) {
-            console.error('Failed to initialize WebGL for channels');
-            return;
+    // Ensure WebGL is initialized before creating ANY channels (images OR audio need it!)
+    const needsWebGL = sortedChannels.some(ch => ch.number !== 0 && (ch.type === 'image' || ch.type === 'audio'));
+    if (needsWebGL) {
+        // Always ensure WebGL is available and properly initialized
+        if (!state.glContext || !state.hasWebGL) {
+            console.log('Initializing WebGL for channels (image/audio)...');
+            const webgl = await import('./backends/webgl.js');
+            const webglResult = await webgl.init(state.canvasWebGL);
+            if (!webglResult.success) {
+                console.error('Failed to initialize WebGL for channels');
+                return;
+            }
+            console.log('✓ WebGL initialized for channels, state.glContext:', !!state.glContext);
+        } else {
+            console.log('WebGL already initialized, reusing existing context');
         }
-        console.log('✓ WebGL initialized, state.glContext:', !!state.glContext);
     }
     
     // Recreate channels (except main which is already created)
@@ -612,7 +781,48 @@ export async function loadChannelConfig(config) {
         // Set nextChannelNumber to match the channel we're about to create
         channelState.nextChannelNumber = ch.number;
         
-        if (ch.type === 'image' && ch.mediaId) {
+        if (ch.type === 'audio' && ch.mediaId) {
+            // Re-register external audio if needed
+            if (ch.mediaId.startsWith('guc:')) {
+                const userPath = ch.mediaId.substring(4);
+                const fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+                const filename = userPath.split('/').pop();
+                const title = filename.replace(/\.(mp3|wav|ogg|m4a)$/i, '');
+                
+                const mediaInfo = {
+                    id: ch.mediaId,
+                    type: 'audio',
+                    name: title,
+                    path: fullUrl,
+                    source: 'guc',
+                    url: fullUrl,
+                    userPath: userPath
+                };
+                
+                mediaLoader.registerExternalMedia(mediaInfo);
+                console.log(`✓ Re-registered external audio: ${ch.mediaId}`);
+            }
+            
+            const channelNumber = await createChannel('audio', {
+                mediaId: ch.mediaId,
+                tabName: ch.tabName,
+                audioMode: ch.audioMode || 'shadertoy'
+            });
+            
+            // Add tab to active tabs if channel was created successfully
+            if (channelNumber !== -1 && ch.tabName) {
+                if (!state.activeTabs.includes(ch.tabName)) {
+                    state.activeTabs.push(ch.tabName);
+                }
+                
+                // IMPORTANT: Force recreation of the selector UI by removing old container
+                const oldContainer = document.getElementById(`${ch.tabName}Container`);
+                if (oldContainer) {
+                    console.log(`  Removing stale container for ${ch.tabName}`);
+                    oldContainer.remove();
+                }
+            }
+        } else if (ch.type === 'image' && ch.mediaId) {
             // If this is an external media (URL import), re-register it
             if (ch.mediaId.startsWith('guc:')) {
                 const userPath = ch.mediaId.substring(4); // Remove 'guc:' prefix
@@ -726,7 +936,7 @@ export function getChannelTextureForDisplay(channelNumber) {
         return channel.textures ? channel.textures[channel.currentPing] : null;
     }
     
-    if (channel.type === 'image' || channel.type === 'video') {
+    if (channel.type === 'image' || channel.type === 'video' || channel.type === 'audio') {
         return channel.texture || null;
     }
     
@@ -736,6 +946,64 @@ export function getChannelTextureForDisplay(channelNumber) {
     }
     
     return null;
+}
+
+/**
+ * Update all audio channel textures (called each frame)
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ */
+export function updateAudioTextures(gl) {
+    getAudioChannels()
+        .filter(ch => ch.audioData.playing)
+        .forEach(ch => {
+            audioInput.updateAudioTexture(
+                gl, 
+                ch.texture, 
+                ch.audioData.analyser, 
+                ch.resolution.width, 
+                ch.resolution.height
+            );
+        });
+}
+
+function getAudioChannels() {
+    return channelState.channels.filter(ch => ch.type === 'audio' && ch.audioData);
+}
+
+export function hasAudioChannels() {
+    return getAudioChannels().length > 0;
+}
+
+export function playAudioChannels() {
+    const audioChannels = getAudioChannels();
+    if (audioChannels.length === 0) {
+        return Promise.resolve();
+    }
+    if (!state.audioStartUnlocked) {
+        return Promise.reject(new Error('Audio start locked'));
+    }
+    return Promise.all(audioChannels.map(ch => audioInput.playAudioChannel(ch.audioData)));
+}
+
+export function pauseAudioChannels() {
+    getAudioChannels().forEach(ch => {
+        audioInput.pauseAudioChannel(ch.audioData);
+    });
+}
+
+export function restartAudioChannels(shouldPlay = state.isPlaying) {
+    const audioChannels = getAudioChannels();
+    audioChannels.forEach(ch => {
+        const audio = ch.audioData.audio;
+        if (audio) {
+            audio.currentTime = 0;
+        }
+    });
+    if (shouldPlay) {
+        return playAudioChannels();
+    }
+    pauseAudioChannels();
+    return Promise.resolve();
 }
 
 // Expose limited debugging helpers
@@ -748,7 +1016,8 @@ if (typeof window !== 'undefined') {
         getAvailableViewerChannels,
         setSelectedOutputChannel,
         getSelectedOutputChannel,
-        getChannelTextureForDisplay
+        getChannelTextureForDisplay,
+        hasAudioChannels
     };
 }
 

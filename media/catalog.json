@@ -105,6 +105,20 @@
         "height": 1024
     }
   ],
-  "videos": []
+  "videos": [],
+  "audio": [
+    {
+      "id": "audio1",
+      "name": "St Mark and the Demonarchy - Freedom is a loaded gun",
+      "path": "media/audio/MCR.mp3",
+      "duration": 115
+    },
+    {
+        "id": "audio2",
+        "name": "DOCTOR VOX - Level Up",
+        "path": "media/audio/DOCTOR_VOX_-_Level_Up.mp3",
+        "duration": 203
+    }
+  ]
 }
 

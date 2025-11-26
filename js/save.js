@@ -9,6 +9,7 @@ import { getTabIcon, getTabLabel, dbKeyToTabName, getEditorForTab, isBufferChann
 import * as uniformControls from './uniform-controls.js';
 import * as channels from './channels.js';
 import { resetEditorState } from './shader-management.js';
+import * as ui from './ui.js';
 
 // ============================================================================
 // Thumbnail Capture
@@ -568,13 +569,20 @@ export async function loadDatabaseShader(shader) {
         uniformControls.loadUniformConfig(null);
     }
     
-    // Recompile
-    if (window.reloadShader) {
-        window.reloadShader().then(() => {
-            setTimeout(() => {
-                state.isInitializing = wasInitializing;
-            }, 100);
-        });
+    const hasAudio = channels.hasAudioChannels();
+    if (hasAudio && !state.audioStartUnlocked) {
+        ui.showAudioStartOverlay();
+    } else {
+        ui.hideAudioStartOverlay();
+    }
+    
+    try {
+        if (window.reloadShader) {
+            await window.reloadShader();
+        }
+        await ui.restart(false);
+    } finally {
+        state.isInitializing = wasInitializing;
     }
     
     // Exit edit mode if we were in it

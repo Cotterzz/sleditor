@@ -23,6 +23,8 @@ import * as recording from './recording.js';
 
 let compileOverlay;
 let compileOverlayText;
+let audioStartOverlay;
+let audioOverlayMessage;
 
 // ============================================================================
 // Theme
@@ -49,6 +51,14 @@ export function toggleTheme() {
 export function setupUI() {
     createCompileOverlay();
     setCompileTime(0);
+    window.addEventListener('audio-play-blocked', () => {
+        if (channels.hasAudioChannels()) {
+            if (state.isPlaying) {
+                pausePlayback();
+            }
+            showAudioStartOverlay();
+        }
+    });
 }
 function createCompileOverlay() {
     if (compileOverlay) return;
@@ -77,6 +87,76 @@ function createCompileOverlay() {
     const canvasContainer = document.getElementById('canvasContainer');
     if (canvasContainer) {
         canvasContainer.appendChild(compileOverlay);
+    }
+}
+
+function ensureAudioStartOverlay() {
+    if (audioStartOverlay) return;
+    const canvasContainer = document.getElementById('canvasContainer');
+    if (!canvasContainer) return;
+    
+    audioStartOverlay = document.createElement('div');
+    audioStartOverlay.id = 'audioStartOverlay';
+    audioStartOverlay.style.position = 'absolute';
+    audioStartOverlay.style.top = '0';
+    audioStartOverlay.style.left = '0';
+    audioStartOverlay.style.right = '0';
+    audioStartOverlay.style.bottom = '0';
+    audioStartOverlay.style.background = 'rgba(0,0,0,0.65)';
+    audioStartOverlay.style.display = 'none';
+    audioStartOverlay.style.alignItems = 'center';
+    audioStartOverlay.style.justifyContent = 'center';
+    audioStartOverlay.style.zIndex = '60';
+    
+    const content = document.createElement('div');
+    content.style.display = 'flex';
+    content.style.flexDirection = 'column';
+    content.style.alignItems = 'center';
+    content.style.gap = '12px';
+    content.style.color = '#fff';
+    
+    const icon = document.createElement('div');
+    icon.textContent = '⏯';
+    icon.style.fontSize = '56px';
+    icon.style.opacity = '0.9';
+    
+    audioOverlayMessage = document.createElement('div');
+    audioOverlayMessage.style.fontSize = '14px';
+    audioOverlayMessage.style.textAlign = 'center';
+    audioOverlayMessage.textContent = 'Click anywhere to start audio & shader';
+    
+    content.appendChild(icon);
+    content.appendChild(audioOverlayMessage);
+    audioStartOverlay.appendChild(content);
+    
+    audioStartOverlay.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+            await startPlayback();
+        } catch (err) {
+            console.warn('Playback still blocked:', err);
+            showAudioStartOverlay('Please allow audio playback to start the shader.');
+        }
+    });
+    canvasContainer.appendChild(audioStartOverlay);
+}
+
+export function showAudioStartOverlay(message = 'Click to start audio & shader') {
+    if (state.audioStartUnlocked || !channels.hasAudioChannels()) return;
+    if (state.isPlaying) {
+        pausePlayback();
+    }
+    ensureAudioStartOverlay();
+    if (!audioStartOverlay) return;
+    if (audioOverlayMessage) {
+        audioOverlayMessage.textContent = message;
+    }
+    audioStartOverlay.style.display = 'flex';
+}
+
+export function hideAudioStartOverlay() {
+    if (audioStartOverlay) {
+        audioStartOverlay.style.display = 'none';
     }
 }
 
@@ -110,20 +190,16 @@ export function setCompileTime(milliseconds) {
 export function togglePlayPause() {
     if (!state.isRunning) return;
     
-    state.isPlaying = !state.isPlaying;
-    
     if (state.isPlaying) {
-        // Resuming - account for time spent paused
-        const pauseDuration = performance.now() - state.lastPauseTime;
-        state.pausedTime += pauseDuration;
-        state.audioContext.resume();
+        pausePlayback();
     } else {
-        // Pausing - record when we paused
-        state.lastPauseTime = performance.now();
-        state.audioContext.suspend();
+        startPlayback().catch(err => {
+            console.warn('Playback start blocked:', err);
+            if (channels.hasAudioChannels()) {
+                showAudioStartOverlay();
+            }
+        });
     }
-    
-    updatePlayPauseButton();
 }
 
 export function updatePlayPauseButton() {
@@ -153,7 +229,7 @@ export function updatePlayPauseButton() {
     }
 }
 
-export function restart(userInitiated = false) {
+export async function restart(userInitiated = false) {
     if (!state.isRunning) return;
     
     // Reset time counters
@@ -180,6 +256,8 @@ export function restart(userInitiated = false) {
         state.nextAudioTime = state.audioContext.currentTime;
     }
     
+    await channels.restartAudioChannels(state.isPlaying);
+    
     // Reset user state
     if (state.userState && state.userInit) {
         try {
@@ -197,6 +275,39 @@ export function restart(userInitiated = false) {
     if (userInitiated) {
         logStatus('✓ Restarted', 'success');
     }
+}
+
+async function startPlayback() {
+    const prevUnlocked = state.audioStartUnlocked;
+    state.audioStartUnlocked = true;
+    if (state.audioContext && state.audioContext.state === 'suspended') {
+        await state.audioContext.resume();
+    }
+    try {
+        await channels.playAudioChannels();
+    } catch (err) {
+        state.audioStartUnlocked = prevUnlocked;
+        throw err;
+    }
+    hideAudioStartOverlay();
+    
+    state.isPlaying = true;
+    const now = performance.now();
+    const pauseDuration = now - (state.lastPauseTime || now);
+    state.pausedTime += pauseDuration;
+    state.lastPauseTime = 0;
+    
+    updatePlayPauseButton();
+}
+
+function pausePlayback() {
+    state.isPlaying = false;
+    state.lastPauseTime = performance.now();
+    if (state.audioContext) {
+        state.audioContext.suspend();
+    }
+    channels.pauseAudioChannels();
+    updatePlayPauseButton();
 }
 
 // ============================================================================
