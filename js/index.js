@@ -229,6 +229,9 @@ function setupUI() {
         });
     });
     
+    // Populate default gallery tab
+    save.populateGallery('sotw');
+    
     document.getElementById('signInGoogle').addEventListener('click', () => {
         backend.signInWithOAuth('google');
     });
@@ -735,9 +738,8 @@ async function init() {
         window.history.replaceState(null, '', window.location.pathname);
     }
     
-    // If no URL shader or failed to load, load default example from database
+    // If still nothing, load default example
     if (!shaderToLoad) {
-        // Load specific default shader by slug
         const defaultSlug = 'x4yrjxhgw';
         const defaultResult = await backend.loadShader(defaultSlug);
         
@@ -745,7 +747,6 @@ async function init() {
             shaderToLoad = defaultResult.shader;
             console.log('Loading default example:', shaderToLoad.title);
         } else {
-            // Fallback to first example if default not found
             console.warn('Failed to load default shader, falling back to first example');
             const examplesResult = await backend.loadExamples();
             if (examplesResult.success && examplesResult.shaders.length > 0) {
