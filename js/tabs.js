@@ -4,9 +4,10 @@
 
 import { state, logStatus } from './core.js';
 import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF } from './examples.js';
-import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, getChannelNumber, createImageChannelTabName, createAudioChannelTabName, createBufferChannelTabName } from './tab-config.js';
+import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, getChannelNumber, createImageChannelTabName, createVideoChannelTabName, createAudioChannelTabName, createBufferChannelTabName } from './tab-config.js';
 import * as mediaSelector from './ui/media-selector.js';
 import * as audioSelector from './ui/audio-selector.js';
+import * as videoSelector from './ui/video-selector.js';
 import * as channels from './channels.js';
 
 // ============================================================================
@@ -215,8 +216,13 @@ export function switchTab(tabName) {
                     channelContainer.innerHTML = '';
                     channelContainer.appendChild(selector);
                 });
+            } else if (isVideoChannel(tabName)) {
+                videoSelector.createVideoSelector(tabName, channelNumber).then(selector => {
+                    channelContainer.innerHTML = '';
+                    channelContainer.appendChild(selector);
+                });
             } else {
-                const channelType = isImageChannel(tabName) ? 'image' : 'video';
+                const channelType = 'image';
                 mediaSelector.createMediaSelector(tabName, channelType, channelNumber).then(selector => {
                     channelContainer.innerHTML = '';
                     channelContainer.appendChild(selector);
@@ -417,6 +423,37 @@ export async function addAudioChannel() {
     console.log(`✓ Audio channel tab added: ${tabName} (ch${channelNumber})`);
 }
 
+export async function addVideoChannel() {
+    // Create channel first, then get the actual channel number it was assigned
+    const channelNumber = await channels.createChannel('video', {
+        mediaId: null,
+        tabName: null // Will be set below
+    });
+    
+    if (channelNumber === -1) {
+        console.error('Failed to create video channel');
+        return;
+    }
+    
+    // Create tab name with the actual channel number
+    const tabName = createVideoChannelTabName(channelNumber);
+    
+    // Update the channel's tab name
+    const channel = channels.getChannel(channelNumber);
+    if (channel) {
+        channel.tabName = tabName;
+    }
+    
+    // Add tab to active tabs
+    state.activeTabs.push(tabName);
+    
+    // Refresh UI
+    renderTabs();
+    switchTab(tabName);
+    
+    console.log(`✓ Video channel tab added: ${tabName} (ch${channelNumber})`);
+}
+
 export async function addBufferChannelTab() {
     const baseGlslTab = getActiveGlslTab();
     if (!baseGlslTab) {
@@ -525,6 +562,7 @@ export function showAddPassMenu() {
         { name: 'js', label: '⚡ JavaScript' },
         { name: '_image_channel', label: '🖼️ Image Channel' }, // Special action
         { name: '_audio_channel', label: '🎵 Audio Channel' }, // Special action
+        { name: '_video_channel', label: '🎬 Video Channel' }, // Special action
         { name: '_buffer_channel', label: '🎚️ Buffer Pass' }
     ];
     
@@ -569,6 +607,8 @@ export function showAddPassMenu() {
                 await addImageChannel();
             } else if (tab.name === '_audio_channel') {
                 await addAudioChannel();
+            } else if (tab.name === '_video_channel') {
+                await addVideoChannel();
             } else if (tab.name === '_buffer_channel') {
                 await addBufferChannelTab();
             } else {

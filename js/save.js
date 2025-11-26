@@ -698,8 +698,8 @@ export async function loadDatabaseShader(shader) {
         uniformControls.loadUniformConfig(null);
     }
     
-    const hasAudio = channels.hasAudioChannels();
-    if (hasAudio && !state.audioStartUnlocked) {
+    const hasMedia = channels.hasMediaChannels();
+    if (hasMedia && !state.mediaStartUnlocked) {
         ui.showAudioStartOverlay();
     } else {
         ui.hideAudioStartOverlay();

@@ -142,7 +142,7 @@ function ensureAudioStartOverlay() {
 }
 
 export function showAudioStartOverlay(message = 'Click to start audio & shader') {
-    if (state.audioStartUnlocked || !channels.hasAudioChannels()) return;
+    if (state.mediaStartUnlocked || !channels.hasMediaChannels()) return;
     if (state.isPlaying) {
         pausePlayback();
     }
@@ -256,7 +256,10 @@ export async function restart(userInitiated = false) {
         state.nextAudioTime = state.audioContext.currentTime;
     }
     
-    await channels.restartAudioChannels(state.isPlaying);
+    await Promise.all([
+        channels.restartAudioChannels(state.isPlaying),
+        channels.restartVideoChannels(state.isPlaying)
+    ]);
     
     // Reset user state
     if (state.userState && state.userInit) {
@@ -278,15 +281,18 @@ export async function restart(userInitiated = false) {
 }
 
 async function startPlayback() {
-    const prevUnlocked = state.audioStartUnlocked;
-    state.audioStartUnlocked = true;
+    const prevUnlocked = state.mediaStartUnlocked;
+    state.mediaStartUnlocked = true;
     if (state.audioContext && state.audioContext.state === 'suspended') {
         await state.audioContext.resume();
     }
     try {
-        await channels.playAudioChannels();
+        await Promise.all([
+            channels.playAudioChannels(),
+            channels.playVideoChannels()
+        ]);
     } catch (err) {
-        state.audioStartUnlocked = prevUnlocked;
+        state.mediaStartUnlocked = prevUnlocked;
         throw err;
     }
     hideAudioStartOverlay();
@@ -307,6 +313,7 @@ function pausePlayback() {
         state.audioContext.suspend();
     }
     channels.pauseAudioChannels();
+    channels.pauseVideoChannels();
     updatePlayPauseButton();
 }
 

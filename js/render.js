@@ -76,9 +76,10 @@ export function render(rawTime) {
     // Mark JS start (before user code)
     perfMonitor.markJSStart();
     
-    // Update audio textures (if any audio channels are playing)
+    // Update audio and video textures (if any media channels are playing)
     if (gl) {
         channels.updateAudioTextures(gl);
+        channels.updateVideoTextures(gl);
     }
     
     // Determine rendering mode based on available backend

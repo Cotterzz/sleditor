@@ -141,7 +141,7 @@ export const state = {
     isPlaying: true,       // Currently playing (default true)
     isRecompiling: false,  // Temporarily pause rendering during shader recompilation
     currentCompileToken: 0,
-    audioStartUnlocked: false,
+    mediaStartUnlocked: false, // Media playback unlock (audio/video need user gesture)
 
     // Monaco editors
     boilerplateEditor: null,
