@@ -401,8 +401,12 @@
     <div class="menu-item primitive" data-type="Box">Box</div>
     <div class="menu-item primitive" data-type="Torus">Torus</div>
     <div class="menu-item primitive" data-type="Cylinder">Cylinder</div>
-    <div class="menu-item primitive" data-type="Plane">Plane</div>
-    <div class="menu-item primitive" data-type="Pyramid">Pyramid</div>
+    <div class="menu-item primitive" data-type="Octahedron">Octahedron</div>
+    <div class="menu-item primitive" data-type="Cone">Cone</div>
+    <div class="menu-item primitive" data-type="RoundCone">Round Cone</div>
+    <div class="menu-item primitive" data-type="VerticalCapsule">Vertical Capsule</div>
+    <div class="menu-item primitive" data-type="CutHollowSphere">Cut Hollow Sphere</div>
+    <div class="menu-item primitive" data-type="DeathStar">Death Star</div>
     <div class="menu-item primitive" data-type="VesicaSegment">Vesica Segment</div>
     
     <h3>Operations</h3>
@@ -449,6 +453,10 @@
         <input type="checkbox" id="autoCompileToggle">
         Auto
     </label>
+    <label class="auto-toggle">
+        <input type="checkbox" id="orthoToggle">
+        Ortho
+    </label>
 </div>
 <button id="recompileButton" title="Recompile Preview">⟳</button>
 
@@ -493,18 +501,54 @@ const NODE_TYPES = {
             height: { default: 1.0, min: 0.1, max: 5, step: 0.1 }
         }
     },
-    Plane: {
+    Octahedron: {
         category: 'primitive',
         maxChildren: 0,
         params: {
-            height: { default: 0, min: -5, max: 5, step: 0.1 }
+            size: { default: 0.75, min: 0.1, max: 3.0, step: 0.05 }
         }
     },
-    Pyramid: {
+    Cone: {
         category: 'primitive',
         maxChildren: 0,
         params: {
-            height: { default: 1.0, min: 0.1, max: 5.0, step: 0.1 }
+            height: { default: 1.5, min: 0.1, max: 5.0, step: 0.05 },
+            angleDeg: { default: 45, min: 1, max: 89, step: 1 }
+        }
+    },
+    RoundCone: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radiusTop: { default: 0.4, min: 0.01, max: 3.0, step: 0.01 },
+            radiusBottom: { default: 0.1, min: 0.01, max: 3.0, step: 0.01 },
+            height: { default: 1.25, min: 0.1, max: 5.0, step: 0.05 }
+        }
+    },
+    VerticalCapsule: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            height: { default: 1.0, min: 0.1, max: 5.0, step: 0.05 },
+            radius: { default: 0.25, min: 0.01, max: 2.5, step: 0.01 }
+        }
+    },
+    CutHollowSphere: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radius: { default: 1.0, min: 0.1, max: 4.0, step: 0.05 },
+            height: { default: 0.35, min: 0.0, max: 3.5, step: 0.05 },
+            thickness: { default: 0.1, min: 0.001, max: 2.0, step: 0.01 }
+        }
+    },
+    DeathStar: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radiusA: { default: 1.0, min: 0.1, max: 5.0, step: 0.05 },
+            radiusB: { default: 0.4, min: 0.05, max: 4.0, step: 0.05 },
+            offset: { default: 0.6, min: 0.0, max: 5.0, step: 0.05 }
         }
     },
     VesicaSegment: {
@@ -664,6 +708,7 @@ const pixelScaleSlider = document.getElementById('pixelScaleSlider');
 const pixelScaleLabel = document.getElementById('pixelScaleLabel');
 const recompileButton = document.getElementById('recompileButton');
 const autoCompileToggle = document.getElementById('autoCompileToggle');
+const orthoToggle = document.getElementById('orthoToggle');
 const paramPanel = document.getElementById('paramPanel');
 const paramPanelNotice = document.getElementById('paramPanelNotice');
 const paramNodeName = document.getElementById('paramNodeName');
@@ -713,6 +758,7 @@ let autoCompile = false;
 let autoCompilePending = false;
 let currentParamNode = null;
 let paramControlsEnabled = true;
+let orthographicMode = false;
 
 function updateRecompileButtonState() {
     if (!recompileButton) return;
@@ -723,9 +769,6 @@ function setParamControlsEnabled(enabled) {
     paramControlsEnabled = enabled;
     if (paramPanel) {
         paramPanel.classList.toggle('disabled', !enabled);
-    }
-    if (paramPanelNotice) {
-        paramPanelNotice.style.display = enabled ? 'none' : 'block';
     }
     const sliders = paramPanel ? paramPanel.querySelectorAll('input[type="range"]') : [];
     sliders.forEach(slider => {
@@ -783,7 +826,6 @@ function renderCurrentParamPanel() {
         currentParamNode = null;
         paramNodeName.textContent = 'Parameters';
         paramContent.innerHTML = `<div class="panel-placeholder">Select a node to edit parameters.</div>`;
-        setParamControlsEnabled(paramControlsEnabled);
         return;
     }
     currentParamNode = node;
@@ -808,7 +850,6 @@ function renderCurrentParamPanel() {
         transformSection.appendChild(createParamSlider(node, key, def, params[key]));
     }
     paramContent.appendChild(transformSection);
-    setParamControlsEnabled(paramControlsEnabled);
 }
 
 // Initialize
@@ -1032,6 +1073,13 @@ function setupEventListeners() {
         });
         autoCompile = !!autoCompileToggle.checked;
     }
+    if (orthoToggle) {
+        orthoToggle.addEventListener('change', (event) => {
+            orthographicMode = !!event.target.checked;
+            updatePreviewUniforms();
+        });
+        orthographicMode = !!orthoToggle.checked;
+    }
 }
 
 function onMenuItemMouseDown(event) {
@@ -1172,6 +1220,10 @@ function updateCameraUniforms() {
     const pos = getCameraPosition();
     gl.uniform3f(cameraUniformLocations.pos, pos.x, pos.y, pos.z);
     gl.uniform3f(cameraUniformLocations.target, CAMERA_STATE.target.x, CAMERA_STATE.target.y, CAMERA_STATE.target.z);
+    const distLoc = uniformLocations['u_cameraDistance'];
+    if (distLoc) {
+        gl.uniform1f(distLoc, CAMERA_STATE.distance);
+    }
 }
 
 function beginCameraDrag(mode, x, y) {
@@ -1200,8 +1252,8 @@ function updateCameraDrag(x, y) {
         CAMERA_STATE.target.y += (dy * panScale) * up.y;
         CAMERA_STATE.target.z += (dy * panScale) * up.z;
     }
-    updateCameraUniforms();
-    renderPreview();
+        updateCameraUniforms();
+        renderPreview();
 }
 
 function endCameraDrag() {
@@ -1990,10 +2042,28 @@ function getPrimitiveDistanceExpr(nodeType, pointVar, params) {
             return `sdTorus(${pointVar}, vec2(${Number(params.majorRadius ?? 0.5).toFixed(3)}, ${Number(params.minorRadius ?? 0.2).toFixed(3)}))`;
         case 'Cylinder':
             return `sdCylinder(${pointVar}, ${Number(params.radius ?? 0.3).toFixed(3)}, ${Number(params.height ?? 1.0).toFixed(3)})`;
-        case 'Plane':
-            return `sdPlane(${pointVar}, ${Number(params.height ?? 0.0).toFixed(3)})`;
-        case 'Pyramid':
-            return `sdPyramid(${pointVar}, ${Number(params.height ?? 1.0).toFixed(3)})`;
+        case 'Octahedron':
+            return `sdOctahedron(${pointVar}, ${Number(params.size ?? 0.75).toFixed(3)})`;
+        case 'Cone': {
+            const height = Number(params.height ?? 1.5);
+            const angleDeg = Number(params.angleDeg ?? 45);
+            const angleRad = angleDeg * Math.PI / 180;
+            const sinVal = Math.sin(angleRad);
+            const cosVal = Math.cos(angleRad);
+            return `sdCone(${pointVar}, vec2(${sinVal.toFixed(3)}, ${cosVal.toFixed(3)}), ${height.toFixed(3)})`;
+        }
+        case 'RoundCone': {
+            const rTop = Number(params.radiusTop ?? 0.4);
+            const rBottom = Number(params.radiusBottom ?? 0.1);
+            const height = Number(params.height ?? 1.25);
+            return `sdRoundCone(${pointVar}, ${rTop.toFixed(3)}, ${rBottom.toFixed(3)}, ${height.toFixed(3)})`;
+        }
+        case 'VerticalCapsule':
+            return `sdVerticalCapsule(${pointVar}, ${Number(params.height ?? 1.0).toFixed(3)}, ${Number(params.radius ?? 0.25).toFixed(3)})`;
+        case 'CutHollowSphere':
+            return `sdCutHollowSphere(${pointVar}, ${Number(params.radius ?? 1.0).toFixed(3)}, ${Number(params.height ?? 0.35).toFixed(3)}, ${Number(params.thickness ?? 0.1).toFixed(3)})`;
+        case 'DeathStar':
+            return `sdDeathStar(${pointVar}, ${Number(params.radiusA ?? 1.0).toFixed(3)}, ${Number(params.radiusB ?? 0.4).toFixed(3)}, ${Number(params.offset ?? 0.6).toFixed(3)})`;
         case 'VesicaSegment': {
             const ax = Number(params.ax ?? -0.5).toFixed(3);
             const ay = Number(params.ay ?? 0.0).toFixed(3);
@@ -2030,8 +2100,31 @@ function getPrimitiveBoundExpr(nodeType, params) {
             const h = Number(params.height ?? 1.0);
             return `${Math.sqrt(r * r + h * h).toFixed(3)}`;
         }
-        case 'Pyramid':
-            return `${Number(params.height ?? 1.0).toFixed(3)}`;
+        case 'Octahedron':
+            return `${(Number(params.size ?? 0.75) * 1.5).toFixed(3)}`;
+        case 'Cone': {
+            const height = Number(params.height ?? 1.5);
+            const angleDeg = Number(params.angleDeg ?? 45);
+            const angleRad = angleDeg * Math.PI / 180;
+            const baseRadius = Math.tan(angleRad) * height;
+            return `${Math.sqrt(baseRadius * baseRadius + height * height).toFixed(3)}`;
+        }
+        case 'RoundCone': {
+            const rTop = Number(params.radiusTop ?? 0.4);
+            const rBottom = Number(params.radiusBottom ?? 0.1);
+            const height = Number(params.height ?? 1.25);
+            return `${(height + Math.max(rTop, rBottom)).toFixed(3)}`;
+        }
+        case 'VerticalCapsule': {
+            const r = Number(params.radius ?? 0.25);
+            const h = Number(params.height ?? 1.0);
+            const half = 0.5 * h + r;
+            return `${Math.sqrt(r * r + half * half).toFixed(3)}`;
+        }
+        case 'CutHollowSphere':
+            return `${(Number(params.radius ?? 1.0) + Number(params.thickness ?? 0.1)).toFixed(3)}`;
+        case 'DeathStar':
+            return `${Math.max(Number(params.radiusA ?? 1.0), Number(params.offset ?? 0.6) + Number(params.radiusB ?? 0.4)).toFixed(3)}`;
         case 'VesicaSegment': {
             const ax = Number(params.ax ?? -0.5);
             const ay = Number(params.ay ?? 0.0);
@@ -2082,11 +2175,28 @@ function generatePreviewNodeCode(node, pointVar) {
             case 'Cylinder':
                 code += `    float ${varName} = sdCylinder(${transformedPoint}, ${prefix}_radius, ${prefix}_height);\n`;
                 break;
-            case 'Plane':
-                code += `    float ${varName} = sdPlane(${transformedPoint}, ${prefix}_height);\n`;
+            case 'Octahedron':
+                code += `    float ${varName} = sdOctahedron(${transformedPoint}, ${prefix}_size);\n`;
                 break;
-            case 'Pyramid':
-                code += `    float ${varName} = sdPyramid(${transformedPoint}, ${prefix}_height);\n`;
+            case 'Cone': {
+                const angleVar = `${varName}_angle`;
+                const coneVec = `${varName}_c`;
+                code += `    float ${angleVar} = radians(${prefix}_angleDeg);\n`;
+                code += `    vec2 ${coneVec} = vec2(sin(${angleVar}), cos(${angleVar}));\n`;
+                code += `    float ${varName} = sdCone(${transformedPoint}, ${coneVec}, ${prefix}_height);\n`;
+                break;
+            }
+            case 'RoundCone':
+                code += `    float ${varName} = sdRoundCone(${transformedPoint}, ${prefix}_radiusTop, ${prefix}_radiusBottom, ${prefix}_height);\n`;
+                break;
+            case 'VerticalCapsule':
+                code += `    float ${varName} = sdVerticalCapsule(${transformedPoint}, ${prefix}_height, ${prefix}_radius);\n`;
+                break;
+            case 'CutHollowSphere':
+                code += `    float ${varName} = sdCutHollowSphere(${transformedPoint}, ${prefix}_radius, ${prefix}_height, ${prefix}_thickness);\n`;
+                break;
+            case 'DeathStar':
+                code += `    float ${varName} = sdDeathStar(${transformedPoint}, ${prefix}_radiusA, ${prefix}_radiusB, ${prefix}_offset);\n`;
                 break;
             case 'VesicaSegment':
                 code += `    float ${varName} = sdVesicaSegment(${transformedPoint}, vec3(${prefix}_ax, ${prefix}_ay, ${prefix}_az), vec3(${prefix}_bx, ${prefix}_by, ${prefix}_bz), ${prefix}_width);\n`;
@@ -2217,24 +2327,60 @@ float sdCylinder(vec3 p, float r, float h) {
     return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
 }
 
-float sdPlane(vec3 p, float h) {
-    return p.y - h;
+float sdOctahedron(vec3 p, float s) {
+    p = abs(p);
+    float m = p.x + p.y + p.z - s;
+    vec3 q;
+         if (3.0 * p.x < m) q = p.xyz;
+    else if (3.0 * p.y < m) q = p.yzx;
+    else if (3.0 * p.z < m) q = p.zxy;
+    else return m * 0.57735027;
+    
+    float k = clamp(0.5 * (q.z - q.y + s), 0.0, s);
+    return length(vec3(q.x, q.y - s + k, q.z - k));
 }
 
-float sdPyramid(vec3 p, float h) {
-    float m2 = h * h + 0.25;
-    p.xz = abs(p.xz);
-    if (p.z > p.x) {
-        p.xz = p.zx;
+float sdCone(vec3 p, vec2 c, float h) {
+    float safeCos = max(c.y, 0.0001);
+    vec2 q = h * vec2(c.x / safeCos, -1.0);
+    vec2 w = vec2(length(p.xz), p.y);
+    vec2 a = w - q * clamp(dot(w, q) / dot(q, q), 0.0, 1.0);
+    vec2 b = w - q * vec2(clamp(w.x / max(q.x, 0.0001), 0.0, 1.0), 1.0);
+    float k = sign(q.y);
+    float d = min(dot(a, a), dot(b, b));
+    float s = max(k * (w.x * q.y - w.y * q.x), k * (w.y - q.y));
+    return sqrt(d) * sign(s);
+}
+
+float sdRoundCone(vec3 p, float r1, float r2, float h) {
+    float b = (r1 - r2) / h;
+    float a = sqrt(max(1.0 - b * b, 0.0001));
+    vec2 q = vec2(length(p.xz), p.y);
+    float k = dot(q, vec2(-b, a));
+    if (k < 0.0) return length(q) - r1;
+    if (k > a * h) return length(q - vec2(0.0, h)) - r2;
+    return dot(q, vec2(a, b)) - r1;
+}
+
+float sdVerticalCapsule(vec3 p, float h, float r) {
+    p.y -= clamp(p.y, 0.0, h);
+    return length(p) - r;
+}
+
+float sdCutHollowSphere(vec3 p, float r, float h, float t) {
+    float w = sqrt(max(r * r - h * h, 0.0));
+    vec2 q = vec2(length(p.xz), p.y);
+    return ((h * q.x < w * q.y) ? length(q - vec2(w, h)) : abs(length(q) - r)) - t;
+}
+
+float sdDeathStar(vec3 p2, float ra, float rb, float d) {
+    float a = (ra * ra - rb * rb + d * d) / (2.0 * d);
+    float b = sqrt(max(ra * ra - a * a, 0.0));
+    vec2 p = vec2(p2.x, length(p2.yz));
+    if (p.x * b - p.y * a > d * max(b - p.y, 0.0)) {
+        return length(p - vec2(a, b));
     }
-    p.xz -= vec2(0.5);
-    vec3 q = vec3(p.z, h * p.y - 0.5 * p.x, h * p.x + 0.5 * p.y);
-    float s = max(-q.x, 0.0);
-    float t = clamp((q.y - 0.5 * p.z) / (m2 + 0.25), 0.0, 1.0);
-    float a = m2 * (q.x + s) * (q.x + s) + q.y * q.y;
-    float b = m2 * (q.x + 0.5 * t) * (q.x + 0.5 * t) + (q.y - m2 * t) * (q.y - m2 * t);
-    float d2 = (min(q.y, -q.x * m2 - 0.5 * q.y) > 0.0) ? 0.0 : min(a, b);
-    return sqrt((d2 + q.z * q.z) / m2) * sign(max(q.z, -p.y));
+    return max(length(p) - ra, -(length(p - vec2(d, 0.0)) - rb));
 }
 
 float sdVesicaSegment(vec3 p, vec3 a, vec3 b, float w) {
@@ -2323,6 +2469,8 @@ function createShaderProgram(sdfCode) {
         uniform float time;
         uniform vec3 u_cameraPos;
         uniform vec3 u_cameraTarget;
+        uniform bool u_orthographicMode;
+        uniform float u_cameraDistance;
         
         ${sdfCode}
         
@@ -2348,12 +2496,24 @@ function createShaderProgram(sdfCode) {
         
         void main() {
             vec2 uv = (gl_FragCoord.xy - 0.5 * resolution) / resolution.y;
-            
+            vec3 forward = normalize(u_cameraTarget - u_cameraPos);
+            vec3 worldUp = vec3(0.0, 1.0, 0.0);
+            vec3 right = normalize(cross(forward, worldUp));
+            if (length(right) < 0.001) {
+                right = vec3(1.0, 0.0, 0.0);
+            }
+            vec3 up = normalize(cross(right, forward));
             vec3 ro = u_cameraPos;
             vec3 rd = computeRayDirection(uv);
+            if (u_orthographicMode) {
+                float orthoScale = max(u_cameraDistance, 0.1);
+                ro = u_cameraPos + uv.x * right * orthoScale + uv.y * up * orthoScale;
+                rd = forward;
+            }
             
             float t = 0.0;
-            vec3 col = vec3(1.0);
+            vec3 baseColor = vec3(0.25, 0.55, 0.95);
+            vec3 col = baseColor * 0.25;
             
             for (int i = 0; i < 100; i++) {
                 vec3 p = ro + rd * t;
@@ -2361,10 +2521,11 @@ function createShaderProgram(sdfCode) {
                 
                 if (d < 0.001) {
                     vec3 n = calcNormal(p);
-                    vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
+                    vec3 lightDir = normalize(vec3(0.2, 0.9, 0.6));
                     float diff = max(dot(n, lightDir), 0.0);
-                    float amb = 0.3;
-                    col = vec3(0.85, 0.75, 0.7) * (diff + amb);
+                    float amb = 0.35;
+                    float spec = pow(max(dot(reflect(-lightDir, n), -rd), 0.0), 32.0);
+                    col = baseColor * (diff + amb) + vec3(0.2, 0.3, 0.45) * spec;
                     break;
                 }
                 
@@ -2433,6 +2594,8 @@ function cacheUniformLocations() {
             }
         }
     });
+    uniformLocations['u_orthographicMode'] = gl.getUniformLocation(program, 'u_orthographicMode');
+    uniformLocations['u_cameraDistance'] = gl.getUniformLocation(program, 'u_cameraDistance');
     
     perfLogDuration('cacheUniformLocations', t0, `uniforms=${uniformCount}`);
 }
@@ -2484,7 +2647,16 @@ function updatePreviewUniforms() {
             }
         }
     });
-    
+    const orthoLoc = uniformLocations['u_orthographicMode'];
+    if (orthoLoc) {
+        gl.uniform1i(orthoLoc, orthographicMode ? 1 : 0);
+        uniformUpdates++;
+    }
+    const camDistLoc = uniformLocations['u_cameraDistance'];
+    if (camDistLoc) {
+        gl.uniform1f(camDistLoc, CAMERA_STATE.distance);
+        uniformUpdates++;
+    }
     const uniformsEnd = perfLogDuration('updatePreviewUniforms', t0, `updates=${uniformUpdates}`);
     renderPreview(uniformsEnd);
 }

@@ -382,8 +382,12 @@
     <div class="menu-item primitive" data-type="Box">Box</div>
     <div class="menu-item primitive" data-type="Torus">Torus</div>
     <div class="menu-item primitive" data-type="Cylinder">Cylinder</div>
-    <div class="menu-item primitive" data-type="Plane">Plane</div>
-    <div class="menu-item primitive" data-type="Pyramid">Pyramid</div>
+    <div class="menu-item primitive" data-type="Octahedron">Octahedron</div>
+    <div class="menu-item primitive" data-type="Cone">Cone</div>
+    <div class="menu-item primitive" data-type="RoundCone">Round Cone</div>
+    <div class="menu-item primitive" data-type="VerticalCapsule">Vertical Capsule</div>
+    <div class="menu-item primitive" data-type="CutHollowSphere">Cut Hollow Sphere</div>
+    <div class="menu-item primitive" data-type="DeathStar">Death Star</div>
     <div class="menu-item primitive" data-type="VesicaSegment">Vesica Segment</div>
     
     <h3>Operations</h3>
@@ -472,18 +476,54 @@ const NODE_TYPES = {
             height: { default: 1.0, min: 0.1, max: 5, step: 0.1 }
         }
     },
-    Plane: {
+    Octahedron: {
         category: 'primitive',
         maxChildren: 0,
         params: {
-            height: { default: 0, min: -5, max: 5, step: 0.1 }
+            size: { default: 0.75, min: 0.1, max: 3.0, step: 0.05 }
         }
     },
-    Pyramid: {
+    Cone: {
         category: 'primitive',
         maxChildren: 0,
         params: {
-            height: { default: 1.0, min: 0.1, max: 5.0, step: 0.1 }
+            height: { default: 1.5, min: 0.1, max: 5.0, step: 0.05 },
+            angleDeg: { default: 45, min: 1, max: 89, step: 1 }
+        }
+    },
+    RoundCone: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radiusTop: { default: 0.4, min: 0.01, max: 3.0, step: 0.01 },
+            radiusBottom: { default: 0.1, min: 0.01, max: 3.0, step: 0.01 },
+            height: { default: 1.25, min: 0.1, max: 5.0, step: 0.05 }
+        }
+    },
+    VerticalCapsule: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            height: { default: 1.0, min: 0.1, max: 5.0, step: 0.05 },
+            radius: { default: 0.25, min: 0.01, max: 2.5, step: 0.01 }
+        }
+    },
+    CutHollowSphere: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radius: { default: 1.0, min: 0.1, max: 4.0, step: 0.05 },
+            height: { default: 0.35, min: 0.0, max: 3.5, step: 0.05 },
+            thickness: { default: 0.1, min: 0.001, max: 2.0, step: 0.01 }
+        }
+    },
+    DeathStar: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radiusA: { default: 1.0, min: 0.1, max: 5.0, step: 0.05 },
+            radiusB: { default: 0.4, min: 0.05, max: 4.0, step: 0.05 },
+            offset: { default: 0.6, min: 0.0, max: 5.0, step: 0.05 }
         }
     },
     VesicaSegment: {
@@ -652,16 +692,20 @@ const NODE_TYPE_SPHERE = 0;
 const NODE_TYPE_BOX = 1;
 const NODE_TYPE_TORUS = 2;
 const NODE_TYPE_CYLINDER = 3;
-const NODE_TYPE_PLANE = 4;
-const NODE_TYPE_PYRAMID = 5;
-const NODE_TYPE_VESICA = 6;
-const NODE_TYPE_UNION = 7;
-const NODE_TYPE_SMOOTH_UNION = 8;
-const NODE_TYPE_SUBTRACTION = 9;
-const NODE_TYPE_SMOOTH_SUBTRACTION = 10;
-const NODE_TYPE_INTERSECTION = 11;
-const NODE_TYPE_SMOOTH_INTERSECTION = 12;
-const NODE_TYPE_XOR = 13;
+const NODE_TYPE_OCTAHEDRON = 4;
+const NODE_TYPE_CONE = 5;
+const NODE_TYPE_ROUND_CONE = 6;
+const NODE_TYPE_VERTICAL_CAPSULE = 7;
+const NODE_TYPE_CUT_HOLLOW_SPHERE = 8;
+const NODE_TYPE_DEATH_STAR = 9;
+const NODE_TYPE_VESICA = 10;
+const NODE_TYPE_UNION = 11;
+const NODE_TYPE_SMOOTH_UNION = 12;
+const NODE_TYPE_SUBTRACTION = 13;
+const NODE_TYPE_SMOOTH_SUBTRACTION = 14;
+const NODE_TYPE_INTERSECTION = 15;
+const NODE_TYPE_SMOOTH_INTERSECTION = 16;
+const NODE_TYPE_XOR = 17;
 const NODE_BUFFER_BINDING = 0;
 const STAGE_SLOT_INDEX = 0;
 
@@ -670,8 +714,12 @@ const NODE_TYPE_ID_MAP = {
     Box: NODE_TYPE_BOX,
     Torus: NODE_TYPE_TORUS,
     Cylinder: NODE_TYPE_CYLINDER,
-    Plane: NODE_TYPE_PLANE,
-    Pyramid: NODE_TYPE_PYRAMID,
+    Octahedron: NODE_TYPE_OCTAHEDRON,
+    Cone: NODE_TYPE_CONE,
+    RoundCone: NODE_TYPE_ROUND_CONE,
+    VerticalCapsule: NODE_TYPE_VERTICAL_CAPSULE,
+    CutHollowSphere: NODE_TYPE_CUT_HOLLOW_SPHERE,
+    DeathStar: NODE_TYPE_DEATH_STAR,
     VesicaSegment: NODE_TYPE_VESICA,
     opUnion: NODE_TYPE_UNION,
     opSmoothUnion: NODE_TYPE_SMOOTH_UNION,
@@ -974,12 +1022,38 @@ function writeNodeParams(nodeType, params, array, base) {
             array[base + 1] = params.height ?? 1.0;
             break;
         }
-        case 'Plane': {
-            array[base + 0] = params.height ?? 0.0;
+        case 'Octahedron': {
+            array[base + 0] = params.size ?? 0.75;
             break;
         }
-        case 'Pyramid': {
+        case 'Cone': {
+            const angleRad = degToRad(params.angleDeg ?? 45);
+            array[base + 0] = Math.sin(angleRad);
+            array[base + 1] = Math.cos(angleRad);
+            array[base + 2] = params.height ?? 1.5;
+            break;
+        }
+        case 'RoundCone': {
+            array[base + 0] = params.radiusTop ?? 0.4;
+            array[base + 1] = params.radiusBottom ?? 0.1;
+            array[base + 2] = params.height ?? 1.25;
+            break;
+        }
+        case 'VerticalCapsule': {
             array[base + 0] = params.height ?? 1.0;
+            array[base + 1] = params.radius ?? 0.25;
+            break;
+        }
+        case 'CutHollowSphere': {
+            array[base + 0] = params.radius ?? 1.0;
+            array[base + 1] = params.height ?? 0.35;
+            array[base + 2] = params.thickness ?? 0.1;
+            break;
+        }
+        case 'DeathStar': {
+            array[base + 0] = params.radiusA ?? 1.0;
+            array[base + 1] = params.radiusB ?? 0.4;
+            array[base + 2] = params.offset ?? 0.6;
             break;
         }
         case 'VesicaSegment': {
@@ -1989,11 +2063,25 @@ function generateExportNodeCode(node, pointVar) {
             case 'Cylinder':
                 code += `    float ${varName} = sdCylinder(${transformedPoint}, ${params.radius.toFixed(3)}, ${params.height.toFixed(3)});\n`;
                 break;
-            case 'Plane':
-                code += `    float ${varName} = sdPlane(${transformedPoint}, ${params.height.toFixed(3)});\n`;
+            case 'Octahedron':
+                code += `    float ${varName} = sdOctahedron(${transformedPoint}, ${params.size.toFixed(3)});\n`;
                 break;
-            case 'Pyramid':
-                code += `    float ${varName} = sdPyramid(${transformedPoint}, ${params.height.toFixed(3)});\n`;
+            case 'Cone': {
+                const angle = ((params.angleDeg ?? 45) * rad);
+                code += `    float ${varName} = sdCone(${transformedPoint}, vec2(sin(${angle.toFixed(4)}), cos(${angle.toFixed(4)})), ${params.height.toFixed(3)});\n`;
+                break;
+            }
+            case 'RoundCone':
+                code += `    float ${varName} = sdRoundCone(${transformedPoint}, ${params.radiusTop.toFixed(3)}, ${params.radiusBottom.toFixed(3)}, ${params.height.toFixed(3)});\n`;
+                break;
+            case 'VerticalCapsule':
+                code += `    float ${varName} = sdVerticalCapsule(${transformedPoint}, ${params.height.toFixed(3)}, ${params.radius.toFixed(3)});\n`;
+                break;
+            case 'CutHollowSphere':
+                code += `    float ${varName} = sdCutHollowSphere(${transformedPoint}, ${params.radius.toFixed(3)}, ${params.height.toFixed(3)}, ${params.thickness.toFixed(3)});\n`;
+                break;
+            case 'DeathStar':
+                code += `    float ${varName} = sdDeathStar(${transformedPoint}, ${params.radiusA.toFixed(3)}, ${params.radiusB.toFixed(3)}, ${params.offset.toFixed(3)});\n`;
                 break;
             case 'VesicaSegment':
                 code += `    float ${varName} = sdVesicaSegment(${transformedPoint}, vec3(${params.ax.toFixed(3)}, ${params.ay.toFixed(3)}, ${params.az.toFixed(3)}), vec3(${params.bx.toFixed(3)}, ${params.by.toFixed(3)}, ${params.bz.toFixed(3)}), ${params.width.toFixed(3)});\n`;
@@ -2198,11 +2286,28 @@ function generatePreviewNodeCode(node, pointVar) {
             case 'Cylinder':
                 code += `    float ${varName} = sdCylinder(${transformedPoint}, ${prefix}_radius, ${prefix}_height);\n`;
                 break;
-            case 'Plane':
-                code += `    float ${varName} = sdPlane(${transformedPoint}, ${prefix}_height);\n`;
+            case 'Octahedron':
+                code += `    float ${varName} = sdOctahedron(${transformedPoint}, ${prefix}_size);\n`;
                 break;
-            case 'Pyramid':
-                code += `    float ${varName} = sdPyramid(${transformedPoint}, ${prefix}_height);\n`;
+            case 'Cone': {
+                const angleVar = `${varName}_angle`;
+                const coneVec = `${varName}_c`;
+                code += `    float ${angleVar} = radians(${prefix}_angleDeg);\n`;
+                code += `    vec2 ${coneVec} = vec2(sin(${angleVar}), cos(${angleVar}));\n`;
+                code += `    float ${varName} = sdCone(${transformedPoint}, ${coneVec}, ${prefix}_height);\n`;
+                break;
+            }
+            case 'RoundCone':
+                code += `    float ${varName} = sdRoundCone(${transformedPoint}, ${prefix}_radiusTop, ${prefix}_radiusBottom, ${prefix}_height);\n`;
+                break;
+            case 'VerticalCapsule':
+                code += `    float ${varName} = sdVerticalCapsule(${transformedPoint}, ${prefix}_height, ${prefix}_radius);\n`;
+                break;
+            case 'CutHollowSphere':
+                code += `    float ${varName} = sdCutHollowSphere(${transformedPoint}, ${prefix}_radius, ${prefix}_height, ${prefix}_thickness);\n`;
+                break;
+            case 'DeathStar':
+                code += `    float ${varName} = sdDeathStar(${transformedPoint}, ${prefix}_radiusA, ${prefix}_radiusB, ${prefix}_offset);\n`;
                 break;
             case 'VesicaSegment':
                 code += `    float ${varName} = sdVesicaSegment(${transformedPoint}, vec3(${prefix}_ax, ${prefix}_ay, ${prefix}_az), vec3(${prefix}_bx, ${prefix}_by, ${prefix}_bz), ${prefix}_width);\n`;
@@ -2488,24 +2593,60 @@ float sdCylinder(vec3 p, float r, float h) {
     return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
 }
 
-float sdPlane(vec3 p, float h) {
-    return p.y - h;
+float sdOctahedron(vec3 p, float s) {
+    p = abs(p);
+    float m = p.x + p.y + p.z - s;
+    vec3 q;
+         if (3.0 * p.x < m) q = p.xyz;
+    else if (3.0 * p.y < m) q = p.yzx;
+    else if (3.0 * p.z < m) q = p.zxy;
+    else return m * 0.57735027;
+    
+    float k = clamp(0.5 * (q.z - q.y + s), 0.0, s);
+    return length(vec3(q.x, q.y - s + k, q.z - k));
 }
 
-float sdPyramid(vec3 p, float h) {
-    float m2 = h * h + 0.25;
-    p.xz = abs(p.xz);
-    if (p.z > p.x) {
-        p.xz = p.zx;
+float sdCone(vec3 p, vec2 c, float h) {
+    float safeCos = max(c.y, 0.0001);
+    vec2 q = h * vec2(c.x / safeCos, -1.0);
+    vec2 w = vec2(length(p.xz), p.y);
+    vec2 a = w - q * clamp(dot(w, q) / dot(q, q), 0.0, 1.0);
+    vec2 b = w - q * vec2(clamp(w.x / max(q.x, 0.0001), 0.0, 1.0), 1.0);
+    float k = sign(q.y);
+    float d = min(dot(a, a), dot(b, b));
+    float sgn = max(k * (w.x * q.y - w.y * q.x), k * (w.y - q.y));
+    return sqrt(d) * sign(sgn);
+}
+
+float sdRoundCone(vec3 p, float r1, float r2, float h) {
+    float b = (r1 - r2) / h;
+    float a = sqrt(max(1.0 - b * b, 0.0001));
+    vec2 q = vec2(length(p.xz), p.y);
+    float k = dot(q, vec2(-b, a));
+    if (k < 0.0) return length(q) - r1;
+    if (k > a * h) return length(q - vec2(0.0, h)) - r2;
+    return dot(q, vec2(a, b)) - r1;
+}
+
+float sdVerticalCapsule(vec3 p, float h, float r) {
+    p.y -= clamp(p.y, 0.0, h);
+    return length(p) - r;
+}
+
+float sdCutHollowSphere(vec3 p, float r, float h, float t) {
+    float w = sqrt(max(r * r - h * h, 0.0));
+    vec2 q = vec2(length(p.xz), p.y);
+    return ((h * q.x < w * q.y) ? length(q - vec2(w, h)) : abs(length(q) - r)) - t;
+}
+
+float sdDeathStar(vec3 p2, float ra, float rb, float d) {
+    float a = (ra * ra - rb * rb + d * d) / (2.0 * d);
+    float b = sqrt(max(ra * ra - a * a, 0.0));
+    vec2 p = vec2(p2.x, length(p2.yz));
+    if (p.x * b - p.y * a > d * max(b - p.y, 0.0)) {
+        return length(p - vec2(a, b));
     }
-    p.xz -= vec2(0.5);
-    vec3 q = vec3(p.z, h * p.y - 0.5 * p.x, h * p.x + 0.5 * p.y);
-    float s = max(-q.x, 0.0);
-    float t = clamp((q.y - 0.5 * p.z) / (m2 + 0.25), 0.0, 1.0);
-    float a = m2 * (q.x + s) * (q.x + s) + q.y * q.y;
-    float b = m2 * (q.x + 0.5 * t) * (q.x + 0.5 * t) + (q.y - m2 * t) * (q.y - m2 * t);
-    float d2 = (min(q.y, -q.x * m2 - 0.5 * q.y) > 0.0) ? 0.0 : min(a, b);
-    return sqrt((d2 + q.z * q.z) / m2) * sign(max(q.z, -p.y));
+    return max(length(p) - ra, -(length(p - vec2(d, 0.0)) - rb));
 }
 
 float sdVesicaSegment(vec3 p, vec3 a, vec3 b, float w) {
