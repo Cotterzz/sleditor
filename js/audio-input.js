@@ -137,10 +137,11 @@ export async function createAudioAnalyser(audioPath, mode = 'shadertoy') {
             return;
         }
         
-        // Connect: source -> analyser -> destination (speakers)
+        // Connect: source -> analyser -> global gain -> destination
         try {
             source.connect(analyser);
-            analyser.connect(audioContext.destination);
+            const destination = state.gainNode || audioContext.destination;
+            analyser.connect(destination);
             console.log('  ✓ Audio nodes connected');
         } catch (error) {
             console.error('  ✗ Failed to connect audio nodes:', error);
@@ -206,8 +207,8 @@ export function updateAudioTexture(gl, texture, analyser, width, height) {
     
     // For Shadertoy compatibility: just use the first 'width' samples
     // Don't skip samples - just truncate to texture width
-    const frequencyData = fullFrequencyData.subarray(0, width);
-    const waveformData = fullWaveformData.subarray(0, width);
+    const frequencyData = fullFrequencyData.slice(0, width);
+    const waveformData = fullWaveformData.slice(0, width);
     
     // Update texture
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -360,6 +361,9 @@ export async function playAudioChannel(channel) {
     } catch (error) {
         console.error('  ✗ Failed to play audio:', error);
         channel.playing = false;
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('audio-play-blocked', { detail: { error } }));
+        }
         throw error; // Re-throw so UI can handle it
     }
 }
@@ -384,17 +388,6 @@ export function pauseAudioChannel(channel) {
  * Set audio volume
  * @param {Object} channel - Audio channel object
  * @param {number} volume - Volume (0.0 to 1.0)
- */
-export function setAudioVolume(channel, volume) {
-    if (!channel || !channel.audio) return;
-    
-    channel.audio.volume = Math.max(0, Math.min(1, volume));
-}
-
-/**
- * Set audio loop
- * @param {Object} channel - Audio channel object
- * @param {boolean} loop - Whether to loop
  */
 export function setAudioLoop(channel, loop) {
     if (!channel || !channel.audio) return;

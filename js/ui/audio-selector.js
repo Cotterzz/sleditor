@@ -52,12 +52,6 @@ export async function createAudioSelector(tabName, channelNumber) {
     `;
     
     if (currentMedia && channel?.audioData) {
-        console.log('Audio selector: channel has audioData', {
-            playing: channel.audioData.playing,
-            hasAudio: !!channel.audioData.audio,
-            hasAnalyser: !!channel.audioData.analyser
-        });
-        
         // Audio visualization
         const visualizer = document.createElement('canvas');
         visualizer.width = 150;
@@ -89,40 +83,10 @@ export async function createAudioSelector(tabName, channelNumber) {
         titleDiv.textContent = currentMedia.name;
         controlsColumn.appendChild(titleDiv);
         
-        // Playback controls row
+        // Playback controls row (loop + hint about global controls)
         const controlsRow = document.createElement('div');
-        controlsRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+        controlsRow.style.cssText = 'display: flex; flex-direction: column; gap: 6px;';
         
-        // Play/Pause button
-        const playPauseBtn = document.createElement('button');
-        playPauseBtn.textContent = channel.audioData.playing ? '⏸' : '▶';
-        playPauseBtn.style.cssText = `
-            background: var(--bg-tertiary);
-            border: 1px solid var(--accent-color);
-            color: var(--text-primary);
-            padding: 4px 12px;
-            border-radius: 2px;
-            cursor: pointer;
-            font-size: 14px;
-        `;
-        playPauseBtn.onclick = async () => {
-            try {
-                if (channel.audioData.playing) {
-                    audioInput.pauseAudioChannel(channel.audioData);
-                    playPauseBtn.textContent = '▶';
-                } else {
-                    await audioInput.playAudioChannel(channel.audioData);
-                    playPauseBtn.textContent = '⏸';
-                }
-            } catch (error) {
-                console.error('Play/pause error:', error);
-                playPauseBtn.textContent = '▶';
-                alert('Failed to play audio: ' + error.message);
-            }
-        };
-        controlsRow.appendChild(playPauseBtn);
-        
-        // Loop checkbox
         const loopLabel = document.createElement('label');
         loopLabel.style.cssText = 'display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-primary); font-size: 11px;';
         const loopCheckbox = document.createElement('input');
@@ -135,21 +99,10 @@ export async function createAudioSelector(tabName, channelNumber) {
         loopLabel.appendChild(document.createTextNode('Loop'));
         controlsRow.appendChild(loopLabel);
         
-        // Volume slider
-        const volumeLabel = document.createElement('div');
-        volumeLabel.style.cssText = 'display: flex; align-items: center; gap: 6px; flex: 1; color: var(--text-primary); font-size: 11px;';
-        volumeLabel.appendChild(document.createTextNode('🔊'));
-        const volumeSlider = document.createElement('input');
-        volumeSlider.type = 'range';
-        volumeSlider.min = '0';
-        volumeSlider.max = '100';
-        volumeSlider.value = String((channel.audioData.audio?.volume || 0.5) * 100);
-        volumeSlider.style.cssText = 'flex: 1;';
-        volumeSlider.oninput = () => {
-            audioInput.setAudioVolume(channel.audioData, volumeSlider.value / 100);
-        };
-        volumeLabel.appendChild(volumeSlider);
-        controlsRow.appendChild(volumeLabel);
+        const globalControlHint = document.createElement('div');
+        globalControlHint.style.cssText = 'font-size: 10px; color: var(--text-secondary);';
+        globalControlHint.textContent = 'Use the main play/pause & volume controls above.';
+        controlsRow.appendChild(globalControlHint);
         
         controlsColumn.appendChild(controlsRow);
         

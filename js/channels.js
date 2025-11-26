@@ -274,6 +274,13 @@ export async function createChannel(type, data) {
             channel.texture = texture;
             channel.resolution = { width, height };
         }
+        
+        // Auto-play if shader is running and audio start unlocked
+        if (channel.audioData && state.isPlaying && state.audioStartUnlocked) {
+            audioInput.playAudioChannel(channel.audioData).catch(err => {
+                console.warn(`Failed to auto-play audio channel ch${channelNumber}:`, err);
+            });
+        }
     } else if (type === 'buffer') {
         channel.resolution = { width: state.canvasWidth, height: state.canvasHeight };
         channel.textures = null; // Created lazily when rendering
@@ -946,8 +953,8 @@ export function getChannelTextureForDisplay(channelNumber) {
  * @param {WebGL2RenderingContext} gl - WebGL context
  */
 export function updateAudioTextures(gl) {
-    channelState.channels
-        .filter(ch => ch.type === 'audio' && ch.audioData && ch.audioData.playing)
+    getAudioChannels()
+        .filter(ch => ch.audioData.playing)
         .forEach(ch => {
             audioInput.updateAudioTexture(
                 gl, 
@@ -957,6 +964,46 @@ export function updateAudioTextures(gl) {
                 ch.resolution.height
             );
         });
+}
+
+function getAudioChannels() {
+    return channelState.channels.filter(ch => ch.type === 'audio' && ch.audioData);
+}
+
+export function hasAudioChannels() {
+    return getAudioChannels().length > 0;
+}
+
+export function playAudioChannels() {
+    const audioChannels = getAudioChannels();
+    if (audioChannels.length === 0) {
+        return Promise.resolve();
+    }
+    if (!state.audioStartUnlocked) {
+        return Promise.reject(new Error('Audio start locked'));
+    }
+    return Promise.all(audioChannels.map(ch => audioInput.playAudioChannel(ch.audioData)));
+}
+
+export function pauseAudioChannels() {
+    getAudioChannels().forEach(ch => {
+        audioInput.pauseAudioChannel(ch.audioData);
+    });
+}
+
+export function restartAudioChannels(shouldPlay = state.isPlaying) {
+    const audioChannels = getAudioChannels();
+    audioChannels.forEach(ch => {
+        const audio = ch.audioData.audio;
+        if (audio) {
+            audio.currentTime = 0;
+        }
+    });
+    if (shouldPlay) {
+        return playAudioChannels();
+    }
+    pauseAudioChannels();
+    return Promise.resolve();
 }
 
 // Expose limited debugging helpers
@@ -969,7 +1016,8 @@ if (typeof window !== 'undefined') {
         getAvailableViewerChannels,
         setSelectedOutputChannel,
         getSelectedOutputChannel,
-        getChannelTextureForDisplay
+        getChannelTextureForDisplay,
+        hasAudioChannels
     };
 }
 
