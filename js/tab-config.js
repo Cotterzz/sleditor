@@ -156,6 +156,15 @@ export function isVideoChannel(tabName) {
 }
 
 /**
+ * Check if tab name is an audio channel
+ * @param {string} tabName - Tab name
+ * @returns {boolean}
+ */
+export function isAudioChannel(tabName) {
+    return tabName.startsWith('audio_ch');
+}
+
+/**
  * Check if tab name is a buffer channel
  * @param {string} tabName - Tab name
  * @returns {boolean}
@@ -170,7 +179,7 @@ export function isBufferChannel(tabName) {
  * @returns {boolean}
  */
 export function isChannel(tabName) {
-    return isImageChannel(tabName) || isVideoChannel(tabName) || isBufferChannel(tabName);
+    return isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName) || isBufferChannel(tabName);
 }
 
 /**
@@ -195,6 +204,7 @@ export function getTabIcon(tabName) {
     // Handle dynamic channel tabs
     if (isImageChannel(tabName)) return '🖼️';
     if (isVideoChannel(tabName)) return '🎥';
+    if (isAudioChannel(tabName)) return '🎵';
     if (isBufferChannel(tabName)) return '🎚️';
     
     const config = TAB_CONFIG[tabName];
@@ -215,6 +225,10 @@ export function getTabLabel(tabName) {
     if (isVideoChannel(tabName)) {
         const chNum = getChannelNumber(tabName);
         return `Video(ch${chNum})`;
+    }
+    if (isAudioChannel(tabName)) {
+        const chNum = getChannelNumber(tabName);
+        return `Audio(ch${chNum})`;
     }
     if (isBufferChannel(tabName)) {
         const chNum = getChannelNumber(tabName);
@@ -313,7 +327,7 @@ export function tabsAreMutuallyExclusive(tab1, tab2) {
  */
 export function getEditorForTab(tabName, state) {
     // Channel tabs don't use Monaco editors
-    if (isImageChannel(tabName) || isVideoChannel(tabName)) {
+    if (isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName)) {
         return null;
     }
     
@@ -340,6 +354,15 @@ export function createImageChannelTabName(channelNumber) {
  */
 export function createVideoChannelTabName(channelNumber) {
     return `video_ch${channelNumber}`;
+}
+
+/**
+ * Create audio channel tab name
+ * @param {number} channelNumber - Channel number
+ * @returns {string} Tab name
+ */
+export function createAudioChannelTabName(channelNumber) {
+    return `audio_ch${channelNumber}`;
 }
 
 /**

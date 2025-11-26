@@ -9,6 +9,7 @@ import * as webgl from './backends/webgl.js';
 import * as jsRuntime from './js-runtime.js';
 import * as perfMonitor from './performance-monitor.js';
 import * as recording from './recording.js';
+import * as channels from './channels.js';
 
 const DEFAULT_RECORDING_FPS = 60;
 
@@ -74,6 +75,11 @@ export function render(rawTime) {
     
     // Mark JS start (before user code)
     perfMonitor.markJSStart();
+    
+    // Update audio textures (if any audio channels are playing)
+    if (gl) {
+        channels.updateAudioTextures(gl);
+    }
     
     // Determine rendering mode based on available backend
     if (state.graphicsBackend === 'webgl' && gl) {

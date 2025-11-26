@@ -2,15 +2,10 @@
 
 ## CURRENT ISSUES/WORK
 
-improve uniform sliders
 
-AI:
-ai insert
-ai chat
-huggingface
-JS, wgsl, audioworklet
 
-finish New logo
+
+
 
 CSS refactoring
 
@@ -88,16 +83,20 @@ User Gallery View
 Localisation
 Mobile compatibility
 UI Rebuild
-Image gen interface
-Segmind pollinations huggingface replicate fal - free tier
-clipdrop, stability, dall-e midjourney no free tier
 
+AI:
+ai insert
+ai chat
+huggingface
+JS, wgsl, audioworklet
 Image to code:
 gemini vision
 Claude
 Huggingface has lots of options blip-clip etc
 gpt 4 vision
-
+Image gen interface
+Segmind pollinations huggingface replicate fal - free tier
+clipdrop, stability, dall-e midjourney no free tier
 site subscription
 stripe paddle lemon squeezy (recommended)
 gumroad paypal subs direct

@@ -4,8 +4,9 @@
 
 import { state, logStatus } from './core.js';
 import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF } from './examples.js';
-import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isBufferChannel, getChannelNumber, createImageChannelTabName, createBufferChannelTabName } from './tab-config.js';
+import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, getChannelNumber, createImageChannelTabName, createAudioChannelTabName, createBufferChannelTabName } from './tab-config.js';
 import * as mediaSelector from './ui/media-selector.js';
+import * as audioSelector from './ui/audio-selector.js';
 import * as channels from './channels.js';
 
 // ============================================================================
@@ -183,14 +184,14 @@ export function switchTab(tabName) {
     state.currentTab = tabName;
     
     // Handle channel tabs separately
-    if (isImageChannel(tabName) || isVideoChannel(tabName)) {
+    if (isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName)) {
         // Hide ALL editor containers first
         document.getElementById('graphicsContainer').style.display = 'none';
         document.getElementById('audioContainer').style.display = 'none';
         document.getElementById('jsEditorContainer').style.display = 'none';
         
         // Hide ALL channel containers
-        document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"]').forEach(c => {
+        document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"], [id$="Container"][id^="audio_"]').forEach(c => {
             c.style.display = 'none';
         });
         
@@ -200,22 +201,27 @@ export function switchTab(tabName) {
             channelContainer = document.createElement('div');
             channelContainer.id = `${tabName}Container`;
             channelContainer.className = 'editor-panel';
-            // Don't set display inline - let CSS class handle flex behavior
             channelContainer.style.display = 'flex';
             channelContainer.style.flexDirection = 'column';
             document.getElementById('devPanel').appendChild(channelContainer);
             
             // Add loading indicator
-            channelContainer.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">Loading media selector...</div>';
+            channelContainer.innerHTML = '<div style="padding: 20px; color: var(--text-secondary);">Loading selector...</div>';
             
-            // Load media selector
+            // Load appropriate selector
             const channelNumber = getChannelNumber(tabName);
-            const channelType = isImageChannel(tabName) ? 'image' : 'video';
-            mediaSelector.createMediaSelector(tabName, channelType, channelNumber).then(selector => {
-                // Clear container and add selector (prevents duplicates)
-                channelContainer.innerHTML = '';
-                channelContainer.appendChild(selector);
-            });
+            if (isAudioChannel(tabName)) {
+                audioSelector.createAudioSelector(tabName, channelNumber).then(selector => {
+                    channelContainer.innerHTML = '';
+                    channelContainer.appendChild(selector);
+                });
+            } else {
+                const channelType = isImageChannel(tabName) ? 'image' : 'video';
+                mediaSelector.createMediaSelector(tabName, channelType, channelNumber).then(selector => {
+                    channelContainer.innerHTML = '';
+                    channelContainer.appendChild(selector);
+                });
+            }
         } else {
             // Show existing container
             channelContainer.style.display = 'block';
@@ -262,7 +268,7 @@ export function switchTab(tabName) {
     allContainers.forEach(c => c.style.display = 'none');
     
     // Hide channel containers
-    document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"]').forEach(c => {
+    document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"], [id$="Container"][id^="audio_"]').forEach(c => {
         c.style.display = 'none';
     });
     
@@ -377,6 +383,40 @@ export async function addImageChannel() {
     console.log(`✓ Image channel tab added: ${tabName} (ch${channelNumber})`);
 }
 
+/**
+ * Add an audio channel
+ */
+export async function addAudioChannel() {
+    // Create channel first, then get the actual channel number it was assigned
+    const channelNumber = await channels.createChannel('audio', {
+        mediaId: null,
+        tabName: null // Will be set below
+    });
+    
+    if (channelNumber === -1) {
+        console.error('Failed to create audio channel');
+        return;
+    }
+    
+    // Create tab name with the actual channel number
+    const tabName = createAudioChannelTabName(channelNumber);
+    
+    // Update the channel's tab name
+    const channel = channels.getChannel(channelNumber);
+    if (channel) {
+        channel.tabName = tabName;
+    }
+    
+    // Add tab to active tabs
+    state.activeTabs.push(tabName);
+    
+    // Refresh UI
+    renderTabs();
+    switchTab(tabName);
+    
+    console.log(`✓ Audio channel tab added: ${tabName} (ch${channelNumber})`);
+}
+
 export async function addBufferChannelTab() {
     const baseGlslTab = getActiveGlslTab();
     if (!baseGlslTab) {
@@ -484,6 +524,7 @@ export function showAddPassMenu() {
         { name: 'audio_worklet', label: '🎵 Audio (Worklet)' },
         { name: 'js', label: '⚡ JavaScript' },
         { name: '_image_channel', label: '🖼️ Image Channel' }, // Special action
+        { name: '_audio_channel', label: '🎵 Audio Channel' }, // Special action
         { name: '_buffer_channel', label: '🎚️ Buffer Pass' }
     ];
     
@@ -526,6 +567,8 @@ export function showAddPassMenu() {
             // Handle image channel as special action
             if (tab.name === '_image_channel') {
                 await addImageChannel();
+            } else if (tab.name === '_audio_channel') {
+                await addAudioChannel();
             } else if (tab.name === '_buffer_channel') {
                 await addBufferChannelTab();
             } else {

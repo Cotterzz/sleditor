@@ -49,11 +49,17 @@ export function getMediaInfo(mediaId) {
         return null;
     }
     
+    // Check images
     const image = catalog.images.find(img => img.id === mediaId);
     if (image) return image;
     
+    // Check videos
     const video = catalog.videos.find(vid => vid.id === mediaId);
     if (video) return video;
+    
+    // Check audio
+    const audio = catalog.audio ? catalog.audio.find(aud => aud.id === mediaId) : null;
+    if (audio) return audio;
     
     return null;
 }
