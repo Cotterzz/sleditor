@@ -345,7 +345,7 @@ body {
 
 .sotw-hero-thumb {
     flex: 1;
-    max-width: 55%;
+    max-width: 65%;
     border-radius: 4px;
     overflow: hidden;
     background: var(--bg-tertiary);
@@ -396,9 +396,23 @@ body {
 
 .sotw-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 12px;
     width: 100%;
+}
+
+/* Force at least 2 columns until very narrow screens */
+@media (min-width: 400px) {
+    .sotw-list {
+        grid-template-columns: repeat(auto-fill, minmax(max(160px, calc(50% - 6px)), 1fr));
+    }
+}
+
+/* Force at least 3 columns on medium+ screens */
+@media (min-width: 700px) {
+    .sotw-list {
+        grid-template-columns: repeat(auto-fill, minmax(max(160px, calc(33.333% - 8px)), 1fr));
+    }
 }
 
 .sotw-list-item {

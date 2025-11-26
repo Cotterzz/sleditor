@@ -78,9 +78,9 @@ export function init() {
         } else if (event === 'SIGNED_OUT') {
             onUserSignedOut();
         } else if (event === 'INITIAL_SESSION' && !session) {
-            // No session on initial load - populate gallery with localStorage/examples
+            // No session on initial load - show SOTW for non-logged-in users
             if (window.save && window.save.populateGallery) {
-                window.save.populateGallery('my', false); // Use cache if available
+                window.save.populateGallery('sotw', false); // Default to SOTW for guests
             }
         }
     });
