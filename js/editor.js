@@ -164,17 +164,19 @@ const GLSL_MONARCH_TOKENS = {
             // Preprocessor
             [/#\s*\w+/, 'keyword.directive'],
             
-            // Keywords
-            [/\b(const|uniform|in|out|if|else|for|while|do|break|continue|return|discard|struct|precision|highp|mediump|lowp)\b/, 'keyword'],
-            
-            // Type keywords
-            [/\b(void|bool|int|float|vec2|vec3|vec4|ivec2|ivec3|ivec4|mat2|mat3|mat4|sampler2D)\b/, 'type'],
+            // Built-in functions (check BEFORE keywords to avoid partial matches)
+            [/\b(sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|abs|sign|floor|ceil|fract|mod|min|max|clamp|mix|step|smoothstep|length|distance|dot|cross|normalize|texture2D|texture|pow|exp|sqrt|log)\b/, 'support.function'],
             
             // Built-ins
             [/\b(gl_Position|gl_FragCoord|gl_FragColor|gl_VertexID)\b/, 'variable.predefined'],
             
-            // Built-in functions
-            [/\b(sin|cos|tan|abs|min|max|clamp|mix|length|dot|normalize|cross|texture2D|texture|pow|exp|sqrt)\b/, 'support.function'],
+            // Type keywords
+            [/\b(void|bool|int|float|vec2|vec3|vec4|ivec2|ivec3|ivec4|mat2|mat3|mat4|sampler2D)\b/, 'type'],
+            
+            // Keywords (check AFTER functions to avoid 'in' matching inside 'sin', 'min', etc.)
+            [/\b(const|uniform|inout|out|if|else|for|while|do|break|continue|return|discard|struct|precision|highp|mediump|lowp)(?![a-zA-Z0-9_])/, 'keyword'],
+            // Match 'in' only when surrounded by non-word chars (spaces, operators, parens, etc.)
+            [/([^a-zA-Z0-9_])(in)([^a-zA-Z0-9_])/, ['', 'keyword', '']],
             
             // Numbers
             [/\b\d+\.?\d*([eE][\-+]?\d+)?[fF]?\b/, 'number'],
@@ -226,7 +228,10 @@ export async function initMonaco(callback, initialCode, helpContent) {
             monaco.editor.defineTheme('sleditor-dark', {
                 base: 'vs-dark',
                 inherit: true,
-                rules: [],
+                rules: [
+                    { token: 'support.function', foreground: '4FC3F7' }, // Blue for functions
+                    { token: 'keyword', foreground: 'C792EA' }, // Indigo/purple for keywords
+                ],
                 colors: {
                     'editor.background': '#1e1e1e',
                 }
@@ -235,7 +240,10 @@ export async function initMonaco(callback, initialCode, helpContent) {
             monaco.editor.defineTheme('sleditor-light', {
                 base: 'vs',
                 inherit: true,
-                rules: [],
+                rules: [
+                    { token: 'support.function', foreground: '0288D1' }, // Darker blue for functions
+                    { token: 'keyword', foreground: '7C4DFF' }, // Indigo for keywords
+                ],
                 colors: {
                     'editor.background': '#eeeeff',
                 }
