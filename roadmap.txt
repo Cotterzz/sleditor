@@ -40,19 +40,26 @@ Main pass can read own output
 Unified channel system
 View different channels in main viewer
 Multiple fonts in shadertoy compatible format
+OpenRouter api for multi model AI-assist
+Video recording - muxer with multipel codecs and frame preservation
+SDF editor - standalone version with shadertoy glsl output
+Audio Buffer support
+Video buffer support
+User loaded video
+User loaded audio
+Shader of the week tab visible to everyone
+
 
 Currently: Shadertoy import
 Requires first:
-   Video Support
-   Audio input
    GLSL Audio (continuous)
    Webcam/mic input
 (cubemap and volume will be in a later phase)
 
 
 TODO:
-User loaded video
-User loaded audio
+Integrate SDF editor with sleditor
+Completely rebuilt and populated help/documentation system
 import code with built-in libraries
 custom user libraries
 shared user libraries
@@ -69,7 +76,6 @@ Secure sandboxed JS for full functionality/sharing and better support for apps/g
 Gaming api - controller support and console mode for presenting game shaders
 Game export for desktop
 Customisable DOM panel for ui outside the shader
-OpenRouter api for multi model AI-assist
 Huggingface api for multi model AI-assist
 Claude/OpenAI/Grok apis for AI-assist if demand is there
 More advance co-pilot with conversation memory and cross model context
@@ -81,7 +87,6 @@ Subscription service for all-in-one LLM api access
 Plugin system for customisable/optional functionality
 Expanded webGPU support - multiple custom passes/entrypoints
 WGSL Frag Shaders
-Video recording
 Midi input
 Advanced shadertoy passes - cubemap and volume
 Mobile support and dedicated UI

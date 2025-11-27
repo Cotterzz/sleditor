@@ -114,6 +114,39 @@
         "duration": 11,
         "width": 1920,
         "height": 1080
+    },{
+        "id": "video2",
+        "name": "Jean-Claude Van Damme",
+        "path": "media/video/vandamme.mp4",
+        "thumb": "media/video/vandamme.png",
+        "duration": 19,
+        "width": 852,
+        "height": 480
+    },{
+        "id": "video3",
+        "name": "1961 Advert",
+        "path": "media/video/ad1.mp4",
+        "thumb": "media/video/ad1.png",
+        "duration": 29,
+        "width": 400,
+        "height": 300
+    },{
+        "id": "video4",
+        "name": "Chrome Advert",
+        "path": "media/video/ad2.mp4",
+        "thumb": "media/video/ad2.png",
+        "duration": 34,
+        "width": 640,
+        "height": 360
+    },
+    {
+        "id": "video5",
+        "name": "Cats",
+        "path": "media/video/cats.mp4",
+        "thumb": "media/video/cats.png",
+        "duration": 8,
+        "width": 1280,
+        "height": 720
     }
   ],
   "audio": [
