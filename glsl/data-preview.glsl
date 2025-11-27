@@ -38,6 +38,8 @@ uniform vec4 uNodePos[MAX_PARAM_SLOTS];
 uniform vec4 uNodeRotScale[MAX_PARAM_SLOTS];
 uniform vec4 uNodeParams[MAX_PARAM_SLOTS];
 
+vec3 g_lastColor = vec3(0.25, 0.25, 0.3);
+
 mat3 rotationX(float a) {
     float c = cos(a);
     float s = sin(a);
@@ -194,6 +196,22 @@ float opXor(float d1, float d2) {
     return max(min(d1, d2), -max(d1, d2));
 }
 
+vec3 hsvToRgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 intToColor(int i) {
+    float goldenRatio = 0.618033988749895;
+    float hue = fract(float(i) * goldenRatio);
+    float satBucket = floor(mod(float(i), 3.0));
+    float valBucket = floor(mod(float(i), 4.0));
+    float sat = clamp(0.7 + satBucket * 0.1, 0.0, 1.0);
+    float val = clamp(0.7 + valBucket * 0.075, 0.0, 1.0);
+    return hsvToRgb(vec3(hue, sat, val));
+}
+
 float primitiveBound(int typeId, vec4 param) {
     if (typeId == NODE_TYPE_SPHERE) {
         return param.x;
@@ -280,6 +298,7 @@ float evaluateScene(vec3 p) {
     int count = int(header.x + 0.5);
     int rootIndex = int(header.y + 0.5);
     float distances[MAX_DATA_NODES];
+    vec3 colors[MAX_DATA_NODES];
     for (int i = 0; i < MAX_DATA_NODES; i++) {
         if (i >= count) break;
         vec4 meta = nodeMeta[i];
@@ -298,6 +317,38 @@ float evaluateScene(vec3 p) {
             float db = (childB >= 0 && childB < MAX_DATA_NODES) ? distances[childB] : 1e6;
             float param = readOpParam(int(meta.w + 0.5));
             distances[i] = applyOperation(typeId, da, db, param);
+            vec3 colorA = (childA >= 0 && childA < MAX_DATA_NODES) ? colors[childA] : vec3(0.3);
+            vec3 colorB = (childB >= 0 && childB < MAX_DATA_NODES) ? colors[childB] : vec3(0.3);
+            if (typeId == NODE_TYPE_UNION) {
+                colors[i] = (da <= db) ? colorA : colorB;
+            } else if (typeId == NODE_TYPE_SMOOTH_UNION) {
+                float k = max(param, 1e-5);
+                float blend = clamp(0.5 + 0.5 * (db - da) / k, 0.0, 1.0);
+                vec3 mixColor = mix(colorB, colorA, blend);
+                float edge = smoothstep(0.0, 1.0, blend * (1.0 - blend) * 4.0);
+                colors[i] = mix(mixColor, intToColor(i), edge);
+            } else if (typeId == NODE_TYPE_SUBTRACTION) {
+                colors[i] = (-da > db) ? colorA : colorB;
+            } else if (typeId == NODE_TYPE_SMOOTH_SUBTRACTION) {
+                float k = max(param, 1e-5);
+                float blend = clamp(0.5 - 0.5 * (db + da) / k, 0.0, 1.0);
+                vec3 mixColor = mix(colorB, colorA, blend);
+                float edge = smoothstep(0.0, 1.0, blend * (1.0 - blend) * 4.0);
+                colors[i] = mix(mixColor, intToColor(i), edge);
+            } else if (typeId == NODE_TYPE_INTERSECTION) {
+                colors[i] = (da >= db) ? colorA : colorB;
+            } else if (typeId == NODE_TYPE_SMOOTH_INTERSECTION) {
+                float k = max(param, 1e-5);
+                float blend = clamp(0.5 - 0.5 * (db - da) / k, 0.0, 1.0);
+                vec3 mixColor = mix(colorB, colorA, blend);
+                float edge = smoothstep(0.0, 1.0, blend * (1.0 - blend) * 4.0);
+                colors[i] = mix(mixColor, intToColor(i), edge);
+            } else if (typeId == NODE_TYPE_XOR) {
+                float choice = step(abs(db), abs(da));
+                colors[i] = mix(colorA, colorB, choice);
+            } else {
+                colors[i] = colorA;
+            }
         } else {
             int slot = clamp(int(meta.w + 0.5), 0, MAX_PARAM_SLOTS - 1);
             vec3 local = applyTransform(slot, p);
@@ -336,22 +387,34 @@ float evaluateScene(vec3 p) {
                 d = sdVesicaSegmentLW(local, nodeParam.x, nodeParam.y);
             }
             distances[i] = d * scale;
+            colors[i] = intToColor(i);
         }
     }
     if (count <= 0) {
+        g_lastColor = vec3(0.2, 0.2, 0.25);
         return 1e6;
     }
     int clampedRoot = clamp(rootIndex, 0, min(count - 1, MAX_DATA_NODES - 1));
+    g_lastColor = colors[clampedRoot];
     return distances[clampedRoot];
 }
 
 vec3 calcNormal(vec3 p) {
     vec2 e = vec2(0.001, 0.0);
-    return normalize(vec3(
-        evaluateScene(p + e.xyy) - evaluateScene(p - e.xyy),
-        evaluateScene(p + e.yxy) - evaluateScene(p - e.yxy),
-        evaluateScene(p + e.yyx) - evaluateScene(p - e.yyx)
-    ));
+    vec3 backup = g_lastColor;
+    float dx1 = evaluateScene(p + e.xyy);
+    g_lastColor = backup;
+    float dx2 = evaluateScene(p - e.xyy);
+    g_lastColor = backup;
+    float dy1 = evaluateScene(p + e.yxy);
+    g_lastColor = backup;
+    float dy2 = evaluateScene(p - e.yxy);
+    g_lastColor = backup;
+    float dz1 = evaluateScene(p + e.yyx);
+    g_lastColor = backup;
+    float dz2 = evaluateScene(p - e.yyx);
+    g_lastColor = backup;
+    return normalize(vec3(dx1 - dx2, dy1 - dy2, dz1 - dz2));
 }
 
 out vec4 outColor;
@@ -373,18 +436,21 @@ void main() {
         rd = forward;
     }
     float t = 0.0;
-    vec3 baseColor = vec3(0.25, 0.55, 0.95);
-    vec3 col = baseColor * 0.25;
+    vec3 baseColor = vec3(0.1, 0.1, 0.12);
+    vec3 col = baseColor;
     for (int i = 0; i < 128; i++) {
         vec3 p = ro + rd * t;
         float d = evaluateScene(p);
         if (d < 0.001) {
+            vec3 hitColor = g_lastColor;
             vec3 n = calcNormal(p);
+            g_lastColor = hitColor;
             vec3 lightDir = normalize(vec3(0.2, 0.9, 0.6));
             float diff = max(dot(n, lightDir), 0.0);
             float amb = 0.35;
             float spec = pow(max(dot(reflect(-lightDir, n), -rd), 0.0), 32.0);
-            col = baseColor * (diff + amb) + vec3(0.2, 0.3, 0.45) * spec;
+            vec3 rim = pow(max(dot(n, rd), 0.0), 2.0) * vec3(0.2, 0.3, 0.45);
+            col = hitColor * (diff + amb) + vec3(1.0) * spec * 0.2 + rim;
             break;
         }
         if (t > 40.0) {

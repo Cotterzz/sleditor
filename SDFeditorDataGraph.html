@@ -322,6 +322,67 @@
             z-index: 80;
         }
 
+        #modeControls {
+            position: fixed;
+            right: 320px;
+            top: 20px;
+            display: flex;
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-family: 'Abel', sans-serif;
+            font-size: 12px;
+            color: #f5f5f5;
+            z-index: 110;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        #modeControls .mode-select {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        #modeControls select {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #f8f8ff;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+        }
+
+        #modeControls select:focus {
+            border-color: #9f7aea;
+            box-shadow: 0 0 0 2px rgba(159, 122, 234, 0.25);
+        }
+
+        #modeControls .palette-control {
+            min-width: 120px;
+        }
+
+        #modeControls .palette-select-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        #modeControls .palette-swatch {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+        }
+
+        #modeControls .palette-swatch.disabled {
+            opacity: 0.35;
+        }
+
         #recycleBin.active {
             background: rgba(255, 99, 71, 0.25);
             border-color: rgba(255, 255, 255, 0.9);
@@ -371,6 +432,10 @@
         .status-meter {
             pointer-events: none;
             margin-left: 16px;
+        }
+
+        #dgFpsDisplay {
+            font-weight: 600;
         }
     </style>
 </head>
@@ -425,6 +490,29 @@
     <div>♻</div>
     <small>Recycle</small>
 </div>
+<div id="modeControls">
+    <div class="mode-select">
+        <span>Color</span>
+        <select id="dgColorModeSelect">
+            <option value="color">Color</option>
+            <option value="single">Single</option>
+        </select>
+    </div>
+    <div class="mode-select palette-control">
+        <span>Palette</span>
+        <div class="palette-select-wrapper">
+            <select id="dgPaletteSelect"></select>
+            <span class="palette-swatch" id="dgPaletteSwatch"></span>
+        </div>
+    </div>
+    <div class="mode-select">
+        <span>Lighting</span>
+        <select id="dgLightingModeSelect">
+            <option value="normal">Normals</option>
+            <option value="depth">Depth</option>
+        </select>
+    </div>
+</div>
 <div id="statusBar">
     <div id="pixelScaleControl">
         <label for="pixelScaleSlider">Pixel size:</label>
@@ -433,6 +521,7 @@
     </div>
     <span class="status-meter" id="uboMemoryDisplay">UBO Memory: calculating…</span>
     <span class="status-meter" id="uniformArrayMemoryDisplay"> Uniform Memory: calculating…</span>
+    <span class="status-meter" id="dgFpsDisplay">FPS: --</span>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.7.1/svg.min.js"></script>
@@ -634,6 +723,125 @@ const TRANSFORM_PARAMS = {
     scale: { default: 1.0, min: 0.1, max: 5.0, step: 0.05 }
 };
 
+function hslToRgb(h, s, l) {
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => {
+        const k = (n + h * 12) % 12;
+        return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    };
+    return {
+        r: Math.round(f(0) * 255),
+        g: Math.round(f(8) * 255),
+        b: Math.round(f(4) * 255)
+    };
+}
+
+function intToColorRGB(index) {
+    const goldenRatio = 0.618033988749895;
+    const hue = (index * goldenRatio) % 1;
+    const saturation = 0.7 + (index % 3) * 0.1;
+    const lightness = 0.45 + (index % 4) * 0.05;
+    return hslToRgb(hue, Math.min(saturation, 1), Math.min(lightness, 1));
+}
+
+function rgbToCss({ r, g, b }, alpha = 1) {
+    return alpha === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function lightenColor(color, amount) {
+    return {
+        r: Math.round(color.r + (255 - color.r) * amount),
+        g: Math.round(color.g + (255 - color.g) * amount),
+        b: Math.round(color.b + (255 - color.b) * amount)
+    };
+}
+
+function darkenColor(color, amount) {
+    return {
+        r: Math.round(color.r * (1 - amount)),
+        g: Math.round(color.g * (1 - amount)),
+        b: Math.round(color.b * (1 - amount))
+    };
+}
+
+function getNodeColorIndex(node) {
+    if (!node) return 0;
+    if (node.dataset.colorIndex) return Number(node.dataset.colorIndex);
+    const match = /(\d+)$/.exec(node.id || '');
+    const index = match ? Number(match[1]) : nodesArray.indexOf(node);
+    node.dataset.colorIndex = String(Math.max(0, index));
+    return Number(node.dataset.colorIndex);
+}
+
+function getReadableTextColor(color) {
+    const luminance = (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255;
+    return luminance > 0.6 ? '#1a202c' : '#f7fafc';
+}
+
+function applyNodeColor(node) {
+    if (!node || node.dataset.type === 'Scene') return;
+    const index = getNodeColorIndex(node);
+    const base = intToColorRGB(index);
+    const gradientStart = lightenColor(base, node.classList.contains('operation') ? 0.05 : 0.2);
+    const gradientEnd = darkenColor(base, 0.2);
+    node.style.background = `linear-gradient(135deg, ${rgbToCss(gradientStart)} 0%, ${rgbToCss(gradientEnd)} 100%)`;
+    node.style.borderColor = rgbToCss(darkenColor(base, 0.35));
+    node.style.color = getReadableTextColor(base);
+}
+
+function initRenderModeControls() {
+    if (colorModeSelect) {
+        colorModeSelect.value = renderModeState.colorMode;
+        colorModeSelect.addEventListener('change', (event) => {
+            renderModeState.colorMode = event.target.value === COLOR_MODES.SINGLE ? COLOR_MODES.SINGLE : COLOR_MODES.COLOR;
+            updateRenderModeControlState();
+            applyRenderModeUniforms();
+            requestPreviewRender();
+        });
+    }
+    if (paletteSelect) {
+        PALETTE_OPTIONS.forEach(index => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = `Color ${index + 1}`;
+            paletteSelect.appendChild(option);
+        });
+        paletteSelect.value = String(renderModeState.paletteIndex);
+        paletteSelect.addEventListener('change', (event) => {
+            const next = parseInt(event.target.al ue, 10);
+            renderModeState.paletteIndex = Number.isFinite(next) ? Math.max(0, next) : 0;
+            updatePaletteSwatch();
+            applyRenderModeUniforms();
+            requestPreviewRender();
+        });
+        updatePaletteSwatch();
+    }
+    if (lightingModeSelect) {
+        lightingModeSelect.value = renderModeState.lightingMode;
+        lightingModeSelect.addEventListener('change', (event) => {
+            renderModeState.lightingMode = event.target.value === LIGHTING_MODES.DEPTH ? LIGHTING_MODES.DEPTH : LIGHTING_MODES.NORMAL;
+            applyRenderModeUniforms();
+            requestPreviewRender();
+        });
+    }
+    updateRenderModeControlState();
+}
+
+function updateRenderModeControlState() {
+    if (paletteSelect) {
+        paletteSelect.disabled = renderModeState.colorMode === COLOR_MODES.COLOR;
+    }
+    if (paletteSwatch) {
+        paletteSwatch.classList.toggle('disabled', renderModeState.colorMode === COLOR_MODES.COLOR);
+    }
+}
+
+function updatePaletteSwatch() {
+    if (!paletteSwatch) return;
+    const rgb = intToColorRGB(renderModeState.paletteIndex);
+    paletteSwatch.style.backgroundColor = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+}
+
 function getNodeParams(node) {
     if (node._sdfParams) return node._sdfParams;
     const parsed = node.dataset.params ? JSON.parse(node.dataset.params) : {};
@@ -685,6 +893,23 @@ const uboMemoryDisplay = document.getElementById('uboMemoryDisplay');
 const uniformArrayMemoryDisplay = document.getElementById('uniformArrayMemoryDisplay');
 const pixelScaleSlider = document.getElementById('pixelScaleSlider');
 const pixelScaleLabel = document.getElementById('pixelScaleLabel');
+const colorModeSelect = document.getElementById('dgColorModeSelect');
+const paletteSelect = document.getElementById('dgPaletteSelect');
+const paletteSwatch = document.getElementById('dgPaletteSwatch');
+const lightingModeSelect = document.getElementById('dgLightingModeSelect');
+const fpsDisplay = document.getElementById('dgFpsDisplay');
+const COLOR_MODES = { COLOR: 'color', SINGLE: 'single' };
+const LIGHTING_MODES = { NORMAL: 'normal', DEPTH: 'depth' };
+const PALETTE_OPTIONS = Array.from({ length: 10 }, (_, idx) => idx);
+const renderModeState = {
+    colorMode: COLOR_MODES.COLOR,
+    lightingMode: LIGHTING_MODES.NORMAL,
+    paletteIndex: 0
+};
+let continuousRender = true;
+let smoothedFps = 0;
+let lastFrameTimestamp = 0;
+let lastFpsUpdate = 0;
 
 const MAX_DATA_NODES = 64;
 const MAX_PARAM_SLOTS = 64;
@@ -1117,6 +1342,7 @@ function scanNodes() {
             nodesObject[i].id = 'node_' + nodeCounter++;
         }
         ensureDetachHandle(nodesObject[i]);
+        applyNodeColor(nodesObject[i]);
     }
 }
 
@@ -1343,6 +1569,7 @@ function createNode(nodeType) {
     attachNodeHoverHandlers(newNode);
     attachDetachWrapperHandlers(newNode);
     newNode.appendChild(newText);
+    applyNodeColor(newNode);
     return newNode;
 }
 
