@@ -108,8 +108,7 @@
         }
 
         .node.selected {
-            box-shadow: 0 0 0 3px #ffcc00;
-            background: rgba(255, 204, 0, 0.15);
+            box-shadow: 0 0 0 3px #ffd700;
         }
 
         .node.invalid {
@@ -516,25 +515,6 @@
         <input type="checkbox" id="orthoToggle">
         Ortho
     </label>
-    <label class="auto-toggle">
-        <input type="checkbox" id="outlineToggle">
-        Outline
-    </label>
-    <div class="mode-select">
-        <span>Outline Mode</span>
-        <select id="outlineModeSelect">
-            <option value="single">Single Pass</option>
-            <option value="dual">Dual Pass</option>
-        </select>
-    </div>
-    <div class="mode-select">
-        <span>Main Steps</span>
-        <input type="number" id="mainStepsInput" min="10" max="200" value="100" style="width: 60px;">
-    </div>
-    <div class="mode-select">
-        <span>Outline Steps</span>
-        <input type="number" id="outlineStepsInput" min="10" max="200" value="60" style="width: 60px;">
-    </div>
     <div class="mode-select">
         <span>Color</span>
         <select id="colorModeSelect">
@@ -881,10 +861,6 @@ const pixelScaleLabel = document.getElementById('pixelScaleLabel');
 const recompileButton = document.getElementById('recompileButton');
 const autoCompileToggle = document.getElementById('autoCompileToggle');
 const orthoToggle = document.getElementById('orthoToggle');
-const outlineToggle = document.getElementById('outlineToggle');
-const outlineModeSelect = document.getElementById('outlineModeSelect');
-const mainStepsInput = document.getElementById('mainStepsInput');
-const outlineStepsInput = document.getElementById('outlineStepsInput');
 const colorModeSelect = document.getElementById('colorModeSelect');
 const paletteSelect = document.getElementById('paletteSelect');
 const paletteSwatch = document.getElementById('paletteSwatch');
@@ -894,12 +870,6 @@ const paramPanel = document.getElementById('paramPanel');
 const paramPanelNotice = document.getElementById('paramPanelNotice');
 const paramNodeName = document.getElementById('paramNodeName');
 const paramContent = document.getElementById('paramContent');
-
-// Outline state
-let outlineEnabled = false;
-let outlineMode = 'single'; // 'single' or 'dual'
-let mainRaymarchSteps = 100;
-let outlineRaymarchSteps = 60;
 
 // Camera state for preview orbit controls
 const CAMERA_STATE = {
@@ -1331,34 +1301,6 @@ function setupEventListeners() {
         });
         orthographicMode = !!orthoToggle.checked;
     }
-    if (outlineToggle) {
-        outlineToggle.addEventListener('change', (event) => {
-            outlineEnabled = !!event.target.checked;
-            updatePreviewUniforms();
-        });
-        outlineEnabled = !!outlineToggle.checked;
-    }
-    if (outlineModeSelect) {
-        outlineModeSelect.addEventListener('change', (event) => {
-            outlineMode = event.target.value;
-            updatePreviewUniforms();
-        });
-        outlineMode = outlineModeSelect.value;
-    }
-    if (mainStepsInput) {
-        mainStepsInput.addEventListener('change', (event) => {
-            mainRaymarchSteps = parseInt(event.target.value);
-            updatePreviewUniforms(); // Update via uniform, no recompile needed
-        });
-        mainRaymarchSteps = parseInt(mainStepsInput.value);
-    }
-    if (outlineStepsInput) {
-        outlineStepsInput.addEventListener('change', (event) => {
-            outlineRaymarchSteps = parseInt(event.target.value);
-            updatePreviewUniforms(); // Update via uniform, no recompile needed
-        });
-        outlineRaymarchSteps = parseInt(outlineStepsInput.value);
-    }
 }
 
 function onMenuItemMouseDown(event) {
@@ -1663,11 +1605,6 @@ function selectNode(node) {
         selectedNode = null;
         renderCurrentParamPanel();
     }
-    
-    // Update outline selection in shader (works in refresh mode without recompile!)
-    if (outlineEnabled && program) {
-        applyRenderModeUniforms();
-    }
 }
 
 function showParamPanel(node) {
@@ -1799,17 +1736,13 @@ function onDocumentMouseDown(event) {
         selectNode(node);
         startNodeDrag(node);
     } else {
-        // Don't deselect when clicking on stage for camera controls
-        // selectNode(null);
+        selectNode(null);
         if (isStageInteractionTarget(target)) {
             if (event.button === 0) {
                 beginCameraDrag('orbit', event.clientX, event.clientY);
             } else if (event.button === 2) {
                 beginCameraDrag('pan', event.clientX, event.clientY);
             }
-        } else {
-            // Only deselect if clicking outside stage/canvas area
-            selectNode(null);
         }
     }
 }
@@ -2262,10 +2195,6 @@ function generateExportNodeCode(node, pointVar) {
 // ===========================================
 // PREVIEW GLSL - Uniform-based (for live edit)
 // ===========================================
-// Global node-to-ID mapping
-let nodeIdMap = new Map();
-let nextNodeId = 1;
-
 function generatePreviewGLSL() {
     const t0 = perfNow();
     const sceneNode = document.getElementById('scene');
@@ -2273,25 +2202,6 @@ function generatePreviewGLSL() {
     
     let code = getSDFPreamble();
     code += '\nvec3 g_lastColor = vec3(0.25, 0.25, 0.3);\n';
-    
-    // Assign IDs to nodes and create ID constants
-    nodeIdMap.clear();
-    nextNodeId = 1;
-    code += '\n// Node IDs\n';
-    traverseSceneNodes(node => {
-        const varName = getNodeVarName(node);
-        const id = nextNodeId++;
-        nodeIdMap.set(node, id);
-        code += `const int ID_${varName} = ${id};\n`;
-    });
-    
-    // Selection and outline tracking
-    code += '\n// Selection tracking\n';
-    code += 'uniform int u_selectedID;\n';
-    code += 'uniform bool u_outlineEnabled;\n';
-    code += 'int g_lastID = 0;\n';
-    code += 'float distToSelected = 1e20;\n';
-    code += 'float g_lastDepth = 0.0;\n'; // Track depth from object center for current surface
     
     // Generate uniform declarations
     code += '\n// Node uniforms\n';
@@ -2316,7 +2226,6 @@ function generatePreviewGLSL() {
     if (children.length === 0) {
         code += `float sceneSDF(vec3 p) {
     g_lastColor = vec3(0.2, 0.2, 0.25);
-    g_lastDepth = 0.0;
     return 1000.0; // Empty scene
 }`;
     } else if (children.length === 1) {
@@ -2325,7 +2234,6 @@ function generatePreviewGLSL() {
 float sceneSDF(vec3 p) {
 ${generatePreviewNodeCode(children[0], 'p')}
     g_lastColor = ${childVar}_color;
-    g_lastDepth = ${childVar}_depth;
     return ${getNodeVarName(children[0])};
 }`;
     } else {
@@ -2335,26 +2243,21 @@ ${generatePreviewNodeCode(children[0], 'p')}
         });
         let unionExpr = getNodeVarName(children[0]);
         let unionColor = `${unionExpr}_color`;
-        let unionDepth = `${unionExpr}_depth`;
         let unionCode = '';
         for (let i = 1; i < children.length; i++) {
             const nextVar = getNodeVarName(children[i]);
             const nextColor = `${nextVar}_color`;
-            const nextDepth = `${nextVar}_depth`;
             const blendVar = `sceneBlend_${i}`;
             unionCode += `    float ${blendVar} = min(${unionExpr}, ${nextVar});\n`;
             unionCode += `    vec3 ${blendVar}_color = (${unionExpr} <= ${nextVar}) ? ${unionColor} : ${nextColor};\n`;
-            unionCode += `    float ${blendVar}_depth = (${unionExpr} <= ${nextVar}) ? ${unionDepth} : ${nextDepth};\n`;
             unionExpr = blendVar;
             unionColor = `${blendVar}_color`;
-            unionDepth = `${blendVar}_depth`;
         }
         code += `
 float sceneSDF(vec3 p) {
 ${nodeCode}
 ${unionCode}
     g_lastColor = ${unionColor};
-    g_lastDepth = ${unionDepth};
     return ${unionExpr};
 }`;
     }
@@ -2481,7 +2384,6 @@ function generatePreviewNodeCode(node, pointVar) {
     const prefix = varName;
     const typeDef = NODE_TYPES[nodeType];
     const colorVar = `${varName}_color`;
-    const depthVar = `${varName}_depth`;
     const nodeColorLiteral = `intToColor(${getNodeColorIndex(node)})`;
     
     let code = '';
@@ -2496,7 +2398,6 @@ function generatePreviewNodeCode(node, pointVar) {
     code += `    float ${scaleVar} = max(${prefix}_scale, 0.0001);\n`;
     code += `    ${transformedPoint} /= ${scaleVar};\n`;
     code += `    vec3 ${colorVar};\n`;
-    code += `    float ${depthVar};\n`;
     
     if (typeDef.category === 'primitive') {
         switch (nodeType) {
@@ -2539,14 +2440,7 @@ function generatePreviewNodeCode(node, pointVar) {
                 code += `    float ${varName} = sdVesicaSegment(${transformedPoint}, vec3(${prefix}_ax, ${prefix}_ay, ${prefix}_az), vec3(${prefix}_bx, ${prefix}_by, ${prefix}_bz), ${prefix}_width);\n`;
                 break;
         }
-        code += `    ${varName} *= ${scaleVar};\n`;
         code += `    ${colorVar} = ${nodeColorLiteral};\n`;
-        code += `    ${depthVar} = length(${transformedPoint});\n`;
-        // Track ID and distance to selected for primitives
-        code += `    g_lastID = ID_${varName};\n`;
-        code += `    if (u_outlineEnabled && g_lastID == u_selectedID) {\n`;
-        code += `        distToSelected = min(distToSelected, ${varName});\n`;
-        code += `    }\n`;
     } else if (typeDef.category === 'operation') {
         const children = getNodeChildren(node);
         
@@ -2561,15 +2455,11 @@ function generatePreviewNodeCode(node, pointVar) {
             const child2Var = getNodeVarName(children[1]);
             const child1Color = `${child1Var}_color`;
             const child2Color = `${child2Var}_color`;
-            const child1Depth = `${child1Var}_depth`;
-            const child2Depth = `${child2Var}_depth`;
-            const depthVar = `${varName}_depth`;
             
             switch (nodeType) {
                 case 'opUnion':
                     code += `    float ${varName} = min(${child1Var}, ${child2Var});\n`;
                     code += `    ${colorVar} = (${child1Var} <= ${child2Var}) ? ${child1Color} : ${child2Color};\n`;
-                    code += `    ${depthVar} = (${child1Var} <= ${child2Var}) ? ${child1Depth} : ${child2Depth};\n`;
                     break;
                 case 'opSmoothUnion':
                     code += `    float ${varName}_blend = clamp(0.5 + 0.5 * (${child2Var} - ${child1Var}) / ${prefix}_k, 0.0, 1.0);\n`;
@@ -2577,12 +2467,10 @@ function generatePreviewNodeCode(node, pointVar) {
                     code += `    vec3 ${varName}_mixColor = mix(${child2Color}, ${child1Color}, ${varName}_blend);\n`;
                     code += `    float ${varName}_edge = smoothstep(0.0, 1.0, ${varName}_blend * (1.0 - ${varName}_blend) * 4.0);\n`;
                     code += `    ${colorVar} = mix(${varName}_mixColor, ${nodeColorLiteral}, ${varName}_edge);\n`;
-                    code += `    ${depthVar} = mix(${child2Depth}, ${child1Depth}, ${varName}_blend);\n`;
                     break;
                 case 'opSubtraction':
                     code += `    float ${varName} = max(-${child1Var}, ${child2Var});\n`;
                     code += `    ${colorVar} = (-${child1Var} > ${child2Var}) ? ${child1Color} : ${child2Color};\n`;
-                    code += `    ${depthVar} = (-${child1Var} > ${child2Var}) ? ${child1Depth} : ${child2Depth};\n`;
                     break;
                 case 'opSmoothSubtraction':
                     code += `    float ${varName}_blend = clamp(0.5 - 0.5 * (${child2Var} + ${child1Var}) / ${prefix}_k, 0.0, 1.0);\n`;
@@ -2590,12 +2478,10 @@ function generatePreviewNodeCode(node, pointVar) {
                     code += `    vec3 ${varName}_mixColor = mix(${child2Color}, ${child1Color}, ${varName}_blend);\n`;
                     code += `    float ${varName}_edge = smoothstep(0.0, 1.0, ${varName}_blend * (1.0 - ${varName}_blend) * 4.0);\n`;
                     code += `    ${colorVar} = mix(${varName}_mixColor, ${nodeColorLiteral}, ${varName}_edge);\n`;
-                    code += `    ${depthVar} = mix(${child2Depth}, ${child1Depth}, ${varName}_blend);\n`;
                     break;
                 case 'opIntersection':
                     code += `    float ${varName} = max(${child1Var}, ${child2Var});\n`;
                     code += `    ${colorVar} = (${child1Var} >= ${child2Var}) ? ${child1Color} : ${child2Color};\n`;
-                    code += `    ${depthVar} = (${child1Var} >= ${child2Var}) ? ${child1Depth} : ${child2Depth};\n`;
                     break;
                 case 'opSmoothIntersection':
                     code += `    float ${varName}_blend = clamp(0.5 - 0.5 * (${child2Var} - ${child1Var}) / ${prefix}_k, 0.0, 1.0);\n`;
@@ -2603,13 +2489,11 @@ function generatePreviewNodeCode(node, pointVar) {
                     code += `    vec3 ${varName}_mixColor = mix(${child2Color}, ${child1Color}, ${varName}_blend);\n`;
                     code += `    float ${varName}_edge = smoothstep(0.0, 1.0, ${varName}_blend * (1.0 - ${varName}_blend) * 4.0);\n`;
                     code += `    ${colorVar} = mix(${varName}_mixColor, ${nodeColorLiteral}, ${varName}_edge);\n`;
-                    code += `    ${depthVar} = mix(${child2Depth}, ${child1Depth}, ${varName}_blend);\n`;
                     break;
                 case 'opXor':
                     code += `    float ${varName} = opXor(${child1Var}, ${child2Var});\n`;
                     code += `    float ${varName}_choice = step(abs(${child2Var}), abs(${child1Var}));\n`;
                     code += `    ${colorVar} = mix(${child1Color}, ${child2Color}, ${varName}_choice);\n`;
-                    code += `    ${depthVar} = mix(${child1Depth}, ${child2Depth}, ${varName}_choice);\n`;
                     break;
             }
         }
@@ -2618,25 +2502,20 @@ function generatePreviewNodeCode(node, pointVar) {
         if (children.length < 1) {
             code += `    float ${varName} = 1000.0; // Incomplete modifier\n`;
             code += `    ${colorVar} = ${nodeColorLiteral};\n`;
-            code += `    float ${varName}_depth = 0.0;\n`;
         } else {
             const child = children[0];
             const childVar = getNodeVarName(child);
             const childColor = `${childVar}_color`;
-            const childDepth = `${childVar}_depth`;
-            const depthVar = `${varName}_depth`;
             switch (nodeType) {
                 case 'opRound':
                     code += generatePreviewNodeCode(child, transformedPoint);
                     code += `    float ${varName} = ${childVar} - ${prefix}_roundRadius;\n`;
                     code += `    ${colorVar} = ${childColor};\n`;
-                    code += `    ${depthVar} = ${childDepth};\n`;
                     break;
                 case 'opOnion':
                     code += generatePreviewNodeCode(child, transformedPoint);
                     code += `    float ${varName} = abs(${childVar}) - ${prefix}_shellThickness;\n`;
                     code += `    ${colorVar} = ${childColor};\n`;
-                    code += `    ${depthVar} = ${childDepth};\n`;
                     break;
                 case 'opTwist': {
                     const warpPoint = `${varName}_warp`;
@@ -2649,7 +2528,6 @@ function generatePreviewNodeCode(node, pointVar) {
                     code += generatePreviewNodeCode(child, warpPoint);
                     code += `    float ${varName} = ${childVar};\n`;
                     code += `    ${colorVar} = ${childColor};\n`;
-                    code += `    ${depthVar} = ${childDepth};\n`;
                     break;
                 }
                 case 'opElongate': {
@@ -2660,7 +2538,6 @@ function generatePreviewNodeCode(node, pointVar) {
                     code += generatePreviewNodeCode(child, clampVar);
                     code += `    float ${varName} = ${childVar} + min(max(${qVar}.x, max(${qVar}.y, ${qVar}.z)), 0.0);\n`;
                     code += `    ${colorVar} = ${childColor};\n`;
-                    code += `    ${depthVar} = ${childDepth};\n`;
                     break;
                 }
                 case 'opCheapBend': {
@@ -2676,7 +2553,6 @@ function generatePreviewNodeCode(node, pointVar) {
                     code += generatePreviewNodeCode(child, warpPoint);
                     code += `    float ${varName} = ${childVar};\n`;
                     code += `    ${colorVar} = ${childColor};\n`;
-                    code += `    ${depthVar} = ${childDepth};\n`;
                     break;
                 }
                 case 'opSymX': {
@@ -2686,7 +2562,6 @@ function generatePreviewNodeCode(node, pointVar) {
                     code += generatePreviewNodeCode(child, warpPoint);
                     code += `    float ${varName} = ${childVar};\n`;
                     code += `    ${colorVar} = ${childColor};\n`;
-                    code += `    ${depthVar} = ${childDepth};\n`;
                     break;
                 }
             }
@@ -2881,9 +2756,6 @@ function createShaderProgram(sdfCode) {
         uniform int u_colorMode;
         uniform int u_lightingMode;
         uniform float u_paletteIndex;
-        uniform bool u_outlineMode; // true = dual-pass, false = single-pass
-        uniform int u_mainSteps;
-        uniform int u_outlineSteps;
         
         ${sdfCode}
         
@@ -2944,22 +2816,10 @@ function createShaderProgram(sdfCode) {
             float t = 0.0;
             vec3 background = vec3(0.05, 0.05, 0.06);
             vec3 col = background;
-            bool nearSelection = false;
-            float minDistToSelected = 1e20;
             
-            // Main raymarch pass - use dynamic step count
-            for (int i = 0; i < 200; i++) {
-                if (i >= u_mainSteps) break;
-                
+            for (int i = 0; i < 100; i++) {
                 vec3 p = ro + rd * t;
-                distToSelected = 1e20;
                 float d = sceneSDF(p);
-                
-                // Single-pass mode: track if we get close to selected during main pass
-                if (!u_outlineMode && u_outlineEnabled && distToSelected < 0.02) {
-                    nearSelection = true;
-                    minDistToSelected = min(minDistToSelected, distToSelected);
-                }
                 
                 if (d < 0.001) {
                     vec3 surfaceColor = resolveSurfaceColor();
@@ -2972,9 +2832,8 @@ function createShaderProgram(sdfCode) {
                         vec3 rim = pow(max(dot(n, rd), 0.0), 2.0) * vec3(0.2, 0.3, 0.45);
                         col = surfaceColor * (diff + amb) + spec * vec3(1.0) * 0.2 + rim;
                     } else {
-                        // Per-object depth based on distance from object origin
-                        float depthFactor = clamp(exp(-0.5 * g_lastDepth), 0.0, 1.0);
-                        float lightAmount = mix(0.2, 1.0, depthFactor);
+                        float depthFactor = clamp(exp(-0.15 * t), 0.0, 1.0);
+                        float lightAmount = mix(0.35, 1.0, depthFactor);
                         col = surfaceColor * lightAmount;
                     }
                     break;
@@ -2984,36 +2843,6 @@ function createShaderProgram(sdfCode) {
                     break;
                 }
                 t += d;
-            }
-
-            // Dual-pass mode: separate outline raymarch with dynamic step count
-            if (u_outlineMode && u_outlineEnabled) {
-                distToSelected = 1e20;
-                t = 0.0;
-                for (int i = 0; i < 200; i++) {
-                    if (i >= u_outlineSteps) break;
-                    
-                    vec3 p = ro + rd * t;
-                    float _ = sceneSDF(p);
-                    if (distToSelected < 0.001) {
-                        break;
-                    }
-                    if (t > 20.0) {
-                        break;
-                    }
-                    t += distToSelected;
-                }
-                minDistToSelected = distToSelected;
-            }
-
-            // Draw outline if within range
-            if (u_outlineEnabled && minDistToSelected > 0.001 && minDistToSelected < 0.02) {
-                col = vec3(1.0, 0.8, 0.0); // Gold/yellow to match node selection
-            }
-            
-            // Single-pass mode: also draw outline if we got near during main pass but didn't hit anything
-            if (!u_outlineMode && nearSelection && col == background) {
-                col = vec3(1.0, 0.8, 0.0);
             }
             
             gl_FragColor = vec4(col, 1.0);
@@ -3082,11 +2911,6 @@ function cacheUniformLocations() {
     uniformLocations['u_colorMode'] = gl.getUniformLocation(program, 'u_colorMode');
     uniformLocations['u_lightingMode'] = gl.getUniformLocation(program, 'u_lightingMode');
     uniformLocations['u_paletteIndex'] = gl.getUniformLocation(program, 'u_paletteIndex');
-    uniformLocations['u_selectedID'] = gl.getUniformLocation(program, 'u_selectedID');
-    uniformLocations['u_outlineEnabled'] = gl.getUniformLocation(program, 'u_outlineEnabled');
-    uniformLocations['u_outlineMode'] = gl.getUniformLocation(program, 'u_outlineMode');
-    uniformLocations['u_mainSteps'] = gl.getUniformLocation(program, 'u_mainSteps');
-    uniformLocations['u_outlineSteps'] = gl.getUniformLocation(program, 'u_outlineSteps');
     
     perfLogDuration('cacheUniformLocations', t0, `uniforms=${uniformCount}`);
 }
@@ -3167,34 +2991,6 @@ function applyRenderModeUniforms() {
     if (lightingLoc) {
         gl.uniform1i(lightingLoc, renderModeState.lightingMode === LIGHTING_MODES.DEPTH ? 1 : 0);
     }
-    
-    // Update outline uniforms
-    const outlineEnabledLoc = uniformLocations['u_outlineEnabled'];
-    if (outlineEnabledLoc) {
-        gl.uniform1i(outlineEnabledLoc, outlineEnabled ? 1 : 0);
-    }
-    const outlineModeLoc = uniformLocations['u_outlineMode'];
-    if (outlineModeLoc) {
-        gl.uniform1i(outlineModeLoc, outlineMode === 'dual' ? 1 : 0);
-    }
-    
-    // Update raymarch step counts
-    const mainStepsLoc = uniformLocations['u_mainSteps'];
-    if (mainStepsLoc) {
-        gl.uniform1i(mainStepsLoc, mainRaymarchSteps);
-    }
-    const outlineStepsLoc = uniformLocations['u_outlineSteps'];
-    if (outlineStepsLoc) {
-        gl.uniform1i(outlineStepsLoc, outlineRaymarchSteps);
-    }
-    
-    // Update selected node ID
-    const selectedIDLoc = uniformLocations['u_selectedID'];
-    if (selectedIDLoc) {
-        const selectedNode = document.querySelector('.node.selected');
-        const selectedID = selectedNode && nodeIdMap.has(selectedNode) ? nodeIdMap.get(selectedNode) : 0;
-        gl.uniform1i(selectedIDLoc, selectedID);
-    }
 }
 
 function renderPreview(prevTimestamp, rafTimestamp) {
@@ -3203,12 +2999,7 @@ function renderPreview(prevTimestamp, rafTimestamp) {
     const frameTimestamp = typeof rafTimestamp === 'number' ? rafTimestamp : performance.now();
     applyRenderModeUniforms();
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    
-    // Only update FPS for RAF frames (not event-triggered renders)
-    if (typeof rafTimestamp === 'number') {
-        updateFps(frameTimestamp);
-    }
-    
+    updateFps(frameTimestamp);
     const renderEnd = perfLogDuration('renderPreview', perfStart);
     if (typeof prevTimestamp === 'number') {
         const total = renderEnd - prevTimestamp + (prevTimestamp - perfStart);
@@ -3283,11 +3074,9 @@ function updateFps(frameTimestamp) {
         const delta = frameTimestamp - lastFrameTimestamp;
         if (delta > 0) {
             const instant = 1000 / delta;
-            // Use stronger smoothing for more stable FPS display
-            smoothedFps = smoothedFps ? (smoothedFps * 0.9 + instant * 0.1) : instant;
-            // Update display every 250ms
+            smoothedFps = smoothedFps ? (smoothedFps * 0.85 + instant * 0.15) : instant;
             if (!lastFpsUpdate || frameTimestamp - lastFpsUpdate > 250) {
-                previewFpsDisplay.textContent = `FPS: ${Math.round(smoothedFps)}`;
+                previewFpsDisplay.textContent = `FPS: ${smoothedFps.toFixed(1)}`;
                 lastFpsUpdate = frameTimestamp;
             }
         }
