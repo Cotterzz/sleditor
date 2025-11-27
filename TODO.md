@@ -3,11 +3,12 @@
 ## CURRENT ISSUES/WORK
 
 
-
-
-
-
 CSS refactoring
+
+## SDF Editor
+FPS
+named nodes in output code
+colored nodes
 
 ## BUGS&FIXES
 
