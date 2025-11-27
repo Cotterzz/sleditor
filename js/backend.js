@@ -78,9 +78,9 @@ export function init() {
         } else if (event === 'SIGNED_OUT') {
             onUserSignedOut();
         } else if (event === 'INITIAL_SESSION' && !session) {
-            // No session on initial load - populate gallery with localStorage/examples
+            // No session on initial load - show SOTW for non-logged-in users
             if (window.save && window.save.populateGallery) {
-                window.save.populateGallery('my', false); // Use cache if available
+                window.save.populateGallery('sotw', false); // Default to SOTW for guests
             }
         }
     });
@@ -486,6 +486,58 @@ export async function loadExamples() {
 
     } catch (error) {
         console.error('Load examples error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Load shader of the week entries (latest first)
+ * @returns {Object} { success, entries, error }
+ */
+export async function loadSotwEntries() {
+    if (!supabase) {
+        return { success: false, error: 'Supabase not initialized' };
+    }
+    
+    try {
+        const result = await supabase
+            .from('shader_of_the_week')
+            .select(`
+                *,
+                shader:shaders(*)
+            `)
+            .order('feature_date', { ascending: false });
+        
+        if (result.error) throw result.error;
+        
+        const entries = [];
+        for (const entry of result.data) {
+            const shader = entry.shader;
+            if (!shader) continue;
+            
+            const codeTypes = shader.code_types || [];
+            const hasGraphicsTab = codeTypes.includes('graphics');
+            const isWGSL = hasGraphicsTab && (shader.code?.wgsl_graphics || shader.code?.graphics) && !shader.code?.glsl_fragment;
+            const needsWebGPU = codeTypes.some(t => t === 'wgsl_graphics' || t === 'wgsl_audio' || t === 'audio_gpu') || isWGSL;
+            if (needsWebGPU && !state.hasWebGPU) {
+                continue;
+            }
+            
+            entries.push({
+                feature_date: entry.feature_date,
+                shader: {
+                    ...shader,
+                    feature_date: entry.feature_date
+                }
+            });
+        }
+        
+        const estimatedBytes = JSON.stringify(entries).length;
+        trackBandwidth('api', estimatedBytes);
+        
+        return { success: true, entries };
+    } catch (error) {
+        console.error('Load SOTW error:', error);
         return { success: false, error: error.message };
     }
 }

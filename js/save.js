@@ -31,10 +31,11 @@ export function captureThumbnail() {
 // ============================================================================
 
 let isPopulatingGallery = false;
-let currentGalleryTab = 'my'; // Track current tab
+let currentGalleryTab = 'sotw'; // Track current tab (default to SOTW)
 
 // Cache for each gallery tab
 let galleryCache = {
+    sotw: null,
     my: null,
     community: null,
     examples: null
@@ -105,8 +106,21 @@ export async function populateGallery(tab = currentGalleryTab, forceRefresh = fa
         
         galleryContent.innerHTML = '';
         
+        // ===== SHADER OF THE WEEK =====
+        if (tab === 'sotw') {
+            const result = await backend.loadSotwEntries();
+            if (result.success && result.entries.length > 0) {
+                galleryCache.sotw = result.entries;
+                renderSotwGallery(galleryContent, result.entries);
+            } else {
+                galleryCache.sotw = [];
+                renderSotwGallery(galleryContent, []);
+            }
+            return;
+        }
+        
         // ===== MY SHADERS TAB =====
-        if (tab === 'my') {
+        else if (tab === 'my') {
             if (isLoggedIn) {
                 // Load from database for logged-in users
                 const myResult = await backend.loadMyShaders();
@@ -214,9 +228,13 @@ function renderGalleryFromCache(container, tab) {
     container.innerHTML = '';
     
     const cached = galleryCache[tab];
+    if (tab === 'sotw') {
+        renderSotwGallery(container, cached || []);
+        return;
+    }
+    
     if (!cached || cached.length === 0) {
-        // Shouldn't happen, but handle it
-        populateGallery(tab, true); // Force refresh
+        populateGallery(tab, true);
         return;
     }
     
@@ -227,6 +245,117 @@ function renderGalleryFromCache(container, tab) {
         const item = createGalleryItem(shader, isMyTab && isLoggedIn);
         if (item) container.appendChild(item);
     });
+}
+
+function renderSotwGallery(container, entries) {
+    container.innerHTML = '';
+    
+    const wrapper = document.createElement('div');
+    wrapper.className = 'sotw-container';
+    container.appendChild(wrapper);
+    
+    if (!entries || entries.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'sotw-empty';
+        empty.innerHTML = `
+            <div style="font-size: 48px; margin-bottom: 10px;">✨</div>
+            <div>No Shader of the Week yet</div>
+        `;
+        wrapper.appendChild(empty);
+        return;
+    }
+    
+    const heroTitle = document.createElement('div');
+    heroTitle.className = 'sotw-section-title';
+    heroTitle.textContent = 'Shader of the Week';
+    wrapper.appendChild(heroTitle);
+    
+    const heroEntry = entries[0];
+    const hero = createSotwHero(heroEntry);
+    if (hero) {
+        wrapper.appendChild(hero);
+    }
+    
+    if (entries.length > 1) {
+        const listTitle = document.createElement('div');
+        listTitle.className = 'sotw-section-subtitle';
+        listTitle.textContent = 'Previous Shaders of the Week';
+        wrapper.appendChild(listTitle);
+        
+        const grid = document.createElement('div');
+        grid.className = 'sotw-list';
+        entries.slice(1).forEach(entry => {
+            const item = createGalleryItem(entry.shader, false);
+            if (item) {
+                item.classList.add('sotw-list-item');
+                grid.appendChild(item);
+            }
+        });
+        wrapper.appendChild(grid);
+    }
+}
+
+function createSotwHero(entry) {
+    const shader = entry.shader;
+    if (!shader) return null;
+    
+    const hero = document.createElement('div');
+    hero.className = 'sotw-hero';
+    hero.onclick = () => loadDatabaseShader(shader);
+    
+    const thumb = document.createElement('div');
+    thumb.className = 'sotw-hero-thumb';
+    
+    const thumbnailUrl = shader.thumbnail_url || shader.thumbnail;
+    if (thumbnailUrl) {
+        const img = document.createElement('img');
+        img.src = thumbnailUrl;
+        img.alt = shader.title || shader.name;
+        img.onerror = () => {
+            thumb.innerHTML = '<div>No Preview</div>';
+        };
+        thumb.appendChild(img);
+    } else {
+        thumb.innerHTML = '<div>No Preview</div>';
+    }
+    
+    const info = document.createElement('div');
+    info.className = 'sotw-hero-info';
+    
+    const badge = document.createElement('div');
+    badge.className = 'sotw-hero-badge';
+    badge.textContent = 'Shader of the Week';
+    info.appendChild(badge);
+    
+    const title = document.createElement('div');
+    title.className = 'sotw-hero-title';
+    title.textContent = shader.title || shader.name;
+    info.appendChild(title);
+    
+    if (shader.creator_name) {
+        const creator = document.createElement('div');
+        creator.className = 'sotw-hero-creator';
+        creator.textContent = `by ${shader.creator_name}`;
+        info.appendChild(creator);
+    }
+    
+    const date = document.createElement('div');
+    date.className = 'sotw-hero-date';
+    const formatted = entry.feature_date ? new Date(entry.feature_date).toLocaleDateString() : '';
+    date.textContent = formatted ? `Featured on ${formatted}` : 'Featured Shader';
+    info.appendChild(date);
+    
+    const stats = document.createElement('div');
+    stats.className = 'sotw-hero-stats';
+    stats.innerHTML = `
+        <span>👁️ ${shader.view_count || 0}</span>
+        <span>❤️ ${shader.like_count || 0}</span>
+    `;
+    info.appendChild(stats);
+    
+    hero.appendChild(thumb);
+    hero.appendChild(info);
+    return hero;
 }
 
 // Optimistic updates: Add shader to cache without refetch
@@ -569,8 +698,8 @@ export async function loadDatabaseShader(shader) {
         uniformControls.loadUniformConfig(null);
     }
     
-    const hasAudio = channels.hasAudioChannels();
-    if (hasAudio && !state.audioStartUnlocked) {
+    const hasMedia = channels.hasMediaChannels();
+    if (hasMedia && !state.mediaStartUnlocked) {
         ui.showAudioStartOverlay();
     } else {
         ui.hideAudioStartOverlay();

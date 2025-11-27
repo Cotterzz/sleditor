@@ -5,6 +5,7 @@
 import { state } from './core.js';
 import * as mediaLoader from './media-loader.js';
 import * as audioInput from './audio-input.js';
+import * as videoInput from './video-input.js';
 
 // Channel state
 const channelState = {
@@ -220,9 +221,62 @@ export async function createChannel(type, data) {
             channel.resolution = { width: 256, height: 256 };
         }
     } else if (type === 'video') {
-        // Video support - Phase 3
-        console.log('Video channels not yet implemented');
-        return -1;
+        // Load video texture
+        let gl = state.glContext;
+        if (!gl) {
+            console.warn('state.glContext not set, trying to get from canvas...');
+            gl = state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl');
+        }
+        
+        if (!gl) {
+            console.error('WebGL context not available for video channel');
+            return -1;
+        }
+        
+        console.log(`Creating video channel ${channelNumber}: WebGL context available:`, !!gl);
+        
+        try {
+            if (data.mediaId) {
+                // User selected a specific video file
+                const mediaInfo = mediaLoader.getMediaInfo(data.mediaId);
+                if (mediaInfo) {
+                    const videoData = await videoInput.loadVideoChannel(gl, mediaInfo.path);
+                    channel.texture = videoData.texture;
+                    channel.videoData = videoData;
+                    channel.resolution = { width: videoData.width, height: videoData.height };
+                    channel.mediaId = data.mediaId;
+                    
+                    // Set loop if specified
+                    if (data.loop !== undefined) {
+                        videoInput.setVideoLoop(channel, data.loop);
+                    }
+                    
+                    console.log(`✓ Video channel loaded: ${mediaInfo.name} (${videoData.width}×${videoData.height})`);
+                } else {
+                    // MediaId not found, use fallback
+                    channel.texture = mediaLoader.createFallbackTexture(gl);
+                    channel.resolution = { width: 256, height: 256 };
+                    channel.mediaId = null;
+                }
+            } else {
+                // No media selected yet - use fallback silently
+                channel.texture = mediaLoader.createFallbackTexture(gl);
+                channel.resolution = { width: 256, height: 256 };
+                channel.mediaId = null;
+            }
+        } catch (error) {
+            console.error('Failed to load video:', error);
+            channel.texture = mediaLoader.createFallbackTexture(gl);
+            channel.resolution = { width: 256, height: 256 };
+            channel.mediaId = null;
+        }
+        
+        // Auto-play if shader is running and media start unlocked
+        if (channel.videoData && state.isPlaying && state.mediaStartUnlocked) {
+            videoInput.playVideoChannel(channel).catch(err => {
+                console.warn(`Failed to auto-play video channel ch${channelNumber}:`, err);
+            });
+        }
     } else if (type === 'audio') {
         // Load audio texture
         let gl = state.glContext;
@@ -275,8 +329,8 @@ export async function createChannel(type, data) {
             channel.resolution = { width, height };
         }
         
-        // Auto-play if shader is running and audio start unlocked
-        if (channel.audioData && state.isPlaying && state.audioStartUnlocked) {
+        // Auto-play if shader is running and media start unlocked
+        if (channel.audioData && state.isPlaying && state.mediaStartUnlocked) {
             audioInput.playAudioChannel(channel.audioData).catch(err => {
                 console.warn(`Failed to auto-play audio channel ch${channelNumber}:`, err);
             });
@@ -312,6 +366,11 @@ export function deleteChannel(channelNumber) {
     // Cleanup audio resources
     if (channel.type === 'audio' && channel.audioData) {
         audioInput.cleanupAudioChannel(channel.audioData);
+    }
+    
+    // Cleanup video resources
+    if (channel.type === 'video' && channel.videoData) {
+        videoInput.cleanupVideoChannel(channel);
     }
     
     // Cleanup WebGL resources
@@ -585,7 +644,9 @@ export function getChannelConfig() {
             filter: ch.filter,
             anisotropic: ch.anisotropic,
             // Include audio options
-            audioMode: ch.audioMode
+            audioMode: ch.audioMode,
+            // Include video options
+            loop: ch.videoData?.loop || false
         }))
     };
 }
@@ -600,6 +661,20 @@ export function resetChannels() {
             // Cleanup audio resources
             if (ch.type === 'audio' && ch.audioData) {
                 audioInput.cleanupAudioChannel(ch.audioData);
+            }
+            
+            // Cleanup video resources
+            if (ch.type === 'video' && ch.videoData) {
+                videoInput.cleanupVideoChannel(ch);
+            }
+            
+            // Remove UI container if it exists
+            if (ch.tabName) {
+                const container = document.getElementById(`${ch.tabName}Container`);
+                if (container) {
+                    console.log(`  Removing UI container for ${ch.tabName}`);
+                    container.remove();
+                }
             }
             
             // Cleanup WebGL textures
@@ -733,6 +808,11 @@ export async function loadChannelConfig(config) {
                 audioInput.cleanupAudioChannel(ch.audioData);
             }
             
+            // Cleanup video resources
+            if (ch.type === 'video' && ch.videoData) {
+                videoInput.cleanupVideoChannel(ch);
+            }
+            
             // Cleanup WebGL textures
             const gl = state.glContext;
             if (gl) {
@@ -756,8 +836,8 @@ export async function loadChannelConfig(config) {
     // Sort channels by number to recreate them in order
     const sortedChannels = [...config.channels].sort((a, b) => a.number - b.number);
     
-    // Ensure WebGL is initialized before creating ANY channels (images OR audio need it!)
-    const needsWebGL = sortedChannels.some(ch => ch.number !== 0 && (ch.type === 'image' || ch.type === 'audio'));
+    // Ensure WebGL is initialized before creating ANY channels (images, videos, or audio need it!)
+    const needsWebGL = sortedChannels.some(ch => ch.number !== 0 && (ch.type === 'image' || ch.type === 'audio' || ch.type === 'video'));
     if (needsWebGL) {
         // Always ensure WebGL is available and properly initialized
         if (!state.glContext || !state.hasWebGL) {
@@ -807,6 +887,48 @@ export async function loadChannelConfig(config) {
                 mediaId: ch.mediaId,
                 tabName: ch.tabName,
                 audioMode: ch.audioMode || 'shadertoy'
+            });
+            
+            // Add tab to active tabs if channel was created successfully
+            if (channelNumber !== -1 && ch.tabName) {
+                if (!state.activeTabs.includes(ch.tabName)) {
+                    state.activeTabs.push(ch.tabName);
+                }
+                
+                // IMPORTANT: Force recreation of the selector UI by removing old container
+                const oldContainer = document.getElementById(`${ch.tabName}Container`);
+                if (oldContainer) {
+                    console.log(`  Removing stale container for ${ch.tabName}`);
+                    oldContainer.remove();
+                }
+            }
+        } else if (ch.type === 'video' && ch.mediaId) {
+            // Re-register external video if needed
+            if (ch.mediaId.startsWith('guc:')) {
+                const userPath = ch.mediaId.substring(4);
+                const fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+                const filename = userPath.split('/').pop();
+                const title = filename.replace(/\.(mp4|webm|ogv|mov)$/i, '');
+                
+                const mediaInfo = {
+                    id: ch.mediaId,
+                    type: 'video',
+                    name: title,
+                    path: fullUrl,
+                    thumb: null, // No thumbnail for external videos
+                    source: 'guc',
+                    url: fullUrl,
+                    userPath: userPath
+                };
+                
+                mediaLoader.registerExternalMedia(mediaInfo);
+                console.log(`✓ Re-registered external video: ${ch.mediaId}`);
+            }
+            
+            const channelNumber = await createChannel('video', {
+                mediaId: ch.mediaId,
+                tabName: ch.tabName,
+                loop: ch.loop || false
             });
             
             // Add tab to active tabs if channel was created successfully
@@ -979,8 +1101,8 @@ export function playAudioChannels() {
     if (audioChannels.length === 0) {
         return Promise.resolve();
     }
-    if (!state.audioStartUnlocked) {
-        return Promise.reject(new Error('Audio start locked'));
+    if (!state.mediaStartUnlocked) {
+        return Promise.reject(new Error('Media start locked'));
     }
     return Promise.all(audioChannels.map(ch => audioInput.playAudioChannel(ch.audioData)));
 }
@@ -1004,6 +1126,59 @@ export function restartAudioChannels(shouldPlay = state.isPlaying) {
     }
     pauseAudioChannels();
     return Promise.resolve();
+}
+
+/**
+ * Update all video channel textures (called each frame)
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ */
+export function updateVideoTextures(gl) {
+    getVideoChannels()
+        .filter(ch => ch.videoData.playing)
+        .forEach(ch => {
+            videoInput.updateVideoTexture(gl, ch.texture, ch.videoData.video);
+        });
+}
+
+function getVideoChannels() {
+    return channelState.channels.filter(ch => ch.type === 'video' && ch.videoData);
+}
+
+export function hasVideoChannels() {
+    return getVideoChannels().length > 0;
+}
+
+export function playVideoChannels() {
+    const videoChannels = getVideoChannels();
+    if (videoChannels.length === 0) {
+        return Promise.resolve();
+    }
+    if (!state.mediaStartUnlocked) {
+        return Promise.reject(new Error('Media start locked'));
+    }
+    return Promise.all(videoChannels.map(ch => videoInput.playVideoChannel(ch)));
+}
+
+export function pauseVideoChannels() {
+    getVideoChannels().forEach(ch => {
+        videoInput.pauseVideoChannel(ch);
+    });
+}
+
+export function restartVideoChannels(shouldPlay = state.isPlaying) {
+    const videoChannels = getVideoChannels();
+    videoChannels.forEach(ch => {
+        videoInput.restartVideoChannel(ch);
+    });
+    if (shouldPlay) {
+        return playVideoChannels();
+    }
+    pauseVideoChannels();
+    return Promise.resolve();
+}
+
+export function hasMediaChannels() {
+    return hasAudioChannels() || hasVideoChannels();
 }
 
 // Expose limited debugging helpers

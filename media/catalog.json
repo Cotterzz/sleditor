@@ -105,7 +105,17 @@
         "height": 1024
     }
   ],
-  "videos": [],
+  "videos": [
+    {
+        "id": "video1",
+        "name": "Woman presents greenscreen",
+        "path": "media/video/woman.mp4",
+        "thumb": "media/video/woman.png",
+        "duration": 11,
+        "width": 1920,
+        "height": 1080
+    }
+  ],
   "audio": [
     {
       "id": "audio1",
