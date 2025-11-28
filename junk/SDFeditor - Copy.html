@@ -467,8 +467,6 @@
     <div class="menu-item primitive" data-type="CutHollowSphere">Cut Hollow Sphere</div>
     <div class="menu-item primitive" data-type="DeathStar">Death Star</div>
     <div class="menu-item primitive" data-type="VesicaSegment">Vesica Segment</div>
-    <div class="menu-item primitive" data-type="Mandelbulb">Mandelbulb</div>
-    <div class="menu-item primitive" data-type="Supershape3D">Supershape 3D</div>
     
     <h3>Operations</h3>
     <div class="menu-item operation" data-type="opUnion">Union</div>
@@ -486,7 +484,6 @@
     <div class="menu-item modifier" data-type="opElongate">Elongate</div>
     <div class="menu-item modifier" data-type="opCheapBend">Cheap Bend</div>
     <div class="menu-item modifier" data-type="opSymX">Mirror X</div>
-    <div class="menu-item modifier" data-type="opRepeat">Repeat (Infinite)</div>
 </div>
 
 <div id="paramPanel">
@@ -667,27 +664,6 @@ const NODE_TYPES = {
             width: { default: 0.25, min: 0.01, max: 3.0, step: 0.01 }
         }
     },
-    Mandelbulb: {
-        category: 'primitive',
-        maxChildren: 0,
-        params: {
-            power: { default: 8.0, min: 2.0, max: 16.0, step: 0.5 },
-            iterations: { default: 20.0, min: 5.0, max: 50.0, step: 1.0 }
-        }
-    },
-    Supershape3D: {
-        category: 'primitive',
-        maxChildren: 0,
-        params: {
-            size: { default: 1.0, min: 0.1, max: 3.0, step: 0.05 },
-            m: { default: 4.0, min: 1.0, max: 20.0, step: 0.5 },
-            n1: { default: 1.0, min: 0.1, max: 10.0, step: 0.1 },
-            n2: { default: 1.0, min: 0.1, max: 10.0, step: 0.1 },
-            n3: { default: 1.0, min: 0.1, max: 10.0, step: 0.1 },
-            a: { default: 1.0, min: 0.1, max: 3.0, step: 0.1 },
-            b: { default: 1.0, min: 0.1, max: 3.0, step: 0.1 }
-        }
-    },
     opUnion: {
         category: 'operation',
         maxChildren: 2,
@@ -770,15 +746,6 @@ const NODE_TYPES = {
         category: 'modifier',
         maxChildren: 1,
         params: {}
-    },
-    opRepeat: {
-        category: 'modifier',
-        maxChildren: 1,
-        params: {
-            spacingX: { default: 2.0, min: 0.1, max: 10.0, step: 0.1 },
-            spacingY: { default: 2.0, min: 0.1, max: 10.0, step: 0.1 },
-            spacingZ: { default: 2.0, min: 0.1, max: 10.0, step: 0.1 }
-        }
     }
 };
 
@@ -2283,16 +2250,6 @@ function generateExportNodeCode(node, pointVar) {
                     code += `    float ${varName} = ${childVar};\n`;
                     break;
                 }
-                case 'opRepeat': {
-                    const warpPoint = `${varName}_warp`;
-                    const sx = Number(params.spacingX ?? 2.0).toFixed(3);
-                    const sy = Number(params.spacingY ?? 2.0).toFixed(3);
-                    const sz = Number(params.spacingZ ?? 2.0).toFixed(3);
-                    code += `    vec3 ${warpPoint} = mod(${transformedPoint} + 0.5 * vec3(${sx}, ${sy}, ${sz}), vec3(${sx}, ${sy}, ${sz})) - 0.5 * vec3(${sx}, ${sy}, ${sz});\n`;
-                    code += generateExportNodeCode(child, warpPoint);
-                    code += `    float ${varName} = ${childVar};\n`;
-                    break;
-                }
             }
         }
     }
@@ -2581,12 +2538,6 @@ function generatePreviewNodeCode(node, pointVar) {
             case 'VesicaSegment':
                 code += `    float ${varName} = sdVesicaSegment(${transformedPoint}, vec3(${prefix}_ax, ${prefix}_ay, ${prefix}_az), vec3(${prefix}_bx, ${prefix}_by, ${prefix}_bz), ${prefix}_width);\n`;
                 break;
-            case 'Mandelbulb':
-                code += `    float ${varName} = sdMandelbulb(${transformedPoint}, ${prefix}_power, ${prefix}_iterations);\n`;
-                break;
-            case 'Supershape3D':
-                code += `    float ${varName} = sdSupershape3D(${transformedPoint}, ${prefix}_size, ${prefix}_m, ${prefix}_n1, ${prefix}_n2, ${prefix}_n3, ${prefix}_a, ${prefix}_b);\n`;
-                break;
         }
         code += `    ${varName} *= ${scaleVar};\n`;
         code += `    ${colorVar} = ${nodeColorLiteral};\n`;
@@ -2732,15 +2683,6 @@ function generatePreviewNodeCode(node, pointVar) {
                     const warpPoint = `${varName}_warp`;
                     code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
                     code += `    ${warpPoint}.x = abs(${warpPoint}.x);\n`;
-                    code += generatePreviewNodeCode(child, warpPoint);
-                    code += `    float ${varName} = ${childVar};\n`;
-                    code += `    ${colorVar} = ${childColor};\n`;
-                    code += `    ${depthVar} = ${childDepth};\n`;
-                    break;
-                }
-                case 'opRepeat': {
-                    const warpPoint = `${varName}_warp`;
-                    code += `    vec3 ${warpPoint} = mod(${transformedPoint} + 0.5 * vec3(${prefix}_spacingX, ${prefix}_spacingY, ${prefix}_spacingZ), vec3(${prefix}_spacingX, ${prefix}_spacingY, ${prefix}_spacingZ)) - 0.5 * vec3(${prefix}_spacingX, ${prefix}_spacingY, ${prefix}_spacingZ);\n`;
                     code += generatePreviewNodeCode(child, warpPoint);
                     code += `    float ${varName} = ${childVar};\n`;
                     code += `    ${colorVar} = ${childColor};\n`;
@@ -2896,77 +2838,6 @@ mat3 rotateY(float a) {
 mat3 rotateZ(float a) {
     float c = cos(a), s = sin(a);
     return mat3(c, -s, 0, s, c, 0, 0, 0, 1);
-}
-
-// === Experimental Shapes ===
-
-// Cart2Polar for Mandelbulb
-vec3 cart2polar(in vec3 st) {
-    float r = length(st);
-    float phi = acos(st.z / r);
-    float theta = atan(st.y, st.x);
-    return vec3(r, phi, theta);
-}
-
-// Mandelbulb SDF
-float sdMandelbulb(in vec3 st, float power, float maxIterations) {
-    vec3 zeta = st;
-    float m = dot(st, st);
-    float dz = 1.0;
-    int iterations = int(maxIterations);
-    
-    for (int i = 0; i < 50; i++) {
-        if (i >= iterations) break;
-        
-        dz = power * pow(m, 3.5) * dz + 1.0;
-        vec3 sphericalZ = cart2polar(zeta);
-        float newx = pow(sphericalZ.x, power) * sin(sphericalZ.y * power) * cos(sphericalZ.z * power);
-        float newy = pow(sphericalZ.x, power) * sin(sphericalZ.y * power) * sin(sphericalZ.z * power);
-        float newz = pow(sphericalZ.x, power) * cos(sphericalZ.y * power);
-        zeta.x = newx + st.x;
-        zeta.y = newy + st.y;
-        zeta.z = newz + st.z;
-        
-        m = dot(zeta, zeta);
-        if (m > 2.0) break;
-    }
-    
-    // Distance estimation through the Hubbard-Douady potential
-    return 0.25 * log(m) * sqrt(m) / dz;
-}
-
-// Supershape helpers
-vec3 Spherical(vec3 pos) {
-    float r = sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
-    float theta = pos.z / r;
-    float phi = atan(pos.y, pos.x);
-    vec3 w = vec3(r, theta, phi);
-    return w;
-}
-
-float superFormula(float theta, float m, float n1, float n2, float n3, float a, float b) {
-    float t1 = abs((1.0 / a) * cos(m * theta / 4.0));
-    t1 = pow(t1, n2);
-    
-    float t2 = abs((1.0 / b) * sin(m * theta / 4.0));
-    t2 = pow(t2, n3);
-    
-    float t3 = t1 + t2;
-    float rr = pow(t3, -1.0 / n1);
-    return rr;
-}
-
-float sdSupershape3D(vec3 p, float size, float m, float n1, float n2, float n3, float a, float b) {
-    float r = Spherical(p).x;
-    float theta = Spherical(p).y;
-    float phi = Spherical(p).z;
-    float r1 = superFormula(phi, m, n1, n2, n3, a, b);
-    float r2 = superFormula(theta, m, n1, n2, n3, a, b);
-    float d1 = size * r1 * cos(phi) * r2 * cos(theta);
-    float d2 = size * r1 * sin(phi) * r2 * cos(theta);
-    float d3 = size * r2 * sin(theta);
-    vec3 q = vec3(d1, d2, d3);
-    return r - length(q);
 }
 
 `;
