@@ -1083,7 +1083,10 @@ export function updateAudioTextures(gl) {
                 ch.texture, 
                 ch.audioData.analyser, 
                 ch.resolution.width, 
-                ch.resolution.height
+                ch.resolution.height,
+                ch.audioMode || 'shadertoy',  // Pass mode for routing
+                ch.audioData.previousFrame,   // Pass previous frame for delta calculation
+                ch.audioData.temporalAverage  // Pass temporal average for blue channel
             );
         });
 }

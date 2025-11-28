@@ -202,6 +202,233 @@ const GLSL_MONARCH_TOKENS = {
 };
 
 // ============================================================================
+// Shader Library (sl.) Autocomplete
+// ============================================================================
+
+const SHADER_LIBRARY = [
+    {
+        name: 'hash',
+        signature: 'float hash(vec2 p)',
+        description: 'Simple 2D hash function. Returns pseudo-random value based on input coordinates.',
+        insertText: 'hash(${1:p})',
+        detail: 'sl.hash(vec2) → float'
+    },
+    {
+        name: 'hash',
+        signature: 'vec2 hash(vec3 p)',
+        description: 'Simple 3D hash function. Returns pseudo-random vec2 based on input coordinates.',
+        insertText: 'hash(${1:p})',
+        detail: 'sl.hash(vec3) → vec2'
+    },
+    {
+        name: 'hsl2rgb',
+        signature: 'vec3 hsl2rgb(vec3 hsl)',
+        description: 'Converts HSL color to RGB. Input: (hue, saturation, lightness)',
+        insertText: 'hsl2rgb(${1:hsl})',
+        detail: 'sl.hsl2rgb(vec3) → vec3'
+    },
+    {
+        name: 'rgb2hsl',
+        signature: 'vec3 rgb2hsl(vec3 rgb)',
+        description: 'Converts RGB color to HSL. Returns (hue, saturation, lightness)',
+        insertText: 'rgb2hsl(${1:rgb})',
+        detail: 'sl.rgb2hsl(vec3) → vec3'
+    },
+    {
+        name: 'noise',
+        signature: 'float noise(vec2 p)',
+        description: 'Smooth 2D noise function using interpolated hash values.',
+        insertText: 'noise(${1:p})',
+        detail: 'sl.noise(vec2) → float'
+    },
+    {
+        name: 'fbm',
+        signature: 'float fbm(vec2 p, int octaves)',
+        description: 'Fractional Brownian Motion. Layered noise with decreasing amplitude.',
+        insertText: 'fbm(${1:p}, ${2:octaves})',
+        detail: 'sl.fbm(vec2, int) → float'
+    },
+    {
+        name: 'rotate2D',
+        signature: 'vec2 rotate2D(vec2 p, float angle)',
+        description: 'Rotates a 2D point around origin by angle (in radians).',
+        insertText: 'rotate2D(${1:p}, ${2:angle})',
+        detail: 'sl.rotate2D(vec2, float) → vec2'
+    },
+    {
+        name: 'sdf_circle',
+        signature: 'float sdf_circle(vec2 p, float r)',
+        description: 'Signed distance function for a circle. Returns distance to circle edge.',
+        insertText: 'sdf_circle(${1:p}, ${2:r})',
+        detail: 'sl.sdf_circle(vec2, float) → float'
+    },
+    {
+        name: 'sdf_box',
+        signature: 'float sdf_box(vec2 p, vec2 size)',
+        description: 'Signed distance function for a box. Returns distance to box edge.',
+        insertText: 'sdf_box(${1:p}, ${2:size})',
+        detail: 'sl.sdf_box(vec2, vec2) → float'
+    },
+    {
+        name: 'palette',
+        signature: 'vec3 palette(float t, vec3 a, vec3 b, vec3 c, vec3 d)',
+        description: 'Cosine palette generator. Creates smooth color gradients using cosine waves.',
+        insertText: 'palette(${1:t}, ${2:a}, ${3:b}, ${4:c}, ${5:d})',
+        detail: 'sl.palette(float, vec3, vec3, vec3, vec3) → vec3'
+    }
+];
+
+function registerShaderLibraryAutocomplete() {
+    // Register for GLSL language
+    monaco.languages.registerCompletionItemProvider('glsl', {
+        triggerCharacters: ['.'],
+        provideCompletionItems: (model, position) => {
+            const textUntilPosition = model.getValueInRange({
+                startLineNumber: position.lineNumber,
+                startColumn: 1,
+                endLineNumber: position.lineNumber,
+                endColumn: position.column
+            });
+            
+            // Check if we just typed "sl."
+            const match = textUntilPosition.match(/\bsl\.(\w*)$/);
+            if (!match) {
+                return { suggestions: [] };
+            }
+            
+            const word = match[1]; // The partial function name after "sl."
+            const range = {
+                startLineNumber: position.lineNumber,
+                endLineNumber: position.lineNumber,
+                startColumn: position.column - word.length,
+                endColumn: position.column
+            };
+            
+            // Create suggestions for all library functions
+            const suggestions = SHADER_LIBRARY.map(func => ({
+                label: func.name,
+                kind: monaco.languages.CompletionItemKind.Function,
+                detail: func.detail,
+                documentation: {
+                    value: `**${func.signature}**\n\n${func.description}`
+                },
+                insertText: func.insertText,
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                range: range
+            }));
+            
+            return { suggestions };
+        }
+    });
+    
+    // Register hover provider for GLSL
+    monaco.languages.registerHoverProvider('glsl', {
+        provideHover: (model, position) => {
+            const word = model.getWordAtPosition(position);
+            if (!word) return null;
+            
+            const line = model.getLineContent(position.lineNumber);
+            const beforeWord = line.substring(0, word.startColumn - 1);
+            
+            // Check if this word is preceded by "sl."
+            if (!beforeWord.endsWith('sl.')) return null;
+            
+            // Find matching function(s) in library
+            const matches = SHADER_LIBRARY.filter(func => func.name === word.word);
+            if (matches.length === 0) return null;
+            
+            // Build hover content with all overloads
+            const contents = matches.map(func => ({
+                value: `**${func.signature}**\n\n${func.description}`
+            }));
+            
+            return {
+                range: new monaco.Range(
+                    position.lineNumber,
+                    word.startColumn,
+                    position.lineNumber,
+                    word.endColumn
+                ),
+                contents: contents
+            };
+        }
+    });
+    
+    // Register for WGSL language too (if you want the library available in WGSL shaders)
+    monaco.languages.registerCompletionItemProvider('wgsl', {
+        triggerCharacters: ['.'],
+        provideCompletionItems: (model, position) => {
+            const textUntilPosition = model.getValueInRange({
+                startLineNumber: position.lineNumber,
+                startColumn: 1,
+                endLineNumber: position.lineNumber,
+                endColumn: position.column
+            });
+            
+            const match = textUntilPosition.match(/\bsl\.(\w*)$/);
+            if (!match) {
+                return { suggestions: [] };
+            }
+            
+            const word = match[1];
+            const range = {
+                startLineNumber: position.lineNumber,
+                endLineNumber: position.lineNumber,
+                startColumn: position.column - word.length,
+                endColumn: position.column
+            };
+            
+            const suggestions = SHADER_LIBRARY.map(func => ({
+                label: func.name,
+                kind: monaco.languages.CompletionItemKind.Function,
+                detail: func.detail,
+                documentation: {
+                    value: `**${func.signature}**\n\n${func.description}`
+                },
+                insertText: func.insertText,
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                range: range
+            }));
+            
+            return { suggestions };
+        }
+    });
+    
+    // Register hover provider for WGSL
+    monaco.languages.registerHoverProvider('wgsl', {
+        provideHover: (model, position) => {
+            const word = model.getWordAtPosition(position);
+            if (!word) return null;
+            
+            const line = model.getLineContent(position.lineNumber);
+            const beforeWord = line.substring(0, word.startColumn - 1);
+            
+            // Check if this word is preceded by "sl."
+            if (!beforeWord.endsWith('sl.')) return null;
+            
+            // Find matching function(s) in library
+            const matches = SHADER_LIBRARY.filter(func => func.name === word.word);
+            if (matches.length === 0) return null;
+            
+            // Build hover content with all overloads
+            const contents = matches.map(func => ({
+                value: `**${func.signature}**\n\n${func.description}`
+            }));
+            
+            return {
+                range: new monaco.Range(
+                    position.lineNumber,
+                    word.startColumn,
+                    position.lineNumber,
+                    word.endColumn
+                ),
+                contents: contents
+            };
+        }
+    });
+}
+
+// ============================================================================
 // Monaco Initialization
 // ============================================================================
 
@@ -217,6 +444,9 @@ export async function initMonaco(callback, initialCode, helpContent) {
             monaco.languages.register({ id: 'glsl' });
             monaco.languages.setLanguageConfiguration('glsl', GLSL_LANGUAGE_CONFIG);
             monaco.languages.setMonarchTokensProvider('glsl', GLSL_MONARCH_TOKENS);
+            
+            // Register shader library autocomplete
+            registerShaderLibraryAutocomplete();
             
             // Configure JavaScript validation to be lenient for code fragments
             monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({

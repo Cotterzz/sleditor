@@ -38,6 +38,22 @@ export const AUDIO_TEXTURE_MODES = {
         width: 4096,
         height: 2,
         description: 'Maximum detail (may be slow)'
+    },
+    // Musical chromagram (12×12 note detection grid)
+    chromagram: {
+        name: 'Chromagram (12×12)',
+        fftSize: 8192,      // Higher FFT for better note resolution
+        width: 12,          // 12 columns (octaves/special)
+        height: 12,         // 12 rows (semitones)
+        description: 'Musical note detection (octaves × semitones)'
+    },
+    // High-res chromagram for better low-octave separation
+    chromagram_hq: {
+        name: 'Chromagram HQ (12×12)',
+        fftSize: 16384,     // Double FFT for much better resolution
+        width: 12,
+        height: 12,
+        description: 'High-res note detection (~3Hz/bin)'
     }
 };
 
@@ -55,15 +71,20 @@ export function createAudioTexture(gl, mode = 'shadertoy') {
     gl.bindTexture(gl.TEXTURE_2D, texture);
     
     // Create empty texture (will be updated each frame)
-    // Use R8 format for grayscale audio data (efficient)
+    // For chromagram modes, use RGB8 format (red=energy, green=delta, blue=temporal avg)
+    // For standard modes, use R8 format (red=energy only)
+    const isChromagram = mode.startsWith('chromagram');
+    const format = isChromagram ? gl.RGB : gl.RED;
+    const internalFormat = isChromagram ? gl.RGB8 : gl.R8;
+    
     gl.texImage2D(
         gl.TEXTURE_2D,
         0,
-        gl.R8,
+        internalFormat,
         width,
         height,
         0,
-        gl.RED,
+        format,
         gl.UNSIGNED_BYTE,
         null
     );
@@ -82,7 +103,9 @@ export function createAudioTexture(gl, mode = 'shadertoy') {
         texture,
         mode: modeConfig,
         width,
-        height
+        height,
+        previousFrame: isChromagram ? new Float32Array(width * height) : null,  // Store previous frame for delta
+        temporalAverage: isChromagram ? new Float32Array(width * height) : null  // Store temporal average for blue channel
     };
 }
 
@@ -180,15 +203,27 @@ export async function createAudioAnalyser(audioPath, mode = 'shadertoy') {
 
 /**
  * Update audio texture with current analysis data
- * Shadertoy-compatible: uses 1024 FFT bins but only uses first 512 for texture
+ * Routes to appropriate update function based on mode
  * @param {WebGL2RenderingContext} gl - WebGL context
  * @param {WebGLTexture} texture - Texture to update
  * @param {AnalyserNode} analyser - Web Audio analyser node
  * @param {number} width - Texture width
- * @param {number} height - Texture height (should be 2)
+ * @param {number} height - Texture height
+ * @param {string} mode - Texture mode (optional, defaults to standard 2-row mode)
+ * @param {Float32Array} previousFrame - Previous frame data for delta (chromagram only)
+ * @param {Float32Array} temporalAverage - Temporal average data (chromagram only)
  */
-export function updateAudioTexture(gl, texture, analyser, width, height) {
-    if (!analyser || height !== 2) return;
+export function updateAudioTexture(gl, texture, analyser, width, height, mode = 'shadertoy', previousFrame = null, temporalAverage = null) {
+    if (!analyser) return;
+    
+    // Route to chromagram processor for 12×12 mode
+    if (mode.startsWith('chromagram') || (width === 12 && height === 12)) {
+        updateChromagramTexture(gl, texture, analyser, previousFrame, temporalAverage);
+        return;
+    }
+    
+    // Standard mode: 2-row texture (frequency + waveform)
+    if (height !== 2) return;
     
     // Shadertoy uses the default fftSize of 2048, giving frequencyBinCount of 1024
     // But their texture is only 512 pixels wide
@@ -239,6 +274,234 @@ export function updateAudioTexture(gl, texture, analyser, width, height) {
 }
 
 /**
+ * Update chromagram texture with musical note analysis
+ * Creates a 12×12 grid mapping FFT data to musical notes
+ * 
+ * Layout:
+ *   Rows 0-11: Semitones (C, C#, D, D#, E, F, F#, G, G#, A, A#, B)
+ *   Col 0: Sub-bass (< C1, 32.7 Hz) / reserved for octave 0
+ *   Col 1-9: Octaves 1-9
+ *   Col 10: High freq (> B9, 7902 Hz) / reserved for octave 10
+ *   Col 11: Overall average energy level
+ * 
+ * Channels:
+ *   Red: Current energy level (squared for emphasis)
+ *   Green: Positive delta (energy increase) - great for beat detection!
+ *   Blue: Temporal average (smoothed over time) - shows sustained notes
+ * 
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ * @param {WebGLTexture} texture - Texture to update
+ * @param {AnalyserNode} analyser - Web Audio analyser node
+ * @param {Float32Array} previousFrame - Previous frame data for delta calculation
+ * @param {Float32Array} temporalAverage - Running average for temporal smoothing
+ */
+export function updateChromagramTexture(gl, texture, analyser, previousFrame, temporalAverage) {
+    if (!analyser) return;
+    
+    // Get FFT data
+    const frequencyBinCount = analyser.frequencyBinCount;
+    const frequencyData = new Uint8Array(frequencyBinCount);
+    analyser.getByteFrequencyData(frequencyData);
+    
+    // Calculate frequency per bin
+    const sampleRate = analyser.context.sampleRate;
+    const binWidth = sampleRate / analyser.fftSize;
+    
+    // Determine if this is HQ mode based on FFT size
+    const isHQMode = analyser.fftSize >= 16384;
+    
+    // Initialize 12×12 grid (accumulator and count for averaging)
+    const grid = new Float32Array(144).fill(0);
+    const counts = new Float32Array(144).fill(0);
+    
+    // Note frequency boundaries (Hz) - C notes for each octave
+    // Lower C1 threshold slightly to catch bins that round to C1
+    const C1 = 30.0;     // Slightly below C1 (32.7 Hz) to catch nearby bins
+    const B9 = 7902.13;  // End of octave 9
+    
+    // Total energy accumulator for column 11
+    let totalEnergy = 0;
+    let totalBins = 0;
+    
+    // Debug: Track which bins contribute to octave 1
+    const oct1Bins = [];
+    const oct9Bins = [];
+    
+    // Choose spreading parameters based on mode
+    const spreadRange = isHQMode ? 0.8 : 1.5;  // HQ: tight, Standard: wide
+    const spreadWidth = isHQMode ? 1 : 2;      // HQ: ±1, Standard: ±2
+    
+    // Process each FFT bin with fractional MIDI note spreading
+    for (let bin = 0; bin < frequencyBinCount; bin++) {
+        const hz = bin * binWidth;
+        const value = frequencyData[bin] / 255.0; // Normalize to 0-1
+        
+        // Skip bin 0 (DC component, always zero)
+        if (bin === 0) continue;
+        
+        // Skip if no energy
+        if (value === 0) continue;
+        
+        // Accumulate total energy
+        totalEnergy += value;
+        totalBins++;
+        
+        // Musical range: convert Hz to MIDI note number (fractional)
+        // MIDI note formula: n = 69 + 12 * log2(f / 440)
+        // Where 440 Hz = A4 (MIDI note 69)
+        // Handle very low frequencies gracefully
+        if (hz < 10) continue; // Skip extremely low frequencies
+        
+        const midiFloat = 69 + 12 * Math.log2(hz / 440);
+        
+        // Determine if this should go to special columns
+        if (midiFloat < 23) {
+            // Very low, definitely sub-bass: column 0
+            for (let row = 0; row < 12; row++) {
+                const idx = row * 12 + 0;
+                grid[idx] += value;
+                counts[idx] += 1;
+            }
+            continue;
+        }
+        
+        if (midiFloat >= 120) {
+            // High freq (C10 and above): column 10
+            for (let row = 0; row < 12; row++) {
+                const idx = row * 12 + 10;
+                grid[idx] += value;
+                counts[idx] += 1;
+            }
+            continue;
+        }
+        
+        // For notes in range, spread energy based on mode
+        const centerMidi = Math.round(midiFloat);
+        
+        for (let midiOffset = -spreadWidth; midiOffset <= spreadWidth; midiOffset++) {
+            const targetMidi = centerMidi + midiOffset;
+            
+            // Calculate distance-based weight
+            const distance = Math.abs(midiFloat - targetMidi);
+            if (distance > spreadRange) continue; // Too far, skip
+            
+            // Linear falloff weight
+            const weight = Math.max(0, 1.0 - (distance / spreadRange));
+            
+            const octave = Math.floor(targetMidi / 12) - 1;
+            const semitone = targetMidi % 12;
+            
+            if (octave >= 1 && octave <= 9 && weight > 0.01) {
+                const col = octave;
+                const row = semitone;
+                const idx = row * 12 + col;
+                
+                grid[idx] += value * weight;
+                counts[idx] += weight;
+                
+                // Debug tracking
+                if (octave === 1) {
+                    oct1Bins.push({ 
+                        bin, 
+                        hz: hz.toFixed(1), 
+                        midi: midiFloat.toFixed(2), 
+                        targetMidi, 
+                        semitone, 
+                        value: value.toFixed(3), 
+                        weight: weight.toFixed(3) 
+                    });
+                }
+                if (octave === 9) {
+                    oct9Bins.push({ 
+                        bin, 
+                        hz: hz.toFixed(1), 
+                        midi: midiFloat.toFixed(2),
+                        targetMidi,
+                        semitone, 
+                        value: value.toFixed(3), 
+                        weight: weight.toFixed(3)
+                    });
+                }
+            }
+        }
+    }
+    
+    // Average accumulated values (for display)
+    for (let i = 0; i < 144; i++) {
+        if (counts[i] > 0) {
+            grid[i] /= counts[i];
+        }
+    }
+    
+    // Column 11: overall average energy level (same value for all rows)
+    const avgLevel = totalBins > 0 ? totalEnergy / totalBins : 0;
+    for (let row = 0; row < 12; row++) {
+        grid[row * 12 + 11] = avgLevel;
+    }
+    
+    // Calculate delta (change from previous frame)
+    // Delta = current - previous, clamped to [0, inf) so negative = 0
+    const delta = new Float32Array(144);
+    for (let i = 0; i < 144; i++) {
+        if (previousFrame) {
+            const change = grid[i] - previousFrame[i];
+            delta[i] = change > 0 ? change : 0.0;  // Positive only, negative = zero
+            
+            // Apply amplification to make beats visible
+            delta[i] *= 15.0;
+        } else {
+            delta[i] = 0;
+        }
+    }
+    
+    // Store current frame for next delta calculation (BEFORE squaring)
+    if (previousFrame) {
+        previousFrame.set(grid);
+    }
+    
+    // Square the energy values to emphasize strong notes and reduce weak ones
+    // Do this BEFORE temporal average so all channels are on same scale
+    for (let i = 0; i < 144; i++) {
+        grid[i] = grid[i] * grid[i];
+    }
+    
+    // Calculate temporal average (smoothed energy for blue channel)
+    // Use exponential moving average with alpha = 0.2 (smooth over ~5 frames)
+    const alpha = 0.2;  // How much of current frame to blend (0.1 = slow smooth, 0.3 = fast response)
+    if (temporalAverage) {
+        for (let i = 0; i < 144; i++) {
+            // EMA: new_avg = alpha * current + (1 - alpha) * old_avg
+            temporalAverage[i] = alpha * grid[i] + (1 - alpha) * temporalAverage[i];
+        }
+    }
+    
+    // Convert to Uint8Array with RGB format (red=energy, green=delta, blue=temporal avg)
+    const textureData = new Uint8Array(144 * 3); // 3 channels
+    for (let i = 0; i < 144; i++) {
+        // Red: squared current energy (transients + sustained)
+        textureData[i * 3 + 0] = Math.floor(Math.min(1.0, grid[i]) * 255);
+        // Green: positive delta (beat/attack detection)
+        textureData[i * 3 + 1] = Math.floor(Math.min(1.0, delta[i]) * 255);
+        // Blue: temporal average SQUARED (sustained tones, very smooth, lower than instant)
+        const blueSquared = temporalAverage ? temporalAverage[i] * temporalAverage[i] : 0;
+        textureData[i * 3 + 2] = Math.floor(Math.min(1.0, blueSquared) * 255);
+    }
+    
+    // Upload to GPU
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texSubImage2D(
+        gl.TEXTURE_2D,
+        0,
+        0, 0,           // x, y offset
+        12, 12,         // width, height
+        gl.RGB,         // 3-channel format
+        gl.UNSIGNED_BYTE,
+        textureData
+    );
+    gl.bindTexture(gl.TEXTURE_2D, null);
+}
+
+/**
  * Load audio from URL and create complete audio channel
  * @param {WebGL2RenderingContext} gl - WebGL context
  * @param {string} audioPath - Path to audio file
@@ -248,7 +511,7 @@ export function updateAudioTexture(gl, texture, analyser, width, height) {
 export async function loadAudioChannel(gl, audioPath, mode = 'shadertoy') {
     try {
         // Create texture
-        const { texture, mode: modeConfig, width, height } = createAudioTexture(gl, mode);
+        const { texture, mode: modeConfig, width, height, previousFrame, temporalAverage } = createAudioTexture(gl, mode);
         
         // Create audio and analyser
         const { audio, analyser, source, context } = await createAudioAnalyser(audioPath, mode);
@@ -265,7 +528,9 @@ export async function loadAudioChannel(gl, audioPath, mode = 'shadertoy') {
             width,
             height,
             playing: false,  // Always start paused
-            path: audioPath
+            path: audioPath,
+            previousFrame,  // Include previousFrame for delta calculation
+            temporalAverage  // Include temporalAverage for blue channel
         };
     } catch (error) {
         console.error('Failed to create audio channel:', error);
