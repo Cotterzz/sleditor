@@ -161,6 +161,12 @@
         "name": "DOCTOR VOX - Level Up",
         "path": "media/audio/DOCTOR_VOX_-_Level_Up.mp3",
         "duration": 203
+    },
+    {
+        "id": "audio3",
+        "name": "test",
+        "path": "media/audio/test.wav",
+        "duration": 203
     }
   ]
 }
