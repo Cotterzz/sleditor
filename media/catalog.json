@@ -164,9 +164,15 @@
     },
     {
         "id": "audio3",
-        "name": "test",
+        "name": "full tone sweep raw wav",
         "path": "media/audio/test.wav",
-        "duration": 203
+        "duration": 30
+    },
+    {
+        "id": "audio4",
+        "name": "C chromatic scale",
+        "path": "media/audio/chromatic.mp3",
+        "duration": 10
     }
   ]
 }
