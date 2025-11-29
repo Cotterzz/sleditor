@@ -54,8 +54,15 @@ export function setupAutoplayUnlock() {
 export function toggleJSExecMode() {
     const oldMode = state.jsExecutionMode;
     
-    // Toggle between 'function' and 'module'
-    state.jsExecutionMode = state.jsExecutionMode === 'function' ? 'module' : 'function';
+    // Cycle through modes: function → module → sandboxed → function
+    if (state.jsExecutionMode === 'function') {
+        state.jsExecutionMode = 'module';
+    } else if (state.jsExecutionMode === 'module') {
+        state.jsExecutionMode = 'sandboxed';
+    } else {
+        state.jsExecutionMode = 'function';
+    }
+    
     saveSettings({ jsExecutionMode: state.jsExecutionMode });
     
     console.log(`⚙️  JS Execution Mode toggled: ${oldMode} → ${state.jsExecutionMode}`);
@@ -65,6 +72,12 @@ export function toggleJSExecMode() {
         compiler.reloadShader();
     }
     
-    logStatus(`✓ JS execution mode: ${state.jsExecutionMode === 'module' ? 'Module Import (optimized)' : 'Function Eval (compatible)'}`, 'success');
+    const modeLabels = {
+        'function': 'Function Eval (compatible)',
+        'module': 'Module Import (optimized)',
+        'sandboxed': 'Sandboxed AudioWorklet (secure)'
+    };
+    
+    logStatus(`✓ JS execution mode: ${modeLabels[state.jsExecutionMode]}`, 'success');
 }
 

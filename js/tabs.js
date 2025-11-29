@@ -2,13 +2,14 @@
 // Tabs - Tab Management and UI
 // ============================================================================
 
-import { state, logStatus } from './core.js';
+import { state, logStatus, saveSettings } from './core.js';
 import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF } from './examples.js';
 import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, getChannelNumber, createImageChannelTabName, createVideoChannelTabName, createAudioChannelTabName, createBufferChannelTabName } from './tab-config.js';
 import * as mediaSelector from './ui/media-selector.js';
 import * as audioSelector from './ui/audio-selector.js';
 import * as videoSelector from './ui/video-selector.js';
 import * as channels from './channels.js';
+import * as compiler from './compiler.js';
 
 // ============================================================================
 // Tab Rendering
@@ -714,34 +715,60 @@ export function showOptionsMenu() {
         menu.remove();
     };
     
-    // JS execution mode toggle
-    const jsExecItem = document.createElement('div');
-    jsExecItem.style.cssText = `
-        padding: 8px 16px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        color: var(--text-primary);
-        font-size: 13px;
-    `;
-    const isModule = state.jsExecutionMode === 'module';
-    jsExecItem.innerHTML = `
-        <span style="width: 20px;">⚡</span>
-        <span style="flex: 1;">${isModule ? 'JS: Function Eval' : 'JS: Module Import'}</span>
-        <span style="color: var(--text-secondary); font-size: 11px;">${isModule ? '' : '(faster)'}</span>
-    `;
-    jsExecItem.onmouseenter = () => jsExecItem.style.background = 'var(--bg-primary)';
-    jsExecItem.onmouseleave = () => jsExecItem.style.background = '';
-    jsExecItem.onclick = () => {
-        // Dispatch event for JS execution mode toggle
-        window.dispatchEvent(new CustomEvent('toggle-js-exec-mode'));
-        menu.remove();
-    };
+    // JS execution mode options (3 modes) - HIDDEN, always sandboxed now
+    // Keep code for potential revert
+    /*
+    const modes = [
+        { id: 'function', icon: '📦', label: 'Function Eval', desc: 'compatible' },
+        { id: 'module', icon: '🚀', label: 'Module Import', desc: 'optimized' },
+        { id: 'sandboxed', icon: '🔒', label: 'Sandboxed', desc: 'secure' }
+    ];
+    
+    modes.forEach(mode => {
+        const modeItem = document.createElement('div');
+        modeItem.style.cssText = `
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-primary);
+            font-size: 13px;
+        `;
+        const isSelected = state.jsExecutionMode === mode.id;
+        modeItem.innerHTML = `
+            <span style="width: 20px;">${isSelected ? '✓' : mode.icon}</span>
+            <span style="flex: 1;">JS: ${mode.label}</span>
+            <span style="color: var(--text-secondary); font-size: 11px;">${mode.desc}</span>
+        `;
+        modeItem.onmouseenter = () => modeItem.style.background = 'var(--bg-primary)';
+        modeItem.onmouseleave = () => modeItem.style.background = '';
+        modeItem.onclick = () => {
+            if (state.jsExecutionMode !== mode.id) {
+                state.jsExecutionMode = mode.id;
+                saveSettings({ jsExecutionMode: mode.id });
+                console.log(`⚙️  JS Execution Mode set to: ${mode.id}`);
+                
+                // Recompile with new mode
+                if (state.isRunning) {
+                    compiler.reloadShader();
+                }
+                
+                const modeLabels = {
+                    'function': 'Function Eval (compatible)',
+                    'module': 'Module Import (optimized)',
+                    'sandboxed': 'Sandboxed AudioWorklet (secure)'
+                };
+                logStatus(`✓ JS execution mode: ${modeLabels[mode.id]}`, 'success');
+            }
+            menu.remove();
+        };
+        menu.appendChild(modeItem);
+    });
+    */
     
     menu.appendChild(themeItem);
     menu.appendChild(vimItem);
-    menu.appendChild(jsExecItem);
     
     document.body.appendChild(menu);
     

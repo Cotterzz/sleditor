@@ -298,20 +298,20 @@ function handleEnterframeError(result) {
     window.dispatchEvent(event);
     
     if (state.activeTabs.includes('js')) {
-        const errorInfo = result.errorInfo;
+        const errorInfo = result.errorInfo || { lineNum: 1, column: 1, endColumn: 1, message: result.error?.message || 'Unknown error' };
         
         // Dispatch error event for editor to handle
         const errorEvent = new CustomEvent('js-runtime-error', { 
             detail: {
                 lineNum: errorInfo.lineNum,
-                column: errorInfo.column,
-                endColumn: errorInfo.endColumn,
+                column: errorInfo.column || 1,
+                endColumn: errorInfo.endColumn || 1,
                 message: `Runtime error in enterframe(): ${errorInfo.message}`
             }
         });
         window.dispatchEvent(errorEvent);
         
-        logStatus(`✗ JS enterframe() error (line ${errorInfo.lineNum}): ${result.error.message}`, 'error');
+        logStatus(`✗ JS enterframe() error (line ${errorInfo.lineNum}): ${result.error?.message || errorInfo.message}`, 'error');
     } else {
         logStatus(`✗ JS runtime error: ${result.error.message}`, 'error');
     }

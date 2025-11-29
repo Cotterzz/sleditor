@@ -797,6 +797,26 @@ async function init() {
 window.reloadShader = compiler.reloadShader;
 window.togglePlayPause = ui.togglePlayPause;
 window.showAuthMessage = ui.showAuthMessage;
+
+// Expose JS execution mode switcher for testing
+window.setJSExecutionMode = (mode) => {
+    const validModes = ['function', 'module', 'sandboxed'];
+    if (!validModes.includes(mode)) {
+        console.error(`Invalid mode. Use: ${validModes.join(', ')}`);
+        return;
+    }
+    
+    state.jsExecutionMode = mode;
+    console.log(`✓ JS Execution Mode set to: ${mode}`);
+    console.log('  Recompile shader to apply changes');
+    
+    if (mode === 'sandboxed') {
+        console.log('  🔒 SANDBOXED MODE: User code runs in isolated AudioWorklet');
+        console.log('     - No DOM access');
+        console.log('     - No network access');
+        console.log('     - Browser-enforced isolation');
+    }
+};
 window.hideAuthMessage = ui.hideAuthMessage;
 window.updateSaveButton = shaderManagement.updateSaveButton;
 window.isShaderOwnedByUser = shaderManagement.isShaderOwnedByUser;

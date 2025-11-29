@@ -133,7 +133,7 @@ export const state = {
     // Editor settings
     isVimMode: false,
     vimStatusNodes: [],  // Store vim mode handlers for each editor
-    jsExecutionMode: 'function',  // 'function' (new Function) or 'module' (dynamic import)
+    jsExecutionMode: 'sandboxed',  // 'function' (new Function), 'module' (dynamic import), or 'sandboxed' (AudioWorklet) - ALWAYS sandboxed now
     
     readbackIndex: 0,
     pendingAudio: false,

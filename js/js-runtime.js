@@ -67,6 +67,16 @@ export function parseJSError(err, codeLines) {
 let currentModuleURL = null;
 let hasLoggedExecutionMode = false;
 
+// ============================================================================
+// Sandboxed Execution (AudioWorklet)
+// ============================================================================
+
+let sandboxWorklet = null;
+let sandboxContext = null;
+let currentCodeBlobURL = null;
+let pendingEnterframeCallback = null;
+let processorNameCounter = 0; // Unique name for each compilation
+
 export async function compile(code = null, useDefault = false) {
     // If JS tab is not active, use invisible default
     const actualCode = useDefault ? INVISIBLE_DEFAULT_JS : (code || '');
@@ -75,8 +85,8 @@ export async function compile(code = null, useDefault = false) {
     // Reset execution log flag on recompile
     hasLoggedExecutionMode = false;
     
-    // Sanitize code (skip for default code)
-    if (!useDefault) {
+    // Sanitize code (skip for default code and sandboxed mode)
+    if (!useDefault && state.jsExecutionMode !== 'sandboxed') {
         const sanitizeResult = sanitize(actualCode);
         if (!sanitizeResult.success) {
             return { success: false, errors: sanitizeResult.errors };
@@ -84,7 +94,10 @@ export async function compile(code = null, useDefault = false) {
     }
     
     // Choose execution method based on state
-    if (state.jsExecutionMode === 'module') {
+    if (state.jsExecutionMode === 'sandboxed') {
+        console.log('🔒 Compiling JS in Sandboxed AudioWorklet (isolated)');
+        return await compileSandboxed(actualCode, codeLines, useDefault);
+    } else if (state.jsExecutionMode === 'module') {
         console.log('🚀 Compiling JS with Dynamic Import (optimized)');
         return await compileModule(actualCode, codeLines, useDefault);
     } else {
@@ -228,17 +241,227 @@ function parseModuleError(err, codeLines) {
 }
 
 // ============================================================================
+// Sandboxed Compilation (AudioWorklet)
+// ============================================================================
+
+async function compileSandboxed(actualCode, codeLines, useDefault) {
+    try {
+        const compileStart = performance.now();
+        
+        // Clean up old blob URL
+        if (currentCodeBlobURL) {
+            URL.revokeObjectURL(currentCodeBlobURL);
+            currentCodeBlobURL = null;
+        }
+        
+        // Generate unique processor name for each compilation
+        const processorName = `sandbox-processor-${processorNameCounter++}`;
+        
+        // Wrap user code in AudioWorkletProcessor
+        const wrappedCode = `
+// User's code (sandboxed - no DOM, window, or network access)
+${actualCode}
+
+// Wrapper that exposes user functions in isolated scope
+class SandboxProcessor extends AudioWorkletProcessor {
+    constructor() {
+        super();
+        
+        // Initialize user state by calling init()
+        try {
+            this.userState = (typeof init === 'function') ? init() : {};
+        } catch (err) {
+            this.userState = {};
+            this.port.postMessage({
+                type: 'error',
+                phase: 'init',
+                error: err.message,
+                stack: err.stack
+            });
+        }
+        
+        // Message handler from main thread
+        this.port.onmessage = (e) => {
+            if (e.data.type === 'enterframe') {
+                this.runEnterframe(e.data);
+            }
+        };
+    }
+    
+    runEnterframe(data) {
+        try {
+            const uniforms = new Float32Array(15);
+            const audioMessages = []; // Collect audio.send() calls
+            const audioParams = {}; // Collect audio.setParam() calls
+            
+            const api = {
+                time: data.time,
+                deltaTime: data.deltaTime,
+                mouse: data.mouse,
+                uniforms: {
+                    setCustomFloat: (slot, value) => {
+                        if (slot >= 0 && slot < 15) {
+                            uniforms[slot] = value;
+                        }
+                    },
+                    setCustomInt: (slot, value) => {
+                        // Int uniforms not supported in sandboxed mode yet
+                        // Could add if needed
+                    }
+                },
+                audio: {
+                    send: (message) => {
+                        // Collect messages to relay to main thread
+                        audioMessages.push(message);
+                    },
+                    setParam: (name, value) => {
+                        // Collect params to relay to main thread
+                        audioParams[name] = value;
+                    }
+                }
+            };
+            
+            // Call user's enterframe function
+            if (typeof enterframe === 'function') {
+                enterframe(this.userState, api);
+            }
+            
+            // Send back results including audio messages
+            this.port.postMessage({
+                type: 'result',
+                uniforms: Array.from(uniforms),
+                audioMessages: audioMessages,
+                audioParams: audioParams
+            });
+        } catch (err) {
+            this.port.postMessage({
+                type: 'error',
+                phase: 'enterframe',
+                error: err.message,
+                stack: err.stack
+            });
+        }
+    }
+    
+    // Required by AudioWorkletProcessor - keeps worklet alive
+    process() {
+        return true;
+    }
+}
+
+registerProcessor('${processorName}', SandboxProcessor);
+`;
+        
+        // Create blob URL from wrapped code
+        const blob = new Blob([wrappedCode], { type: 'application/javascript' });
+        currentCodeBlobURL = URL.createObjectURL(blob);
+        
+        // Initialize AudioContext if needed (minimal sample rate to reduce overhead)
+        if (!sandboxContext) {
+            sandboxContext = new AudioContext({ sampleRate: 8000 });
+        }
+        
+        // Load the module into AudioWorklet
+        await sandboxContext.audioWorklet.addModule(currentCodeBlobURL);
+        
+        // Create/recreate the worklet node
+        if (sandboxWorklet) {
+            sandboxWorklet.port.onmessage = null;
+            sandboxWorklet.disconnect();
+        }
+        
+        sandboxWorklet = new AudioWorkletNode(sandboxContext, processorName);
+        
+        // Handle responses from worklet
+        sandboxWorklet.port.onmessage = (e) => {
+            if (e.data.type === 'result') {
+                // Apply uniforms via callback
+                if (pendingEnterframeCallback) {
+                    pendingEnterframeCallback(e.data.uniforms);
+                    pendingEnterframeCallback = null;
+                }
+                
+                // Relay audio messages to actual audio worklet
+                if (e.data.audioMessages && e.data.audioMessages.length > 0) {
+                    e.data.audioMessages.forEach(msg => {
+                        if (state.audioWorkletNode && state.audioWorkletNode.port) {
+                            state.audioWorkletNode.port.postMessage(msg);
+                        }
+                    });
+                }
+                
+                // Relay audio params to actual audio worklet
+                if (e.data.audioParams) {
+                    Object.entries(e.data.audioParams).forEach(([name, value]) => {
+                        if (state.audioWorkletNode && state.audioWorkletNode.parameters && 
+                            state.audioWorkletNode.parameters.has(name)) {
+                            state.audioWorkletNode.parameters.get(name).value = value;
+                        }
+                    });
+                }
+            } else if (e.data.type === 'warning') {
+                console.warn(`⚠️ Sandboxed JS: ${e.data.message}`);
+            } else if (e.data.type === 'error') {
+                console.error(`Sandboxed JS ${e.data.phase} error:`, e.data.error);
+                if (e.data.stack) {
+                    console.error(e.data.stack);
+                }
+            }
+        };
+        
+        const compileTime = performance.now() - compileStart;
+        console.log(`  ✓ Sandboxed compilation took ${compileTime.toFixed(3)}ms`);
+        
+        // Store placeholder functions for compatibility
+        state.userInit = () => ({});
+        state.userEnterframe = () => {}; // Actual execution happens in worklet
+        
+        return { success: true };
+        
+    } catch (err) {
+        if (useDefault) {
+            console.error('Default JS compilation failed:', err);
+            return { success: false, errors: [] };
+        }
+        
+        // Parse error
+        const errorInfo = parseJSError(err, codeLines);
+        
+        return {
+            success: false,
+            errors: [{
+                lineNum: errorInfo.lineNum,
+                column: errorInfo.column,
+                endColumn: errorInfo.endColumn,
+                message: errorInfo.message
+            }]
+        };
+    }
+}
+
+// ============================================================================
 // Runtime Execution
 // ============================================================================
 
 export function callEnterframe(elapsedSec, uniformF32 = null, uniformI32 = null, audioContext = null) {
-    if (!state.userEnterframe) return { success: true };
-    
     // Log execution mode once per compilation
     if (!hasLoggedExecutionMode) {
         console.log(`▶️  Executing enterframe() compiled with: ${state.jsExecutionMode}`);
         hasLoggedExecutionMode = true;
     }
+    
+    // Sandboxed mode: delegate to AudioWorklet
+    if (state.jsExecutionMode === 'sandboxed') {
+        // Check if sandbox is initialized
+        if (!sandboxWorklet) {
+            // Not an error - just skip this frame, it will initialize
+            return { success: true };
+        }
+        return callEnterframeSandboxed(elapsedSec, uniformF32);
+    }
+    
+    // Non-sandboxed modes: direct execution
+    if (!state.userEnterframe) return { success: true };
     
     try {
         const api = {
@@ -296,6 +519,46 @@ export function callEnterframe(elapsedSec, uniformF32 = null, uniformI32 = null,
             success: false, 
             error: err,
             errorInfo: parseJSError(err, state.jsEditor ? state.jsEditor.getValue().split('\n').length : 1)
+        };
+    }
+}
+
+// ============================================================================
+// Sandboxed Enterframe Execution
+// ============================================================================
+
+function callEnterframeSandboxed(elapsedSec, uniformF32) {
+    if (!sandboxWorklet) {
+        return { success: false, error: 'Sandbox not initialized' };
+    }
+    
+    try {
+        const t0 = performance.now();
+        
+        // Set up callback to apply uniforms when worklet responds
+        pendingEnterframeCallback = (uniforms) => {
+            console.log(`Sandboxed latency: ${(performance.now() - t0).toFixed(2)}ms`);
+            if (uniformF32) {
+                for (let i = 0; i < Math.min(uniforms.length, 15); i++) {
+                    uniformF32[7 + i] = uniforms[i];
+                }
+            }
+        };
+        
+        // Send enterframe request to worklet
+        sandboxWorklet.port.postMessage({
+            type: 'enterframe',
+            time: elapsedSec,
+            deltaTime: 0.016, // Could calculate real delta
+            mouse: { x: state.mouseX, y: state.mouseY }
+        });
+        
+        return { success: true };
+    } catch (err) {
+        return { 
+            success: false, 
+            error: err,
+            errorInfo: { lineNum: 1, message: err.message }
         };
     }
 }
