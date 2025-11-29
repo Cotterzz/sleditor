@@ -2131,6 +2131,35 @@ function getNodeVarName(node) {
     return 'd_' + node.id.replace(/[^a-zA-Z0-9]/g, '_');
 }
 
+// Counter for export variable names
+let exportVarCounters = {};
+let exportVarNameMap = {}; // Map node to its export variable name
+
+function getExportVarName(node) {
+    // Return cached name if already generated
+    if (exportVarNameMap[node.id]) {
+        return exportVarNameMap[node.id];
+    }
+    
+    const nodeType = node.dataset.type;
+    const typeName = nodeType.replace(/^op/, '').toLowerCase();
+    
+    // Initialize counter for this type if needed
+    if (!exportVarCounters[nodeType]) {
+        exportVarCounters[nodeType] = 0;
+    }
+    exportVarCounters[nodeType]++;
+    
+    const varName = typeName + '_' + exportVarCounters[nodeType];
+    exportVarNameMap[node.id] = varName; // Cache it
+    return varName;
+}
+
+function resetExportVarCounters() {
+    exportVarCounters = {};
+    exportVarNameMap = {};
+}
+
 // ===========================================
 // EXPORT GLSL - Hardcoded values (for output)
 // ===========================================
@@ -2138,6 +2167,9 @@ function generateExportGLSL() {
     const t0 = perfNow();
     const sceneNode = document.getElementById('scene');
     const children = getNodeChildren(sceneNode);
+    
+    // Reset export variable name counters for clean numbering
+    resetExportVarCounters();
     
     let code = getSDFPreamble();
     
@@ -2149,7 +2181,7 @@ function generateExportGLSL() {
         code += `
 float sceneSDF(vec3 p) {
 ${generateExportNodeCode(children[0], 'p')}
-    return ${getNodeVarName(children[0])};
+    return ${getExportVarName(children[0])};
 }`;
     } else {
         let nodeCode = '';
@@ -2157,9 +2189,9 @@ ${generateExportNodeCode(children[0], 'p')}
             nodeCode += generateExportNodeCode(child, 'p');
         });
         
-        let unionExpr = getNodeVarName(children[0]);
+        let unionExpr = getExportVarName(children[0]);
         for (let i = 1; i < children.length; i++) {
-            unionExpr = `min(${unionExpr}, ${getNodeVarName(children[i])})`;
+            unionExpr = `min(${unionExpr}, ${getExportVarName(children[i])})`;
         }
         
         code += `
@@ -2177,7 +2209,7 @@ ${nodeCode}
 function generateExportNodeCode(node, pointVar) {
     const nodeType = node.dataset.type;
     const params = getNodeParams(node);
-    const varName = getNodeVarName(node);
+    const varName = getExportVarName(node); // Use readable export names
     const typeDef = NODE_TYPES[nodeType];
     
     let code = '';
@@ -2219,8 +2251,8 @@ function generateExportNodeCode(node, pointVar) {
             code += generateExportNodeCode(children[0], transformedPoint);
             code += generateExportNodeCode(children[1], transformedPoint);
             
-            const child1Var = getNodeVarName(children[0]);
-            const child2Var = getNodeVarName(children[1]);
+            const child1Var = getExportVarName(children[0]);
+            const child2Var = getExportVarName(children[1]);
             
             switch (nodeType) {
                 case 'opUnion':
@@ -2252,7 +2284,7 @@ function generateExportNodeCode(node, pointVar) {
             code += `    float ${varName} = 1000.0; // Incomplete modifier\n`;
         } else {
             const child = children[0];
-            const childVar = getNodeVarName(child);
+            const childVar = getExportVarName(child);
             switch (nodeType) {
                 case 'opRound':
                     code += generateExportNodeCode(child, transformedPoint);
