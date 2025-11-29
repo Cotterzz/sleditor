@@ -68,7 +68,7 @@ let currentModuleURL = null;
 let hasLoggedExecutionMode = false;
 
 // ============================================================================
-// Sandboxed Execution (AudioWorklet)
+// Sandboxed Execution 
 // ============================================================================
 
 let sandboxWorklet = null;
@@ -95,13 +95,13 @@ export async function compile(code = null, useDefault = false) {
     
     // Choose execution method based on state
     if (state.jsExecutionMode === 'sandboxed') {
-        console.log('🔒 Compiling JS in Sandboxed AudioWorklet (isolated)');
+       
         return await compileSandboxed(actualCode, codeLines, useDefault);
     } else if (state.jsExecutionMode === 'module') {
-        console.log('🚀 Compiling JS with Dynamic Import (optimized)');
+       
         return await compileModule(actualCode, codeLines, useDefault);
     } else {
-        console.log('📦 Compiling JS with Function Eval (compatible)');
+        
         return compileFunction(actualCode, codeLines, useDefault);
     }
 }
@@ -124,7 +124,7 @@ return { init, enterframe };
         state.userEnterframe = userFunctions.enterframe;
         
         const compileTime = performance.now() - compileStart;
-        console.log(`  ✓ Function compilation took ${compileTime.toFixed(3)}ms`);
+        
         
         return { success: true };
     } catch (err) {
@@ -179,7 +179,7 @@ export { init, enterframe };
         state.userEnterframe = module.enterframe;
         
         const compileTime = performance.now() - compileStart;
-        console.log(`  ✓ Module import took ${compileTime.toFixed(3)}ms`);
+        
         
         return { success: true };
     } catch (err) {
@@ -241,7 +241,7 @@ function parseModuleError(err, codeLines) {
 }
 
 // ============================================================================
-// Sandboxed Compilation (AudioWorklet)
+// Sandboxed Compilation 
 // ============================================================================
 
 async function compileSandboxed(actualCode, codeLines, useDefault) {
@@ -257,7 +257,7 @@ async function compileSandboxed(actualCode, codeLines, useDefault) {
         // Generate unique processor name for each compilation
         const processorName = `sandbox-processor-${processorNameCounter++}`;
         
-        // Wrap user code in AudioWorkletProcessor
+        // Wrap user code
         const wrappedCode = `
 // User's code (sandboxed - no DOM, window, or network access)
 ${actualCode}
@@ -356,12 +356,12 @@ registerProcessor('${processorName}', SandboxProcessor);
         const blob = new Blob([wrappedCode], { type: 'application/javascript' });
         currentCodeBlobURL = URL.createObjectURL(blob);
         
-        // Initialize AudioContext if needed (minimal sample rate to reduce overhead)
+        // Initialize AudioContext if needed
         if (!sandboxContext) {
             sandboxContext = new AudioContext({ sampleRate: 8000 });
         }
         
-        // Load the module into AudioWorklet
+        // Load the module into Worklet
         await sandboxContext.audioWorklet.addModule(currentCodeBlobURL);
         
         // Create/recreate the worklet node
@@ -410,7 +410,7 @@ registerProcessor('${processorName}', SandboxProcessor);
         };
         
         const compileTime = performance.now() - compileStart;
-        console.log(`  ✓ Sandboxed compilation took ${compileTime.toFixed(3)}ms`);
+       
         
         // Store placeholder functions for compatibility
         state.userInit = () => ({});
@@ -450,7 +450,7 @@ export function callEnterframe(elapsedSec, uniformF32 = null, uniformI32 = null,
         hasLoggedExecutionMode = true;
     }
     
-    // Sandboxed mode: delegate to AudioWorklet
+    // Sandboxed mode: delegate to Worklet
     if (state.jsExecutionMode === 'sandboxed') {
         // Check if sandbox is initialized
         if (!sandboxWorklet) {
@@ -537,7 +537,7 @@ function callEnterframeSandboxed(elapsedSec, uniformF32) {
         
         // Set up callback to apply uniforms when worklet responds
         pendingEnterframeCallback = (uniforms) => {
-            console.log(`Sandboxed latency: ${(performance.now() - t0).toFixed(2)}ms`);
+            
             if (uniformF32) {
                 for (let i = 0; i < Math.min(uniforms.length, 15); i++) {
                     uniformF32[7 + i] = uniforms[i];
