@@ -599,17 +599,8 @@ export async function loadPublicShaders() {
         const estimatedBytes = JSON.stringify(result.data).length;
         trackBandwidth('api', estimatedBytes);
 
-        // SECURITY: Filter out shaders with JavaScript (XSS risk)
-        // Remove this filter when JS sandboxing is fully implemented
-        const filteredShaders = result.data.filter(shader => {
-            const hasJS = shader.code_types && (
-                shader.code_types.includes('js') || 
-                shader.code_types.includes('javascript')
-            );
-            return !hasJS;
-        });
-
-        return { success: true, shaders: filteredShaders };
+        // JS shaders are now safe with sandboxed execution (AudioWorklet)
+        return { success: true, shaders: result.data };
 
     } catch (error) {
         console.error('Load public shaders error:', error);
