@@ -139,12 +139,38 @@ export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
         for (const pass of passPlan) {
             const source = getPassSource(pass);
             const requiredChannels = channels.parseChannelUsage(source);
-            let channelUniforms = '';
-            requiredChannels.forEach(chNum => {
-                channelUniforms += `uniform sampler2D iChannel${chNum};\n`;
-            });
             
-            const fullSource = (boilerplate || '') + channelUniforms + source;
+            // Check if all required channels exist (for non-raw modes)
+            if (boilerplate !== '') {
+                const missingChannels = [];
+                requiredChannels.forEach(chNum => {
+                    const channel = channels.getChannel(chNum);
+                    if (!channel) {
+                        missingChannels.push(chNum);
+                    }
+                });
+                
+                if (missingChannels.length > 0) {
+                    const channelList = missingChannels.map(n => `iChannel${n}`).join(', ');
+                    const errorMsg = `Shader uses ${channelList} but these channels don't exist. Add them using the '+' button.`;
+                    logStatus(`✗ ${pass.label}: ${errorMsg}`, 'error');
+                    return false;
+                }
+            }
+            
+            // Build full source
+            let fullSource;
+            if (boilerplate === '') {
+                // Raw GLSL mode: NO automatic additions, user must declare everything
+                fullSource = source;
+            } else {
+                // Regular/Stoy/Golf mode: add channel uniforms automatically
+                let channelUniforms = '';
+                requiredChannels.forEach(chNum => {
+                    channelUniforms += `uniform sampler2D iChannel${chNum};\n`;
+                });
+                fullSource = boilerplate + channelUniforms + source;
+            }
             
             const compileResult = await webgl.compileProgram(fullSource);
             if (!compileResult.success) {

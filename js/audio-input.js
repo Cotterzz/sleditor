@@ -279,9 +279,9 @@ export function updateAudioTexture(gl, texture, analyser, width, height, mode = 
  * 
  * Layout:
  *   Rows 0-11: Semitones (C, C#, D, D#, E, F, F#, G, G#, A, A#, B)
- *   Col 0: Sub-bass (< C1, 32.7 Hz) / reserved for octave 0
- *   Col 1-9: Octaves 1-9
- *   Col 10: High freq (> B9, 7902 Hz) / reserved for octave 10
+ *   Col 0: Sub-bass (< C1, ~32.7 Hz) / reserved for octave 0
+ *   Col 1-9: Octaves 1-9 (32.7 Hz - 7902 Hz)
+ *   Col 10: Octave 10 (8372 Hz - 16744 Hz) + ultrasonic catch-all (>16744 Hz)
  *   Col 11: Overall average energy level
  * 
  * Channels:
@@ -365,8 +365,10 @@ export function updateChromagramTexture(gl, texture, analyser, previousFrame, te
             continue;
         }
         
-        if (midiFloat >= 120) {
-            // High freq (C10 and above): column 10
+        if (midiFloat >= 132) {
+            // High freq (above B10, ~16.7kHz): column 10 catch-all (shared with octave 10)
+            // Note: Octave 10 notes will populate their specific semitone rows
+            // This catch-all distributes ultrasonic content across all rows
             for (let row = 0; row < 12; row++) {
                 const idx = row * 12 + 10;
                 grid[idx] += value;
@@ -391,7 +393,9 @@ export function updateChromagramTexture(gl, texture, analyser, previousFrame, te
             const octave = Math.floor(targetMidi / 12) - 1;
             const semitone = targetMidi % 12;
             
-            if (octave >= 1 && octave <= 9 && weight > 0.01) {
+            // Accept octaves 1-10 (extended to include full musical range)
+            if (octave >= 1 && octave <= 10 && weight > 0.01) {
+                // Map octave to column: 1-9 use columns 1-9, octave 10 uses column 10
                 const col = octave;
                 const row = semitone;
                 const idx = row * 12 + col;
