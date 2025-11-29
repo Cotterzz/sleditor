@@ -578,7 +578,8 @@ async function init() {
         state.isVimMode = settings.isVimMode;
     }
     if (settings.jsExecutionMode !== undefined) {
-        state.jsExecutionMode = settings.jsExecutionMode;
+        // Always use sandboxed mode now (ignore saved setting)
+        state.jsExecutionMode = 'sandboxed';
     }
     ui.applyTheme();
     
