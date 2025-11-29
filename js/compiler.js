@@ -152,7 +152,7 @@ export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
                 
                 if (missingChannels.length > 0) {
                     const channelList = missingChannels.map(n => `iChannel${n}`).join(', ');
-                    const errorMsg = `Shader uses ${channelList} but these channels don't exist. Add them using the '+' button.`;
+                    const errorMsg = `Shader uses ${channelList} but this channel(s) doesn't exist. Add using the '+Add Pass' button.`;
                     logStatus(`✗ ${pass.label}: ${errorMsg}`, 'error');
                     return false;
                 }

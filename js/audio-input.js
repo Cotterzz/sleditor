@@ -443,33 +443,35 @@ export function updateChromagramTexture(gl, texture, analyser, previousFrame, te
         grid[row * 12 + 11] = avgLevel;
     }
     
-    // Calculate delta (change from previous frame)
-    // Delta = current - previous, clamped to [0, inf) so negative = 0
+    // Square the energy values FIRST to emphasize strong notes
+    for (let i = 0; i < 144; i++) {
+        grid[i] = grid[i] * grid[i];
+    }
+    
+    // Calculate delta from SQUARED values (so it's on same scale as red channel)
+    // Delta = current_squared - previous_squared, clamped to [0, inf)
     const delta = new Float32Array(144);
     for (let i = 0; i < 144; i++) {
         if (previousFrame) {
             const change = grid[i] - previousFrame[i];
-            delta[i] = change > 0 ? change : 0.0;  // Positive only, negative = zero
-            
-            // Apply amplification to make beats visible
-            delta[i] *= 15.0;
+            if (change > 0) {
+                // Make delta proportional to current energy level
+                // This prevents noise amplification in quiet sections
+                delta[i] = change * grid[i] * 50.0;
+            } else {
+                delta[i] = 0;
+            }
         } else {
             delta[i] = 0;
         }
     }
     
-    // Store current frame for next delta calculation (BEFORE squaring)
+    // Store SQUARED frame for next delta calculation
     if (previousFrame) {
         previousFrame.set(grid);
     }
     
-    // Square the energy values to emphasize strong notes and reduce weak ones
-    // Do this BEFORE temporal average so all channels are on same scale
-    for (let i = 0; i < 144; i++) {
-        grid[i] = grid[i] * grid[i];
-    }
-    
-    // Calculate temporal average (smoothed energy for blue channel)
+    // Calculate temporal average from SQUARED values (smoothed energy for blue channel)
     // Use exponential moving average with alpha = 0.2 (smooth over ~5 frames)
     const alpha = 0.2;  // How much of current frame to blend (0.1 = slow smooth, 0.3 = fast response)
     if (temporalAverage) {
