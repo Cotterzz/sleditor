@@ -236,7 +236,7 @@ export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
             }
         } else {
             // No JS tab active - reset to minimal JS to prevent old code from running
-            await jsRuntime.compile(MINIMAL_JS, false);
+            await jsRuntime.compile(MINIMAL_JS, true);
         }
         
         if (!audioSuccess || !jsSuccess) {
@@ -465,7 +465,7 @@ export async function reloadShader(isResizeOnly = false) {
             }
         } else {
             // No JS tab active - reset to minimal JS to prevent old code from running
-            await jsRuntime.compile(MINIMAL_JS, false);
+            await jsRuntime.compile(MINIMAL_JS, true);
         }
         
         const totalTime = performance.now() - startTotal;

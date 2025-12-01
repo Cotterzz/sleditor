@@ -946,9 +946,19 @@ export async function loadChannelConfig(config) {
             }
         } else if (ch.type === 'image' && ch.mediaId) {
             // If this is an external media (URL import), re-register it
-            if (ch.mediaId.startsWith('guc:')) {
-                const userPath = ch.mediaId.substring(4); // Remove 'guc:' prefix
-                const fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+            if (ch.mediaId.startsWith('guc:') || ch.mediaId.startsWith('polyhaven:')) {
+                const source = ch.mediaId.startsWith('polyhaven:') ? 'polyhaven' : 'guc';
+                const prefixLength = source === 'polyhaven' ? 10 : 4; // 'polyhaven:' or 'guc:'
+                const userPath = ch.mediaId.substring(prefixLength);
+                
+                // Build full URL based on source
+                let fullUrl;
+                if (source === 'polyhaven') {
+                    fullUrl = 'https://dl.polyhaven.org/file/ph-assets/' + userPath;
+                } else {
+                    fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+                }
+                
                 const filename = userPath.split('/').pop();
                 const title = filename.replace(/\.(png|jpg|jpeg)$/i, '');
                 
@@ -961,13 +971,13 @@ export async function loadChannelConfig(config) {
                     thumb: fullUrl,
                     width: 0, // Will be set when texture loads
                     height: 0,
-                    source: 'guc',
+                    source: source,
                     url: fullUrl,
                     userPath: userPath
                 };
                 
                 mediaLoader.registerExternalMedia(mediaInfo);
-                console.log(`✓ Re-registered external media: ${ch.mediaId}`);
+                console.log(`✓ Re-registered external media: ${ch.mediaId} from ${source}`);
             }
             
             const channelNumber = await createChannel('image', {
