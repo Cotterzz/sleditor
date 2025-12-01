@@ -83,6 +83,11 @@
     pointer-events: auto;
 }
 
+        .node,
+        .node * {
+            cursor: default;
+        }
+
         .node.scene {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-color: #5a67d8;
@@ -118,7 +123,23 @@
 
         .nodetitle {
             font-weight: 500;
-            pointer-events: none;
+            cursor: default;
+        }
+
+        .nodetitleinput {
+            width: 100%;
+            padding: 2px 4px;
+            border: none;
+            border-radius: 3px;
+            font-family: 'Abel', sans-serif;
+            font-size: 15px;
+            font-weight: 500;
+            color: #1a202c;
+            cursor: text;
+        }
+
+        .nodetitleinput:focus {
+            outline: 2px solid #63b3ed;
         }
 
         #sidebar {
@@ -249,7 +270,37 @@
             color: #ed64a6;
             margin-bottom: 10px;
             text-transform: uppercase;
+        }
+
+        .param-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .param-actions button {
+            flex: 1;
+            padding: 6px 10px;
+            border: none;
+            border-radius: 4px;
+            font-family: 'Abel', sans-serif;
+            font-size: 13px;
+            cursor: pointer;
+            background: #f6ad55;
+            color: #1a202c;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .param-actions button:hover {
+            background: #fbd38d;
 }
+
+        .collapse-hint {
+            font-size: 12px;
+            color: #f6ad55;
+            margin-top: 4px;
+            display: none;
+        }
 #glCanvas {
     position: fixed;
     left: 0;
@@ -454,6 +505,7 @@
 <div id="sidebar">
     <div id="sidebarControls">
         <button id="exportShader">Export Shadertoy</button>
+        <button id="saveGraphButton">Save Scene</button>
     </div>
     <h3>Primitives</h3>
     <div class="menu-item primitive" data-type="Sphere">Sphere</div>
@@ -900,6 +952,13 @@ let pos1, pos2, pos3, pos4;
 let selectedNode = null;
 let nodeCounter = 0;
 
+// Collapsed primitives storage
+let collapsedPrimitives = {}; // { 'Collapsed_123': { code, displayName, boundingRadius } }
+let collapsedCounter = 0;
+let collapseHintElement = null;
+const saveGraphButton = document.getElementById('saveGraphButton');
+const LOCAL_STORAGE_KEY = 'sdfEditorState';
+
 let dropPreview = null;
 let currentDropTarget = null;
 
@@ -1114,8 +1173,24 @@ function renderCurrentParamPanel() {
     const nodeType = node.dataset.type;
     const typeDef = NODE_TYPES[nodeType];
     const params = getNodeParams(node);
-    paramNodeName.textContent = nodeType;
+    const headerTitle = typeDef && typeDef.displayName ? typeDef.displayName : nodeType;
+    paramNodeName.textContent = headerTitle;
     paramContent.innerHTML = '';
+    collapseHintElement = null;
+    if (nodeType !== 'Scene') {
+        const actions = document.createElement('div');
+        actions.className = 'param-actions';
+        const collapseBtn = document.createElement('button');
+        collapseBtn.textContent = 'Collapse This Node';
+        collapseBtn.addEventListener('click', () => initiateCollapseWithRename(node, { showHint: true }));
+        actions.appendChild(collapseBtn);
+        const hint = document.createElement('div');
+        hint.className = 'collapse-hint';
+        hint.textContent = 'Rename the node title and press Enter to collapse.';
+        actions.appendChild(hint);
+        collapseHintElement = hint;
+        paramContent.appendChild(actions);
+    }
     if (typeDef && typeDef.params && Object.keys(typeDef.params).length > 0) {
         const section = document.createElement('div');
         section.className = 'param-section';
@@ -1157,6 +1232,7 @@ function init() {
     initRenderModeControls();
     initWebGL();
     applyPreviewScale();
+    loadGraphFromStorage();
     recompilePreview();
 }
 
@@ -1231,6 +1307,19 @@ function addLine(num) {
 function generateShadertoyShader() {
     const sdfCode = generateExportGLSL();
     
+    // Get current camera state
+    const camDist = CAMERA_STATE.distance.toFixed(2);
+    const camTargetX = CAMERA_STATE.target.x.toFixed(2);
+    const camTargetY = CAMERA_STATE.target.y.toFixed(2);
+    const camTargetZ = CAMERA_STATE.target.z.toFixed(2);
+    
+    // Calculate camera position from yaw, pitch, distance
+    const yaw = CAMERA_STATE.yaw;
+    const pitch = CAMERA_STATE.pitch;
+    const camX = (CAMERA_STATE.target.x + CAMERA_STATE.distance * Math.cos(pitch) * Math.sin(yaw)).toFixed(2);
+    const camY = (CAMERA_STATE.target.y + CAMERA_STATE.distance * Math.sin(pitch)).toFixed(2);
+    const camZ = (CAMERA_STATE.target.z + CAMERA_STATE.distance * Math.cos(pitch) * Math.cos(yaw)).toFixed(2);
+    
     return `// Generated with SDF Builder
 // Paste into Shadertoy
 
@@ -1248,8 +1337,16 @@ vec3 calcNormal(vec3 p) {
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
     
-    vec3 ro = vec3(0.0, 0.0, 3.0);
-    vec3 rd = normalize(vec3(uv, -1.0));
+    // Camera settings from editor (adjust these as needed)
+    vec3 cameraPos = vec3(${camX}, ${camY}, ${camZ});
+    vec3 cameraTarget = vec3(${camTargetX}, ${camTargetY}, ${camTargetZ});
+    
+    // Calculate ray direction
+    vec3 forward = normalize(cameraTarget - cameraPos);
+    vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
+    vec3 up = cross(right, forward);
+    vec3 rd = normalize(forward + uv.x * right + uv.y * up);
+    vec3 ro = cameraPos;
     
     float t = 0.0;
     vec3 col = vec3(1.0);
@@ -1268,7 +1365,8 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         }
         
         if (t > 20.0) break;
-        t += d;
+        // Conservative step multiplier for complex/approximate SDFs
+        t += d * 0.5;
     }
     
     fragColor = vec4(col, 1.0);
@@ -1309,6 +1407,12 @@ function setupEventListeners() {
     document.addEventListener('mousemove', onDocumentMouseMove, false);
     document.addEventListener('mouseup', onDocumentMouseUp, false);
     document.addEventListener('contextmenu', e => e.preventDefault(), false);
+    document.addEventListener('dblclick', handleNodeTitleDoubleClick, true);
+    document.addEventListener('blur', handleNodeTitleBlur, true);
+    document.addEventListener('keydown', handleNodeTitleKeyDown, true);
+    if (saveGraphButton) {
+        saveGraphButton.addEventListener('click', saveGraphToLocalStorage);
+    }
     
     window.addEventListener('resize', () => {
         updateLine(document.getElementById("rootnode"));
@@ -1426,7 +1530,8 @@ function createNode(nodeType) {
     const detachHandle = document.createElement('div');
     
     newText.className = "nodetitle";
-    newText.textContent = nodeType;
+    const displayTitle = typeDef && typeDef.displayName ? typeDef.displayName : nodeType;
+    newText.textContent = displayTitle;
     
     newNode.className = "node " + typeDef.category;
     newNode.id = 'node_' + nodeCounter++;
@@ -2109,6 +2214,440 @@ function getNodeVarName(node) {
     return 'd_' + node.id.replace(/[^a-zA-Z0-9]/g, '_');
 }
 
+// Counter for export variable names
+let exportVarCounters = {};
+let exportVarNameMap = {}; // Map node to its export variable name
+
+function getExportVarName(node) {
+    // Return cached name if already generated
+    if (exportVarNameMap[node.id]) {
+        return exportVarNameMap[node.id];
+    }
+    
+    const nodeType = node.dataset.type;
+    const typeName = nodeType.replace(/^op/, '').toLowerCase();
+    
+    // Initialize counter for this type if needed
+    if (!exportVarCounters[nodeType]) {
+        exportVarCounters[nodeType] = 0;
+    }
+    exportVarCounters[nodeType]++;
+    
+    const varName = typeName + '_' + exportVarCounters[nodeType];
+    exportVarNameMap[node.id] = varName; // Cache it
+    return varName;
+}
+
+function resetExportVarCounters() {
+    exportVarCounters = {};
+    exportVarNameMap = {};
+}
+
+function calculateBoundForNode(node) {
+    const nodeType = node.dataset.type;
+    const params = getNodeParams(node);
+    const typeDef = NODE_TYPES[nodeType];
+    
+    if (typeDef.category === 'primitive') {
+        const bound = getPrimitiveBoundExpr(nodeType, params);
+        return bound ? parseFloat(bound) : 3.0;
+    } else {
+        // For operations/modifiers, use a conservative bound
+        const children = getNodeChildren(node);
+        if (children.length === 0) return 3.0;
+        
+        let maxBound = 0;
+        children.forEach(child => {
+            maxBound = Math.max(maxBound, calculateBoundForNode(child));
+        });
+        return maxBound * (params.scale || 1.0) * 1.5; // Conservative multiplier
+    }
+}
+
+function collapseNodeToPrimitive(node) {
+    if (!node || node.dataset.type === 'Scene') {
+        alert('Cannot collapse Scene node');
+        return;
+    }
+    
+    const titleElement = node.querySelector('.nodetitle');
+    const displayName = titleElement ? titleElement.textContent.trim() || node.dataset.type : node.dataset.type;
+    
+    // Generate unique ID
+    const collapsedId = 'Collapsed_' + (++collapsedCounter);
+    
+    // Generate SDF code for this subtree
+    resetExportVarCounters();
+    const sdfCode = generateExportNodeCode(node, 'p');
+    const returnVar = getExportVarName(node);
+    
+    // Create function
+    const functionCode = `float sd${collapsedId}(vec3 p) {
+${sdfCode}    return ${returnVar};
+}
+
+`;
+    
+    // Calculate bounding radius
+    const boundingRadius = calculateBoundForNode(node);
+    
+    // Store collapsed primitive
+    collapsedPrimitives[collapsedId] = {
+        code: functionCode,
+        displayName: displayName,
+        boundingRadius: boundingRadius
+    };
+    
+    // Add to NODE_TYPES
+    NODE_TYPES[collapsedId] = {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {},
+        displayName: displayName
+    };
+    
+    // Add to menu
+    addCollapsedPrimitiveToMenu(collapsedId);
+    
+    // Get parent and position before removing
+    const parent = node.parentNode;
+    const nodeStyle = { left: node.style.left, top: node.style.top };
+    
+    // Copy transform from original node
+    const originalParams = getNodeParams(node);
+    
+    // Remove original node and its children from graph
+    removeNodeFromGraph(node);
+    
+    // Create new collapsed primitive instance
+    const newNode = createNode(collapsedId);
+    newNode.style.left = nodeStyle.left;
+    newNode.style.top = nodeStyle.top;
+    
+    // Copy transform parameters
+    const newParams = getNodeParams(newNode);
+    newParams.posX = originalParams.posX;
+    newParams.posY = originalParams.posY;
+    newParams.posZ = originalParams.posZ;
+    newParams.rotX = originalParams.rotX;
+    newParams.rotY = originalParams.rotY;
+    newParams.rotZ = originalParams.rotZ;
+    newParams.scale = originalParams.scale;
+    setNodeParams(newNode, newParams);
+    
+    // Add to parent
+    parent.appendChild(newNode);
+    
+    // Rebuild node list and connector lines
+    scanNodes();
+    draw.clear();
+    lines = [];
+    addLines();
+    
+    selectNode(newNode);
+    handleGraphChanged();
+    renderCurrentParamPanel();
+    showCollapseHint(false);
+}
+
+function showCollapseHint(show) {
+    if (!collapseHintElement) return;
+    collapseHintElement.style.display = show ? 'block' : 'none';
+}
+
+function initiateCollapseWithRename(node, options = {}) {
+    if (!node || node.dataset.type === 'Scene') {
+        alert('Select a non-scene node to collapse.');
+        return;
+    }
+    if (options.showHint) {
+        showCollapseHint(true);
+    } else {
+        showCollapseHint(false);
+    }
+    const existingInput = node.querySelector('.nodetitleinput');
+    if (existingInput) {
+        existingInput.dataset.collapseAfterSave = '1';
+        existingInput.focus();
+        existingInput.select();
+        return;
+    }
+    const titleElement = node.querySelector('.nodetitle');
+    if (!titleElement) return;
+    startEditNodeTitle(titleElement, true);
+}
+
+function startEditNodeTitle(titleEl, collapseAfter = false) {
+    if (!titleEl) return;
+    const node = titleEl.closest('.node');
+    if (!node || node.dataset.type === 'Scene') return;
+    const existingInput = node.querySelector('.nodetitleinput');
+    if (existingInput) {
+        if (collapseAfter) {
+            existingInput.dataset.collapseAfterSave = '1';
+        }
+        existingInput.focus();
+        existingInput.select();
+        return;
+    }
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'nodetitleinput';
+    const currentText = titleEl.textContent.trim();
+    input.value = currentText;
+    input.dataset.originalValue = currentText;
+    if (collapseAfter) {
+        input.dataset.collapseAfterSave = '1';
+    }
+    titleEl.replaceWith(input);
+    input.focus();
+    input.select();
+}
+
+function finishEditNodeTitle(input, save = true) {
+    if (!input || !input.classList.contains('nodetitleinput') || input._finished) return;
+    input._finished = true;
+    const node = input.closest('.node');
+    const original = input.dataset.originalValue || '';
+    const text = save ? (input.value.trim() || original || 'Node') : (original || 'Node');
+    const titleEl = document.createElement('div');
+    titleEl.className = 'nodetitle';
+    titleEl.textContent = text;
+    if (input.parentNode) {
+        input.replaceWith(titleEl);
+    } else {
+        return;
+    }
+    if (node) {
+        if (node === selectedNode) {
+            paramNodeName.textContent = text;
+        }
+        updateLine(node);
+        const collapsedDef = collapsedPrimitives[node.dataset.type];
+        if (collapsedDef) {
+            collapsedDef.displayName = text;
+            const menuItems = document.querySelectorAll(`.menu-item[data-type="${node.dataset.type}"]`);
+            menuItems.forEach(item => {
+                item.textContent = text;
+            });
+        }
+    }
+    const shouldCollapse = input.dataset.collapseAfterSave === '1' && node;
+    if (shouldCollapse) {
+        showCollapseHint(false);
+        setTimeout(() => collapseNodeToPrimitive(node), 0);
+    } else if (!save) {
+        showCollapseHint(false);
+    }
+}
+
+function handleNodeTitleDoubleClick(event) {
+    if (event.target.classList && event.target.classList.contains('nodetitleinput')) return;
+    const node = event.target.closest && event.target.closest('.node');
+    if (!node || node.dataset.type === 'Scene') return;
+    event.preventDefault();
+    event.stopPropagation();
+    initiateCollapseWithRename(node, { showHint: false });
+}
+
+function handleNodeTitleBlur(event) {
+    const target = event.target;
+    if (target && target.classList.contains('nodetitleinput')) {
+        finishEditNodeTitle(target, true);
+    }
+}
+
+function handleNodeTitleKeyDown(event) {
+    const target = event.target;
+    if (!target || !target.classList.contains('nodetitleinput')) return;
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        finishEditNodeTitle(target, true);
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        finishEditNodeTitle(target, false);
+    }
+}
+
+function addCollapsedPrimitiveToMenu(collapsedId) {
+    const data = collapsedPrimitives[collapsedId];
+    if (!data) return;
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    const primitivesHeader = Array.from(sidebar.querySelectorAll('h3')).find(h => h.textContent === 'Primitives');
+    if (!primitivesHeader) return;
+    const existing = sidebar.querySelector(`.menu-item[data-type="${collapsedId}"]`);
+    if (existing) {
+        existing.textContent = data.displayName || collapsedId;
+        return;
+    }
+    const menuItem = document.createElement('div');
+    menuItem.className = 'menu-item primitive';
+    menuItem.dataset.type = collapsedId;
+    menuItem.textContent = data.displayName || collapsedId;
+    menuItem.style.fontStyle = 'italic';
+    menuItem.style.opacity = '0.85';
+    const nextSibling = primitivesHeader.nextElementSibling;
+    if (nextSibling) {
+        primitivesHeader.parentNode.insertBefore(menuItem, nextSibling);
+    } else {
+        primitivesHeader.parentNode.appendChild(menuItem);
+    }
+    menuItem.addEventListener('mousedown', onMenuItemMouseDown, false);
+}
+
+function serializeNodeTree(node) {
+    if (!node) return null;
+    const params = JSON.parse(JSON.stringify(getNodeParams(node) || {}));
+    const titleEl = node.querySelector('.nodetitle');
+    const data = {
+        type: node.dataset.type,
+        title: titleEl ? titleEl.textContent.trim() : '',
+        params,
+        style: {
+            left: node.style.left || '',
+            top: node.style.top || ''
+        },
+        children: getNodeChildren(node).map(child => serializeNodeTree(child))
+    };
+    return data;
+}
+
+function rebuildNodesFromData(data, parent) {
+    if (!data || !parent) return null;
+    if (data.type === 'Scene') {
+        const sceneNode = parent;
+        const titleEl = sceneNode.querySelector('.nodetitle');
+        if (titleEl && data.title) {
+            titleEl.textContent = data.title;
+        }
+        if (data.params) {
+            setNodeParams(sceneNode, data.params);
+        }
+        (data.children || []).forEach(child => rebuildNodesFromData(child, sceneNode));
+        return sceneNode;
+    }
+    if (!NODE_TYPES[data.type]) {
+        console.warn('Unknown node type in saved scene:', data.type);
+        return null;
+    }
+    const node = createNode(data.type);
+    const titleEl = node.querySelector('.nodetitle');
+    if (titleEl && data.title) {
+        titleEl.textContent = data.title;
+    }
+    if (data.params) {
+        setNodeParams(node, data.params);
+    }
+    if (data.style) {
+        if (data.style.left) node.style.left = data.style.left;
+        if (data.style.top) node.style.top = data.style.top;
+    }
+    parent.appendChild(node);
+    (data.children || []).forEach(child => rebuildNodesFromData(child, node));
+    return node;
+}
+
+function resetCollapsedPrimitiveRegistry() {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+        sidebar.querySelectorAll('.menu-item[data-type^="Collapsed_"]').forEach(item => item.remove());
+    }
+    Object.keys(NODE_TYPES).forEach(key => {
+        if (key.startsWith('Collapsed_')) {
+            delete NODE_TYPES[key];
+        }
+    });
+}
+
+function registerCollapsedPrimitive(id, data) {
+    if (!data) return;
+    NODE_TYPES[id] = {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {},
+        displayName: data.displayName || id
+    };
+    addCollapsedPrimitiveToMenu(id);
+    const match = id.match(/Collapsed_(\d+)/);
+    if (match) {
+        collapsedCounter = Math.max(collapsedCounter, parseInt(match[1], 10));
+    }
+}
+
+function saveGraphToLocalStorage() {
+    try {
+        const sceneNode = document.getElementById('scene');
+        if (!sceneNode) return;
+        const state = {
+            version: 1,
+            nodes: serializeNodeTree(sceneNode),
+            collapsedPrimitives
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+        if (saveGraphButton) {
+            const original = saveGraphButton.textContent;
+            saveGraphButton.textContent = 'Saved ✓';
+            saveGraphButton.disabled = true;
+            setTimeout(() => {
+                saveGraphButton.textContent = original;
+                saveGraphButton.disabled = false;
+            }, 1200);
+        }
+        console.log('[SDF] Scene saved to localStorage.');
+    } catch (err) {
+        console.error('Failed to save scene:', err);
+    }
+}
+
+function loadGraphFromStorage() {
+    try {
+        const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (!raw) return false;
+        const state = JSON.parse(raw);
+        if (!state || !state.nodes) return false;
+        resetCollapsedPrimitiveRegistry();
+        collapsedPrimitives = {};
+        collapsedCounter = 0;
+        const entries = Object.entries(state.collapsedPrimitives || {});
+        entries.forEach(([id, data]) => {
+            collapsedPrimitives[id] = data;
+            registerCollapsedPrimitive(id, data);
+        });
+        const sceneNode = document.getElementById('scene');
+        if (!sceneNode) return false;
+        getNodeChildren(sceneNode).forEach(child => removeNodeFromGraph(child));
+        rebuildNodesFromData(state.nodes, sceneNode);
+        scanNodes();
+        draw.clear();
+        lines = [];
+        addLines();
+        initializeNodeParams();
+        currentParamNode = ensureValidParamNode(currentParamNode) || getFirstEditableNode();
+        renderCurrentParamPanel();
+        graphDirty = false;
+        return true;
+    } catch (err) {
+        console.error('Failed to load saved scene:', err);
+        return false;
+    }
+}
+
+function removeNodeFromGraph(node) {
+    if (!node) return;
+    const children = getNodeChildren(node);
+    children.forEach(child => removeNodeFromGraph(child));
+    const index = nodesArray.indexOf(node);
+    if (index >= 0) {
+        nodesArray.splice(index, 1);
+        if (lines[index]) {
+            lines[index].remove();
+        }
+        lines.splice(index, 1);
+    }
+    node.remove();
+}
+
 // ===========================================
 // EXPORT GLSL - Hardcoded values (for output)
 // ===========================================
@@ -2116,6 +2655,9 @@ function generateExportGLSL() {
     const t0 = perfNow();
     const sceneNode = document.getElementById('scene');
     const children = getNodeChildren(sceneNode);
+    
+    // Reset export variable name counters for clean numbering
+    resetExportVarCounters();
     
     let code = getSDFPreamble();
     
@@ -2127,7 +2669,7 @@ function generateExportGLSL() {
         code += `
 float sceneSDF(vec3 p) {
 ${generateExportNodeCode(children[0], 'p')}
-    return ${getNodeVarName(children[0])};
+    return ${getExportVarName(children[0])};
 }`;
     } else {
         let nodeCode = '';
@@ -2135,9 +2677,9 @@ ${generateExportNodeCode(children[0], 'p')}
             nodeCode += generateExportNodeCode(child, 'p');
         });
         
-        let unionExpr = getNodeVarName(children[0]);
+        let unionExpr = getExportVarName(children[0]);
         for (let i = 1; i < children.length; i++) {
-            unionExpr = `min(${unionExpr}, ${getNodeVarName(children[i])})`;
+            unionExpr = `min(${unionExpr}, ${getExportVarName(children[i])})`;
         }
         
         code += `
@@ -2155,7 +2697,7 @@ ${nodeCode}
 function generateExportNodeCode(node, pointVar) {
     const nodeType = node.dataset.type;
     const params = getNodeParams(node);
-    const varName = getNodeVarName(node);
+    const varName = getExportVarName(node); // Use readable export names
     const typeDef = NODE_TYPES[nodeType];
     
     let code = '';
@@ -2197,8 +2739,8 @@ function generateExportNodeCode(node, pointVar) {
             code += generateExportNodeCode(children[0], transformedPoint);
             code += generateExportNodeCode(children[1], transformedPoint);
             
-            const child1Var = getNodeVarName(children[0]);
-            const child2Var = getNodeVarName(children[1]);
+            const child1Var = getExportVarName(children[0]);
+            const child2Var = getExportVarName(children[1]);
             
             switch (nodeType) {
                 case 'opUnion':
@@ -2230,7 +2772,7 @@ function generateExportNodeCode(node, pointVar) {
             code += `    float ${varName} = 1000.0; // Incomplete modifier\n`;
         } else {
             const child = children[0];
-            const childVar = getNodeVarName(child);
+            const childVar = getExportVarName(child);
             switch (nodeType) {
                 case 'opRound':
                     code += generateExportNodeCode(child, transformedPoint);
@@ -2449,7 +2991,26 @@ function getPrimitiveDistanceExpr(nodeType, pointVar, params) {
             const width = Number(params.width ?? 0.25).toFixed(3);
             return `sdVesicaSegment(${pointVar}, vec3(${ax}, ${ay}, ${az}), vec3(${bx}, ${by}, ${bz}), ${width})`;
         }
+        case 'Mandelbulb': {
+            const power = Number(params.power ?? 8.0).toFixed(3);
+            const iterations = Number(params.iterations ?? 20.0).toFixed(3);
+            return `sdMandelbulb(${pointVar}, ${power}, ${iterations})`;
+        }
+        case 'Supershape3D': {
+            const size = Number(params.size ?? 1.0).toFixed(3);
+            const m = Number(params.m ?? 4.0).toFixed(3);
+            const n1 = Number(params.n1 ?? 1.0).toFixed(3);
+            const n2 = Number(params.n2 ?? 1.0).toFixed(3);
+            const n3 = Number(params.n3 ?? 1.0).toFixed(3);
+            const a = Number(params.a ?? 1.0).toFixed(3);
+            const b = Number(params.b ?? 1.0).toFixed(3);
+            return `sdSupershape3D(${pointVar}, ${size}, ${m}, ${n1}, ${n2}, ${n3}, ${a}, ${b})`;
+        }
         default:
+            // Check if it's a collapsed primitive
+            if (collapsedPrimitives[nodeType]) {
+                return `sd${nodeType}(${pointVar})`;
+            }
             return '1000.0';
     }
 }
@@ -2513,7 +3074,19 @@ function getPrimitiveBoundExpr(nodeType, params) {
             );
             return `${(0.5 * length + width).toFixed(3)}`;
         }
+        case 'Mandelbulb':
+            // Mandelbulb is roughly bounded by a sphere of radius ~1.2
+            return '1.5';
+        case 'Supershape3D': {
+            const size = Number(params.size ?? 1.0);
+            // Supershape can vary widely, use size * 2 as safe bound
+            return `${(size * 2.0).toFixed(3)}`;
+        }
         default:
+            // Check if it's a collapsed primitive
+            if (collapsedPrimitives[nodeType]) {
+                return collapsedPrimitives[nodeType].boundingRadius.toFixed(3);
+            }
             return null;
     }
 }
@@ -2586,6 +3159,12 @@ function generatePreviewNodeCode(node, pointVar) {
                 break;
             case 'Supershape3D':
                 code += `    float ${varName} = sdSupershape3D(${transformedPoint}, ${prefix}_size, ${prefix}_m, ${prefix}_n1, ${prefix}_n2, ${prefix}_n3, ${prefix}_a, ${prefix}_b);\n`;
+                break;
+            default:
+                // Check if it's a collapsed primitive
+                if (collapsedPrimitives[nodeType]) {
+                    code += `    float ${varName} = sd${nodeType}(${transformedPoint});\n`;
+                }
                 break;
         }
         code += `    ${varName} *= ${scaleVar};\n`;
@@ -2757,7 +3336,7 @@ function generatePreviewNodeCode(node, pointVar) {
 }
 
 function getSDFPreamble() {
-    return `// SDF Primitives and Operations
+    let code = `// SDF Primitives and Operations
 float sdSphere(vec3 p, float r) {
     return length(p) - r;
 }
@@ -2970,6 +3549,13 @@ float sdSupershape3D(vec3 p, float size, float m, float n1, float n2, float n3, 
 }
 
 `;
+    
+    // Add collapsed primitives
+    for (const [id, data] of Object.entries(collapsedPrimitives)) {
+        code += data.code;
+    }
+    
+    return code;
 }
 
 // ===========================================
