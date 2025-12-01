@@ -135,6 +135,7 @@
             font-size: 15px;
             font-weight: 500;
             color: #1a202c;
+            cursor: text;
         }
 
         .nodetitleinput:focus {
@@ -504,6 +505,7 @@
 <div id="sidebar">
     <div id="sidebarControls">
         <button id="exportShader">Export Shadertoy</button>
+        <button id="saveGraphButton">Save Scene</button>
     </div>
     <h3>Primitives</h3>
     <div class="menu-item primitive" data-type="Sphere">Sphere</div>
@@ -954,6 +956,8 @@ let nodeCounter = 0;
 let collapsedPrimitives = {}; // { 'Collapsed_123': { code, displayName, boundingRadius } }
 let collapsedCounter = 0;
 let collapseHintElement = null;
+const saveGraphButton = document.getElementById('saveGraphButton');
+const LOCAL_STORAGE_KEY = 'sdfEditorState';
 
 let dropPreview = null;
 let currentDropTarget = null;
@@ -1228,6 +1232,7 @@ function init() {
     initRenderModeControls();
     initWebGL();
     applyPreviewScale();
+    loadGraphFromStorage();
     recompilePreview();
 }
 
@@ -1405,6 +1410,9 @@ function setupEventListeners() {
     document.addEventListener('dblclick', handleNodeTitleDoubleClick, true);
     document.addEventListener('blur', handleNodeTitleBlur, true);
     document.addEventListener('keydown', handleNodeTitleKeyDown, true);
+    if (saveGraphButton) {
+        saveGraphButton.addEventListener('click', saveGraphToLocalStorage);
+    }
     
     window.addEventListener('resize', () => {
         updateLine(document.getElementById("rootnode"));
@@ -2464,29 +2472,165 @@ function handleNodeTitleKeyDown(event) {
 function addCollapsedPrimitiveToMenu(collapsedId) {
     const data = collapsedPrimitives[collapsedId];
     if (!data) return;
-    const displayName = data.displayName;
     const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
     const primitivesHeader = Array.from(sidebar.querySelectorAll('h3')).find(h => h.textContent === 'Primitives');
     if (!primitivesHeader) return;
-    
-    // Create menu item
+    const existing = sidebar.querySelector(`.menu-item[data-type="${collapsedId}"]`);
+    if (existing) {
+        existing.textContent = data.displayName || collapsedId;
+        return;
+    }
     const menuItem = document.createElement('div');
     menuItem.className = 'menu-item primitive';
     menuItem.dataset.type = collapsedId;
-    menuItem.textContent = displayName;
+    menuItem.textContent = data.displayName || collapsedId;
     menuItem.style.fontStyle = 'italic';
     menuItem.style.opacity = '0.85';
-    
-    // Insert after the primitives header
     const nextSibling = primitivesHeader.nextElementSibling;
     if (nextSibling) {
         primitivesHeader.parentNode.insertBefore(menuItem, nextSibling);
     } else {
         primitivesHeader.parentNode.appendChild(menuItem);
     }
-    
-    // Attach event listener
     menuItem.addEventListener('mousedown', onMenuItemMouseDown, false);
+}
+
+function serializeNodeTree(node) {
+    if (!node) return null;
+    const params = JSON.parse(JSON.stringify(getNodeParams(node) || {}));
+    const titleEl = node.querySelector('.nodetitle');
+    const data = {
+        type: node.dataset.type,
+        title: titleEl ? titleEl.textContent.trim() : '',
+        params,
+        style: {
+            left: node.style.left || '',
+            top: node.style.top || ''
+        },
+        children: getNodeChildren(node).map(child => serializeNodeTree(child))
+    };
+    return data;
+}
+
+function rebuildNodesFromData(data, parent) {
+    if (!data || !parent) return null;
+    if (data.type === 'Scene') {
+        const sceneNode = parent;
+        const titleEl = sceneNode.querySelector('.nodetitle');
+        if (titleEl && data.title) {
+            titleEl.textContent = data.title;
+        }
+        if (data.params) {
+            setNodeParams(sceneNode, data.params);
+        }
+        (data.children || []).forEach(child => rebuildNodesFromData(child, sceneNode));
+        return sceneNode;
+    }
+    if (!NODE_TYPES[data.type]) {
+        console.warn('Unknown node type in saved scene:', data.type);
+        return null;
+    }
+    const node = createNode(data.type);
+    const titleEl = node.querySelector('.nodetitle');
+    if (titleEl && data.title) {
+        titleEl.textContent = data.title;
+    }
+    if (data.params) {
+        setNodeParams(node, data.params);
+    }
+    if (data.style) {
+        if (data.style.left) node.style.left = data.style.left;
+        if (data.style.top) node.style.top = data.style.top;
+    }
+    parent.appendChild(node);
+    (data.children || []).forEach(child => rebuildNodesFromData(child, node));
+    return node;
+}
+
+function resetCollapsedPrimitiveRegistry() {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+        sidebar.querySelectorAll('.menu-item[data-type^="Collapsed_"]').forEach(item => item.remove());
+    }
+    Object.keys(NODE_TYPES).forEach(key => {
+        if (key.startsWith('Collapsed_')) {
+            delete NODE_TYPES[key];
+        }
+    });
+}
+
+function registerCollapsedPrimitive(id, data) {
+    if (!data) return;
+    NODE_TYPES[id] = {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {},
+        displayName: data.displayName || id
+    };
+    addCollapsedPrimitiveToMenu(id);
+    const match = id.match(/Collapsed_(\d+)/);
+    if (match) {
+        collapsedCounter = Math.max(collapsedCounter, parseInt(match[1], 10));
+    }
+}
+
+function saveGraphToLocalStorage() {
+    try {
+        const sceneNode = document.getElementById('scene');
+        if (!sceneNode) return;
+        const state = {
+            version: 1,
+            nodes: serializeNodeTree(sceneNode),
+            collapsedPrimitives
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+        if (saveGraphButton) {
+            const original = saveGraphButton.textContent;
+            saveGraphButton.textContent = 'Saved ✓';
+            saveGraphButton.disabled = true;
+            setTimeout(() => {
+                saveGraphButton.textContent = original;
+                saveGraphButton.disabled = false;
+            }, 1200);
+        }
+        console.log('[SDF] Scene saved to localStorage.');
+    } catch (err) {
+        console.error('Failed to save scene:', err);
+    }
+}
+
+function loadGraphFromStorage() {
+    try {
+        const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (!raw) return false;
+        const state = JSON.parse(raw);
+        if (!state || !state.nodes) return false;
+        resetCollapsedPrimitiveRegistry();
+        collapsedPrimitives = {};
+        collapsedCounter = 0;
+        const entries = Object.entries(state.collapsedPrimitives || {});
+        entries.forEach(([id, data]) => {
+            collapsedPrimitives[id] = data;
+            registerCollapsedPrimitive(id, data);
+        });
+        const sceneNode = document.getElementById('scene');
+        if (!sceneNode) return false;
+        getNodeChildren(sceneNode).forEach(child => removeNodeFromGraph(child));
+        rebuildNodesFromData(state.nodes, sceneNode);
+        scanNodes();
+        draw.clear();
+        lines = [];
+        addLines();
+        initializeNodeParams();
+        currentParamNode = ensureValidParamNode(currentParamNode) || getFirstEditableNode();
+        renderCurrentParamPanel();
+        graphDirty = false;
+        return true;
+    } catch (err) {
+        console.error('Failed to load saved scene:', err);
+        return false;
+    }
 }
 
 function removeNodeFromGraph(node) {
