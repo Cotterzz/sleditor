@@ -214,6 +214,43 @@
             text-transform: uppercase;
         }
 
+        .lathe-editor {
+            width: 100%;
+            height: 200px;
+            background: #1a202c;
+            border: 1px solid #4a5568;
+            border-radius: 4px;
+            position: relative;
+            cursor: crosshair;
+            margin-bottom: 10px;
+        }
+
+        .lathe-editor canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .lathe-editor-controls {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .lathe-editor-controls button {
+            flex: 1;
+            padding: 4px 8px;
+            font-size: 11px;
+            background: #4a5568;
+            border: none;
+            border-radius: 3px;
+            color: white;
+            cursor: pointer;
+        }
+
+        .lathe-editor-controls button:hover {
+            background: #5a67d8;
+        }
+
         .param-item {
             margin: 8px 0;
         }
@@ -317,6 +354,40 @@
             color: white;
             font-family: 'Source Code Pro', monospace;
             box-sizing: border-box;
+        }
+
+        #recycleBin {
+            position: absolute;
+            left: calc(220px + 20px);
+            bottom: 20px;
+            width: 160px;
+            height: 90px;
+            border: 2px dashed rgba(255, 99, 71, 0.6);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 99, 71, 0.08);
+            font-family: 'Abel', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 36px;
+            transition: background 0.2s, transform 0.2s, border-color 0.2s;
+            z-index: 80;
+            color: rgba(255, 99, 71, 0.6);
+            pointer-events: none;
+        }
+
+        #recycleBin small {
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        #recycleBin.active {
+            background: rgba(255, 99, 71, 0.25);
+            border-color: rgba(255, 255, 255, 0.9);
+            transform: scale(1.05);
         }
 
         #preview {
@@ -475,6 +546,7 @@
     <div class="menu-item mesh" data-type="Icosahedron">Icosahedron</div>
     <div class="menu-item mesh" data-type="Octahedron">Octahedron</div>
     <div class="menu-item mesh" data-type="Tetrahedron">Tetrahedron</div>
+    <div class="menu-item mesh" data-type="Lathe">Lathe</div>
     
     <h3>Lights</h3>
     <div class="menu-item light" data-type="AmbientLight">Ambient</div>
@@ -497,6 +569,11 @@
 <svg id="drawing"></svg>
 
 <div id="rootnode"></div>
+
+<div id="recycleBin">
+    <div>♻</div>
+    <small>Recycle</small>
+</div>
 
 <div id="preview"></div>
 
@@ -532,8 +609,8 @@ const NODE_TYPES = {
             backgroundColor: { type: 'color', default: '#000000' },
             fog: { type: 'boolean', default: false },
             fogColor: { type: 'color', default: '#ffffff' },
-            fogNear: { type: 'number', default: 1, min: 0.1, max: 100, step: 0.1 },
-            fogFar: { type: 'number', default: 10, min: 1, max: 1000, step: 1 }
+            fogNear: { type: 'number', default: 1, min: 0, max: 50, step: 0.5 },
+            fogFar: { type: 'number', default: 50, min: 1, max: 200, step: 1 }
         }
     },
     Group: {
@@ -636,6 +713,32 @@ const NODE_TYPES = {
             radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
         }
     },
+    Lathe: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            // Default wine cup/goblet shape points [x, y] - x is radius, y is height
+            points: { 
+                type: 'lathePoints', 
+                default: [
+                    [0.0, 0.0],
+                    [0.4, 0.05],
+                    [0.35, 0.1],
+                    [0.1, 0.15],
+                    [0.08, 0.5],
+                    [0.1, 0.55],
+                    [0.5, 0.9],
+                    [0.5, 1.0],
+                    [0.45, 1.0],
+                    [0.45, 0.95],
+                    [0.08, 0.6],
+                    [0.0, 0.6]
+                ]
+            },
+            segments: { type: 'number', default: 32, min: 3, max: 64, step: 1 },
+            scale: { type: 'number', default: 1, min: 0.1, max: 5, step: 0.1 }
+        }
+    },
     AmbientLight: {
         category: 'light',
         maxChildren: 0,
@@ -727,6 +830,9 @@ let detached = false;
 let dragFromMenu = false;
 let dropPreview = null;
 let currentDropTarget = null;
+const recycleBin = document.getElementById('recycleBin');
+const recycleRect = () => recycleBin.getBoundingClientRect();
+let recycleActive = false;
 
 // Three.js scene
 let scene, camera, renderer, controls;
@@ -908,16 +1014,8 @@ function initThreeJS() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x000000);
     
-    // Add default lighting so objects are visible
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
-    defaultLights.push(ambientLight);
-    
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(5, 10, 7);
-    directionalLight.castShadow = true;
-    scene.add(directionalLight);
-    defaultLights.push(directionalLight);
+    // Default lights are now represented as nodes in the editor
+    // They will be added via updatePreview() when light nodes are processed
     
     camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
     camera.position.set(5, 5, 5);
@@ -998,6 +1096,20 @@ function createSceneNode() {
     sceneNode.style.top = '50px';
     document.getElementById('rootnode').appendChild(sceneNode);
     nodesArray.push(sceneNode);
+    
+    // Add default ambient light as a node
+    const ambientNode = createNode('AmbientLight');
+    ambientNode.style.left = '40px';
+    ambientNode.style.top = '40px';
+    sceneNode.appendChild(ambientNode);
+    nodesArray.push(ambientNode);
+    
+    // Add default directional light as a node
+    const directionalNode = createNode('DirectionalLight');
+    directionalNode.style.left = '40px';
+    directionalNode.style.top = '80px';
+    sceneNode.appendChild(directionalNode);
+    nodesArray.push(directionalNode);
 }
 
 function setupMenuItems() {
@@ -1158,6 +1270,9 @@ function onDocumentMouseMove(event) {
     if (detached) {
         updateDropPreview();
     }
+    
+    // Update recycle bin preview
+    updateRecyclePreview();
 }
 
 function updateDropPreview() {
@@ -1265,6 +1380,17 @@ function getPreviewPathData(zone, pointerX, pointerY) {
 function onDocumentMouseUp(event) {
     if (dragging && dragged) {
         clearDropPreview();
+        clearRecyclePreview();
+        
+        // Check recycle bin first
+        if (checkRecycleBin(pos3, pos4)) {
+            deleteNodeWithChildren(dragged);
+            dragging = false;
+            dragged = null;
+            detached = false;
+            dragFromMenu = false;
+            return;
+        }
         
         const targetInfo = findDropTarget(pos3, pos4);
         
@@ -1277,9 +1403,13 @@ function onDocumentMouseUp(event) {
             node.style.boxShadow = node === selectedNode ? '0 0 0 3px #ffcc00' : '';
         });
         
+        // Clear and rebuild lines
+        draw.clear();
+        lines = [];
+        
         // Rescan and update
         scanNodes();
-        updateAllLines();
+        addLines();
         updatePreview();
     }
     
@@ -1287,6 +1417,48 @@ function onDocumentMouseUp(event) {
     dragged = null;
     detached = false;
     dragFromMenu = false;
+}
+
+function updateRecyclePreview() {
+    if (!dragged) return;
+    const rect = recycleRect();
+    const inBin = pos3 >= rect.left && pos3 <= rect.right && pos4 >= rect.top && pos4 <= rect.bottom;
+    if (inBin && !recycleActive) {
+        recycleActive = true;
+        recycleBin.classList.add('active');
+    } else if (!inBin && recycleActive) {
+        recycleActive = false;
+        recycleBin.classList.remove('active');
+    }
+}
+
+function clearRecyclePreview() {
+    recycleActive = false;
+    recycleBin.classList.remove('active');
+}
+
+function checkRecycleBin(clientX, clientY) {
+    const rect = recycleRect();
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+}
+
+function deleteNodeWithChildren(node) {
+    if (!node || node.dataset.type === 'Scene') return;
+    if (selectedNode && (selectedNode === node || node.contains(selectedNode))) {
+        selectNode(null);
+    }
+    
+    // Remove the node from DOM
+    node.remove();
+    
+    // Clear all lines and rebuild
+    draw.clear();
+    lines = [];
+    
+    // Rescan nodes and rebuild lines
+    scanNodes();
+    addLines();
+    updatePreview();
 }
 
 function isDescendant(parent, child) {
@@ -1326,9 +1498,15 @@ function selectNode(node) {
     }
     
     selectedNode = node;
-    node.classList.add('selected');
     
-    renderParamPanel(node);
+    if (node) {
+        node.classList.add('selected');
+        renderParamPanel(node);
+    } else {
+        // Clear param panel when nothing selected
+        const paramContent = document.getElementById('paramContent');
+        paramContent.innerHTML = '<p style="color: #718096;">Select a node to edit parameters</p>';
+    }
 }
 
 function renderParamPanel(node) {
@@ -1386,6 +1564,12 @@ function renderParamPanel(node) {
     // Attach fine control button listeners
     paramContent.querySelectorAll('.param-fine-btn').forEach(btn => {
         btn.addEventListener('click', onParamChange);
+    });
+    
+    // Initialize lathe editors
+    paramContent.querySelectorAll('.lathe-editor').forEach(container => {
+        const key = container.dataset.key;
+        initLatheEditor(container, key);
     });
 }
 
@@ -1466,9 +1650,246 @@ function createParamInput(key, def, value) {
                 </div>
             `;
         }
+    } else if (def.type === 'lathePoints') {
+        // Lathe point editor - creates a canvas-based editor
+        const pointsJson = JSON.stringify(value);
+        return `
+            <div class="param-item">
+                <label class="param-label">${label}</label>
+                <div class="lathe-editor" data-key="${key}">
+                    <canvas></canvas>
+                </div>
+                <div class="lathe-editor-controls">
+                    <button onclick="addLathePoint('${key}')">+ Add</button>
+                    <button onclick="removeLathePoint('${key}')">- Remove</button>
+                    <button onclick="resetLathePoints('${key}')">Reset</button>
+                </div>
+                <input type="hidden" class="param-input lathe-points-data" data-key="${key}" value='${pointsJson}'>
+            </div>
+        `;
     }
     
     return '';
+}
+
+// Lathe point editor functions
+let activeLatheEditor = null;
+let draggedPointIndex = -1;
+
+function initLatheEditor(container, key) {
+    const canvas = container.querySelector('canvas');
+    const ctx = canvas.getContext('2d');
+    const rect = container.getBoundingClientRect();
+    
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    
+    const input = document.querySelector(`.lathe-points-data[data-key="${key}"]`);
+    let points = JSON.parse(input.value);
+    
+    function pointToCanvas(p) {
+        // Map point [x, y] where x is 0-1 (radius) and y is 0-1 (height)
+        // to canvas coordinates
+        const padding = 10;
+        const availWidth = canvas.width - padding * 2;
+        const availHeight = canvas.height - padding * 2;
+        return {
+            x: padding + p[0] * availWidth,
+            y: padding + (1 - p[1]) * availHeight // Flip Y
+        };
+    }
+    
+    function canvasToPoint(cx, cy) {
+        const padding = 10;
+        const availWidth = canvas.width - padding * 2;
+        const availHeight = canvas.height - padding * 2;
+        return [
+            Math.max(0, Math.min(1, (cx - padding) / availWidth)),
+            Math.max(0, Math.min(1, 1 - (cy - padding) / availHeight))
+        ];
+    }
+    
+    function draw() {
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw grid
+        ctx.strokeStyle = '#2d3748';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 10; i++) {
+            const x = 10 + (canvas.width - 20) * i / 10;
+            const y = 10 + (canvas.height - 20) * i / 10;
+            ctx.beginPath();
+            ctx.moveTo(x, 10);
+            ctx.lineTo(x, canvas.height - 10);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(10, y);
+            ctx.lineTo(canvas.width - 10, y);
+            ctx.stroke();
+        }
+        
+        // Draw center line (axis)
+        ctx.strokeStyle = '#4a5568';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(10, 10);
+        ctx.lineTo(10, canvas.height - 10);
+        ctx.stroke();
+        
+        // Draw profile line
+        if (points.length > 1) {
+            ctx.strokeStyle = '#48bb78';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const first = pointToCanvas(points[0]);
+            ctx.moveTo(first.x, first.y);
+            for (let i = 1; i < points.length; i++) {
+                const p = pointToCanvas(points[i]);
+                ctx.lineTo(p.x, p.y);
+            }
+            ctx.stroke();
+            
+            // Draw mirrored profile (lathe preview)
+            ctx.strokeStyle = 'rgba(72, 187, 120, 0.3)';
+            ctx.beginPath();
+            const firstM = pointToCanvas(points[0]);
+            ctx.moveTo(20 - firstM.x + 10, firstM.y);
+            for (let i = 1; i < points.length; i++) {
+                const p = pointToCanvas(points[i]);
+                ctx.lineTo(20 - p.x + 10, p.y);
+            }
+            ctx.stroke();
+        }
+        
+        // Draw points
+        points.forEach((p, i) => {
+            const cp = pointToCanvas(p);
+            ctx.fillStyle = i === draggedPointIndex ? '#f6ad55' : '#4facfe';
+            ctx.beginPath();
+            ctx.arc(cp.x, cp.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        });
+    }
+    
+    function findPointAt(cx, cy) {
+        for (let i = 0; i < points.length; i++) {
+            const cp = pointToCanvas(points[i]);
+            const dx = cx - cp.x;
+            const dy = cy - cp.y;
+            if (dx * dx + dy * dy < 100) return i;
+        }
+        return -1;
+    }
+    
+    function updatePoints(newPoints) {
+        points = newPoints;
+        input.value = JSON.stringify(points);
+        draw();
+        
+        // Trigger update
+        if (selectedNode) {
+            const params = getNodeParams(selectedNode);
+            params[key] = points;
+            setNodeParams(selectedNode, params);
+            updatePreview();
+        }
+    }
+    
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        
+        draggedPointIndex = findPointAt(cx, cy);
+        if (draggedPointIndex === -1) {
+            // Add new point
+            const newPoint = canvasToPoint(cx, cy);
+            // Insert at correct Y position
+            let insertIndex = points.length;
+            for (let i = 0; i < points.length; i++) {
+                if (points[i][1] > newPoint[1]) {
+                    insertIndex = i;
+                    break;
+                }
+            }
+            points.splice(insertIndex, 0, newPoint);
+            draggedPointIndex = insertIndex;
+            updatePoints([...points]);
+        }
+        activeLatheEditor = { canvas, points, key, updatePoints };
+    });
+    
+    canvas.addEventListener('mousemove', (e) => {
+        if (draggedPointIndex === -1 || !activeLatheEditor) return;
+        const rect = canvas.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        const newPoint = canvasToPoint(cx, cy);
+        points[draggedPointIndex] = newPoint;
+        updatePoints([...points]);
+    });
+    
+    canvas.addEventListener('mouseup', () => {
+        draggedPointIndex = -1;
+        activeLatheEditor = null;
+    });
+    
+    canvas.addEventListener('mouseleave', () => {
+        if (draggedPointIndex !== -1) {
+            draggedPointIndex = -1;
+            activeLatheEditor = null;
+        }
+    });
+    
+    // Store reference for external functions
+    container._latheEditor = { points, updatePoints, draw };
+    
+    draw();
+}
+
+function addLathePoint(key) {
+    const container = document.querySelector(`.lathe-editor[data-key="${key}"]`);
+    if (!container || !container._latheEditor) return;
+    const editor = container._latheEditor;
+    // Add point at middle
+    editor.points.push([0.3, 0.5]);
+    editor.updatePoints([...editor.points]);
+}
+
+function removeLathePoint(key) {
+    const container = document.querySelector(`.lathe-editor[data-key="${key}"]`);
+    if (!container || !container._latheEditor) return;
+    const editor = container._latheEditor;
+    if (editor.points.length > 2) {
+        editor.points.pop();
+        editor.updatePoints([...editor.points]);
+    }
+}
+
+function resetLathePoints(key) {
+    const container = document.querySelector(`.lathe-editor[data-key="${key}"]`);
+    if (!container || !container._latheEditor) return;
+    const editor = container._latheEditor;
+    // Reset to wine cup shape
+    const defaultPoints = [
+        [0.0, 0.0],
+        [0.4, 0.05],
+        [0.35, 0.1],
+        [0.1, 0.15],
+        [0.08, 0.5],
+        [0.1, 0.55],
+        [0.5, 0.9],
+        [0.5, 1.0],
+        [0.45, 1.0],
+        [0.45, 0.95],
+        [0.08, 0.6],
+        [0.0, 0.6]
+    ];
+    editor.updatePoints(defaultPoints);
 }
 
 function onParamChange(event) {
@@ -1628,6 +2049,13 @@ function createMesh(type, params) {
             break;
         case 'Tetrahedron':
             geometry = new THREE.TetrahedronGeometry(params.radius);
+            break;
+        case 'Lathe':
+            // Convert points array to THREE.Vector2 array
+            const lathePoints = (params.points || []).map(p => 
+                new THREE.Vector2(p[0] * params.scale, p[1] * params.scale)
+            );
+            geometry = new THREE.LatheGeometry(lathePoints, params.segments);
             break;
         default:
             geometry = new THREE.BoxGeometry(1, 1, 1);
@@ -1889,6 +2317,12 @@ function generateMeshCode(type, params, varName, indent) {
             break;
         case 'Tetrahedron':
             geomCode = `new THREE.TetrahedronGeometry(${params.radius})`;
+            break;
+        case 'Lathe':
+            const pointsCode = (params.points || []).map(p => 
+                `new THREE.Vector2(${(p[0] * params.scale).toFixed(3)}, ${(p[1] * params.scale).toFixed(3)})`
+            ).join(', ');
+            geomCode = `new THREE.LatheGeometry([${pointsCode}], ${params.segments})`;
             break;
     }
     
