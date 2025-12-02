@@ -209,8 +209,36 @@ export async function createMediaSelector(tabName, channelType, channelNumber) {
     
     const urlLabel = document.createElement('div');
     urlLabel.style.cssText = 'font-size: 11px; font-weight: bold; margin-bottom: 6px; color: var(--text-secondary);';
-    urlLabel.textContent = 'Import from GitHub';
+    urlLabel.textContent = 'Import from URL';
     urlSection.appendChild(urlLabel);
+    
+    // Source selector (only for images)
+    let sourceSelect = null;
+    if (channelType === 'image') {
+        const sourceRow = document.createElement('div');
+        sourceRow.style.cssText = 'display: flex; gap: 6px; align-items: center; margin-bottom: 6px;';
+        
+        const sourceLabel = document.createElement('span');
+        sourceLabel.style.cssText = 'font-size: 11px; color: var(--text-secondary);';
+        sourceLabel.textContent = 'Source:';
+        sourceRow.appendChild(sourceLabel);
+        
+        sourceSelect = document.createElement('select');
+        sourceSelect.style.cssText = `
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 2px;
+        `;
+        sourceSelect.innerHTML = `
+            <option value="github">GitHub</option>
+            <option value="polyhaven">Poly Haven</option>
+        `;
+        sourceRow.appendChild(sourceSelect);
+        urlSection.appendChild(sourceRow);
+    }
     
     const urlRow = document.createElement('div');
     urlRow.style.cssText = 'display: flex; gap: 6px; align-items: center;';
@@ -234,6 +262,19 @@ export async function createMediaSelector(tabName, channelType, channelNumber) {
         font-family: monospace;
     `;
     urlRow.appendChild(urlInput);
+    
+    // Update prefix and placeholder when source changes (images only)
+    if (channelType === 'image' && sourceSelect) {
+        sourceSelect.onchange = () => {
+            if (sourceSelect.value === 'polyhaven') {
+                urlPrefix.textContent = 'https://dl.polyhaven.org/file/ph-assets/';
+                urlInput.placeholder = 'HDRIs/hdri_name/hdri_file.png';
+            } else {
+                urlPrefix.textContent = 'https://raw.githubusercontent.com/';
+                urlInput.placeholder = 'user/repo/branch/path/image.png';
+            }
+        };
+    }
     
     const importBtn = document.createElement('button');
     importBtn.textContent = 'Import';
@@ -262,7 +303,7 @@ export async function createMediaSelector(tabName, channelType, channelNumber) {
     importBtn.onclick = async () => {
         const userPath = urlInput.value.trim();
         if (!userPath) {
-            alert('Please enter a GitHub path');
+            alert('Please enter a path');
             return;
         }
         
@@ -272,13 +313,26 @@ export async function createMediaSelector(tabName, channelType, channelNumber) {
             return;
         }
         
-        const fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+        // Build full URL based on source
+        let fullUrl;
+        let source = 'guc'; // Default to GitHub User Content
+        
+        if (channelType === 'image' && sourceSelect) {
+            if (sourceSelect.value === 'polyhaven') {
+                fullUrl = 'https://dl.polyhaven.org/file/ph-assets/' + userPath;
+                source = 'polyhaven';
+            } else {
+                fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+            }
+        } else {
+            fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+        }
         
         importBtn.disabled = true;
         importBtn.textContent = 'Loading...';
         
         try {
-            await handleUrlImport(fullUrl, userPath, channelNumber, channelType);
+            await handleUrlImport(fullUrl, userPath, channelNumber, channelType, source);
             urlInput.value = '';
             importBtn.textContent = 'Import';
         } catch (error) {
@@ -309,7 +363,7 @@ export async function createMediaSelector(tabName, channelType, channelNumber) {
     const allItems = [...items];
     
     // Add external media if current selection is external
-    if (currentMedia && currentMedia.source === 'guc' && !allItems.find(item => item.id === currentMedia.id)) {
+    if (currentMedia && (currentMedia.source === 'guc' || currentMedia.source === 'polyhaven') && !allItems.find(item => item.id === currentMedia.id)) {
         allItems.unshift(currentMedia); // Add at beginning
     }
     
@@ -442,17 +496,18 @@ async function handleMediaSelect(mediaId, channelNumber, channelType) {
 }
 
 /**
- * Handle URL import from GitHub
- * @param {string} fullUrl - Complete GitHub raw URL
+ * Handle URL import from GitHub or other sources
+ * @param {string} fullUrl - Complete URL
  * @param {string} userPath - User-provided path (used as title)
  * @param {number} channelNumber - Channel number
  * @param {string} channelType - 'image' or 'video'
+ * @param {string} source - Source identifier ('guc', 'polyhaven', etc.)
  */
-async function handleUrlImport(fullUrl, userPath, channelNumber, channelType) {
+async function handleUrlImport(fullUrl, userPath, channelNumber, channelType, source = 'guc') {
     console.log(`Importing from URL: ${fullUrl}`);
     
     // Create a special media ID for URL-sourced images
-    const mediaId = 'guc:' + userPath;
+    const mediaId = source + ':' + userPath;
     
     // Extract title from path (filename without extension)
     const filename = userPath.split('/').pop();
@@ -477,7 +532,7 @@ async function handleUrlImport(fullUrl, userPath, channelNumber, channelType) {
         thumb: fullUrl,
         width: img.width,
         height: img.height,
-        source: 'guc', // GitHub User Content
+        source: source,
         url: fullUrl,
         userPath: userPath
     };

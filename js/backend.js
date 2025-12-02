@@ -4,6 +4,7 @@
 
 import { state, logStatus } from './core.js';
 import * as perfMonitor from './performance-monitor.js';
+import * as render from './render.js';
 
 // Supabase credentials (set at module level so they're available immediately)
 const SUPABASE_URL = 'https://vnsdnskppjwktvksxxvp.supabase.co';
@@ -723,12 +724,15 @@ export async function deleteThumbnail(filename) {
  * @returns {Promise<Blob>}
  */
 export async function captureThumbnailBlob() {
+    // If paused, render a single frame first to ensure canvas has current content
+    if (!state.isPlaying) {
+        render.renderOnce();
+    }
+    
     const activeCanvas = state.graphicsBackend === 'webgl' ? state.canvasWebGL : state.canvasWebGPU;
     
-    // For WebGL, wait a frame to ensure render is complete
-    if (state.graphicsBackend === 'webgl') {
-        await new Promise(resolve => requestAnimationFrame(resolve));
-    }
+    // Wait a frame to ensure render is complete
+    await new Promise(resolve => requestAnimationFrame(resolve));
     
     // Create thumbnail canvas at fixed 256x256 size
     const THUMBNAIL_SIZE = 256;

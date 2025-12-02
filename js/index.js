@@ -229,8 +229,7 @@ function setupUI() {
         });
     });
     
-    // Populate default gallery tab
-    save.populateGallery('sotw');
+    // Note: Gallery population moved to after backend.init() to ensure Supabase is ready
     
     document.getElementById('signInGoogle').addEventListener('click', () => {
         backend.signInWithOAuth('google');
@@ -592,6 +591,9 @@ async function init() {
     
     // Initialize backend (Supabase auth)
     backend.init();
+    
+    // Populate default gallery tab (after backend init so Supabase is ready)
+    save.populateGallery('sotw');
     
     // Initialize performance monitor
     perfMonitor.init();

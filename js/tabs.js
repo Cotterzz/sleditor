@@ -553,11 +553,9 @@ export function showAddPassMenu() {
     }
     
     // Build menu options
+    // Note: Main pass types (glsl_regular, glsl_stoy, glsl_golf, glsl_fragment) 
+    // are only available in the "New Shader" menu, not here
     const availableTabs = [
-        { name: 'glsl_regular', label: '🎨 Regular (GLSL)' },
-        { name: 'glsl_stoy', label: '🔺 S-Toy (GLSL)' },
-        { name: 'glsl_golf', label: '⛳ Golf (GLSL)' },
-        { name: 'glsl_fragment', label: '🔺 Raw (GLSL)' },
         { name: 'audio_gpu', label: '🔊 Audio (WGSL)' },
         { name: 'audio_worklet', label: '🎵 Audio (Worklet)' },
         { name: 'js', label: '⚡ JavaScript' },
@@ -573,6 +571,7 @@ export function showAddPassMenu() {
     const hasAudioGpu = state.activeTabs.includes('audio_gpu');
     const hasAudioWorklet = state.activeTabs.includes('audio_worklet');
     const hasGLSL = state.activeTabs.some(t => t === 'glsl_fragment' || t === 'glsl_regular' || t === 'glsl_stoy' || t === 'glsl_golf');
+    const hasWGSL = state.activeTabs.includes('graphics'); // WGSL graphics tab
     
     availableTabs.forEach(tab => {
         const isActive = state.activeTabs.includes(tab.name);
@@ -580,14 +579,25 @@ export function showAddPassMenu() {
         // Grey out incompatible tabs:
         // - Other audio tab if one is active (mutual exclusion)
         // - WGSL audio if GLSL graphics is active (incompatible backends)
-        // - GLSL tabs if already have another GLSL tab active
+        // - Channels not yet supported for WGSL
+        // - Buffer pass only available with GLSL
+        const isChannelTab = tab.name === '_image_channel' || tab.name === '_audio_channel' || tab.name === '_video_channel';
         const isDisabled = (tab.name === 'audio_gpu' && (hasAudioWorklet || hasGLSL)) || 
                           (tab.name === 'audio_worklet' && hasAudioGpu) ||
-                          ((tab.name === 'glsl_fragment' || tab.name === 'glsl_regular' || tab.name === 'glsl_stoy' || tab.name === 'glsl_golf') && hasGLSL) ||
-                          (tab.name === '_buffer_channel' && !getActiveGlslTab());
+                          (isChannelTab && hasWGSL) ||  // Channels not supported for WGSL yet
+                          (tab.name === '_buffer_channel' && (!getActiveGlslTab() || hasWGSL));
         
         const option = document.createElement('div');
-        option.textContent = tab.label + (isActive ? ' ✓' : '');
+        
+        // Add hint text for disabled channel options when WGSL is active
+        let labelText = tab.label + (isActive ? ' ✓' : '');
+        if (isDisabled && isChannelTab && hasWGSL) {
+            labelText += ' (GLSL only)';
+        } else if (isDisabled && tab.name === '_buffer_channel' && hasWGSL) {
+            labelText += ' (GLSL only)';
+        }
+        
+        option.textContent = labelText;
         option.style.cssText = `
             padding: 6px 12px;
             cursor: ${(isActive || isDisabled) ? 'default' : 'pointer'};
