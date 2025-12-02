@@ -1,0 +1,4730 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="author" content="John Cotterell">
+    <title>SDF Builder</title>
+    <link href="https://fonts.googleapis.com/css?family=Abel|Quicksand:500|Source+Code+Pro" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #rootnode {
+            font-size: 20px;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+
+        .node {
+            font-family: 'Quicksand', sans-serif;
+            font-size: .9em;
+            padding: 8px 12px;
+            border: 2px solid #cccccc;
+            border-radius: 5px;
+            background: #eeeeee;
+            position: absolute;
+            z-index: 9;
+            cursor: default;
+            min-width: 80px;
+            text-align: center;
+        }
+
+.node .detach-wrapper {
+    position: absolute;
+    top: -32px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 30px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.35);
+    border: 1px dashed rgba(197, 48, 48, 0.6);
+    opacity: 0;
+    pointer-events: auto;
+}
+
+.detach-wrapper .detach-handle {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.25);
+    background: #fff;
+    color: #c53030;
+    font-size: 13px;
+    line-height: 22px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    opacity: 0;
+    pointer-events: auto;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.detach-wrapper .detach-handle::selection {
+    background: transparent;
+}
+
+.node .detach-wrapper:hover,
+.detach-wrapper.force-visible,
+.detach-wrapper:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+        .node,
+        .node * {
+            cursor: default;
+        }
+
+        .node.scene {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #5a67d8;
+            color: white;
+        }
+
+        .node.operation {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-color: #ed64a6;
+            color: white;
+        }
+
+        .node.modifier {
+            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            border-color: #f6ad55;
+            color: #2d3748;
+        }
+
+        .node.primitive {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            border-color: #38b2ac;
+            color: white;
+        }
+
+        .node.selected {
+            box-shadow: 0 0 0 3px #ffcc00;
+            background: rgba(255, 204, 0, 0.15);
+        }
+
+        .node.invalid {
+            opacity: 0.5;
+        }
+
+        .nodetitle {
+            font-weight: 500;
+            cursor: default;
+        }
+
+        .nodetitleinput {
+            width: 100%;
+            padding: 2px 4px;
+            border: none;
+            border-radius: 3px;
+            font-family: 'Abel', sans-serif;
+            font-size: 15px;
+            font-weight: 500;
+            color: #1a202c;
+            cursor: text;
+        }
+
+        .nodetitleinput:focus {
+            outline: 2px solid #63b3ed;
+        }
+
+        #sidebar {
+            font-family: 'Abel', sans-serif;
+            font-size: 16px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 200px;
+            height: 100%;
+            background: #2d3748;
+            color: white;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        #sidebar h3 {
+            margin: 15px 0 10px 0;
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #a0aec0;
+            border-bottom: 1px solid #4a5568;
+            padding-bottom: 5px;
+        }
+
+        .menu-item {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 4px;
+            cursor: grab;
+            transition: background 0.2s;
+        }
+
+        .menu-item:hover {
+            background: #4a5568;
+        }
+
+        .menu-item.primitive {
+            border-left: 3px solid #4facfe;
+        }
+
+        .menu-item.operation {
+            border-left: 3px solid #f5576c;
+        }
+
+        .menu-item.modifier {
+            border-left: 3px solid #f6ad55;
+        }
+
+        #paramPanel {
+            font-family: 'Abel', sans-serif;
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 280px;
+            height: 100%;
+            background: #2d3748;
+            color: white;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+
+        #paramPanel.visible {
+            display: block;
+        }
+
+        #paramPanel h3 {
+            margin: 0 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #4a5568;
+        }
+
+#paramPanel.disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+#paramPanelNotice {
+    display: none;
+    font-size: 12px;
+    color: #f6ad55;
+    margin-bottom: 10px;
+}
+
+#paramPanel.disabled #paramPanelNotice {
+    display: block;
+}
+
+.panel-placeholder {
+    color: #a0aec0;
+    font-style: italic;
+    font-size: 12px;
+}
+
+        .param-group {
+            margin-bottom: 15px;
+        }
+
+        .param-group label {
+            display: block;
+            font-size: 12px;
+            color: #a0aec0;
+            margin-bottom: 5px;
+        }
+
+        .param-group input[type="range"] {
+            width: 100%;
+            margin-bottom: 3px;
+        }
+
+        .param-group .value-display {
+            font-size: 11px;
+            color: #718096;
+            text-align: right;
+        }
+
+        .param-section {
+            margin-bottom: 20px;
+        }
+
+        .param-section-title {
+            font-size: 13px;
+            color: #ed64a6;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        .param-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .param-actions button {
+            flex: 1;
+            padding: 6px 10px;
+            border: none;
+            border-radius: 4px;
+            font-family: 'Abel', sans-serif;
+            font-size: 13px;
+            cursor: pointer;
+            background: #f6ad55;
+            color: #1a202c;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        .param-actions button:hover {
+            background: #fbd38d;
+}
+
+        .collapse-hint {
+            font-size: 12px;
+            color: #f6ad55;
+            margin-top: 4px;
+            display: none;
+        }
+#glCanvas {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+#previewControls {
+    position: fixed;
+    right: 320px;
+    bottom: 20px;
+    background: rgba(250, 250, 250, 0.45);
+    color: #f5f5f5;
+    font-family: 'Abel', sans-serif;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 120;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+#previewControls label {
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 11px;
+    color: #cbd5f5;
+}
+
+#previewControls input[type="range"] {
+    width: 140px;
+}
+
+#previewControls .auto-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #cbd5f5;
+}
+
+#previewControls .mode-select {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 11px;
+}
+
+#previewControls .mode-select span {
+    text-transform: uppercase;
+    color: #a0aec0;
+    letter-spacing: 0.4px;
+}
+
+#previewControls select {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #111010;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+}
+
+#previewControls select:focus {
+    background: rgba(254, 255, 255, 0.08);
+    border-color: #9f7aea;
+    box-shadow: 0 0 0 2px rgba(159, 122, 234, 0.25);
+}
+
+#previewControls .palette-control {
+    min-width: 120px;
+}
+
+#previewControls .palette-select-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.palette-swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.4);
+}
+
+.palette-swatch.disabled {
+    opacity: 0.35;
+}
+
+.preview-fps {
+    font-weight: 600;
+    font-size: 13px;
+    min-width: 70px;
+    text-align: right;
+}
+
+        #recompileButton {
+            position: fixed;
+            top: 20px;
+            right: 320px;
+            width: 48px;
+            height: 48px;
+            border: none;
+            border-radius: 50%;
+            background: #5a67d8;
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+            transition: transform 0.1s ease, background 0.2s ease;
+            z-index: 140;
+        }
+
+        #recompileButton:hover {
+            background: #7f9cf5;
+            transform: translateY(-2px);
+        }
+
+        #recompileButton:active {
+            transform: translateY(0);
+        }
+
+#recompileButton:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+        #sidebarControls {
+            margin-bottom: 20px;
+        }
+
+        #sidebarControls button {
+            width: 100%;
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            font-family: 'Abel', sans-serif;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        #sidebarControls #exportShader {
+            background: #68d391;
+            color: #1a202c;
+        }
+
+        #sidebarControls #exportShader:hover {
+            background: #9ae6b4;
+        }
+
+        #recycleBin {
+            position: absolute;
+            left: calc(220px + 20px);
+            bottom: 20px;
+            width: 160px;
+            height: 90px;
+            border: 2px dashed rgba(255, 99, 71, 0.6);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 99, 71, 0.6);
+            background: rgba(255, 99, 71, 0.08);
+            font-family: 'Abel', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 36px;
+            transition: background 0.2s, transform 0.2s, border-color 0.2s;
+            z-index: 80;
+        }
+
+        #recycleBin.active {
+            background: rgba(255, 99, 71, 0.25);
+            border-color: rgba(255, 255, 255, 0.9);
+            transform: scale(1.05);
+        }
+
+        svg {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        #drawing {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <div id="sidebarControls">
+        <button id="exportShader">Export Shadertoy</button>
+        <button id="saveGraphButton">Save Scene</button>
+    </div>
+    <h3>Primitives</h3>
+    <div class="menu-item primitive" data-type="Sphere">Sphere</div>
+    <div class="menu-item primitive" data-type="Box">Box</div>
+    <div class="menu-item primitive" data-type="Torus">Torus</div>
+    <div class="menu-item primitive" data-type="Cylinder">Cylinder</div>
+    <div class="menu-item primitive" data-type="Octahedron">Octahedron</div>
+    <div class="menu-item primitive" data-type="Cone">Cone</div>
+    <div class="menu-item primitive" data-type="RoundCone">Round Cone</div>
+    <div class="menu-item primitive" data-type="VerticalCapsule">Vertical Capsule</div>
+    <div class="menu-item primitive" data-type="CutHollowSphere">Cut Hollow Sphere</div>
+    <div class="menu-item primitive" data-type="DeathStar">Death Star</div>
+    <div class="menu-item primitive" data-type="VesicaSegment">Vesica Segment</div>
+    <div class="menu-item primitive" data-type="Mandelbulb">Mandelbulb</div>
+    <div class="menu-item primitive" data-type="Supershape3D">Supershape 3D</div>
+    
+    <h3>Operations</h3>
+    <div class="menu-item operation" data-type="opUnion">Union</div>
+    <div class="menu-item operation" data-type="opSmoothUnion">Smooth Union</div>
+    <div class="menu-item operation" data-type="opSubtraction">Subtraction</div>
+    <div class="menu-item operation" data-type="opSmoothSubtraction">Smooth Subtract</div>
+    <div class="menu-item operation" data-type="opIntersection">Intersection</div>
+    <div class="menu-item operation" data-type="opSmoothIntersection">Smooth Intersect</div>
+    <div class="menu-item operation" data-type="opXor">XOR</div>
+
+    <h3>Modifiers</h3>
+    <div class="menu-item modifier" data-type="opRound">Round (Bevel)</div>
+    <div class="menu-item modifier" data-type="opOnion">Onion (Shell)</div>
+    <div class="menu-item modifier" data-type="opTwist">Twist</div>
+    <div class="menu-item modifier" data-type="opElongate">Elongate</div>
+    <div class="menu-item modifier" data-type="opCheapBend">Cheap Bend</div>
+    <div class="menu-item modifier" data-type="opSymX">Mirror X</div>
+    <div class="menu-item modifier" data-type="opRepeat">Repeat (Infinite)</div>
+</div>
+
+<div id="paramPanel">
+    <h3 id="paramNodeName">Parameters</h3>
+    <div id="paramPanelNotice">Recompile to edit parameters</div>
+    <div id="paramContent"></div>
+</div>
+
+<div id="drawing"></div>
+<div id="rootnode">
+    <div class="node scene" id="scene" data-type="Scene" style="left: 50%; top: 5%;">
+        <div class="nodetitle">Scene</div>
+    </div>
+</div>
+
+<canvas id="glCanvas"></canvas>
+<div id="recycleBin">
+    <div>♻</div>
+    <small>Recycle</small>
+</div>
+<div id="previewControls">
+    <label for="pixelScaleSlider">Pixel size</label>
+    <input type="range" id="pixelScaleSlider" min="0" max="4" step="1" value="0">
+    <span id="pixelScaleLabel">1x</span>
+    <label class="auto-toggle">
+        <input type="checkbox" id="autoCompileToggle">
+        Auto
+    </label>
+    <label class="auto-toggle">
+        <input type="checkbox" id="orthoToggle">
+        Ortho
+    </label>
+    <label class="auto-toggle">
+        <input type="checkbox" id="outlineToggle">
+        Outline
+    </label>
+    <div class="mode-select">
+        <span>Outline Mode</span>
+        <select id="outlineModeSelect">
+            <option value="single">Single Pass</option>
+            <option value="dual">Dual Pass</option>
+        </select>
+    </div>
+    <div class="mode-select">
+        <span>Main Steps</span>
+        <input type="number" id="mainStepsInput" min="10" max="200" value="100" style="width: 60px;">
+    </div>
+    <div class="mode-select">
+        <span>Outline Steps</span>
+        <input type="number" id="outlineStepsInput" min="10" max="200" value="60" style="width: 60px;">
+    </div>
+    <div class="mode-select">
+        <span>Color</span>
+        <select id="colorModeSelect">
+            <option value="color">Color</option>
+            <option value="single">Single</option>
+        </select>
+    </div>
+    <div class="mode-select palette-control">
+        <span>Palette</span>
+        <div class="palette-select-wrapper">
+            <select id="paletteSelect"></select>
+            <span class="palette-swatch" id="paletteSwatch"></span>
+        </div>
+    </div>
+    <div class="mode-select">
+        <span>Lighting</span>
+        <select id="lightingModeSelect">
+            <option value="normal">Normals</option>
+            <option value="depth">Depth</option>
+        </select>
+    </div>
+    <span class="preview-fps" id="previewFps">FPS: --</span>
+</div>
+<button id="recompileButton" title="Recompile Preview">⟳</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.7.1/svg.min.js"></script>
+<script>
+// Node type definitions
+const NODE_TYPES = {
+    Scene: {
+        category: 'scene',
+        maxChildren: 99,
+        params: {}
+    },
+    Sphere: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radius: { default: 0.5, min: 0.05, max: 3, step: 0.05 }
+        }
+    },
+    Box: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            sizeX: { default: 0.5, min: 0.05, max: 3, step: 0.05 },
+            sizeY: { default: 0.5, min: 0.05, max: 3, step: 0.05 },
+            sizeZ: { default: 0.5, min: 0.05, max: 3, step: 0.05 }
+        }
+    },
+    Torus: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            majorRadius: { default: 0.5, min: 0.1, max: 2, step: 0.05 },
+            minorRadius: { default: 0.2, min: 0.05, max: 1, step: 0.05 }
+        }
+    },
+    Cylinder: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radius: { default: 0.3, min: 0.05, max: 2, step: 0.05 },
+            height: { default: 1.0, min: 0.1, max: 5, step: 0.1 }
+        }
+    },
+    Octahedron: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            size: { default: 0.75, min: 0.1, max: 3.0, step: 0.05 }
+        }
+    },
+    Cone: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            height: { default: 1.5, min: 0.1, max: 5.0, step: 0.05 },
+            angleDeg: { default: 45, min: 1, max: 89, step: 1 }
+        }
+    },
+    RoundCone: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radiusTop: { default: 0.4, min: 0.01, max: 3.0, step: 0.01 },
+            radiusBottom: { default: 0.1, min: 0.01, max: 3.0, step: 0.01 },
+            height: { default: 1.25, min: 0.1, max: 5.0, step: 0.05 }
+        }
+    },
+    VerticalCapsule: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            height: { default: 1.0, min: 0.1, max: 5.0, step: 0.05 },
+            radius: { default: 0.25, min: 0.01, max: 2.5, step: 0.01 }
+        }
+    },
+    CutHollowSphere: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radius: { default: 1.0, min: 0.1, max: 4.0, step: 0.05 },
+            height: { default: 0.35, min: 0.0, max: 3.5, step: 0.05 },
+            thickness: { default: 0.1, min: 0.001, max: 2.0, step: 0.01 }
+        }
+    },
+    DeathStar: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            radiusA: { default: 1.0, min: 0.1, max: 5.0, step: 0.05 },
+            radiusB: { default: 0.4, min: 0.05, max: 4.0, step: 0.05 },
+            offset: { default: 0.6, min: 0.0, max: 5.0, step: 0.05 }
+        }
+    },
+    VesicaSegment: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            ax: { default: -0.5, min: -3, max: 3, step: 0.1 },
+            ay: { default: 0.0, min: -3, max: 3, step: 0.1 },
+            az: { default: 0.0, min: -3, max: 3, step: 0.1 },
+            bx: { default: 0.5, min: -3, max: 3, step: 0.1 },
+            by: { default: 0.0, min: -3, max: 3, step: 0.1 },
+            bz: { default: 0.0, min: -3, max: 3, step: 0.1 },
+            width: { default: 0.25, min: 0.01, max: 3.0, step: 0.01 }
+        }
+    },
+    Mandelbulb: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            power: { default: 8.0, min: 2.0, max: 16.0, step: 0.5 },
+            iterations: { default: 20.0, min: 5.0, max: 50.0, step: 1.0 }
+        }
+    },
+    Supershape3D: {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {
+            size: { default: 1.0, min: 0.1, max: 3.0, step: 0.05 },
+            m: { default: 4.0, min: 1.0, max: 20.0, step: 0.5 },
+            n1: { default: 1.0, min: 0.1, max: 10.0, step: 0.1 },
+            n2: { default: 1.0, min: 0.1, max: 10.0, step: 0.1 },
+            n3: { default: 1.0, min: 0.1, max: 10.0, step: 0.1 },
+            a: { default: 1.0, min: 0.1, max: 3.0, step: 0.1 },
+            b: { default: 1.0, min: 0.1, max: 3.0, step: 0.1 }
+        }
+    },
+    opUnion: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {}
+    },
+    opSmoothUnion: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {
+            k: { default: 0.3, min: 0.01, max: 1, step: 0.01 }
+        }
+    },
+    opSubtraction: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {}
+    },
+    opSmoothSubtraction: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {
+            k: { default: 0.3, min: 0.01, max: 1, step: 0.01 }
+        }
+    },
+    opIntersection: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {}
+    },
+    opSmoothIntersection: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {
+            k: { default: 0.3, min: 0.01, max: 1, step: 0.01 }
+        }
+    },
+    opXor: {
+        category: 'operation',
+        maxChildren: 2,
+        params: {}
+    },
+    opRound: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {
+            roundRadius: { default: 0.1, min: 0.0, max: 1.0, step: 0.01 }
+        }
+    },
+    opOnion: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {
+            shellThickness: { default: 0.05, min: 0.0, max: 1.0, step: 0.01 }
+        }
+    },
+    opTwist: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {
+            twistAmount: { default: 2.0, min: -20.0, max: 20.0, step: 0.1 }
+        }
+    },
+    opElongate: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {
+            extentX: { default: 0.3, min: 0.0, max: 2.0, step: 0.05 },
+            extentY: { default: 0.3, min: 0.0, max: 2.0, step: 0.05 },
+            extentZ: { default: 0.3, min: 0.0, max: 2.0, step: 0.05 }
+        }
+    },
+    opCheapBend: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {
+            bendAmount: { default: 2.0, min: -20.0, max: 20.0, step: 0.1 }
+        }
+    },
+    opSymX: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {}
+    },
+    opRepeat: {
+        category: 'modifier',
+        maxChildren: 1,
+        params: {
+            spacingX: { default: 2.0, min: 0.1, max: 10.0, step: 0.1 },
+            spacingY: { default: 2.0, min: 0.1, max: 10.0, step: 0.1 },
+            spacingZ: { default: 2.0, min: 0.1, max: 10.0, step: 0.1 }
+        }
+    }
+};
+
+const TRANSFORM_PARAMS = {
+    posX: { default: 0, min: -5, max: 5, step: 0.1 },
+    posY: { default: 0, min: -5, max: 5, step: 0.1 },
+    posZ: { default: 0, min: -5, max: 5, step: 0.1 },
+    rotX: { default: 0, min: -180, max: 180, step: 1 },
+    rotY: { default: 0, min: -180, max: 180, step: 1 },
+    rotZ: { default: 0, min: -180, max: 180, step: 1 },
+    scale: { default: 1.0, min: 0.1, max: 5.0, step: 0.05 }
+};
+
+function hslToRgb(h, s, l) {
+    const a = s * Math.min(l, 1 - l);
+    const f = (n) => {
+        const k = (n + h * 12) % 12;
+        return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    };
+    return {
+        r: Math.round(f(0) * 255),
+        g: Math.round(f(8) * 255),
+        b: Math.round(f(4) * 255)
+    };
+}
+
+function intToColorRGB(index) {
+    const goldenRatio = 0.618033988749895;
+    const hue = (index * goldenRatio) % 1;
+    const saturation = 0.7 + (index % 3) * 0.1;
+    const lightness = 0.45 + (index % 4) * 0.05;
+    return hslToRgb(hue, Math.min(saturation, 1), Math.min(lightness, 1));
+}
+
+function rgbToCss({ r, g, b }, alpha = 1) {
+    if (alpha === 1) {
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function mixColor(color, target, amount) {
+    return {
+        r: Math.round(color.r + (target.r - color.r) * amount),
+        g: Math.round(color.g + (target.g - color.g) * amount),
+        b: Math.round(color.b + (target.b - color.b) * amount)
+    };
+}
+
+function lightenColor(color, amount) {
+    return mixColor(color, { r: 255, g: 255, b: 255 }, amount);
+}
+
+function darkenColor(color, amount) {
+    return mixColor(color, { r: 0, g: 0, b: 0 }, amount);
+}
+
+function getNodeColorIndex(node) {
+    if (!node) return 0;
+    if (node.dataset.colorIndex) {
+        return Number(node.dataset.colorIndex);
+    }
+    const match = /(\d+)$/.exec(node.id || '');
+    const index = match ? Number(match[1]) : nodesArray.indexOf(node);
+    node.dataset.colorIndex = String(Math.max(0, index));
+    return Number(node.dataset.colorIndex);
+}
+
+function getReadableTextColor(color) {
+    const luminance = (0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b) / 255;
+    return luminance > 0.6 ? '#1a202c' : '#f7fafc';
+}
+
+function applyNodeColor(node) {
+    if (!node || node.dataset.type === 'Scene') return;
+    const index = getNodeColorIndex(node);
+    const base = intToColorRGB(index);
+    const gradientStart = lightenColor(base, node.classList.contains('operation') ? 0.05 : 0.2);
+    const gradientEnd = darkenColor(base, 0.15);
+    node.style.background = `linear-gradient(135deg, ${rgbToCss(gradientStart)} 0%, ${rgbToCss(gradientEnd)} 100%)`;
+    node.style.borderColor = rgbToCss(darkenColor(base, 0.35));
+    node.style.color = getReadableTextColor(base);
+}
+
+function getNodeParams(node) {
+    if (node._sdfParams) return node._sdfParams;
+    const parsed = node.dataset.params ? JSON.parse(node.dataset.params) : {};
+    node._sdfParams = parsed;
+    return parsed;
+}
+
+function setNodeParams(node, params) {
+    node._sdfParams = params;
+    node.dataset.params = JSON.stringify(params);
+}
+
+function ensureDetachHandle(node) {
+    if (node.dataset.type === 'Scene') return;
+    if (!node.querySelector('.detach-wrapper')) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'detach-wrapper';
+        wrapper.textContent = '×';
+        const handle = document.createElement('div');
+        handle.className = 'detach-handle';
+        handle.textContent = '×';
+        wrapper.appendChild(handle);
+        node.appendChild(wrapper);
+    }
+    attachNodeHoverHandlers(node);
+    attachDetachWrapperHandlers(node);
+}
+
+// State
+let dragging = false;
+let dragged = null;
+let detached = false;
+let dragFromMenu = false;
+let pos1, pos2, pos3, pos4;
+let selectedNode = null;
+let nodeCounter = 0;
+
+// Collapsed primitives storage
+let collapsedPrimitives = {}; // { 'Collapsed_123': { code, displayName, boundingRadius } }
+let collapsedCounter = 0;
+let collapseHintElement = null;
+const saveGraphButton = document.getElementById('saveGraphButton');
+const LOCAL_STORAGE_KEY = 'sdfEditorState';
+
+let dropPreview = null;
+let currentDropTarget = null;
+
+const draw = SVG('drawing').size('100%', '100%');
+let nodesArray = [];
+let lines = [];
+const recycleBin = document.getElementById('recycleBin');
+const recycleRect = () => recycleBin.getBoundingClientRect();
+let recycleActive = false;
+const pixelScaleSlider = document.getElementById('pixelScaleSlider');
+const pixelScaleLabel = document.getElementById('pixelScaleLabel');
+const recompileButton = document.getElementById('recompileButton');
+const autoCompileToggle = document.getElementById('autoCompileToggle');
+const orthoToggle = document.getElementById('orthoToggle');
+const outlineToggle = document.getElementById('outlineToggle');
+const outlineModeSelect = document.getElementById('outlineModeSelect');
+const mainStepsInput = document.getElementById('mainStepsInput');
+const outlineStepsInput = document.getElementById('outlineStepsInput');
+const colorModeSelect = document.getElementById('colorModeSelect');
+const paletteSelect = document.getElementById('paletteSelect');
+const paletteSwatch = document.getElementById('paletteSwatch');
+const lightingModeSelect = document.getElementById('lightingModeSelect');
+const previewFpsDisplay = document.getElementById('previewFps');
+const paramPanel = document.getElementById('paramPanel');
+const paramPanelNotice = document.getElementById('paramPanelNotice');
+const paramNodeName = document.getElementById('paramNodeName');
+const paramContent = document.getElementById('paramContent');
+
+// Outline state
+let outlineEnabled = false;
+let outlineMode = 'single'; // 'single' or 'dual'
+let mainRaymarchSteps = 100;
+let outlineRaymarchSteps = 60;
+
+// Camera state for preview orbit controls
+const CAMERA_STATE = {
+    yaw: 0,
+    pitch: 0,
+    distance: 4,
+    target: { x: 0, y: 0, z: 0 }
+};
+let cameraUniformLocations = { pos: null, target: null };
+let cameraDragMode = null;
+let cameraLastX = 0;
+let cameraLastY = 0;
+
+// Simple performance logger (toggle via window.SDF_PERF.enabled)
+const SDF_PERF = {
+    enabled: false
+};
+
+function perfNow() {
+    return performance.now();
+}
+
+function perfLogDuration(label, startTime, extra = '') {
+    return startTime;
+}
+
+function perfLogInfo(label, info) {
+}
+
+window.SDF_PERF = SDF_PERF;
+
+// WebGPU state
+let device = null;
+let context = null;
+let pipeline = null;
+let uniformBuffer = null;
+let bindGroup = null;
+let vertexBuffer = null;
+const pendingSliderUpdates = new Map();
+let sliderFlushHandle = null;
+
+const PREVIEW_PIXEL_SCALES = [1, 2, 4, 8, 16];
+const COLOR_MODES = { COLOR: 'color', SINGLE: 'single' };
+const LIGHTING_MODES = { NORMAL: 'normal', DEPTH: 'depth' };
+const PALETTE_OPTIONS = Array.from({ length: 10 }, (_, idx) => idx);
+let previewScaleIndex = 0;
+let graphDirty = false;
+let autoCompile = false;
+let autoCompilePending = false;
+let currentParamNode = null;
+let paramControlsEnabled = true;
+let orthographicMode = false;
+const renderModeState = {
+    colorMode: COLOR_MODES.COLOR,
+    lightingMode: LIGHTING_MODES.NORMAL,
+    paletteIndex: 0
+};
+let previewAnimationHandle = null;
+let lastFrameTimestamp = 0;
+let smoothedFps = 0;
+let lastFpsUpdate = 0;
+
+function updateRecompileButtonState() {
+    if (!recompileButton) return;
+    recompileButton.disabled = !graphDirty;
+}
+
+function initRenderModeControls() {
+    if (colorModeSelect) {
+        colorModeSelect.value = renderModeState.colorMode;
+        colorModeSelect.addEventListener('change', (event) => {
+            renderModeState.colorMode = event.target.value === COLOR_MODES.SINGLE ? COLOR_MODES.SINGLE : COLOR_MODES.COLOR;
+            updateRenderModeControlState();
+            applyRenderModeUniforms();
+        });
+    }
+    if (paletteSelect) {
+        PALETTE_OPTIONS.forEach(index => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = `Color ${index + 1}`;
+            paletteSelect.appendChild(option);
+        });
+        paletteSelect.value = String(renderModeState.paletteIndex);
+        paletteSelect.addEventListener('change', (event) => {
+            const next = parseInt(event.target.value, 10);
+            renderModeState.paletteIndex = Number.isFinite(next) ? Math.max(0, next) : 0;
+            updatePaletteSwatch();
+            applyRenderModeUniforms();
+        });
+        updatePaletteSwatch();
+    }
+    if (lightingModeSelect) {
+        lightingModeSelect.value = renderModeState.lightingMode;
+        lightingModeSelect.addEventListener('change', (event) => {
+            renderModeState.lightingMode = event.target.value === LIGHTING_MODES.DEPTH ? LIGHTING_MODES.DEPTH : LIGHTING_MODES.NORMAL;
+            applyRenderModeUniforms();
+        });
+    }
+    updateRenderModeControlState();
+}
+
+function updateRenderModeControlState() {
+    if (paletteSelect) {
+        paletteSelect.disabled = renderModeState.colorMode === COLOR_MODES.COLOR;
+    }
+    if (paletteSwatch) {
+        paletteSwatch.classList.toggle('disabled', renderModeState.colorMode === COLOR_MODES.COLOR);
+    }
+}
+
+function updatePaletteSwatch() {
+    if (!paletteSwatch) return;
+    const rgb = intToColorRGB(renderModeState.paletteIndex);
+    paletteSwatch.style.backgroundColor = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+}
+
+function setParamControlsEnabled(enabled) {
+    paramControlsEnabled = enabled;
+    if (paramPanel) {
+        paramPanel.classList.toggle('disabled', !enabled);
+    }
+    const sliders = paramPanel ? paramPanel.querySelectorAll('input[type="range"]') : [];
+    sliders.forEach(slider => {
+        slider.disabled = !enabled;
+    });
+}
+
+function ensureValidParamNode(node) {
+    if (node && document.body.contains(node) && node.dataset.type !== 'Scene') {
+        return node;
+    }
+    return null;
+}
+
+function getFirstEditableNode() {
+    if (nodesArray.length) {
+        for (const node of nodesArray) {
+            if (node && node.dataset && node.dataset.type && node.dataset.type !== 'Scene') {
+                return node;
+            }
+        }
+    }
+    const root = document.getElementById('rootnode');
+    if (!root) return null;
+    return root.querySelector('.node:not(#scene)');
+}
+
+function scheduleAutoCompile() {
+    if (autoCompilePending) return;
+    autoCompilePending = true;
+    requestAnimationFrame(() => {
+        autoCompilePending = false;
+        if (autoCompile && graphDirty) {
+            recompilePreview();
+        }
+    });
+}
+
+function handleGraphChanged() {
+    graphDirty = true;
+    updateRecompileButtonState();
+    pendingSliderUpdates.clear();
+    currentParamNode = ensureValidParamNode(currentParamNode);
+    setParamControlsEnabled(false);
+    if (autoCompile) {
+        scheduleAutoCompile();
+    }
+}
+
+function renderCurrentParamPanel() {
+    if (!paramPanel || !paramContent || !paramNodeName) return;
+    paramPanel.classList.add('visible');
+    let node = ensureValidParamNode(currentParamNode);
+    if (!node) {
+        currentParamNode = null;
+        paramNodeName.textContent = 'Parameters';
+        paramContent.innerHTML = `<div class="panel-placeholder">Select a node to edit parameters.</div>`;
+        return;
+    }
+    currentParamNode = node;
+    const nodeType = node.dataset.type;
+    const typeDef = NODE_TYPES[nodeType];
+    const params = getNodeParams(node);
+    const headerTitle = typeDef && typeDef.displayName ? typeDef.displayName : nodeType;
+    paramNodeName.textContent = headerTitle;
+    paramContent.innerHTML = '';
+    collapseHintElement = null;
+    if (nodeType !== 'Scene') {
+        const actions = document.createElement('div');
+        actions.className = 'param-actions';
+        const collapseBtn = document.createElement('button');
+        collapseBtn.textContent = 'Collapse This Node';
+        collapseBtn.addEventListener('click', () => initiateCollapseWithRename(node, { showHint: true }));
+        actions.appendChild(collapseBtn);
+        const hint = document.createElement('div');
+        hint.className = 'collapse-hint';
+        hint.textContent = 'Rename the node title and press Enter to collapse.';
+        actions.appendChild(hint);
+        collapseHintElement = hint;
+        paramContent.appendChild(actions);
+    }
+    if (typeDef && typeDef.params && Object.keys(typeDef.params).length > 0) {
+        const section = document.createElement('div');
+        section.className = 'param-section';
+        section.innerHTML = '<div class="param-section-title">Shape Parameters</div>';
+        for (const [key, def] of Object.entries(typeDef.params)) {
+            section.appendChild(createParamSlider(node, key, def, params[key]));
+        }
+        paramContent.appendChild(section);
+    }
+    const transformSection = document.createElement('div');
+    transformSection.className = 'param-section';
+    transformSection.innerHTML = '<div class="param-section-title">Transform</div>';
+    for (const [key, def] of Object.entries(TRANSFORM_PARAMS)) {
+        transformSection.appendChild(createParamSlider(node, key, def, params[key]));
+    }
+    paramContent.appendChild(transformSection);
+}
+
+// Initialize
+function init() {
+    scanNodes();
+    addLines();
+    initializeNodeParams();
+    setupEventListeners();
+    if (paramPanel) {
+        paramPanel.classList.add('visible');
+    }
+    currentParamNode = getFirstEditableNode();
+    renderCurrentParamPanel();
+    setParamControlsEnabled(true);
+    updateRecompileButtonState();
+    if (pixelScaleSlider) {
+        const initial = parseInt(pixelScaleSlider.value, 10);
+        previewScaleIndex = Math.max(0, Math.min(PREVIEW_PIXEL_SCALES.length - 1, isNaN(initial) ? 0 : initial));
+    } else {
+        previewScaleIndex = 0;
+    }
+    updatePixelScaleLabel();
+    initRenderModeControls();
+    
+    // Initialize WebGPU asynchronously
+    initWebGPU().then(success => {
+        if (success) {
+    applyPreviewScale();
+    loadGraphFromStorage();
+    recompilePreview();
+        } else {
+            console.error('Failed to initialize WebGPU');
+            alert('WebGPU not supported. Please use a browser that supports WebGPU.');
+        }
+    });
+}
+
+function scanNodes() {
+    const nodesObject = document.getElementsByClassName("node");
+    nodesArray = [];
+    for (let i = 0; i < nodesObject.length; i++) {
+        nodesArray.push(nodesObject[i]);
+        if (!nodesObject[i].id || nodesObject[i].id === '') {
+            nodesObject[i].id = 'node_' + nodeCounter++;
+        }
+        ensureDetachHandle(nodesObject[i]);
+        applyNodeColor(nodesObject[i]);
+    }
+}
+
+function initializeNodeParams() {
+    nodesArray.forEach(node => {
+        if (!node.dataset.params) {
+            const nodeType = node.dataset.type;
+            const typeDef = NODE_TYPES[nodeType];
+            const params = {};
+            
+            if (typeDef && typeDef.params) {
+                for (const [key, val] of Object.entries(typeDef.params)) {
+                    params[key] = val.default;
+                }
+            }
+            
+            if (nodeType !== 'Scene') {
+                for (const [key, val] of Object.entries(TRANSFORM_PARAMS)) {
+                    params[key] = val.default;
+                }
+            }
+            
+            setNodeParams(node, params);
+        } else {
+            node._sdfParams = JSON.parse(node.dataset.params);
+        }
+    });
+}
+
+function addLines() {
+    for (let i = 0; i < nodesArray.length; i++) {
+        addLine(i);
+    }
+}
+
+function addLine(num) {
+    const node = nodesArray[num];
+    const box1 = node.getBoundingClientRect();
+    const box2 = node.parentNode.getBoundingClientRect();
+    const x1 = box1.left + (box1.width / 2);
+    const y1 = box1.top + (box1.height / 2);
+    const x2 = box2.left + (box2.width / 2);
+    const y2 = box2.top + (box2.height / 2);
+    
+    if (lines[num]) {
+        lines[num].plot([['M', x1, y1], ['C', x1, y2, x2, y1, x2, y2]]);
+    } else {
+        lines[num] = draw.path([['M', x1, y1], ['C', x1, y2, x2, y1, x2, y2]])
+            .fill('none')
+            .stroke({ width: 2, color: "#888888" });
+    }
+    
+    if (!node.parentNode.classList.contains("node")) {
+        lines[num].hide();
+    } else {
+        lines[num].show();
+    }
+}
+function generateShadertoyShader() {
+    const sdfCode = generateExportGLSL();
+    
+    // Get current camera state
+    const camDist = CAMERA_STATE.distance.toFixed(2);
+    const camTargetX = CAMERA_STATE.target.x.toFixed(2);
+    const camTargetY = CAMERA_STATE.target.y.toFixed(2);
+    const camTargetZ = CAMERA_STATE.target.z.toFixed(2);
+    
+    // Calculate camera position from yaw, pitch, distance
+    const yaw = CAMERA_STATE.yaw;
+    const pitch = CAMERA_STATE.pitch;
+    const camX = (CAMERA_STATE.target.x + CAMERA_STATE.distance * Math.cos(pitch) * Math.sin(yaw)).toFixed(2);
+    const camY = (CAMERA_STATE.target.y + CAMERA_STATE.distance * Math.sin(pitch)).toFixed(2);
+    const camZ = (CAMERA_STATE.target.z + CAMERA_STATE.distance * Math.cos(pitch) * Math.cos(yaw)).toFixed(2);
+    
+    return `// Generated with SDF Builder
+// Paste into Shadertoy
+
+${sdfCode}
+
+vec3 calcNormal(vec3 p) {
+    vec2 e = vec2(0.001, 0.0);
+    return normalize(vec3(
+        sceneSDF(p + e.xyy) - sceneSDF(p - e.xyy),
+        sceneSDF(p + e.yxy) - sceneSDF(p - e.yxy),
+        sceneSDF(p + e.yyx) - sceneSDF(p - e.yyx)
+    ));
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
+    
+    // Camera settings from editor (adjust these as needed)
+    vec3 cameraPos = vec3(${camX}, ${camY}, ${camZ});
+    vec3 cameraTarget = vec3(${camTargetX}, ${camTargetY}, ${camTargetZ});
+    
+    // Calculate ray direction
+    vec3 forward = normalize(cameraTarget - cameraPos);
+    vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
+    vec3 up = cross(right, forward);
+    vec3 rd = normalize(forward + uv.x * right + uv.y * up);
+    vec3 ro = cameraPos;
+    
+    float t = 0.0;
+    vec3 col = vec3(1.0);
+    
+    for (int i = 0; i < 100; i++) {
+        vec3 p = ro + rd * t;
+        float d = sceneSDF(p);
+        
+        if (d < 0.001) {
+            vec3 n = calcNormal(p);
+            vec3 lightDir = normalize(vec3(1.0, 1.0, 1.0));
+            float diff = max(dot(n, lightDir), 0.0);
+            float amb = 0.3;
+            col = vec3(0.85, 0.75, 0.7) * (diff + amb);
+            break;
+        }
+        
+        if (t > 20.0) break;
+        // Conservative step multiplier for complex/approximate SDFs
+        t += d * 0.5;
+    }
+    
+    fragColor = vec4(col, 1.0);
+}
+`;
+}
+
+function downloadShadertoyShader() {
+    const shaderCode = generateShadertoyShader();
+    const blob = new Blob([shaderCode], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'sdf_shader.glsl';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+function updateLine(node) {
+    const nodeIndex = nodesArray.indexOf(node);
+    if (nodeIndex >= 0) {
+        addLine(nodeIndex);
+    }
+    
+    const children = node.querySelectorAll('.node');
+    children.forEach(child => {
+        const childIndex = nodesArray.indexOf(child);
+        if (childIndex >= 0) {
+            addLine(childIndex);
+        }
+    });
+}
+
+function setupEventListeners() {
+    document.addEventListener('mousedown', onDocumentMouseDown, false);
+    document.addEventListener('mousemove', onDocumentMouseMove, false);
+    document.addEventListener('mouseup', onDocumentMouseUp, false);
+    document.addEventListener('contextmenu', e => e.preventDefault(), false);
+    document.addEventListener('dblclick', handleNodeTitleDoubleClick, true);
+    document.addEventListener('blur', handleNodeTitleBlur, true);
+    document.addEventListener('keydown', handleNodeTitleKeyDown, true);
+    if (saveGraphButton) {
+        saveGraphButton.addEventListener('click', saveGraphToLocalStorage);
+    }
+    
+    window.addEventListener('resize', () => {
+        updateLine(document.getElementById("rootnode"));
+        applyPreviewScale();
+    }, false);
+    
+    document.querySelectorAll('.menu-item').forEach(item => {
+        item.addEventListener('mousedown', onMenuItemMouseDown, false);
+    });
+    
+    document.getElementById('exportShader').addEventListener('click', () => {
+    // Try to copy to clipboard first
+    const shaderCode = generateShadertoyShader();
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(shaderCode).then(() => {
+            alert('Shadertoy shader copied to clipboard!');
+        }).catch(() => {
+            // Fallback to download
+            downloadShadertoyShader();
+        });
+    } else {
+        // Fallback to download
+        downloadShadertoyShader();
+    }
+});
+
+    document.addEventListener('mousedown', onDetachHandleMouseDown);
+    document.addEventListener('wheel', handleCameraWheel, { passive: false });
+    if (pixelScaleSlider) {
+        pixelScaleSlider.addEventListener('input', handlePixelScaleInput);
+    }
+    if (recompileButton) {
+        recompileButton.addEventListener('click', () => {
+            if (graphDirty) {
+                recompilePreview();
+            }
+        });
+    }
+    if (autoCompileToggle) {
+        autoCompileToggle.addEventListener('change', (event) => {
+            autoCompile = !!event.target.checked;
+            if (autoCompile && graphDirty) {
+                scheduleAutoCompile();
+            }
+        });
+        autoCompile = !!autoCompileToggle.checked;
+    }
+    if (orthoToggle) {
+        orthoToggle.addEventListener('change', (event) => {
+            orthographicMode = !!event.target.checked;
+            updatePreviewUniforms();
+        });
+        orthographicMode = !!orthoToggle.checked;
+    }
+    if (outlineToggle) {
+        outlineToggle.addEventListener('change', (event) => {
+            outlineEnabled = !!event.target.checked;
+            updatePreviewUniforms();
+        });
+        outlineEnabled = !!outlineToggle.checked;
+    }
+    if (outlineModeSelect) {
+        outlineModeSelect.addEventListener('change', (event) => {
+            outlineMode = event.target.value;
+            updatePreviewUniforms();
+        });
+        outlineMode = outlineModeSelect.value;
+    }
+    if (mainStepsInput) {
+        mainStepsInput.addEventListener('change', (event) => {
+            mainRaymarchSteps = parseInt(event.target.value);
+            updatePreviewUniforms(); // Update via uniform, no recompile needed
+        });
+        mainRaymarchSteps = parseInt(mainStepsInput.value);
+    }
+    if (outlineStepsInput) {
+        outlineStepsInput.addEventListener('change', (event) => {
+            outlineRaymarchSteps = parseInt(event.target.value);
+            updatePreviewUniforms(); // Update via uniform, no recompile needed
+        });
+        outlineRaymarchSteps = parseInt(outlineStepsInput.value);
+    }
+}
+
+function onMenuItemMouseDown(event) {
+    event.preventDefault();
+    const nodeType = event.target.dataset.type;
+    
+    const newNode = createNode(nodeType);
+    document.getElementById("rootnode").appendChild(newNode);
+    nodesArray.push(newNode);
+    
+    newNode.style.left = event.clientX - 50 + "px";
+    newNode.style.top = event.clientY - 15 + "px";
+    
+    addLine(nodesArray.length - 1);
+    handleGraphChanged();
+    
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    newNode.dataset.dragOffsetX = 50;
+    newNode.dataset.dragOffsetY = 15;
+    dragging = true;
+    dragged = newNode;
+    detached = true;
+    dragFromMenu = true;
+}
+
+function createNode(nodeType) {
+    const typeDef = NODE_TYPES[nodeType];
+    const newNode = document.createElement("DIV");
+    const newText = document.createElement("DIV");
+    const detachWrapper = document.createElement('div');
+    const detachHandle = document.createElement('div');
+    
+    newText.className = "nodetitle";
+    const displayTitle = typeDef && typeDef.displayName ? typeDef.displayName : nodeType;
+    newText.textContent = displayTitle;
+    
+    newNode.className = "node " + typeDef.category;
+    newNode.id = 'node_' + nodeCounter++;
+    newNode.dataset.type = nodeType;
+    
+    const params = {};
+    if (typeDef.params) {
+        for (const [key, val] of Object.entries(typeDef.params)) {
+            params[key] = val.default;
+        }
+    }
+    for (const [key, val] of Object.entries(TRANSFORM_PARAMS)) {
+        params[key] = val.default;
+    }
+    setNodeParams(newNode, params);
+    
+    if (nodeType !== 'Scene') {
+        detachWrapper.className = 'detach-wrapper';
+        detachWrapper.textContent = '×';
+        detachHandle.className = 'detach-handle';
+        detachHandle.textContent = '×';
+        detachWrapper.appendChild(detachHandle);
+        newNode.appendChild(detachWrapper);
+    }
+    attachNodeHoverHandlers(newNode);
+    attachDetachWrapperHandlers(newNode);
+    newNode.appendChild(newText);
+    applyNodeColor(newNode);
+    return newNode;
+}
+
+function attachNodeHoverHandlers(node) {
+    if (node.dataset.type === 'Scene' || node._hoverHandlersAttached) return;
+    node.addEventListener('mouseover', handleNodeMouseOver);
+    node.addEventListener('mouseout', handleNodeMouseOut);
+    node._hoverHandlersAttached = true;
+}
+
+function attachDetachWrapperHandlers(node) {
+    if (node.dataset.type === 'Scene') return;
+    const wrapper = node.querySelector('.detach-wrapper');
+    if (!wrapper || wrapper._hoverHandlersAttached) return;
+    wrapper.addEventListener('mouseenter', () => {
+        node.classList.add('node-hover');
+    });
+    wrapper.addEventListener('mouseleave', (event) => {
+        const related = event.relatedTarget;
+        if (related && (node.contains(related) || wrapper.contains(related))) return;
+        node.classList.remove('node-hover');
+    });
+    wrapper._hoverHandlersAttached = true;
+}
+
+function handleNodeMouseOver(event) {
+    if (event.target !== event.currentTarget) return;
+    event.currentTarget.classList.add('node-hover');
+    const wrapper = event.currentTarget.querySelector('.detach-wrapper');
+    if (wrapper) {
+        wrapper.setAttribute('aria-label', 'Click to detach and drag this node');
+    }
+}
+
+function handleNodeMouseOut(event) {
+    if (event.target !== event.currentTarget) return;
+    const related = event.relatedTarget;
+    if (related && event.currentTarget.contains(related)) return;
+    event.currentTarget.classList.remove('node-hover');
+    const wrapper = event.currentTarget.querySelector('.detach-wrapper');
+    if (wrapper) {
+        wrapper.removeAttribute('aria-label');
+    }
+}
+
+function getCameraPosition() {
+    const dist = Math.max(0.5, CAMERA_STATE.distance);
+    const cosPitch = Math.cos(CAMERA_STATE.pitch);
+    const sinPitch = Math.sin(CAMERA_STATE.pitch);
+    const cosYaw = Math.cos(CAMERA_STATE.yaw);
+    const sinYaw = Math.sin(CAMERA_STATE.yaw);
+    return {
+        x: CAMERA_STATE.target.x + dist * cosPitch * sinYaw,
+        y: CAMERA_STATE.target.y + dist * sinPitch,
+        z: CAMERA_STATE.target.z + dist * cosPitch * cosYaw
+    };
+}
+
+function getCameraBasis() {
+    const pos = getCameraPosition();
+    const target = CAMERA_STATE.target;
+    let forward = normalizeVector({
+        x: target.x - pos.x,
+        y: target.y - pos.y,
+        z: target.z - pos.z
+    });
+    let right = normalizeVector(crossVector(forward, { x: 0, y: 1, z: 0 }));
+    if (lengthVector(right) < 0.001) {
+        right = { x: 1, y: 0, z: 0 };
+    }
+    const up = normalizeVector(crossVector(right, forward));
+    return { forward, right, up };
+}
+
+function updateCameraUniforms() {
+    // WebGPU version: camera uniforms updated via updateUniformBuffer()
+    // This is called automatically during renderPreview()
+}
+
+function beginCameraDrag(mode, x, y) {
+    cameraDragMode = mode;
+    cameraLastX = x;
+    cameraLastY = y;
+    document.body.style.cursor = mode === 'pan' ? 'move' : 'grab';
+}
+
+function updateCameraDrag(x, y) {
+    if (!cameraDragMode) return;
+    const dx = x - cameraLastX;
+    const dy = y - cameraLastY;
+    cameraLastX = x;
+    cameraLastY = y;
+    const { right, up } = getCameraBasis();
+    if (cameraDragMode === 'orbit') {
+        CAMERA_STATE.yaw -= dx * 0.005;
+        CAMERA_STATE.pitch = clamp(CAMERA_STATE.pitch + dy * 0.003, -1.4, 1.4);
+    } else if (cameraDragMode === 'pan') {
+        const panScale = CAMERA_STATE.distance * 0.002;
+        CAMERA_STATE.target.x -= (dx * panScale) * right.x;
+        CAMERA_STATE.target.y -= (dx * panScale) * right.y;
+        CAMERA_STATE.target.z -= (dx * panScale) * right.z;
+        CAMERA_STATE.target.x += (dy * panScale) * up.x;
+        CAMERA_STATE.target.y += (dy * panScale) * up.y;
+        CAMERA_STATE.target.z += (dy * panScale) * up.z;
+    }
+        updateCameraUniforms();
+        renderPreview();
+}
+
+function endCameraDrag() {
+    cameraDragMode = null;
+    document.body.style.cursor = '';
+}
+
+function handleCameraWheel(event) {
+    if (!isStageInteractionTarget(event.target)) return;
+    event.preventDefault();
+    const zoomFactor = Math.exp(event.deltaY * 0.001);
+    CAMERA_STATE.distance = clamp(CAMERA_STATE.distance * zoomFactor, 0.8, 50);
+    updateCameraUniforms();
+    renderPreview();
+}
+
+function isStageInteractionTarget(target) {
+    if (!target) return false;
+    return !(
+        target.closest('#sidebar') ||
+        target.closest('#paramPanel') ||
+        target.closest('.node') ||
+        target.closest('.menu-item') ||
+        target.closest('#sidebarControls') ||
+        target.closest('#recycleBin') ||
+        target.closest('.detach-wrapper')
+    );
+}
+
+function normalizeVector(v) {
+    const len = lengthVector(v);
+    if (len < 1e-6) return { x: 0, y: 0, z: 0 };
+    return { x: v.x / len, y: v.y / len, z: v.z / len };
+}
+
+function lengthVector(v) {
+    return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+}
+
+function crossVector(a, b) {
+    return {
+        x: a.y * b.z - a.z * b.y,
+        y: a.z * b.x - a.x * b.z,
+        z: a.x * b.y - a.y * b.x
+    };
+}
+
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function getNodeChildren(node) {
+    return Array.from(node.children).filter(child => child.classList.contains('node'));
+}
+
+function canAcceptChild(parentNode) {
+    const parentType = parentNode.dataset.type;
+    const typeDef = NODE_TYPES[parentType];
+    if (!typeDef) return false;
+    
+    const currentChildren = getNodeChildren(parentNode);
+    return currentChildren.length < typeDef.maxChildren;
+}
+
+function attachNodeToParent(child, parent) {
+    if (!canAcceptChild(parent)) {
+        document.getElementById("rootnode").appendChild(child);
+        positionNodeAtPoint(child, pos3, pos4);
+        return false;
+    }
+    
+    reparentNodePreservingPosition(child, parent);
+    updateLine(child);
+    handleGraphChanged();
+    return true;
+}
+
+function reparentNodePreservingPosition(node, newParent) {
+    const nodeRect = node.getBoundingClientRect();
+    const parentRect = newParent.getBoundingClientRect();
+    newParent.appendChild(node);
+    node.style.left = `${nodeRect.left - parentRect.left}px`;
+    node.style.top = `${nodeRect.top - parentRect.top}px`;
+}
+
+function positionNodeAtPoint(node, clientX, clientY) {
+    const parent = node.parentNode || document.getElementById('rootnode');
+    const parentRect = parent.getBoundingClientRect();
+    const offsetX = Number(node.dataset.dragOffsetX ?? node.offsetWidth / 2);
+    const offsetY = Number(node.dataset.dragOffsetY ?? node.offsetHeight / 2);
+    node.style.left = `${clientX - parentRect.left - offsetX}px`;
+    node.style.top = `${clientY - parentRect.top - offsetY}px`;
+}
+
+function detachNodeToRoot(node) {
+    const root = document.getElementById('rootnode');
+    reparentNodePreservingPosition(node, root);
+    updateLine(node);
+    handleGraphChanged();
+}
+
+function onDetachHandleMouseDown(event) {
+    const wrapper = event.target.closest('.detach-wrapper');
+    if (!wrapper) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const node = wrapper.closest('.node');
+    if (!node || node.dataset.type === 'Scene') return;
+    detachNodeToRoot(node);
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    selectNode(node);
+    startNodeDrag(node);
+}
+
+function selectNode(node) {
+    if (selectedNode) {
+        selectedNode.classList.remove('selected');
+    }
+    
+    if (node && node.dataset.type !== 'Scene') {
+        selectedNode = node;
+        node.classList.add('selected');
+        showParamPanel(node);
+    } else {
+        selectedNode = null;
+        renderCurrentParamPanel();
+    }
+    
+    // Update outline selection in shader (works in refresh mode without recompile!)
+    if (outlineEnabled && program) {
+        applyRenderModeUniforms();
+    }
+}
+
+function showParamPanel(node) {
+    if (node && node.dataset.type !== 'Scene') {
+        currentParamNode = node;
+    }
+    renderCurrentParamPanel();
+}
+
+function createParamSlider(node, key, def, value) {
+    const group = document.createElement('div');
+    group.className = 'param-group';
+    
+    const label = document.createElement('label');
+    label.textContent = key;
+    
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = def.min;
+    slider.max = def.max;
+    slider.step = def.step;
+    slider.value = value;
+    slider.disabled = !paramControlsEnabled;
+    
+    const valueDisplay = document.createElement('div');
+    valueDisplay.className = 'value-display';
+    valueDisplay.textContent = value.toFixed(2);
+    
+    slider.addEventListener('input', () => {
+        const numericValue = parseFloat(slider.value);
+        valueDisplay.textContent = numericValue.toFixed(2);
+        queueSliderUpdate(node, key, numericValue);
+    });
+    
+    group.appendChild(label);
+    group.appendChild(slider);
+    group.appendChild(valueDisplay);
+    
+    return group;
+}
+
+function queueSliderUpdate(node, key, value) {
+    if (!paramControlsEnabled) return;
+    let entry = pendingSliderUpdates.get(node);
+    if (!entry) {
+        entry = { node, changes: {} };
+        pendingSliderUpdates.set(node, entry);
+    }
+    entry.changes[key] = value;
+    if (!sliderFlushHandle) {
+        sliderFlushHandle = requestAnimationFrame(() => {
+            sliderFlushHandle = null;
+            flushPendingSliderUpdates();
+        });
+    }
+}
+
+function flushPendingSliderUpdates() {
+    if (!pendingSliderUpdates.size) return;
+    pendingSliderUpdates.forEach(({ node, changes }) => {
+        const params = getNodeParams(node);
+        Object.assign(params, changes);
+        setNodeParams(node, params);
+    });
+    pendingSliderUpdates.clear();
+    updatePreviewUniforms();
+}
+
+function getPreviewScale() {
+    return PREVIEW_PIXEL_SCALES[previewScaleIndex] || 1;
+}
+
+function updatePixelScaleLabel() {
+    if (!pixelScaleLabel) return;
+    pixelScaleLabel.textContent = `${getPreviewScale()}x`;
+}
+
+function applyPreviewScale() {
+    const canvas = document.getElementById('glCanvas');
+    if (!canvas) return;
+    const scale = getPreviewScale();
+    canvas.width = Math.max(64, Math.floor(window.innerWidth / scale));
+    canvas.height = Math.max(64, Math.floor(window.innerHeight / scale));
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    
+    // WebGPU will automatically handle canvas resizing
+    // Just need to re-render
+    if (device && pipeline) {
+            renderPreview();
+    }
+}
+
+function handlePixelScaleInput(event) {
+    const raw = parseInt(event.target.value, 10);
+    const clamped = Math.max(0, Math.min(PREVIEW_PIXEL_SCALES.length - 1, isNaN(raw) ? 0 : raw));
+    if (clamped === previewScaleIndex) return;
+    previewScaleIndex = clamped;
+    updatePixelScaleLabel();
+    applyPreviewScale();
+}
+
+function onDocumentMouseDown(event) {
+    const target = event.target;
+    
+    if (target.closest('.detach-wrapper')) {
+        return;
+    }
+    
+    if (target.closest('#sidebar') || target.closest('#paramPanel') || 
+        target.closest('#glCanvas') ||
+        target.closest('#previewControls') ||
+        target.closest('#recompileButton')) {
+        return;
+    }
+    
+    if (target.classList.contains("node") || target.parentNode.classList.contains("node")) {
+        event.preventDefault();
+        const node = target.classList.contains("node") ? target : target.parentNode;
+        
+        pos3 = event.clientX;
+        pos4 = event.clientY;
+        
+        selectNode(node);
+        startNodeDrag(node);
+    } else {
+        // Don't deselect when clicking on stage for camera controls
+        // selectNode(null);
+        if (isStageInteractionTarget(target)) {
+            if (event.button === 0) {
+                beginCameraDrag('orbit', event.clientX, event.clientY);
+            } else if (event.button === 2) {
+                beginCameraDrag('pan', event.clientX, event.clientY);
+            }
+        } else {
+            // Only deselect if clicking outside stage/canvas area
+            selectNode(null);
+        }
+    }
+}
+
+function onDocumentMouseMove(event) {
+    if (cameraDragMode) {
+        event.preventDefault();
+        updateCameraDrag(event.clientX, event.clientY);
+        return;
+    }
+    if (dragging) {
+        event.preventDefault();
+        pos1 = pos3 - event.clientX;
+        pos2 = pos4 - event.clientY;
+        pos3 = event.clientX;
+        pos4 = event.clientY;
+        nodeDrag();
+    }
+}
+
+function onDocumentMouseUp(event) {
+    if (cameraDragMode) {
+        event.preventDefault();
+        endCameraDrag();
+        return;
+    }
+    if (dragging) {
+        event.preventDefault();
+        
+        if (detached) {
+            const attached = finalizeDrop(event.clientX, event.clientY);
+            if (!attached && dragged.parentNode.id === "rootnode") {
+                positionNodeAtPoint(dragged, event.clientX, event.clientY);
+                handleGraphChanged();
+            }
+        }
+        
+        clearDropPreview();
+        stopNodeDrag();
+    }
+}
+
+function startNodeDrag(node) {
+    dragging = true;
+    dragged = node;
+    detached = node.parentNode.id === "rootnode";
+    const rect = node.getBoundingClientRect();
+    const offsetX = pos3 - rect.left;
+    const offsetY = pos4 - rect.top;
+    node.dataset.dragOffsetX = offsetX;
+    node.dataset.dragOffsetY = offsetY;
+}
+
+function nodeDrag() {
+    const parentRect = dragged.parentNode.getBoundingClientRect();
+    dragged.style.left = `${pos3 - parentRect.left - dragged.dataset.dragOffsetX}px`;
+    dragged.style.top = `${pos4 - parentRect.top - dragged.dataset.dragOffsetY}px`;
+    updateLine(dragged);
+    if (detached) {
+        updateDropPreview();
+    } else {
+        clearDropPreview();
+    }
+    updateRecyclePreview();
+}
+
+function stopNodeDrag() {
+    dragging = false;
+    detached = false;
+    dragFromMenu = false;
+    dragged = null;
+    clearDropPreview();
+    clearRecyclePreview();
+}
+
+function isValidDropTarget(child, target) {
+    if (!target || target === child) return false;
+    if (!target.classList || !target.classList.contains('node')) return false;
+    if (child.contains && child.contains(target)) return false;
+    return canAcceptChild(target);
+}
+
+function getDropZoneRect(node) {
+    const rect = node.getBoundingClientRect();
+    const padding = 10;
+    const width = rect.width * 1.2;
+    const height = rect.height * 2.2;
+    const centerX = rect.left + rect.width / 2;
+    return {
+        left: centerX - width / 2,
+        right: centerX + width / 2,
+        top: rect.bottom + padding,
+        bottom: rect.bottom + padding + height,
+        anchorX: centerX,
+        anchorY: rect.top + rect.height / 2
+    };
+}
+
+function findDropTarget(x, y) {
+    for (const node of nodesArray) {
+        if (!isValidDropTarget(dragged, node)) continue;
+        const zone = getDropZoneRect(node);
+        if (x >= zone.left && x <= zone.right && y >= zone.top && y <= zone.bottom) {
+            return { node, zone };
+        }
+    }
+    return null;
+}
+
+function getPreviewPathData(zone, pointerX, pointerY) {
+    const midY = (zone.anchorY + pointerY) / 2;
+    return [
+        ['M', zone.anchorX, zone.anchorY],
+        ['C', zone.anchorX, midY, pointerX, midY, pointerX, pointerY]
+    ];
+}
+
+function updateDropPreview() {
+    if (!dragged) return;
+    const pointerX = pos3;
+    const pointerY = pos4;
+    if (!Number.isFinite(pointerX) || !Number.isFinite(pointerY)) return;
+    
+    const targetInfo = findDropTarget(pointerX, pointerY);
+    if (!targetInfo) {
+        clearDropPreview();
+        return;
+    }
+    
+    if (currentDropTarget === targetInfo.node) {
+        if (dropPreview) {
+            dropPreview.plot(getPreviewPathData(targetInfo.zone, pointerX, pointerY));
+        }
+        return;
+    }
+    
+    currentDropTarget = targetInfo.node;
+    const pathData = getPreviewPathData(targetInfo.zone, pointerX, pointerY);
+    if (!dropPreview) {
+        dropPreview = draw.path(pathData)
+            .fill('none')
+            .stroke({ width: 2, color: '#f6ad55', dasharray: '6 4', linecap: 'round' });
+    } else {
+        dropPreview.plot(pathData);
+    }
+}
+
+function clearDropPreview() {
+    if (dropPreview) {
+        dropPreview.remove();
+        dropPreview = null;
+    }
+    currentDropTarget = null;
+}
+
+function updateRecyclePreview() {
+    if (!dragged) return;
+    const rect = recycleRect();
+    const inBin = pos3 >= rect.left && pos3 <= rect.right && pos4 >= rect.top && pos4 <= rect.bottom;
+    if (inBin && !recycleActive) {
+        recycleActive = true;
+        recycleBin.classList.add('active');
+    } else if (!inBin && recycleActive) {
+        recycleActive = false;
+        recycleBin.classList.remove('active');
+    }
+}
+
+function clearRecyclePreview() {
+    recycleActive = false;
+    recycleBin.classList.remove('active');
+}
+
+function checkRecycleBin(clientX, clientY) {
+    const rect = recycleRect();
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+}
+
+function deleteNodeWithChildren(node) {
+    if (!node || node.id === 'scene') return;
+    if (selectedNode && (selectedNode === node || node.contains(selectedNode))) {
+        selectNode(null);
+    }
+    node.remove();
+    scanNodes();
+    draw.clear();
+    lines = [];
+    dropPreview = null;
+    currentDropTarget = null;
+    addLines();
+    handleGraphChanged();
+}
+
+function finalizeDrop(clientX, clientY) {
+    if (checkRecycleBin(clientX, clientY)) {
+        deleteNodeWithChildren(dragged);
+        clearDropPreview();
+        clearRecyclePreview();
+        return true;
+    }
+    
+    if (currentDropTarget && attachNodeToParent(dragged, currentDropTarget)) {
+        clearDropPreview();
+        clearRecyclePreview();
+        return true;
+    }
+    
+    dragged.hidden = true;
+    const elemBelow = document.elementFromPoint(clientX, clientY);
+    dragged.hidden = false;
+    
+    if (elemBelow) {
+        let targetNode = null;
+        if (elemBelow.classList.contains("node")) {
+            targetNode = elemBelow;
+        } else if (elemBelow.parentNode && elemBelow.parentNode.classList.contains("node")) {
+            targetNode = elemBelow.parentNode;
+        }
+        
+        if (isValidDropTarget(dragged, targetNode)) {
+            clearDropPreview();
+            clearRecyclePreview();
+            return attachNodeToParent(dragged, targetNode);
+        }
+    }
+    
+    clearDropPreview();
+    clearRecyclePreview();
+    return false;
+}
+
+// Helper to traverse all nodes connected to scene
+function traverseSceneNodes(callback) {
+    const sceneNode = document.getElementById('scene');
+    
+    function traverse(node) {
+        if (node.dataset.type !== 'Scene') {
+            callback(node);
+        }
+        getNodeChildren(node).forEach(child => traverse(child));
+    }
+    
+    traverse(sceneNode);
+}
+
+function getSceneStats() {
+    const sceneNode = document.getElementById('scene');
+    let count = 0;
+    let depth = 0;
+    
+    function traverse(node, currentDepth) {
+        if (node.dataset.type !== 'Scene') {
+            count++;
+            depth = Math.max(depth, currentDepth);
+        }
+        getNodeChildren(node).forEach(child => traverse(child, currentDepth + 1));
+    }
+    
+    traverse(sceneNode, 0);
+    return { nodeCount: count, maxDepth: depth };
+}
+
+function getNodeVarName(node) {
+    return 'd_' + node.id.replace(/[^a-zA-Z0-9]/g, '_');
+}
+
+// Counter for export variable names
+let exportVarCounters = {};
+let exportVarNameMap = {}; // Map node to its export variable name
+
+function getExportVarName(node) {
+    // Return cached name if already generated
+    if (exportVarNameMap[node.id]) {
+        return exportVarNameMap[node.id];
+    }
+    
+    const nodeType = node.dataset.type;
+    const typeName = nodeType.replace(/^op/, '').toLowerCase();
+    
+    // Initialize counter for this type if needed
+    if (!exportVarCounters[nodeType]) {
+        exportVarCounters[nodeType] = 0;
+    }
+    exportVarCounters[nodeType]++;
+    
+    const varName = typeName + '_' + exportVarCounters[nodeType];
+    exportVarNameMap[node.id] = varName; // Cache it
+    return varName;
+}
+
+function resetExportVarCounters() {
+    exportVarCounters = {};
+    exportVarNameMap = {};
+}
+
+function calculateBoundForNode(node) {
+    const nodeType = node.dataset.type;
+    const params = getNodeParams(node);
+    const typeDef = NODE_TYPES[nodeType];
+    
+    if (typeDef.category === 'primitive') {
+        const bound = getPrimitiveBoundExpr(nodeType, params);
+        return bound ? parseFloat(bound) : 3.0;
+    } else {
+        // For operations/modifiers, use a conservative bound
+        const children = getNodeChildren(node);
+        if (children.length === 0) return 3.0;
+        
+        let maxBound = 0;
+        children.forEach(child => {
+            maxBound = Math.max(maxBound, calculateBoundForNode(child));
+        });
+        return maxBound * (params.scale || 1.0) * 1.5; // Conservative multiplier
+    }
+}
+
+function collapseNodeToPrimitive(node) {
+    if (!node || node.dataset.type === 'Scene') {
+        alert('Cannot collapse Scene node');
+        return;
+    }
+    
+    const titleElement = node.querySelector('.nodetitle');
+    const displayName = titleElement ? titleElement.textContent.trim() || node.dataset.type : node.dataset.type;
+    
+    // Generate unique ID
+    const collapsedId = 'Collapsed_' + (++collapsedCounter);
+    
+    // Generate SDF code for this subtree
+    resetExportVarCounters();
+    const sdfCode = generateExportNodeCode(node, 'p');
+    const returnVar = getExportVarName(node);
+    
+    // Create function
+    const functionCode = `float sd${collapsedId}(vec3 p) {
+${sdfCode}    return ${returnVar};
+}
+
+`;
+    
+    // Calculate bounding radius
+    const boundingRadius = calculateBoundForNode(node);
+    
+    // Store collapsed primitive
+    collapsedPrimitives[collapsedId] = {
+        code: functionCode,
+        displayName: displayName,
+        boundingRadius: boundingRadius
+    };
+    
+    // Add to NODE_TYPES
+    NODE_TYPES[collapsedId] = {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {},
+        displayName: displayName
+    };
+    
+    // Add to menu
+    addCollapsedPrimitiveToMenu(collapsedId);
+    
+    // Get parent and position before removing
+    const parent = node.parentNode;
+    const nodeStyle = { left: node.style.left, top: node.style.top };
+    
+    // Copy transform from original node
+    const originalParams = getNodeParams(node);
+    
+    // Remove original node and its children from graph
+    removeNodeFromGraph(node);
+    
+    // Create new collapsed primitive instance
+    const newNode = createNode(collapsedId);
+    newNode.style.left = nodeStyle.left;
+    newNode.style.top = nodeStyle.top;
+    
+    // Copy transform parameters
+    const newParams = getNodeParams(newNode);
+    newParams.posX = originalParams.posX;
+    newParams.posY = originalParams.posY;
+    newParams.posZ = originalParams.posZ;
+    newParams.rotX = originalParams.rotX;
+    newParams.rotY = originalParams.rotY;
+    newParams.rotZ = originalParams.rotZ;
+    newParams.scale = originalParams.scale;
+    setNodeParams(newNode, newParams);
+    
+    // Add to parent
+    parent.appendChild(newNode);
+    
+    // Rebuild node list and connector lines
+    scanNodes();
+    draw.clear();
+    lines = [];
+    addLines();
+    
+    selectNode(newNode);
+    handleGraphChanged();
+    renderCurrentParamPanel();
+    showCollapseHint(false);
+}
+
+function showCollapseHint(show) {
+    if (!collapseHintElement) return;
+    collapseHintElement.style.display = show ? 'block' : 'none';
+}
+
+function initiateCollapseWithRename(node, options = {}) {
+    if (!node || node.dataset.type === 'Scene') {
+        alert('Select a non-scene node to collapse.');
+        return;
+    }
+    if (options.showHint) {
+        showCollapseHint(true);
+    } else {
+        showCollapseHint(false);
+    }
+    const existingInput = node.querySelector('.nodetitleinput');
+    if (existingInput) {
+        existingInput.dataset.collapseAfterSave = '1';
+        existingInput.focus();
+        existingInput.select();
+        return;
+    }
+    const titleElement = node.querySelector('.nodetitle');
+    if (!titleElement) return;
+    startEditNodeTitle(titleElement, true);
+}
+
+function startEditNodeTitle(titleEl, collapseAfter = false) {
+    if (!titleEl) return;
+    const node = titleEl.closest('.node');
+    if (!node || node.dataset.type === 'Scene') return;
+    const existingInput = node.querySelector('.nodetitleinput');
+    if (existingInput) {
+        if (collapseAfter) {
+            existingInput.dataset.collapseAfterSave = '1';
+        }
+        existingInput.focus();
+        existingInput.select();
+        return;
+    }
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'nodetitleinput';
+    const currentText = titleEl.textContent.trim();
+    input.value = currentText;
+    input.dataset.originalValue = currentText;
+    if (collapseAfter) {
+        input.dataset.collapseAfterSave = '1';
+    }
+    titleEl.replaceWith(input);
+    input.focus();
+    input.select();
+}
+
+function finishEditNodeTitle(input, save = true) {
+    if (!input || !input.classList.contains('nodetitleinput') || input._finished) return;
+    input._finished = true;
+    const node = input.closest('.node');
+    const original = input.dataset.originalValue || '';
+    const text = save ? (input.value.trim() || original || 'Node') : (original || 'Node');
+    const titleEl = document.createElement('div');
+    titleEl.className = 'nodetitle';
+    titleEl.textContent = text;
+    if (input.parentNode) {
+        input.replaceWith(titleEl);
+    } else {
+        return;
+    }
+    if (node) {
+        if (node === selectedNode) {
+            paramNodeName.textContent = text;
+        }
+        updateLine(node);
+        const collapsedDef = collapsedPrimitives[node.dataset.type];
+        if (collapsedDef) {
+            collapsedDef.displayName = text;
+            const menuItems = document.querySelectorAll(`.menu-item[data-type="${node.dataset.type}"]`);
+            menuItems.forEach(item => {
+                item.textContent = text;
+            });
+        }
+    }
+    const shouldCollapse = input.dataset.collapseAfterSave === '1' && node;
+    if (shouldCollapse) {
+        showCollapseHint(false);
+        setTimeout(() => collapseNodeToPrimitive(node), 0);
+    } else if (!save) {
+        showCollapseHint(false);
+    }
+}
+
+function handleNodeTitleDoubleClick(event) {
+    if (event.target.classList && event.target.classList.contains('nodetitleinput')) return;
+    const node = event.target.closest && event.target.closest('.node');
+    if (!node || node.dataset.type === 'Scene') return;
+    event.preventDefault();
+    event.stopPropagation();
+    initiateCollapseWithRename(node, { showHint: false });
+}
+
+function handleNodeTitleBlur(event) {
+    const target = event.target;
+    if (target && target.classList.contains('nodetitleinput')) {
+        finishEditNodeTitle(target, true);
+    }
+}
+
+function handleNodeTitleKeyDown(event) {
+    const target = event.target;
+    if (!target || !target.classList.contains('nodetitleinput')) return;
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        finishEditNodeTitle(target, true);
+    } else if (event.key === 'Escape') {
+        event.preventDefault();
+        finishEditNodeTitle(target, false);
+    }
+}
+
+function addCollapsedPrimitiveToMenu(collapsedId) {
+    const data = collapsedPrimitives[collapsedId];
+    if (!data) return;
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    const primitivesHeader = Array.from(sidebar.querySelectorAll('h3')).find(h => h.textContent === 'Primitives');
+    if (!primitivesHeader) return;
+    const existing = sidebar.querySelector(`.menu-item[data-type="${collapsedId}"]`);
+    if (existing) {
+        existing.textContent = data.displayName || collapsedId;
+        return;
+    }
+    const menuItem = document.createElement('div');
+    menuItem.className = 'menu-item primitive';
+    menuItem.dataset.type = collapsedId;
+    menuItem.textContent = data.displayName || collapsedId;
+    menuItem.style.fontStyle = 'italic';
+    menuItem.style.opacity = '0.85';
+    const nextSibling = primitivesHeader.nextElementSibling;
+    if (nextSibling) {
+        primitivesHeader.parentNode.insertBefore(menuItem, nextSibling);
+    } else {
+        primitivesHeader.parentNode.appendChild(menuItem);
+    }
+    menuItem.addEventListener('mousedown', onMenuItemMouseDown, false);
+}
+
+function serializeNodeTree(node) {
+    if (!node) return null;
+    const params = JSON.parse(JSON.stringify(getNodeParams(node) || {}));
+    const titleEl = node.querySelector('.nodetitle');
+    const data = {
+        type: node.dataset.type,
+        title: titleEl ? titleEl.textContent.trim() : '',
+        params,
+        style: {
+            left: node.style.left || '',
+            top: node.style.top || ''
+        },
+        children: getNodeChildren(node).map(child => serializeNodeTree(child))
+    };
+    return data;
+}
+
+function rebuildNodesFromData(data, parent) {
+    if (!data || !parent) return null;
+    if (data.type === 'Scene') {
+        const sceneNode = parent;
+        const titleEl = sceneNode.querySelector('.nodetitle');
+        if (titleEl && data.title) {
+            titleEl.textContent = data.title;
+        }
+        if (data.params) {
+            setNodeParams(sceneNode, data.params);
+        }
+        (data.children || []).forEach(child => rebuildNodesFromData(child, sceneNode));
+        return sceneNode;
+    }
+    if (!NODE_TYPES[data.type]) {
+        console.warn('Unknown node type in saved scene:', data.type);
+        return null;
+    }
+    const node = createNode(data.type);
+    const titleEl = node.querySelector('.nodetitle');
+    if (titleEl && data.title) {
+        titleEl.textContent = data.title;
+    }
+    if (data.params) {
+        setNodeParams(node, data.params);
+    }
+    if (data.style) {
+        if (data.style.left) node.style.left = data.style.left;
+        if (data.style.top) node.style.top = data.style.top;
+    }
+    parent.appendChild(node);
+    (data.children || []).forEach(child => rebuildNodesFromData(child, node));
+    return node;
+}
+
+function resetCollapsedPrimitiveRegistry() {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+        sidebar.querySelectorAll('.menu-item[data-type^="Collapsed_"]').forEach(item => item.remove());
+    }
+    Object.keys(NODE_TYPES).forEach(key => {
+        if (key.startsWith('Collapsed_')) {
+            delete NODE_TYPES[key];
+        }
+    });
+}
+
+function registerCollapsedPrimitive(id, data) {
+    if (!data) return;
+    NODE_TYPES[id] = {
+        category: 'primitive',
+        maxChildren: 0,
+        params: {},
+        displayName: data.displayName || id
+    };
+    addCollapsedPrimitiveToMenu(id);
+    const match = id.match(/Collapsed_(\d+)/);
+    if (match) {
+        collapsedCounter = Math.max(collapsedCounter, parseInt(match[1], 10));
+    }
+}
+
+function saveGraphToLocalStorage() {
+    try {
+        const sceneNode = document.getElementById('scene');
+        if (!sceneNode) return;
+        const state = {
+            version: 1,
+            nodes: serializeNodeTree(sceneNode),
+            collapsedPrimitives
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+        if (saveGraphButton) {
+            const original = saveGraphButton.textContent;
+            saveGraphButton.textContent = 'Saved ✓';
+            saveGraphButton.disabled = true;
+            setTimeout(() => {
+                saveGraphButton.textContent = original;
+                saveGraphButton.disabled = false;
+            }, 1200);
+        }
+        console.log('[SDF] Scene saved to localStorage.');
+    } catch (err) {
+        console.error('Failed to save scene:', err);
+    }
+}
+
+function loadGraphFromStorage() {
+    try {
+        const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (!raw) return false;
+        const state = JSON.parse(raw);
+        if (!state || !state.nodes) return false;
+        resetCollapsedPrimitiveRegistry();
+        collapsedPrimitives = {};
+        collapsedCounter = 0;
+        const entries = Object.entries(state.collapsedPrimitives || {});
+        entries.forEach(([id, data]) => {
+            collapsedPrimitives[id] = data;
+            registerCollapsedPrimitive(id, data);
+        });
+        const sceneNode = document.getElementById('scene');
+        if (!sceneNode) return false;
+        getNodeChildren(sceneNode).forEach(child => removeNodeFromGraph(child));
+        rebuildNodesFromData(state.nodes, sceneNode);
+        scanNodes();
+        draw.clear();
+        lines = [];
+        addLines();
+        initializeNodeParams();
+        currentParamNode = ensureValidParamNode(currentParamNode) || getFirstEditableNode();
+        renderCurrentParamPanel();
+        graphDirty = false;
+        return true;
+    } catch (err) {
+        console.error('Failed to load saved scene:', err);
+        return false;
+    }
+}
+
+function removeNodeFromGraph(node) {
+    if (!node) return;
+    const children = getNodeChildren(node);
+    children.forEach(child => removeNodeFromGraph(child));
+    const index = nodesArray.indexOf(node);
+    if (index >= 0) {
+        nodesArray.splice(index, 1);
+        if (lines[index]) {
+            lines[index].remove();
+        }
+        lines.splice(index, 1);
+    }
+    node.remove();
+}
+
+// ===========================================
+// EXPORT GLSL - Hardcoded values (for output)
+// ===========================================
+function generateExportGLSL() {
+    const t0 = perfNow();
+    const sceneNode = document.getElementById('scene');
+    const children = getNodeChildren(sceneNode);
+    
+    // Reset export variable name counters for clean numbering
+    resetExportVarCounters();
+    
+    let code = getSDFPreamble();
+    
+    if (children.length === 0) {
+        code += `float sceneSDF(vec3 p) {
+    return 1000.0; // Empty scene
+}`;
+    } else if (children.length === 1) {
+        code += `
+float sceneSDF(vec3 p) {
+${generateExportNodeCode(children[0], 'p')}
+    return ${getExportVarName(children[0])};
+}`;
+    } else {
+        let nodeCode = '';
+        children.forEach(child => {
+            nodeCode += generateExportNodeCode(child, 'p');
+        });
+        
+        let unionExpr = getExportVarName(children[0]);
+        for (let i = 1; i < children.length; i++) {
+            unionExpr = `min(${unionExpr}, ${getExportVarName(children[i])})`;
+        }
+        
+        code += `
+float sceneSDF(vec3 p) {
+${nodeCode}
+    return ${unionExpr};
+}`;
+    }
+    
+    const stats = getSceneStats();
+    perfLogDuration('generateExportGLSL', t0, `nodes=${stats.nodeCount} depth=${stats.maxDepth}`);
+    return code;
+}
+
+function generateExportNodeCode(node, pointVar) {
+    const nodeType = node.dataset.type;
+    const params = getNodeParams(node);
+    const varName = getExportVarName(node); // Use readable export names
+    const typeDef = NODE_TYPES[nodeType];
+    
+    let code = '';
+    const transformedPoint = varName + '_p';
+    const rad = Math.PI / 180;
+    const scaleVar = `${varName}_scale`;
+    
+    code += `    vec3 ${transformedPoint} = ${pointVar};\n`;
+    code += `    ${transformedPoint} -= vec3(${params.posX.toFixed(3)}, ${params.posY.toFixed(3)}, ${params.posZ.toFixed(3)});\n`;
+    if (params.rotX !== 0) code += `    ${transformedPoint} *= rotateX(${(params.rotX * rad).toFixed(4)});\n`;
+    if (params.rotY !== 0) code += `    ${transformedPoint} *= rotateY(${(params.rotY * rad).toFixed(4)});\n`;
+    if (params.rotZ !== 0) code += `    ${transformedPoint} *= rotateZ(${(params.rotZ * rad).toFixed(4)});\n`;
+    code += `    float ${scaleVar} = max(${params.scale.toFixed(3)}, 0.0001);\n`;
+    code += `    ${transformedPoint} /= ${scaleVar};\n`;
+    
+    if (typeDef.category === 'primitive') {
+        const distVar = `${varName}_dist`;
+        const boundExpr = getPrimitiveBoundExpr(nodeType, params);
+        const distExpr = getPrimitiveDistanceExpr(nodeType, transformedPoint, params);
+        code += `    float ${distVar};\n`;
+        if (boundExpr) {
+            const skipVar = `${varName}_skip`;
+            code += `    float ${skipVar} = length(${transformedPoint}) - (${boundExpr});\n`;
+            code += `    if (${skipVar} > 2.0) {\n`;
+            code += `        ${distVar} = ${skipVar};\n`;
+            code += `    } else {\n`;
+            code += `        ${distVar} = ${distExpr};\n`;
+            code += `    }\n`;
+        } else {
+            code += `    ${distVar} = ${distExpr};\n`;
+        }
+        code += `    float ${varName} = ${distVar};\n`;
+    } else if (typeDef.category === 'operation') {
+        const children = getNodeChildren(node);
+        
+        if (children.length < 2) {
+            code += `    float ${varName} = 1000.0; // Incomplete operation\n`;
+        } else {
+            code += generateExportNodeCode(children[0], transformedPoint);
+            code += generateExportNodeCode(children[1], transformedPoint);
+            
+            const child1Var = getExportVarName(children[0]);
+            const child2Var = getExportVarName(children[1]);
+            
+            switch (nodeType) {
+                case 'opUnion':
+                    code += `    float ${varName} = min(${child1Var}, ${child2Var});\n`;
+                    break;
+                case 'opSmoothUnion':
+                    code += `    float ${varName} = opSmoothUnion(${child1Var}, ${child2Var}, ${params.k.toFixed(3)});\n`;
+                    break;
+                case 'opSubtraction':
+                    code += `    float ${varName} = max(-${child1Var}, ${child2Var});\n`;
+                    break;
+                case 'opSmoothSubtraction':
+                    code += `    float ${varName} = opSmoothSubtraction(${child1Var}, ${child2Var}, ${params.k.toFixed(3)});\n`;
+                    break;
+                case 'opIntersection':
+                    code += `    float ${varName} = max(${child1Var}, ${child2Var});\n`;
+                    break;
+                case 'opSmoothIntersection':
+                    code += `    float ${varName} = opSmoothIntersection(${child1Var}, ${child2Var}, ${params.k.toFixed(3)});\n`;
+                    break;
+                case 'opXor':
+                    code += `    float ${varName} = opXor(${child1Var}, ${child2Var});\n`;
+                    break;
+        }
+    }
+    } else if (typeDef.category === 'modifier') {
+        const children = getNodeChildren(node);
+        if (children.length < 1) {
+            code += `    float ${varName} = 1000.0; // Incomplete modifier\n`;
+        } else {
+            const child = children[0];
+            const childVar = getExportVarName(child);
+            switch (nodeType) {
+                case 'opRound':
+                    code += generateExportNodeCode(child, transformedPoint);
+                    code += `    float ${varName} = ${childVar} - ${params.roundRadius.toFixed(3)};\n`;
+                    break;
+                case 'opOnion':
+                    code += generateExportNodeCode(child, transformedPoint);
+                    code += `    float ${varName} = abs(${childVar}) - ${params.shellThickness.toFixed(3)};\n`;
+                    break;
+                case 'opTwist': {
+                    const warpPoint = `${varName}_warp`;
+                    const angleVar = `${varName}_angle`;
+                    const matVar = `${varName}_mat`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    float ${angleVar} = ${params.twistAmount.toFixed(3)} * ${warpPoint}.y;\n`;
+                    code += `    mat2 ${matVar} = mat2(cos(${angleVar}), -sin(${angleVar}), sin(${angleVar}), cos(${angleVar}));\n`;
+                    code += `    ${warpPoint}.xz = ${matVar} * ${warpPoint}.xz;\n`;
+                    code += generateExportNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    break;
+                }
+                case 'opElongate': {
+                    const qVar = `${varName}_q`;
+                    const clampVar = `${varName}_clamped`;
+                    code += `    vec3 ${qVar} = abs(${transformedPoint}) - vec3(${params.extentX.toFixed(3)}, ${params.extentY.toFixed(3)}, ${params.extentZ.toFixed(3)});\n`;
+                    code += `    vec3 ${clampVar} = max(${qVar}, vec3(0.0));\n`;
+                    code += generateExportNodeCode(child, clampVar);
+                    code += `    float ${varName} = ${childVar} + min(max(${qVar}.x, max(${qVar}.y, ${qVar}.z)), 0.0);\n`;
+                    break;
+                }
+                case 'opCheapBend': {
+                    const warpPoint = `${varName}_warp`;
+                    const angleVar = `${varName}_angle`;
+                    const matVar = `${varName}_mat`;
+                    const rotated = `${varName}_rot`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    float ${angleVar} = ${params.bendAmount.toFixed(3)} * ${warpPoint}.x;\n`;
+                    code += `    mat2 ${matVar} = mat2(cos(${angleVar}), -sin(${angleVar}), sin(${angleVar}), cos(${angleVar}));\n`;
+                    code += `    vec2 ${rotated} = ${matVar} * ${warpPoint}.xy;\n`;
+                    code += `    ${warpPoint}.xy = ${rotated};\n`;
+                    code += generateExportNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    break;
+                }
+                case 'opSymX': {
+                    const warpPoint = `${varName}_warp`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    ${warpPoint}.x = abs(${warpPoint}.x);\n`;
+                    code += generateExportNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    break;
+                }
+                case 'opRepeat': {
+                    const warpPoint = `${varName}_warp`;
+                    const sx = Number(params.spacingX ?? 2.0).toFixed(3);
+                    const sy = Number(params.spacingY ?? 2.0).toFixed(3);
+                    const sz = Number(params.spacingZ ?? 2.0).toFixed(3);
+                    code += `    vec3 ${warpPoint} = mod(${transformedPoint} + 0.5 * vec3(${sx}, ${sy}, ${sz}), vec3(${sx}, ${sy}, ${sz})) - 0.5 * vec3(${sx}, ${sy}, ${sz});\n`;
+                    code += generateExportNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    break;
+                }
+            }
+        }
+    }
+    
+    code += `    ${varName} *= ${scaleVar};\n`;
+    
+    return code;
+}
+
+// ===========================================
+// PREVIEW GLSL - Uniform-based (for live edit)
+// ===========================================
+// Global node-to-ID mapping
+let nodeIdMap = new Map();
+let nextNodeId = 1;
+
+function generatePreviewGLSL() {
+    const t0 = perfNow();
+    const sceneNode = document.getElementById('scene');
+    const children = getNodeChildren(sceneNode);
+    
+    let code = getSDFPreamble();
+    code += '\nvec3 g_lastColor = vec3(0.25, 0.25, 0.3);\n';
+    
+    // Assign IDs to nodes and create ID constants
+    nodeIdMap.clear();
+    nextNodeId = 1;
+    code += '\n// Node IDs\n';
+    traverseSceneNodes(node => {
+        const varName = getNodeVarName(node);
+        const id = nextNodeId++;
+        nodeIdMap.set(node, id);
+        code += `const int ID_${varName} = ${id};\n`;
+    });
+    
+    // Selection and outline tracking
+    code += '\n// Selection tracking\n';
+    code += 'uniform int u_selectedID;\n';
+    code += 'uniform bool u_outlineEnabled;\n';
+    code += 'int g_lastID = 0;\n';
+    code += 'float distToSelected = 1e20;\n';
+    code += 'float g_lastDepth = 0.0;\n'; // Track depth from object center for current surface
+    
+    // Generate uniform declarations
+    code += '\n// Node uniforms\n';
+    traverseSceneNodes(node => {
+        const prefix = getNodeVarName(node);
+        const nodeType = node.dataset.type;
+        const typeDef = NODE_TYPES[nodeType];
+        
+        code += `uniform vec3 ${prefix}_pos;\n`;
+        code += `uniform vec3 ${prefix}_rot;\n`;
+        code += `uniform float ${prefix}_scale;\n`;
+        
+        if (typeDef.params) {
+            for (const key of Object.keys(typeDef.params)) {
+                code += `uniform float ${prefix}_${key};\n`;
+            }
+        }
+    });
+    
+    code += '\n';
+    
+    if (children.length === 0) {
+        code += `float sceneSDF(vec3 p) {
+    g_lastColor = vec3(0.2, 0.2, 0.25);
+    g_lastDepth = 0.0;
+    return 1000.0; // Empty scene
+}`;
+    } else if (children.length === 1) {
+        const childVar = getNodeVarName(children[0]);
+        code += `
+float sceneSDF(vec3 p) {
+${generatePreviewNodeCode(children[0], 'p')}
+    g_lastColor = ${childVar}_color;
+    g_lastDepth = ${childVar}_depth;
+    return ${getNodeVarName(children[0])};
+}`;
+    } else {
+        let nodeCode = '';
+        children.forEach(child => {
+            nodeCode += generatePreviewNodeCode(child, 'p');
+        });
+        let unionExpr = getNodeVarName(children[0]);
+        let unionColor = `${unionExpr}_color`;
+        let unionDepth = `${unionExpr}_depth`;
+        let unionCode = '';
+        for (let i = 1; i < children.length; i++) {
+            const nextVar = getNodeVarName(children[i]);
+            const nextColor = `${nextVar}_color`;
+            const nextDepth = `${nextVar}_depth`;
+            const blendVar = `sceneBlend_${i}`;
+            unionCode += `    float ${blendVar} = min(${unionExpr}, ${nextVar});\n`;
+            unionCode += `    vec3 ${blendVar}_color = (${unionExpr} <= ${nextVar}) ? ${unionColor} : ${nextColor};\n`;
+            unionCode += `    float ${blendVar}_depth = (${unionExpr} <= ${nextVar}) ? ${unionDepth} : ${nextDepth};\n`;
+            unionExpr = blendVar;
+            unionColor = `${blendVar}_color`;
+            unionDepth = `${blendVar}_depth`;
+        }
+        code += `
+float sceneSDF(vec3 p) {
+${nodeCode}
+${unionCode}
+    g_lastColor = ${unionColor};
+    g_lastDepth = ${unionDepth};
+    return ${unionExpr};
+}`;
+    }
+    
+    const stats = getSceneStats();
+    perfLogDuration('generatePreviewGLSL', t0, `nodes=${stats.nodeCount} depth=${stats.maxDepth}`);
+    return code;
+}
+
+function getPrimitiveDistanceExpr(nodeType, pointVar, params) {
+    switch (nodeType) {
+        case 'Sphere':
+            return `sdSphere(${pointVar}, ${Number(params.radius ?? 0.5).toFixed(3)})`;
+        case 'Box':
+            return `sdBox(${pointVar}, vec3(${Number(params.sizeX ?? 0.5).toFixed(3)}, ${Number(params.sizeY ?? 0.5).toFixed(3)}, ${Number(params.sizeZ ?? 0.5).toFixed(3)}))`;
+        case 'Torus':
+            return `sdTorus(${pointVar}, vec2(${Number(params.majorRadius ?? 0.5).toFixed(3)}, ${Number(params.minorRadius ?? 0.2).toFixed(3)}))`;
+        case 'Cylinder':
+            return `sdCylinder(${pointVar}, ${Number(params.radius ?? 0.3).toFixed(3)}, ${Number(params.height ?? 1.0).toFixed(3)})`;
+        case 'Octahedron':
+            return `sdOctahedron(${pointVar}, ${Number(params.size ?? 0.75).toFixed(3)})`;
+        case 'Cone': {
+            const height = Number(params.height ?? 1.5);
+            const angleDeg = Number(params.angleDeg ?? 45);
+            const angleRad = angleDeg * Math.PI / 180;
+            const sinVal = Math.sin(angleRad);
+            const cosVal = Math.cos(angleRad);
+            return `sdCone(${pointVar}, vec2(${sinVal.toFixed(3)}, ${cosVal.toFixed(3)}), ${height.toFixed(3)})`;
+        }
+        case 'RoundCone': {
+            const rTop = Number(params.radiusTop ?? 0.4);
+            const rBottom = Number(params.radiusBottom ?? 0.1);
+            const height = Number(params.height ?? 1.25);
+            return `sdRoundCone(${pointVar}, ${rTop.toFixed(3)}, ${rBottom.toFixed(3)}, ${height.toFixed(3)})`;
+        }
+        case 'VerticalCapsule':
+            return `sdVerticalCapsule(${pointVar}, ${Number(params.height ?? 1.0).toFixed(3)}, ${Number(params.radius ?? 0.25).toFixed(3)})`;
+        case 'CutHollowSphere':
+            return `sdCutHollowSphere(${pointVar}, ${Number(params.radius ?? 1.0).toFixed(3)}, ${Number(params.height ?? 0.35).toFixed(3)}, ${Number(params.thickness ?? 0.1).toFixed(3)})`;
+        case 'DeathStar':
+            return `sdDeathStar(${pointVar}, ${Number(params.radiusA ?? 1.0).toFixed(3)}, ${Number(params.radiusB ?? 0.4).toFixed(3)}, ${Number(params.offset ?? 0.6).toFixed(3)})`;
+        case 'VesicaSegment': {
+            const ax = Number(params.ax ?? -0.5).toFixed(3);
+            const ay = Number(params.ay ?? 0.0).toFixed(3);
+            const az = Number(params.az ?? 0.0).toFixed(3);
+            const bx = Number(params.bx ?? 0.5).toFixed(3);
+            const by = Number(params.by ?? 0.0).toFixed(3);
+            const bz = Number(params.bz ?? 0.0).toFixed(3);
+            const width = Number(params.width ?? 0.25).toFixed(3);
+            return `sdVesicaSegment(${pointVar}, vec3(${ax}, ${ay}, ${az}), vec3(${bx}, ${by}, ${bz}), ${width})`;
+        }
+        case 'Mandelbulb': {
+            const power = Number(params.power ?? 8.0).toFixed(3);
+            const iterations = Number(params.iterations ?? 20.0).toFixed(3);
+            return `sdMandelbulb(${pointVar}, ${power}, ${iterations})`;
+        }
+        case 'Supershape3D': {
+            const size = Number(params.size ?? 1.0).toFixed(3);
+            const m = Number(params.m ?? 4.0).toFixed(3);
+            const n1 = Number(params.n1 ?? 1.0).toFixed(3);
+            const n2 = Number(params.n2 ?? 1.0).toFixed(3);
+            const n3 = Number(params.n3 ?? 1.0).toFixed(3);
+            const a = Number(params.a ?? 1.0).toFixed(3);
+            const b = Number(params.b ?? 1.0).toFixed(3);
+            return `sdSupershape3D(${pointVar}, ${size}, ${m}, ${n1}, ${n2}, ${n3}, ${a}, ${b})`;
+        }
+        default:
+            // Check if it's a collapsed primitive
+            if (collapsedPrimitives[nodeType]) {
+                return `sd${nodeType}(${pointVar})`;
+            }
+            return '1000.0';
+    }
+}
+
+function getPrimitiveBoundExpr(nodeType, params) {
+    switch (nodeType) {
+        case 'Sphere':
+            return `${Number(params.radius ?? 0.5).toFixed(3)}`;
+        case 'Box': {
+            const sx = Number(params.sizeX ?? 0.5);
+            const sy = Number(params.sizeY ?? 0.5);
+            const sz = Number(params.sizeZ ?? 0.5);
+            const diag = Math.sqrt(sx * sx + sy * sy + sz * sz);
+            return `${diag.toFixed(3)}`;
+        }
+        case 'Torus': {
+            const major = Number(params.majorRadius ?? 0.5);
+            const minor = Number(params.minorRadius ?? 0.2);
+            return `${(major + minor).toFixed(3)}`;
+        }
+        case 'Cylinder': {
+            const r = Number(params.radius ?? 0.3);
+            const h = Number(params.height ?? 1.0);
+            return `${Math.sqrt(r * r + h * h).toFixed(3)}`;
+        }
+        case 'Octahedron':
+            return `${(Number(params.size ?? 0.75) * 1.5).toFixed(3)}`;
+        case 'Cone': {
+            const height = Number(params.height ?? 1.5);
+            const angleDeg = Number(params.angleDeg ?? 45);
+            const angleRad = angleDeg * Math.PI / 180;
+            const baseRadius = Math.tan(angleRad) * height;
+            return `${Math.sqrt(baseRadius * baseRadius + height * height).toFixed(3)}`;
+        }
+        case 'RoundCone': {
+            const rTop = Number(params.radiusTop ?? 0.4);
+            const rBottom = Number(params.radiusBottom ?? 0.1);
+            const height = Number(params.height ?? 1.25);
+            return `${(height + Math.max(rTop, rBottom)).toFixed(3)}`;
+        }
+        case 'VerticalCapsule': {
+            const r = Number(params.radius ?? 0.25);
+            const h = Number(params.height ?? 1.0);
+            const half = 0.5 * h + r;
+            return `${Math.sqrt(r * r + half * half).toFixed(3)}`;
+        }
+        case 'CutHollowSphere':
+            return `${(Number(params.radius ?? 1.0) + Number(params.thickness ?? 0.1)).toFixed(3)}`;
+        case 'DeathStar':
+            return `${Math.max(Number(params.radiusA ?? 1.0), Number(params.offset ?? 0.6) + Number(params.radiusB ?? 0.4)).toFixed(3)}`;
+        case 'VesicaSegment': {
+            const ax = Number(params.ax ?? -0.5);
+            const ay = Number(params.ay ?? 0.0);
+            const az = Number(params.az ?? 0.0);
+            const bx = Number(params.bx ?? 0.5);
+            const by = Number(params.by ?? 0.0);
+            const bz = Number(params.bz ?? 0.0);
+            const width = Number(params.width ?? 0.25);
+            const length = Math.sqrt(
+                Math.pow(bx - ax, 2) + Math.pow(by - ay, 2) + Math.pow(bz - az, 2)
+            );
+            return `${(0.5 * length + width).toFixed(3)}`;
+        }
+        case 'Mandelbulb':
+            // Mandelbulb is roughly bounded by a sphere of radius ~1.2
+            return '1.5';
+        case 'Supershape3D': {
+            const size = Number(params.size ?? 1.0);
+            // Supershape can vary widely, use size * 2 as safe bound
+            return `${(size * 2.0).toFixed(3)}`;
+        }
+        default:
+            // Check if it's a collapsed primitive
+            if (collapsedPrimitives[nodeType]) {
+                return collapsedPrimitives[nodeType].boundingRadius.toFixed(3);
+            }
+            return null;
+    }
+}
+
+function generatePreviewNodeCode(node, pointVar) {
+    const nodeType = node.dataset.type;
+    const varName = getNodeVarName(node);
+    const prefix = varName;
+    const typeDef = NODE_TYPES[nodeType];
+    const colorVar = `${varName}_color`;
+    const depthVar = `${varName}_depth`;
+    const nodeColorLiteral = `intToColor(${getNodeColorIndex(node)})`;
+    
+    let code = '';
+    const transformedPoint = varName + '_p';
+    const scaleVar = `${varName}_scale`;
+    
+    code += `    vec3 ${transformedPoint} = ${pointVar};\n`;
+    code += `    ${transformedPoint} -= ${prefix}_pos;\n`;
+    code += `    ${transformedPoint} *= rotateX(${prefix}_rot.x);\n`;
+    code += `    ${transformedPoint} *= rotateY(${prefix}_rot.y);\n`;
+    code += `    ${transformedPoint} *= rotateZ(${prefix}_rot.z);\n`;
+    code += `    float ${scaleVar} = max(${prefix}_scale, 0.0001);\n`;
+    code += `    ${transformedPoint} /= ${scaleVar};\n`;
+    code += `    vec3 ${colorVar};\n`;
+    code += `    float ${depthVar};\n`;
+    
+    if (typeDef.category === 'primitive') {
+        switch (nodeType) {
+            case 'Sphere':
+                code += `    float ${varName} = sdSphere(${transformedPoint}, ${prefix}_radius);\n`;
+                break;
+            case 'Box':
+                code += `    float ${varName} = sdBox(${transformedPoint}, vec3(${prefix}_sizeX, ${prefix}_sizeY, ${prefix}_sizeZ));\n`;
+                break;
+            case 'Torus':
+                code += `    float ${varName} = sdTorus(${transformedPoint}, vec2(${prefix}_majorRadius, ${prefix}_minorRadius));\n`;
+                break;
+            case 'Cylinder':
+                code += `    float ${varName} = sdCylinder(${transformedPoint}, ${prefix}_radius, ${prefix}_height);\n`;
+                break;
+            case 'Octahedron':
+                code += `    float ${varName} = sdOctahedron(${transformedPoint}, ${prefix}_size);\n`;
+                break;
+            case 'Cone': {
+                const angleVar = `${varName}_angle`;
+                const coneVec = `${varName}_c`;
+                code += `    float ${angleVar} = radians(${prefix}_angleDeg);\n`;
+                code += `    vec2 ${coneVec} = vec2(sin(${angleVar}), cos(${angleVar}));\n`;
+                code += `    float ${varName} = sdCone(${transformedPoint}, ${coneVec}, ${prefix}_height);\n`;
+                break;
+            }
+            case 'RoundCone':
+                code += `    float ${varName} = sdRoundCone(${transformedPoint}, ${prefix}_radiusTop, ${prefix}_radiusBottom, ${prefix}_height);\n`;
+                break;
+            case 'VerticalCapsule':
+                code += `    float ${varName} = sdVerticalCapsule(${transformedPoint}, ${prefix}_height, ${prefix}_radius);\n`;
+                break;
+            case 'CutHollowSphere':
+                code += `    float ${varName} = sdCutHollowSphere(${transformedPoint}, ${prefix}_radius, ${prefix}_height, ${prefix}_thickness);\n`;
+                break;
+            case 'DeathStar':
+                code += `    float ${varName} = sdDeathStar(${transformedPoint}, ${prefix}_radiusA, ${prefix}_radiusB, ${prefix}_offset);\n`;
+                break;
+            case 'VesicaSegment':
+                code += `    float ${varName} = sdVesicaSegment(${transformedPoint}, vec3(${prefix}_ax, ${prefix}_ay, ${prefix}_az), vec3(${prefix}_bx, ${prefix}_by, ${prefix}_bz), ${prefix}_width);\n`;
+                break;
+            case 'Mandelbulb':
+                code += `    float ${varName} = sdMandelbulb(${transformedPoint}, ${prefix}_power, ${prefix}_iterations);\n`;
+                break;
+            case 'Supershape3D':
+                code += `    float ${varName} = sdSupershape3D(${transformedPoint}, ${prefix}_size, ${prefix}_m, ${prefix}_n1, ${prefix}_n2, ${prefix}_n3, ${prefix}_a, ${prefix}_b);\n`;
+                break;
+            default:
+                // Check if it's a collapsed primitive
+                if (collapsedPrimitives[nodeType]) {
+                    code += `    float ${varName} = sd${nodeType}(${transformedPoint});\n`;
+                }
+                break;
+        }
+        code += `    ${varName} *= ${scaleVar};\n`;
+        code += `    ${colorVar} = ${nodeColorLiteral};\n`;
+        code += `    ${depthVar} = length(${transformedPoint});\n`;
+        // Track ID and distance to selected for primitives
+        code += `    g_lastID = ID_${varName};\n`;
+        code += `    if (u_outlineEnabled && g_lastID == u_selectedID) {\n`;
+        code += `        distToSelected = min(distToSelected, ${varName});\n`;
+        code += `    }\n`;
+    } else if (typeDef.category === 'operation') {
+        const children = getNodeChildren(node);
+        
+        if (children.length < 2) {
+            code += `    float ${varName} = 1000.0; // Incomplete operation\n`;
+            code += `    ${colorVar} = ${nodeColorLiteral};\n`;
+        } else {
+            code += generatePreviewNodeCode(children[0], transformedPoint);
+            code += generatePreviewNodeCode(children[1], transformedPoint);
+            
+            const child1Var = getNodeVarName(children[0]);
+            const child2Var = getNodeVarName(children[1]);
+            const child1Color = `${child1Var}_color`;
+            const child2Color = `${child2Var}_color`;
+            const child1Depth = `${child1Var}_depth`;
+            const child2Depth = `${child2Var}_depth`;
+            const depthVar = `${varName}_depth`;
+            
+            switch (nodeType) {
+                case 'opUnion':
+                    code += `    float ${varName} = min(${child1Var}, ${child2Var});\n`;
+                    code += `    ${colorVar} = (${child1Var} <= ${child2Var}) ? ${child1Color} : ${child2Color};\n`;
+                    code += `    ${depthVar} = (${child1Var} <= ${child2Var}) ? ${child1Depth} : ${child2Depth};\n`;
+                    break;
+                case 'opSmoothUnion':
+                    code += `    float ${varName}_blend = clamp(0.5 + 0.5 * (${child2Var} - ${child1Var}) / ${prefix}_k, 0.0, 1.0);\n`;
+                    code += `    float ${varName} = opSmoothUnion(${child1Var}, ${child2Var}, ${prefix}_k);\n`;
+                    code += `    vec3 ${varName}_mixColor = mix(${child2Color}, ${child1Color}, ${varName}_blend);\n`;
+                    code += `    float ${varName}_edge = smoothstep(0.0, 1.0, ${varName}_blend * (1.0 - ${varName}_blend) * 4.0);\n`;
+                    code += `    ${colorVar} = mix(${varName}_mixColor, ${nodeColorLiteral}, ${varName}_edge);\n`;
+                    code += `    ${depthVar} = mix(${child2Depth}, ${child1Depth}, ${varName}_blend);\n`;
+                    break;
+                case 'opSubtraction':
+                    code += `    float ${varName} = max(-${child1Var}, ${child2Var});\n`;
+                    code += `    ${colorVar} = (-${child1Var} > ${child2Var}) ? ${child1Color} : ${child2Color};\n`;
+                    code += `    ${depthVar} = (-${child1Var} > ${child2Var}) ? ${child1Depth} : ${child2Depth};\n`;
+                    break;
+                case 'opSmoothSubtraction':
+                    code += `    float ${varName}_blend = clamp(0.5 - 0.5 * (${child2Var} + ${child1Var}) / ${prefix}_k, 0.0, 1.0);\n`;
+                    code += `    float ${varName} = opSmoothSubtraction(${child1Var}, ${child2Var}, ${prefix}_k);\n`;
+                    code += `    vec3 ${varName}_mixColor = mix(${child2Color}, ${child1Color}, ${varName}_blend);\n`;
+                    code += `    float ${varName}_edge = smoothstep(0.0, 1.0, ${varName}_blend * (1.0 - ${varName}_blend) * 4.0);\n`;
+                    code += `    ${colorVar} = mix(${varName}_mixColor, ${nodeColorLiteral}, ${varName}_edge);\n`;
+                    code += `    ${depthVar} = mix(${child2Depth}, ${child1Depth}, ${varName}_blend);\n`;
+                    break;
+                case 'opIntersection':
+                    code += `    float ${varName} = max(${child1Var}, ${child2Var});\n`;
+                    code += `    ${colorVar} = (${child1Var} >= ${child2Var}) ? ${child1Color} : ${child2Color};\n`;
+                    code += `    ${depthVar} = (${child1Var} >= ${child2Var}) ? ${child1Depth} : ${child2Depth};\n`;
+                    break;
+                case 'opSmoothIntersection':
+                    code += `    float ${varName}_blend = clamp(0.5 - 0.5 * (${child2Var} - ${child1Var}) / ${prefix}_k, 0.0, 1.0);\n`;
+                    code += `    float ${varName} = opSmoothIntersection(${child1Var}, ${child2Var}, ${prefix}_k);\n`;
+                    code += `    vec3 ${varName}_mixColor = mix(${child2Color}, ${child1Color}, ${varName}_blend);\n`;
+                    code += `    float ${varName}_edge = smoothstep(0.0, 1.0, ${varName}_blend * (1.0 - ${varName}_blend) * 4.0);\n`;
+                    code += `    ${colorVar} = mix(${varName}_mixColor, ${nodeColorLiteral}, ${varName}_edge);\n`;
+                    code += `    ${depthVar} = mix(${child2Depth}, ${child1Depth}, ${varName}_blend);\n`;
+                    break;
+                case 'opXor':
+                    code += `    float ${varName} = opXor(${child1Var}, ${child2Var});\n`;
+                    code += `    float ${varName}_choice = step(abs(${child2Var}), abs(${child1Var}));\n`;
+                    code += `    ${colorVar} = mix(${child1Color}, ${child2Color}, ${varName}_choice);\n`;
+                    code += `    ${depthVar} = mix(${child1Depth}, ${child2Depth}, ${varName}_choice);\n`;
+                    break;
+            }
+        }
+    } else if (typeDef.category === 'modifier') {
+        const children = getNodeChildren(node);
+        if (children.length < 1) {
+            code += `    float ${varName} = 1000.0; // Incomplete modifier\n`;
+            code += `    ${colorVar} = ${nodeColorLiteral};\n`;
+            code += `    float ${varName}_depth = 0.0;\n`;
+        } else {
+            const child = children[0];
+            const childVar = getNodeVarName(child);
+            const childColor = `${childVar}_color`;
+            const childDepth = `${childVar}_depth`;
+            const depthVar = `${varName}_depth`;
+            switch (nodeType) {
+                case 'opRound':
+                    code += generatePreviewNodeCode(child, transformedPoint);
+                    code += `    float ${varName} = ${childVar} - ${prefix}_roundRadius;\n`;
+                    code += `    ${colorVar} = ${childColor};\n`;
+                    code += `    ${depthVar} = ${childDepth};\n`;
+                    break;
+                case 'opOnion':
+                    code += generatePreviewNodeCode(child, transformedPoint);
+                    code += `    float ${varName} = abs(${childVar}) - ${prefix}_shellThickness;\n`;
+                    code += `    ${colorVar} = ${childColor};\n`;
+                    code += `    ${depthVar} = ${childDepth};\n`;
+                    break;
+                case 'opTwist': {
+                    const warpPoint = `${varName}_warp`;
+                    const angleVar = `${varName}_angle`;
+                    const matVar = `${varName}_mat`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    float ${angleVar} = ${prefix}_twistAmount * ${warpPoint}.y;\n`;
+                    code += `    mat2 ${matVar} = mat2(cos(${angleVar}), -sin(${angleVar}), sin(${angleVar}), cos(${angleVar}));\n`;
+                    code += `    ${warpPoint}.xz = ${matVar} * ${warpPoint}.xz;\n`;
+                    code += generatePreviewNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    code += `    ${colorVar} = ${childColor};\n`;
+                    code += `    ${depthVar} = ${childDepth};\n`;
+                    break;
+                }
+                case 'opElongate': {
+                    const qVar = `${varName}_q`;
+                    const clampVar = `${varName}_clamped`;
+                    code += `    vec3 ${qVar} = abs(${transformedPoint}) - vec3(${prefix}_extentX, ${prefix}_extentY, ${prefix}_extentZ);\n`;
+                    code += `    vec3 ${clampVar} = max(${qVar}, vec3(0.0));\n`;
+                    code += generatePreviewNodeCode(child, clampVar);
+                    code += `    float ${varName} = ${childVar} + min(max(${qVar}.x, max(${qVar}.y, ${qVar}.z)), 0.0);\n`;
+                    code += `    ${colorVar} = ${childColor};\n`;
+                    code += `    ${depthVar} = ${childDepth};\n`;
+                    break;
+                }
+                case 'opCheapBend': {
+                    const warpPoint = `${varName}_warp`;
+                    const angleVar = `${varName}_angle`;
+                    const matVar = `${varName}_mat`;
+                    const rotated = `${varName}_rot`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    float ${angleVar} = ${prefix}_bendAmount * ${warpPoint}.x;\n`;
+                    code += `    mat2 ${matVar} = mat2(cos(${angleVar}), -sin(${angleVar}), sin(${angleVar}), cos(${angleVar}));\n`;
+                    code += `    vec2 ${rotated} = ${matVar} * ${warpPoint}.xy;\n`;
+                    code += `    ${warpPoint}.xy = ${rotated};\n`;
+                    code += generatePreviewNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    code += `    ${colorVar} = ${childColor};\n`;
+                    code += `    ${depthVar} = ${childDepth};\n`;
+                    break;
+                }
+                case 'opSymX': {
+                    const warpPoint = `${varName}_warp`;
+                    code += `    vec3 ${warpPoint} = ${transformedPoint};\n`;
+                    code += `    ${warpPoint}.x = abs(${warpPoint}.x);\n`;
+                    code += generatePreviewNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    code += `    ${colorVar} = ${childColor};\n`;
+                    code += `    ${depthVar} = ${childDepth};\n`;
+                    break;
+                }
+                case 'opRepeat': {
+                    const warpPoint = `${varName}_warp`;
+                    code += `    vec3 ${warpPoint} = mod(${transformedPoint} + 0.5 * vec3(${prefix}_spacingX, ${prefix}_spacingY, ${prefix}_spacingZ), vec3(${prefix}_spacingX, ${prefix}_spacingY, ${prefix}_spacingZ)) - 0.5 * vec3(${prefix}_spacingX, ${prefix}_spacingY, ${prefix}_spacingZ);\n`;
+                    code += generatePreviewNodeCode(child, warpPoint);
+                    code += `    float ${varName} = ${childVar};\n`;
+                    code += `    ${colorVar} = ${childColor};\n`;
+                    code += `    ${depthVar} = ${childDepth};\n`;
+                    break;
+                }
+            }
+        }
+    }
+    
+    code += `    ${varName} *= ${scaleVar};\n`;
+    
+    return code;
+}
+
+function getSDFPreamble() {
+    let code = `// SDF Primitives and Operations
+float sdSphere(vec3 p, float r) {
+    return length(p) - r;
+}
+
+float sdBox(vec3 p, vec3 b) {
+    vec3 q = abs(p) - b;
+    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+float sdTorus(vec3 p, vec2 t) {
+    vec2 q = vec2(length(p.xz) - t.x, p.y);
+    return length(q) - t.y;
+}
+
+float sdCylinder(vec3 p, float r, float h) {
+    vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
+    return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+}
+
+float sdOctahedron(vec3 p, float s) {
+    p = abs(p);
+    float m = p.x + p.y + p.z - s;
+    vec3 q;
+         if (3.0 * p.x < m) q = p.xyz;
+    else if (3.0 * p.y < m) q = p.yzx;
+    else if (3.0 * p.z < m) q = p.zxy;
+    else return m * 0.57735027;
+    
+    float k = clamp(0.5 * (q.z - q.y + s), 0.0, s);
+    return length(vec3(q.x, q.y - s + k, q.z - k));
+}
+
+float sdCone(vec3 p, vec2 c, float h) {
+    float safeCos = max(c.y, 0.0001);
+    vec2 q = h * vec2(c.x / safeCos, -1.0);
+    vec2 w = vec2(length(p.xz), p.y);
+    vec2 a = w - q * clamp(dot(w, q) / dot(q, q), 0.0, 1.0);
+    vec2 b = w - q * vec2(clamp(w.x / max(q.x, 0.0001), 0.0, 1.0), 1.0);
+    float k = sign(q.y);
+    float d = min(dot(a, a), dot(b, b));
+    float s = max(k * (w.x * q.y - w.y * q.x), k * (w.y - q.y));
+    return sqrt(d) * sign(s);
+}
+
+float sdRoundCone(vec3 p, float r1, float r2, float h) {
+    float b = (r1 - r2) / h;
+    float a = sqrt(max(1.0 - b * b, 0.0001));
+    vec2 q = vec2(length(p.xz), p.y);
+    float k = dot(q, vec2(-b, a));
+    if (k < 0.0) return length(q) - r1;
+    if (k > a * h) return length(q - vec2(0.0, h)) - r2;
+    return dot(q, vec2(a, b)) - r1;
+}
+
+float sdVerticalCapsule(vec3 p, float h, float r) {
+    p.y -= clamp(p.y, 0.0, h);
+    return length(p) - r;
+}
+
+float sdCutHollowSphere(vec3 p, float r, float h, float t) {
+    float w = sqrt(max(r * r - h * h, 0.0));
+    vec2 q = vec2(length(p.xz), p.y);
+    return ((h * q.x < w * q.y) ? length(q - vec2(w, h)) : abs(length(q) - r)) - t;
+}
+
+float sdDeathStar(vec3 p2, float ra, float rb, float d) {
+    float a = (ra * ra - rb * rb + d * d) / (2.0 * d);
+    float b = sqrt(max(ra * ra - a * a, 0.0));
+    vec2 p = vec2(p2.x, length(p2.yz));
+    if (p.x * b - p.y * a > d * max(b - p.y, 0.0)) {
+        return length(p - vec2(a, b));
+    }
+    return max(length(p) - ra, -(length(p - vec2(d, 0.0)) - rb));
+}
+
+float sdVesicaSegment(vec3 p, vec3 a, vec3 b, float w) {
+    vec3 c = (a + b) * 0.5;
+    vec3 ba = b - a;
+    float l = length(ba);
+    vec3 v = ba / max(l, 0.0001);
+    vec3 rel = p - c;
+    float y = dot(rel, v);
+    vec2 q = vec2(length(rel - y * v), abs(y));
+    float r = 0.5 * l;
+    float ww = max(w, 0.0001);
+    float d = 0.5 * (r * r - ww * ww) / ww;
+    vec3 h = (r * q.x < d * (q.y - r)) ? vec3(0.0, r, 0.0) : vec3(-d, 0.0, d + ww);
+    return length(q - h.xy) - h.z;
+}
+
+float opSmoothUnion(float d1, float d2, float k) {
+    float h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
+    return mix(d2, d1, h) - k * h * (1.0 - h);
+}
+
+float opSmoothSubtraction(float d1, float d2, float k) {
+    float h = clamp(0.5 - 0.5 * (d2 + d1) / k, 0.0, 1.0);
+    return mix(d2, -d1, h) + k * h * (1.0 - h);
+}
+
+float opSmoothIntersection(float d1, float d2, float k) {
+    float h = clamp(0.5 - 0.5 * (d2 - d1) / k, 0.0, 1.0);
+    return mix(d2, d1, h) + k * h * (1.0 - h);
+}
+
+float opXor(float d1, float d2) {
+    return max(min(d1, d2), -max(d1, d2));
+}
+
+vec3 hsvToRgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+vec3 intToColor(int i) {
+    float goldenRatio = 0.618033988749895;
+    float hue = fract(float(i) * goldenRatio);
+    float satBucket = floor(mod(float(i), 3.0));
+    float valBucket = floor(mod(float(i), 4.0));
+    float sat = clamp(0.7 + satBucket * 0.1, 0.0, 1.0);
+    float val = clamp(0.7 + valBucket * 0.075, 0.0, 1.0);
+    return hsvToRgb(vec3(hue, sat, val));
+}
+
+mat3 rotateX(float a) {
+    float c = cos(a), s = sin(a);
+    return mat3(1, 0, 0, 0, c, -s, 0, s, c);
+}
+
+mat3 rotateY(float a) {
+    float c = cos(a), s = sin(a);
+    return mat3(c, 0, s, 0, 1, 0, -s, 0, c);
+}
+
+mat3 rotateZ(float a) {
+    float c = cos(a), s = sin(a);
+    return mat3(c, -s, 0, s, c, 0, 0, 0, 1);
+}
+
+// === Experimental Shapes ===
+
+// Cart2Polar for Mandelbulb
+vec3 cart2polar(in vec3 st) {
+    float r = length(st);
+    float phi = acos(st.z / r);
+    float theta = atan(st.y, st.x);
+    return vec3(r, phi, theta);
+}
+
+// Mandelbulb SDF
+float sdMandelbulb(in vec3 st, float power, float maxIterations) {
+    vec3 zeta = st;
+    float m = dot(st, st);
+    float dz = 1.0;
+    int iterations = int(maxIterations);
+    
+    for (int i = 0; i < 50; i++) {
+        if (i >= iterations) break;
+        
+        dz = power * pow(m, 3.5) * dz + 1.0;
+        vec3 sphericalZ = cart2polar(zeta);
+        float newx = pow(sphericalZ.x, power) * sin(sphericalZ.y * power) * cos(sphericalZ.z * power);
+        float newy = pow(sphericalZ.x, power) * sin(sphericalZ.y * power) * sin(sphericalZ.z * power);
+        float newz = pow(sphericalZ.x, power) * cos(sphericalZ.y * power);
+        zeta.x = newx + st.x;
+        zeta.y = newy + st.y;
+        zeta.z = newz + st.z;
+        
+        m = dot(zeta, zeta);
+        if (m > 2.0) break;
+    }
+    
+    // Distance estimation through the Hubbard-Douady potential
+    return 0.25 * log(m) * sqrt(m) / dz;
+}
+
+// Supershape helpers
+vec3 Spherical(vec3 pos) {
+    float r = sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+    float theta = pos.z / r;
+    float phi = atan(pos.y, pos.x);
+    vec3 w = vec3(r, theta, phi);
+    return w;
+}
+
+float superFormula(float theta, float m, float n1, float n2, float n3, float a, float b) {
+    float t1 = abs((1.0 / a) * cos(m * theta / 4.0));
+    t1 = pow(t1, n2);
+    
+    float t2 = abs((1.0 / b) * sin(m * theta / 4.0));
+    t2 = pow(t2, n3);
+    
+    float t3 = t1 + t2;
+    float rr = pow(t3, -1.0 / n1);
+    return rr;
+}
+
+float sdSupershape3D(vec3 p, float size, float m, float n1, float n2, float n3, float a, float b) {
+    float r = Spherical(p).x;
+    float theta = Spherical(p).y;
+    float phi = Spherical(p).z;
+    float r1 = superFormula(phi, m, n1, n2, n3, a, b);
+    float r2 = superFormula(theta, m, n1, n2, n3, a, b);
+    float d1 = size * r1 * cos(phi) * r2 * cos(theta);
+    float d2 = size * r1 * sin(phi) * r2 * cos(theta);
+    float d3 = size * r2 * sin(theta);
+    vec3 q = vec3(d1, d2, d3);
+    return r - length(q);
+}
+
+`;
+    
+    // Add collapsed primitives
+    for (const [id, data] of Object.entries(collapsedPrimitives)) {
+        code += data.code;
+    }
+    
+    return code;
+}
+
+// ===========================================
+// WebGL
+// ===========================================
+async function initWebGPU() {
+    const canvas = document.getElementById('glCanvas');
+    
+    if (!navigator.gpu) {
+        console.error('WebGPU not supported');
+        return false;
+    }
+    
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+        console.error('Failed to get WebGPU adapter');
+        return false;
+    }
+    
+    device = await adapter.requestDevice();
+    context = canvas.getContext('webgpu');
+    
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    context.configure({
+        device: device,
+        format: format,
+        alphaMode: 'premultiplied'
+    });
+    
+    // Create vertex buffer for fullscreen quad
+    const vertices = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
+    vertexBuffer = device.createBuffer({
+        size: vertices.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        mappedAtCreation: true
+    });
+    new Float32Array(vertexBuffer.getMappedRange()).set(vertices);
+    vertexBuffer.unmap();
+    
+    return true;
+}
+
+// Convert GLSL SDF preamble to WGSL
+function getSDFPreambleWGSL() {
+    let code = `// SDF Primitives and Operations
+fn sdSphere(p: vec3<f32>, r: f32) -> f32 {
+    return length(p) - r;
+}
+
+fn sdBox(p: vec3<f32>, b: vec3<f32>) -> f32 {
+    let q = abs(p) - b;
+    return length(max(q, vec3<f32>(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+fn sdTorus(p: vec3<f32>, t: vec2<f32>) -> f32 {
+    let q = vec2<f32>(length(p.xz) - t.x, p.y);
+    return length(q) - t.y;
+}
+
+fn sdCylinder(p: vec3<f32>, r: f32, h: f32) -> f32 {
+    let d = abs(vec2<f32>(length(p.xz), p.y)) - vec2<f32>(r, h);
+    return min(max(d.x, d.y), 0.0) + length(max(d, vec2<f32>(0.0)));
+}
+
+fn sdOctahedron(p_in: vec3<f32>, s: f32) -> f32 {
+    var p = abs(p_in);
+    let m = p.x + p.y + p.z - s;
+    var q: vec3<f32>;
+    if (3.0 * p.x < m) {
+        q = p.xyz;
+    } else if (3.0 * p.y < m) {
+        q = p.yzx;
+    } else if (3.0 * p.z < m) {
+        q = p.zxy;
+    } else {
+        return m * 0.57735027;
+    }
+    
+    let k = clamp(0.5 * (q.z - q.y + s), 0.0, s);
+    return length(vec3<f32>(q.x, q.y - s + k, q.z - k));
+}
+
+fn sdCone(p: vec3<f32>, c: vec2<f32>, h: f32) -> f32 {
+    let safeCos = max(c.y, 0.0001);
+    let q = h * vec2<f32>(c.x / safeCos, -1.0);
+    let w = vec2<f32>(length(p.xz), p.y);
+    let a = w - q * clamp(dot(w, q) / dot(q, q), 0.0, 1.0);
+    let b = w - q * vec2<f32>(clamp(w.x / max(q.x, 0.0001), 0.0, 1.0), 1.0);
+    let k = sign(q.y);
+    let d = min(dot(a, a), dot(b, b));
+    let s = max(k * (w.x * q.y - w.y * q.x), k * (w.y - q.y));
+    return sqrt(d) * sign(s);
+}
+
+fn sdRoundCone(p: vec3<f32>, r1: f32, r2: f32, h: f32) -> f32 {
+    let b = (r1 - r2) / h;
+    let a = sqrt(max(1.0 - b * b, 0.0001));
+    let q = vec2<f32>(length(p.xz), p.y);
+    let k = dot(q, vec2<f32>(-b, a));
+    if (k < 0.0) { return length(q) - r1; }
+    if (k > a * h) { return length(q - vec2<f32>(0.0, h)) - r2; }
+    return dot(q, vec2<f32>(a, b)) - r1;
+}
+
+fn sdVerticalCapsule(p_in: vec3<f32>, h: f32, r: f32) -> f32 {
+    var p = p_in;
+    p.y -= clamp(p.y, 0.0, h);
+    return length(p) - r;
+}
+
+fn sdCutHollowSphere(p: vec3<f32>, r: f32, h: f32, t: f32) -> f32 {
+    let w = sqrt(max(r * r - h * h, 0.0));
+    let q = vec2<f32>(length(p.xz), p.y);
+    var dist: f32;
+    if (h * q.x < w * q.y) {
+        dist = length(q - vec2<f32>(w, h));
+    } else {
+        dist = abs(length(q) - r);
+    }
+    return dist - t;
+}
+
+fn sdDeathStar(p2: vec3<f32>, ra: f32, rb: f32, d: f32) -> f32 {
+    let a = (ra * ra - rb * rb + d * d) / (2.0 * d);
+    let b = sqrt(max(ra * ra - a * a, 0.0));
+    let p = vec2<f32>(p2.x, length(p2.yz));
+    if (p.x * b - p.y * a > d * max(b - p.y, 0.0)) {
+        return length(p - vec2<f32>(a, b));
+    }
+    return max(length(p) - ra, -(length(p - vec2<f32>(d, 0.0)) - rb));
+}
+
+fn sdVesicaSegment(p: vec3<f32>, a: vec3<f32>, b: vec3<f32>, w: f32) -> f32 {
+    let c = (a + b) * 0.5;
+    let ba = b - a;
+    let l = length(ba);
+    let v = ba / max(l, 0.0001);
+    let rel = p - c;
+    let y = dot(rel, v);
+    let q = vec2<f32>(length(rel - y * v), abs(y));
+    let r = 0.5 * l;
+    let ww = max(w, 0.0001);
+    let d = 0.5 * (r * r - ww * ww) / ww;
+    var h: vec3<f32>;
+    if (r * q.x < d * (q.y - r)) {
+        h = vec3<f32>(0.0, r, 0.0);
+    } else {
+        h = vec3<f32>(-d, 0.0, d + ww);
+    }
+    return length(q - h.xy) - h.z;
+}
+
+fn opSmoothUnion(d1: f32, d2: f32, k: f32) -> f32 {
+    let h = clamp(0.5 + 0.5 * (d2 - d1) / k, 0.0, 1.0);
+    return mix(d2, d1, h) - k * h * (1.0 - h);
+}
+
+fn opSmoothSubtraction(d1: f32, d2: f32, k: f32) -> f32 {
+    let h = clamp(0.5 - 0.5 * (d2 + d1) / k, 0.0, 1.0);
+    return mix(d2, -d1, h) + k * h * (1.0 - h);
+}
+
+fn opSmoothIntersection(d1: f32, d2: f32, k: f32) -> f32 {
+    let h = clamp(0.5 - 0.5 * (d2 - d1) / k, 0.0, 1.0);
+    return mix(d2, d1, h) + k * h * (1.0 - h);
+}
+
+fn opXor(d1: f32, d2: f32) -> f32 {
+    return max(min(d1, d2), -max(d1, d2));
+}
+
+fn hsvToRgb(c: vec3<f32>) -> vec3<f32> {
+    let K = vec4<f32>(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    let p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, vec3<f32>(0.0), vec3<f32>(1.0)), c.y);
+}
+
+fn intToColor(i: i32) -> vec3<f32> {
+    let goldenRatio = 0.618033988749895;
+    let hue = fract(f32(i) * goldenRatio);
+    let satBucket = floor(f32(i) % 3.0);
+    let valBucket = floor(f32(i) % 4.0);
+    let sat = clamp(0.7 + satBucket * 0.1, 0.0, 1.0);
+    let val = clamp(0.7 + valBucket * 0.075, 0.0, 1.0);
+    return hsvToRgb(vec3<f32>(hue, sat, val));
+}
+
+fn rotateX(a: f32) -> mat3x3<f32> {
+    let c = cos(a);
+    let s = sin(a);
+    return mat3x3<f32>(
+        1.0, 0.0, 0.0,
+        0.0, c, -s,
+        0.0, s, c
+    );
+}
+
+fn rotateY(a: f32) -> mat3x3<f32> {
+    let c = cos(a);
+    let s = sin(a);
+    return mat3x3<f32>(
+        c, 0.0, s,
+        0.0, 1.0, 0.0,
+        -s, 0.0, c
+    );
+}
+
+fn rotateZ(a: f32) -> mat3x3<f32> {
+    let c = cos(a);
+    let s = sin(a);
+    return mat3x3<f32>(
+        c, -s, 0.0,
+        s, c, 0.0,
+        0.0, 0.0, 1.0
+    );
+}
+
+// === Experimental Shapes ===
+
+fn cart2polar(st: vec3<f32>) -> vec3<f32> {
+    let r = length(st);
+    let phi = acos(st.z / r);
+    let theta = atan2(st.y, st.x);
+    return vec3<f32>(r, phi, theta);
+}
+
+fn sdMandelbulb(st: vec3<f32>, power: f32, maxIterations: f32) -> f32 {
+    var zeta = st;
+    var m = dot(st, st);
+    var dz = 1.0;
+    let iterations = i32(maxIterations);
+    
+    for (var i = 0; i < 50; i++) {
+        if (i >= iterations) { break; }
+        
+        dz = power * pow(m, 3.5) * dz + 1.0;
+        let sphericalZ = cart2polar(zeta);
+        let newx = pow(sphericalZ.x, power) * sin(sphericalZ.y * power) * cos(sphericalZ.z * power);
+        let newy = pow(sphericalZ.x, power) * sin(sphericalZ.y * power) * sin(sphericalZ.z * power);
+        let newz = pow(sphericalZ.x, power) * cos(sphericalZ.y * power);
+        zeta.x = newx + st.x;
+        zeta.y = newy + st.y;
+        zeta.z = newz + st.z;
+        
+        m = dot(zeta, zeta);
+        if (m > 2.0) { break; }
+    }
+    
+    return 0.25 * log(m) * sqrt(m) / dz;
+}
+
+fn Spherical(pos: vec3<f32>) -> vec3<f32> {
+    let r = sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+    let theta = pos.z / r;
+    let phi = atan2(pos.y, pos.x);
+    return vec3<f32>(r, theta, phi);
+}
+
+fn superFormula(theta: f32, m: f32, n1: f32, n2: f32, n3: f32, a: f32, b: f32) -> f32 {
+    var t1 = abs((1.0 / a) * cos(m * theta / 4.0));
+    t1 = pow(t1, n2);
+    
+    var t2 = abs((1.0 / b) * sin(m * theta / 4.0));
+    t2 = pow(t2, n3);
+    
+    let t3 = t1 + t2;
+    let rr = pow(t3, -1.0 / n1);
+    return rr;
+}
+
+fn sdSupershape3D(p: vec3<f32>, size: f32, m: f32, n1: f32, n2: f32, n3: f32, a: f32, b: f32) -> f32 {
+    let r = Spherical(p).x;
+    let theta = Spherical(p).y;
+    let phi = Spherical(p).z;
+    let r1 = superFormula(phi, m, n1, n2, n3, a, b);
+    let r2 = superFormula(theta, m, n1, n2, n3, a, b);
+    let d1 = size * r1 * cos(phi) * r2 * cos(theta);
+    let d2 = size * r1 * sin(phi) * r2 * cos(theta);
+    let d3 = size * r2 * sin(theta);
+    let q = vec3<f32>(d1, d2, d3);
+    return r - length(q);
+}
+
+fn opRepeat(p: vec3<f32>, c: vec3<f32>) -> vec3<f32> {
+    return modulo(p + 0.5 * c, c) - 0.5 * c;
+}
+
+// Helper function for modulo operation on vectors
+fn modulo(a: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
+    return a - b * floor(a / b);
+}
+
+`;
+    
+    // Add collapsed primitives with WGSL syntax
+    for (const [id, data] of Object.entries(collapsedPrimitives)) {
+        // Convert GLSL collapsed code to WGSL more carefully
+        let wgslCode = data.code;
+        
+        // Convert function signature: float sdName(vec3 p) { -> fn sdName(p: vec3<f32>) -> f32 {
+        wgslCode = wgslCode.replace(/float\s+(sd\w+)\s*\(\s*vec3\s+(\w+)\s*\)\s*\{/g, 'fn $1($2: vec3<f32>) -> f32 {');
+        
+        // Convert uninitialized variable declarations: "float var;" -> "var var: f32 = 0.0;"
+        wgslCode = wgslCode.replace(/(\n\s+)float\s+(\w+);/g, '$1var $2: f32 = 0.0;');
+        wgslCode = wgslCode.replace(/(\n\s+)vec2\s+(\w+);/g, '$1var $2: vec2<f32> = vec2<f32>(0.0);');
+        wgslCode = wgslCode.replace(/(\n\s+)vec3\s+(\w+);/g, '$1var $2: vec3<f32> = vec3<f32>(0.0);');
+        wgslCode = wgslCode.replace(/(\n\s+)vec4\s+(\w+);/g, '$1var $2: vec4<f32> = vec4<f32>(0.0);');
+        
+        // Convert variable declarations with initialization: "    float var =" -> "    var var: f32 ="
+        wgslCode = wgslCode.replace(/(\n\s+)float\s+(\w+)\s*=/g, '$1var $2: f32 =');
+        wgslCode = wgslCode.replace(/(\n\s+)vec2\s+(\w+)\s*=/g, '$1var $2: vec2<f32> =');
+        wgslCode = wgslCode.replace(/(\n\s+)vec3\s+(\w+)\s*=/g, '$1var $2: vec3<f32> =');
+        wgslCode = wgslCode.replace(/(\n\s+)vec4\s+(\w+)\s*=/g, '$1var $2: vec4<f32> =');
+        wgslCode = wgslCode.replace(/(\n\s+)mat3\s+(\w+)\s*=/g, '$1var $2: mat3x3<f32> =');
+        
+        // Convert type constructors in expressions
+        wgslCode = wgslCode.replace(/\bvec2\(/g, 'vec2<f32>(');
+        wgslCode = wgslCode.replace(/\bvec3\(/g, 'vec3<f32>(');
+        wgslCode = wgslCode.replace(/\bvec4\(/g, 'vec4<f32>(');
+        wgslCode = wgslCode.replace(/\bmat3\(/g, 'mat3x3<f32>(');
+        
+        // Convert operators and functions
+        wgslCode = wgslCode.replace(/\bmod\(/g, 'modulo(');
+        wgslCode = wgslCode.replace(/\bradians\(/g, 'radiansWGSL(');
+        
+        // Convert *= for matrices (WGSL doesn't support vector *= matrix)
+        // vec3 p; p *= rotateX(...); becomes p = rotateX(...) * p;
+        wgslCode = wgslCode.replace(/(\w+)\s*\*=\s*(rotate[XYZ]\([^)]+\));/g, '$1 = $2 * $1;');
+        
+        code += wgslCode;
+    }
+    
+    return code;
+}
+
+// Generate node code in WGSL syntax (native generation, not conversion)
+function generatePreviewNodeCodeWGSL(node, pointVar) {
+    const nodeType = node.dataset.type;
+    const varName = getNodeVarName(node);
+    const prefix = varName;
+    const typeDef = NODE_TYPES[nodeType];
+    const colorVar = `${varName}_color`;
+    const depthVar = `${varName}_depth`;
+    const nodeColorIndex = getNodeColorIndex(node);
+    
+    let code = '';
+    const transformedPoint = varName + '_p';
+    const scaleVar = `${varName}_scale`;
+
+    // Generate WGSL code directly
+    code += `    var ${transformedPoint}: vec3<f32> = ${pointVar};\n`;
+    code += `    var ${scaleVar}: f32 = 1.0;\n`; // Force scale to 1.0
+    code += `    var ${colorVar}: vec3<f32>;\n`;
+    code += `    var ${depthVar}: f32;\n`;
+    
+    if (typeDef.category === 'primitive') {
+        switch (nodeType) {
+            case 'Sphere':
+                code += `    var ${varName}: f32 = sdSphere(${transformedPoint}, uniforms.node_radius);\n`;
+                break;
+            case 'Box':
+                code += `    var ${varName}: f32 = sdBox(${transformedPoint}, vec3<f32>(uniforms.node_sizeX, uniforms.node_sizeY, uniforms.node_sizeZ));\n`;
+                break;
+            case 'Torus':
+                code += `    var ${varName}: f32 = sdTorus(${transformedPoint}, vec2<f32>(uniforms.node_majorRadius, uniforms.node_minorRadius));\n`;
+                break;
+            case 'Cylinder':
+                code += `    var ${varName}: f32 = sdCylinder(${transformedPoint}, uniforms.node_radius, uniforms.node_height);\n`;
+                break;
+            case 'Octahedron':
+                code += `    var ${varName}: f32 = sdOctahedron(${transformedPoint}, uniforms.node_sizeX);\n`; // Using sizeX as size
+                break;
+            case 'Cone': {
+                const angleVar = `${varName}_angle`;
+                const coneVec = `${varName}_c`;
+                code += `    var ${angleVar}: f32 = radiansWGSL(uniforms.node_angleDeg);\n`;
+                code += `    var ${coneVec}: vec2<f32> = vec2<f32>(sin(${angleVar}), cos(${angleVar}));\n`;
+                code += `    var ${varName}: f32 = sdCone(${transformedPoint}, ${coneVec}, uniforms.node_height);\n`;
+                break;
+            }
+            case 'RoundCone':
+                code += `    var ${varName}: f32 = sdRoundCone(${transformedPoint}, uniforms.${prefix}_radiusTop, uniforms.${prefix}_radiusBottom, uniforms.${prefix}_height);\n`;
+                break;
+            case 'VerticalCapsule':
+                code += `    var ${varName}: f32 = sdVerticalCapsule(${transformedPoint}, uniforms.${prefix}_height, uniforms.${prefix}_radius);\n`;
+                break;
+            case 'CutHollowSphere':
+                code += `    var ${varName}: f32 = sdCutHollowSphere(${transformedPoint}, uniforms.${prefix}_radius, uniforms.${prefix}_height, uniforms.${prefix}_thickness);\n`;
+                break;
+            case 'DeathStar':
+                code += `    var ${varName}: f32 = sdDeathStar(${transformedPoint}, uniforms.${prefix}_radiusA, uniforms.${prefix}_radiusB, uniforms.${prefix}_offset);\n`;
+                break;
+            case 'VesicaSegment':
+                code += `    var ${varName}: f32 = sdVesicaSegment(${transformedPoint}, vec3<f32>(uniforms.${prefix}_ax, uniforms.${prefix}_ay, uniforms.${prefix}_az), vec3<f32>(uniforms.${prefix}_bx, uniforms.${prefix}_by, uniforms.${prefix}_bz), uniforms.${prefix}_width);\n`;
+                break;
+            case 'Mandelbulb':
+                code += `    var ${varName}: f32 = sdMandelbulb(${transformedPoint}, uniforms.${prefix}_power, uniforms.${prefix}_iterations);\n`;
+                break;
+            case 'Supershape3D':
+                code += `    var ${varName}: f32 = sdSupershape3D(${transformedPoint}, uniforms.${prefix}_size, uniforms.${prefix}_m, uniforms.${prefix}_n1, uniforms.${prefix}_n2, uniforms.${prefix}_n3, uniforms.${prefix}_a, uniforms.${prefix}_b);\n`;
+                break;
+            default:
+                // Check if it's a collapsed primitive
+                if (collapsedPrimitives[nodeType]) {
+                    code += `    var ${varName}: f32 = sd${nodeType}(${transformedPoint});\n`;
+                }
+                break;
+        }
+        code += `    ${varName} *= ${scaleVar};\n`;
+        code += `    ${colorVar} = intToColor(${nodeColorIndex});\n`;
+        code += `    ${depthVar} = length(${transformedPoint});\n`;
+        // Track ID and distance to selected for primitives
+        code += `    g_lastID = ID_${varName};\n`;
+        code += `    if (uniforms.u_outlineEnabled != 0.0 && g_lastID == uniforms.u_selectedID) {\n`;
+        code += `        distToSelected = min(distToSelected, ${varName});\n`;
+        code += `    }\n`;
+    } else if (typeDef.category === 'operation') {
+        const children = getNodeChildren(node);
+        
+        if (children.length < 2) {
+            code += `    var ${varName}: f32 = 1000.0; // Incomplete operation\n`;
+            code += `    ${colorVar} = intToColor(${nodeColorIndex});\n`;
+            code += `    ${depthVar} = 0.0;\n`;
+        } else {
+            code += generatePreviewNodeCodeWGSL(children[0], transformedPoint);
+            code += generatePreviewNodeCodeWGSL(children[1], transformedPoint);
+            
+            const child1Var = getNodeVarName(children[0]);
+            const child2Var = getNodeVarName(children[1]);
+            const child1Color = `${child1Var}_color`;
+            const child2Color = `${child2Var}_color`;
+            const child1Depth = `${child1Var}_depth`;
+            const child2Depth = `${child2Var}_depth`;
+            
+            switch (nodeType) {
+                case 'Union':
+                    code += `    var ${varName}: f32 = min(${child1Var}, ${child2Var});\n`;
+                    code += `    ${colorVar} = select(${child2Color}, ${child1Color}, ${child1Var} <= ${child2Var});\n`;
+                    code += `    ${depthVar} = select(${child2Depth}, ${child1Depth}, ${child1Var} <= ${child2Var});\n`;
+                    break;
+                case 'Subtraction':
+                    code += `    var ${varName}: f32 = max(-${child1Var}, ${child2Var});\n`;
+                    code += `    ${colorVar} = ${child2Color};\n`;
+                    code += `    ${depthVar} = ${child2Depth};\n`;
+                    break;
+                case 'Intersection':
+                    code += `    var ${varName}: f32 = max(${child1Var}, ${child2Var});\n`;
+                    code += `    ${colorVar} = select(${child1Color}, ${child2Color}, ${child2Var} > ${child1Var});\n`;
+                    code += `    ${depthVar} = select(${child1Depth}, ${child2Depth}, ${child2Var} > ${child1Var});\n`;
+                    break;
+                case 'SmoothUnion': {
+                    const blendVar = `${varName}_blend`;
+                    code += `    var ${varName}: f32 = opSmoothUnion(${child1Var}, ${child2Var}, uniforms.${prefix}_smoothness);\n`;
+                    code += `    var ${blendVar}: f32 = clamp(0.5 + 0.5 * (${child2Var} - ${child1Var}) / uniforms.${prefix}_smoothness, 0.0, 1.0);\n`;
+                    code += `    ${colorVar} = mix(${child2Color}, ${child1Color}, ${blendVar});\n`;
+                    code += `    ${depthVar} = mix(${child2Depth}, ${child1Depth}, ${blendVar});\n`;
+                    break;
+                }
+                case 'SmoothSubtraction': {
+                    const blendVar = `${varName}_blend`;
+                    code += `    var ${varName}: f32 = opSmoothSubtraction(${child1Var}, ${child2Var}, uniforms.${prefix}_smoothness);\n`;
+                    code += `    var ${blendVar}: f32 = clamp(0.5 - 0.5 * (${child2Var} + ${child1Var}) / uniforms.${prefix}_smoothness, 0.0, 1.0);\n`;
+                    code += `    ${colorVar} = mix(${child2Color}, ${child1Color}, ${blendVar});\n`;
+                    code += `    ${depthVar} = mix(${child2Depth}, ${child1Depth}, ${blendVar});\n`;
+                    break;
+                }
+                case 'SmoothIntersection': {
+                    const blendVar = `${varName}_blend`;
+                    code += `    var ${varName}: f32 = opSmoothIntersection(${child1Var}, ${child2Var}, uniforms.${prefix}_smoothness);\n`;
+                    code += `    var ${blendVar}: f32 = clamp(0.5 - 0.5 * (${child2Var} - ${child1Var}) / uniforms.${prefix}_smoothness, 0.0, 1.0);\n`;
+                    code += `    ${colorVar} = mix(${child2Color}, ${child1Color}, ${blendVar});\n`;
+                    code += `    ${depthVar} = mix(${child2Depth}, ${child1Depth}, ${blendVar});\n`;
+                    break;
+                }
+                case 'Xor':
+                    code += `    var ${varName}: f32 = opXor(${child1Var}, ${child2Var});\n`;
+                    code += `    ${colorVar} = select(${child2Color}, ${child1Color}, abs(${child1Var}) < abs(${child2Var}));\n`;
+                    code += `    ${depthVar} = select(${child2Depth}, ${child1Depth}, abs(${child1Var}) < abs(${child2Var}));\n`;
+                    break;
+            }
+        }
+    } else if (typeDef.category === 'modifier') {
+        const child = getNodeChildren(node)[0];
+        if (!child) {
+            code += `    var ${varName}: f32 = 1000.0;\n`;
+            code += `    ${colorVar} = intToColor(${nodeColorIndex});\n`;
+            code += `    ${depthVar} = 0.0;\n`;
+        } else {
+            const childVar = getNodeVarName(child);
+            const childColor = `${childVar}_color`;
+            const childDepth = `${childVar}_depth`;
+            
+            switch (nodeType) {
+                case 'opRepeat': {
+                    const warpPoint = `${varName}_warp`;
+                    code += `    var ${warpPoint}: vec3<f32> = modulo(${transformedPoint} + 0.5 * vec3<f32>(uniforms.${prefix}_spacingX, uniforms.${prefix}_spacingY, uniforms.${prefix}_spacingZ), vec3<f32>(uniforms.${prefix}_spacingX, uniforms.${prefix}_spacingY, uniforms.${prefix}_spacingZ)) - 0.5 * vec3<f32>(uniforms.${prefix}_spacingX, uniforms.${prefix}_spacingY, uniforms.${prefix}_spacingZ);\n`;
+                    code += generatePreviewNodeCodeWGSL(child, warpPoint);
+                    code += `    var ${varName}: f32 = ${childVar};\n`;
+                    code += `    ${colorVar} = ${childColor};\n`;
+                    code += `    ${depthVar} = ${childDepth};\n`;
+                    break;
+                }
+            }
+        }
+    }
+    
+    code += `    ${varName} *= ${scaleVar};\n`;
+    
+    return code;
+}
+
+// Generate complete WGSL preview shader
+function generatePreviewWGSL() {
+    const t0 = perfNow();
+    const sceneNode = document.getElementById('scene');
+    const children = getNodeChildren(sceneNode);
+    
+    let code = getSDFPreambleWGSL();
+    
+    // Add helper functions that differ between GLSL and WGSL
+    code += '\nfn radiansWGSL(degrees: f32) -> f32 { return degrees * 0.01745329251994329577; }\n';
+    code += '\nvar<private> g_lastColor: vec3<f32> = vec3<f32>(0.25, 0.25, 0.3);\n';
+    code += 'var<private> g_lastID: i32 = 0;\n';
+    code += 'var<private> distToSelected: f32 = 1e20;\n';
+    code += 'var<private> g_lastDepth: f32 = 0.0;\n\n';
+    
+    // Create node ID constants
+    nodeIdMap.clear();
+    nextNodeId = 1;
+    code += '// Node IDs\n';
+    traverseSceneNodes(node => {
+        const varName = getNodeVarName(node);
+        const id = nextNodeId++;
+        nodeIdMap.set(node, id);
+        code += `const ID_${varName}: i32 = ${id};\n`;
+    });
+    
+    // Create uniform struct
+    code += '\nstruct Uniforms {\n';
+    code += '    resolution: vec2<f32>,\n';
+    code += '    u_cameraPos: vec3<f32>,\n';
+    code += '    u_cameraTarget: vec3<f32>,\n';
+    code += '    u_cameraDistance: f32,\n';
+    code += '    u_orthographicMode: f32,\n';
+    code += '    u_colorMode: f32,\n';
+    code += '    u_lightingMode: f32,\n';
+    code += '    u_paletteIndex: f32,\n';
+    code += '    u_outlineMode: f32,\n';
+    code += '    u_mainSteps: f32,\n';
+    code += '    u_outlineSteps: f32,\n';
+    code += '    u_selectedID: f32,\n';
+    code += '    u_outlineEnabled: f32,\n';
+    // Node parameters for the first node (simplified approach)
+    code += '    node_radius: f32,\n';
+    code += '    node_sizeX: f32,\n';
+    code += '    node_sizeY: f32,\n';
+    code += '    node_sizeZ: f32,\n';
+    code += '    node_majorRadius: f32,\n';
+    code += '    node_minorRadius: f32,\n';
+    code += '    node_height: f32,\n';
+    code += '    node_angleDeg: f32,\n';
+    code += '};\n\n';
+    code += '@group(0) @binding(0) var<uniform> uniforms: Uniforms;\n\n';
+    
+    // Generate sceneSDF function
+    if (children.length === 0) {
+        code += `fn sceneSDF(p: vec3<f32>) -> f32 {
+    g_lastColor = vec3<f32>(0.2, 0.2, 0.25);
+    g_lastDepth = 0.0;
+    return 1000.0; // Empty scene
+}\n`;
+    } else if (children.length === 1) {
+        const childVar = getNodeVarName(children[0]);
+        code += `fn sceneSDF(p: vec3<f32>) -> f32 {\n`;
+        code += generatePreviewNodeCodeWGSL(children[0], 'p');
+        code += `    g_lastColor = ${childVar}_color;\n`;
+        code += `    g_lastDepth = ${childVar}_depth;\n`;
+        code += `    return ${childVar};\n`;
+        code += `}\n`;
+        console.log('Generated single-child sceneSDF for', children[0].dataset.type);
+    } else {
+        let nodeCode = '';
+        children.forEach(child => {
+            nodeCode += generatePreviewNodeCodeWGSL(child, 'p');
+        });
+        let unionExpr = getNodeVarName(children[0]);
+        let unionColor = `${unionExpr}_color`;
+        let unionDepth = `${unionExpr}_depth`;
+        let unionCode = '';
+        for (let i = 1; i < children.length; i++) {
+            const nextVar = getNodeVarName(children[i]);
+            const nextColor = `${nextVar}_color`;
+            const nextDepth = `${nextVar}_depth`;
+            const blendVar = `sceneBlend_${i}`;
+            unionCode += `    var ${blendVar}: f32 = min(${unionExpr}, ${nextVar});\n`;
+            unionCode += `    var ${blendVar}_color: vec3<f32> = select(${nextColor}, ${unionColor}, ${unionExpr} <= ${nextVar});\n`;
+            unionCode += `    var ${blendVar}_depth: f32 = select(${nextDepth}, ${unionDepth}, ${unionExpr} <= ${nextVar});\n`;
+            unionExpr = blendVar;
+            unionColor = `${blendVar}_color`;
+            unionDepth = `${blendVar}_depth`;
+        }
+        code += `fn sceneSDF(p: vec3<f32>) -> f32 {\n`;
+        code += nodeCode;
+        code += unionCode;
+        code += `    g_lastColor = ${unionColor};\n`;
+        code += `    g_lastDepth = ${unionDepth};\n`;
+        code += `    return ${unionExpr};\n`;
+        code += `}\n`;
+    }
+    
+    // Add vertex shader
+    code += `
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) fragCoord: vec2<f32>,
+};
+
+@vertex
+fn vs_main(@location(0) position: vec2<f32>) -> VertexOutput {
+    var output: VertexOutput;
+    output.position = vec4<f32>(position, 0.0, 1.0);
+    output.fragCoord = (position + 1.0) * 0.5 * uniforms.resolution;
+    return output;
+}
+
+fn resolveSurfaceColor() -> vec3<f32> {
+    if (uniforms.u_colorMode == 0.0) {
+                return g_lastColor;
+            }
+    let paletteIndex = i32(floor(uniforms.u_paletteIndex + 0.5));
+            return intToColor(paletteIndex);
+        }
+        
+fn calcNormal(p: vec3<f32>) -> vec3<f32> {
+    let e = vec2<f32>(0.001, 0.0);
+    let backup = g_lastColor;
+    let dx1 = sceneSDF(p + e.xyy);
+            g_lastColor = backup;
+    let dx2 = sceneSDF(p - e.xyy);
+            g_lastColor = backup;
+    let dy1 = sceneSDF(p + e.yxy);
+            g_lastColor = backup;
+    let dy2 = sceneSDF(p - e.yxy);
+            g_lastColor = backup;
+    let dz1 = sceneSDF(p + e.yyx);
+            g_lastColor = backup;
+    let dz2 = sceneSDF(p - e.yyx);
+            g_lastColor = backup;
+    return normalize(vec3<f32>(dx1 - dx2, dy1 - dy2, dz1 - dz2));
+}
+
+fn computeRayDirection(uv: vec2<f32>) -> vec3<f32> {
+    let forward = normalize(uniforms.u_cameraTarget - uniforms.u_cameraPos);
+    let worldUp = vec3<f32>(0.0, 1.0, 0.0);
+    var right = normalize(cross(forward, worldUp));
+            if (length(right) < 0.001) {
+        right = vec3<f32>(1.0, 0.0, 0.0);
+    }
+    let up = normalize(cross(right, forward));
+    return normalize(forward + uv.x * right + uv.y * up);
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
+    let uv = (input.fragCoord - 0.5 * uniforms.resolution) / uniforms.resolution.y;
+
+    let forward = normalize(uniforms.u_cameraTarget - uniforms.u_cameraPos);
+    let worldUp = vec3<f32>(0.0, 1.0, 0.0);
+    var right = normalize(cross(forward, worldUp));
+    if (length(right) < 0.001) {
+        right = vec3<f32>(1.0, 0.0, 0.0);
+    }
+    let up = normalize(cross(right, forward));
+    var ro = uniforms.u_cameraPos;
+    var rd = computeRayDirection(uv);
+    
+    if (uniforms.u_orthographicMode != 0.0) {
+        let orthoScale = max(uniforms.u_cameraDistance, 0.1);
+        ro = uniforms.u_cameraPos + uv.x * right * orthoScale + uv.y * up * orthoScale;
+                rd = forward;
+            }
+            
+    var t: f32 = 0.0;
+    let background = vec3<f32>(0.05, 0.05, 0.06);
+    var col = background;
+    var nearSelection = false;
+    var minDistToSelected: f32 = 1e20;
+    
+    // Main raymarch pass
+    for (var i = 0; i < 200; i++) {
+        // TEMP: Hardcode 100 until we fix uniform alignment
+        if (i >= 100) { break; }
+        iterCount = i;
+        
+        let p = ro + rd * t;
+        distToSelected = 1e20;
+        let d = sceneSDF(p);
+        
+        // Single-pass mode outline tracking
+        if (uniforms.u_outlineMode == 0.0 && uniforms.u_outlineEnabled != 0.0 && distToSelected < 0.02) {
+            nearSelection = true;
+            minDistToSelected = min(minDistToSelected, distToSelected);
+        }
+        
+        if (d < 0.001) {
+            col = vec3<f32>(1.0, 0.0, 0.0); // TEMP: Just red
+            break;
+        }
+                
+        if (t > 20.0) { 
+            break; 
+        }
+        t += d;
+    }
+
+    // Dual-pass outline mode
+    if (uniforms.u_outlineMode != 0.0 && uniforms.u_outlineEnabled != 0.0) {
+                distToSelected = 1e20;
+                t = 0.0;
+        for (var i = 0; i < 200; i++) {
+            // TEMP: Hardcode 60
+            if (i >= 60) { break; }
+            
+            let p = ro + rd * t;
+            let dummy_dist = sceneSDF(p);
+            if (distToSelected < 0.001) { break; }
+            if (t > 20.0) { break; }
+                    t += distToSelected;
+                }
+                minDistToSelected = distToSelected;
+            }
+
+    // Draw outline
+    if (uniforms.u_outlineEnabled != 0.0 && minDistToSelected > 0.001 && minDistToSelected < 0.02) {
+        col = vec3<f32>(1.0, 0.8, 0.0);
+    }
+    
+    if (uniforms.u_outlineMode == 0.0 && nearSelection && all(col == background)) {
+        let outlineFactor = smoothstep(0.02, 0.0, minDistToSelected);
+        col = mix(background, vec3<f32>(1.0, 0.8, 0.0), outlineFactor * 0.6);
+    }
+    
+    return vec4<f32>(col, 1.0);
+}
+`;
+    
+    const stats = getSceneStats();
+    perfLogDuration('generatePreviewWGSL', t0, `nodes=${stats.nodeCount} depth=${stats.maxDepth}`);
+    return code;
+}
+
+function createRenderPipeline(wgslCode) {
+    const t0 = perfNow();
+    
+    if (!device) {
+        console.error('WebGPU device not initialized');
+        return null;
+    }
+    
+    // Create shader module
+    const shaderModule = device.createShaderModule({
+        code: wgslCode
+    });
+    
+    // Calculate uniform buffer size - must be <= 65536 for uniform buffers
+    // Fixed size for camera/rendering params + generic node params
+    // IMPORTANT: Account for std140 alignment padding
+    let uniformSize = 0;
+    uniformSize += 8;   // resolution vec2<f32>
+    uniformSize += 8;   // padding to align vec3
+    uniformSize += 12;  // u_cameraPos vec3<f32>
+    uniformSize += 4;   // padding after vec3
+    uniformSize += 12;  // u_cameraTarget vec3<f32>
+    uniformSize += 4;   // padding after vec3
+    uniformSize += 4;   // u_cameraDistance f32
+    uniformSize += 4;   // u_orthographicMode f32
+    uniformSize += 4;   // u_colorMode f32
+    uniformSize += 4;   // u_lightingMode f32
+    uniformSize += 4;   // u_paletteIndex f32
+    uniformSize += 4;   // u_outlineMode f32
+    uniformSize += 4;   // u_mainSteps i32
+    uniformSize += 4;   // u_outlineSteps i32
+    uniformSize += 4;   // u_selectedID i32
+    uniformSize += 4;   // u_outlineEnabled f32
+    // Node params
+    uniformSize += 4;   // node_radius f32
+    uniformSize += 4;   // node_sizeX f32
+    uniformSize += 4;   // node_sizeY f32
+    uniformSize += 4;   // node_sizeZ f32
+    uniformSize += 4;   // node_majorRadius f32
+    uniformSize += 4;   // node_minorRadius f32
+    uniformSize += 4;   // node_height f32
+    uniformSize += 4;   // node_angleDeg f32
+
+    // Ensure 16-byte alignment
+    uniformSize = Math.ceil(uniformSize / 16) * 16;
+    
+    // Create uniform buffer
+    if (uniformBuffer) {
+        uniformBuffer.destroy();
+    }
+    uniformBuffer = device.createBuffer({
+        size: uniformSize,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+    
+    // Create bind group layout
+    const bindGroupLayout = device.createBindGroupLayout({
+        entries: [{
+            binding: 0,
+            visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+            buffer: { type: 'uniform' }
+        }]
+    });
+    
+    // Create bind group
+    bindGroup = device.createBindGroup({
+        layout: bindGroupLayout,
+        entries: [{
+            binding: 0,
+            resource: { buffer: uniformBuffer }
+        }]
+    });
+    
+    // Create pipeline layout
+    const pipelineLayout = device.createPipelineLayout({
+        bindGroupLayouts: [bindGroupLayout]
+    });
+    
+    // Create render pipeline
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    const renderPipeline = device.createRenderPipeline({
+        layout: pipelineLayout,
+        vertex: {
+            module: shaderModule,
+            entryPoint: 'vs_main',
+            buffers: [{
+                arrayStride: 8,  // 2 floats * 4 bytes
+                attributes: [{
+                    shaderLocation: 0,
+                    offset: 0,
+                    format: 'float32x2'
+                }]
+            }]
+        },
+        fragment: {
+            module: shaderModule,
+            entryPoint: 'fs_main',
+            targets: [{
+                format: format
+            }]
+        },
+        primitive: {
+            topology: 'triangle-strip'
+        }
+    });
+
+    console.log('Pipeline created successfully');
+    perfLogDuration('createRenderPipeline', t0);
+    return renderPipeline;
+}
+
+// Update uniforms via buffer writes (replaces cacheUniformLocations and updatePreviewUniforms)
+function updateUniformBuffer() {
+    if (!device || !uniformBuffer) return;
+    
+    const t0 = perfNow();
+    
+    // Create a buffer to hold uniform data
+    // We need to match the struct layout from WGSL shader
+    const canvas = document.getElementById('glCanvas');
+    const data = new ArrayBuffer(8192); // Generous size
+    const view = new DataView(data);
+    let offset = 0;
+    
+    // Helper to write aligned data
+    function writeFloat32(value) {
+        view.setFloat32(offset, value, true);
+        offset += 4;
+    }
+    
+    function writeInt32(value) {
+        view.setInt32(offset, value, true);
+        offset += 4;
+    }
+    
+    function writeUint32(value) {
+        view.setUint32(offset, value, true);
+        offset += 4;
+    }
+    
+    function writeVec2(x, y) {
+        writeFloat32(x);
+        writeFloat32(y);
+    }
+    
+    function writeVec3(x, y, z) {
+        writeFloat32(x);
+        writeFloat32(y);
+        writeFloat32(z);
+    }
+
+    function writeVec4(x, y, z, w) {
+        writeFloat32(x);
+        writeFloat32(y);
+        writeFloat32(z);
+        writeFloat32(w);
+    }
+    
+    function align16() {
+        offset = Math.ceil(offset / 16) * 16;
+    }
+    
+    // Write uniform data matching the struct layout
+    console.log('Offset start:', offset);
+    writeVec2(canvas.width, canvas.height);  // resolution (8 bytes)
+    console.log('After resolution:', offset);
+    writeFloat32(0); // Padding
+    writeFloat32(0); // Padding
+    console.log('After padding 1:', offset);
+
+    const pos = getCameraPosition();
+    console.log('Camera pos:', pos, 'target:', CAMERA_STATE.target, 'distance:', CAMERA_STATE.distance);
+    writeVec4(pos.x, pos.y, pos.z, 0);  // u_cameraPos as vec4 (16 bytes)
+    console.log('After cameraPos:', offset);
+
+    writeVec4(CAMERA_STATE.target.x, CAMERA_STATE.target.y, CAMERA_STATE.target.z, 0);  // u_cameraTarget as vec4 (16 bytes)
+    console.log('After cameraTarget:', offset);
+
+    writeFloat32(CAMERA_STATE.distance);  // u_cameraDistance
+    writeFloat32(orthographicMode ? 1.0 : 0.0);  // u_orthographicMode
+    writeFloat32(renderModeState.colorMode === COLOR_MODES.SINGLE ? 1.0 : 0.0);  // u_colorMode
+    writeFloat32(renderModeState.lightingMode === LIGHTING_MODES.DEPTH ? 1.0 : 0.0);  // u_lightingMode
+    // We're now at offset 48 + 16 = 64, which is 16-byte aligned
+    console.log('Offset before paletteIndex:', offset);
+    writeFloat32(renderModeState.paletteIndex);  // u_paletteIndex (offset 64)
+    writeFloat32(outlineMode === 'dual' ? 1.0 : 0.0);  // u_outlineMode (offset 68)
+    writeFloat32(mainRaymarchSteps);  // u_mainSteps as f32 (offset 72)
+    writeFloat32(outlineRaymarchSteps);  // u_outlineSteps as f32 (offset 76)
+    writeFloat32(selectedNode && nodeIdMap.has(selectedNode) ? nodeIdMap.get(selectedNode) : 0);  // u_selectedID (offset 80)
+    writeFloat32(outlineEnabled ? 1.0 : 0.0);  // u_outlineEnabled (offset 84)
+    console.log('Offset after all settings:', offset, 'mainSteps value:', mainRaymarchSteps);
+
+    // Write node parameters (first node only, simplified)
+    let firstNodeParams = { radius: 0.5, sizeX: 0.5, sizeY: 0.5, sizeZ: 0.5, majorRadius: 0.5, minorRadius: 0.2, height: 1.0, angleDeg: 45 };
+    let nodeCount = 0;
+    traverseSceneNodes(node => {
+        nodeCount++;
+        const params = getNodeParams(node);
+        firstNodeParams = { ...firstNodeParams, ...params };
+        return; // Only first node
+    });
+    console.log('Writing params for', nodeCount, 'nodes:', firstNodeParams);
+    writeFloat32(firstNodeParams.radius);
+    writeFloat32(firstNodeParams.sizeX);
+    writeFloat32(firstNodeParams.sizeY);
+    writeFloat32(firstNodeParams.sizeZ);
+    writeFloat32(firstNodeParams.majorRadius);
+    writeFloat32(firstNodeParams.minorRadius);
+    writeFloat32(firstNodeParams.height);
+    writeFloat32(firstNodeParams.angleDeg);
+
+    // Write data to GPU buffer
+    console.log('Writing', offset, 'bytes to uniform buffer (capacity:', data.byteLength, ')');
+    device.queue.writeBuffer(uniformBuffer, 0, data, 0, offset);
+    
+    perfLogDuration('updateUniformBuffer', t0);
+}
+
+// Stub functions for compatibility
+function cacheUniformLocations() {
+    // Replaced by updateUniformBuffer in WebGPU version
+}
+
+// Stubs for compatibility - these are now handled by updateUniformBuffer()
+function updatePreviewUniforms() {
+    // Replaced by updateUniformBuffer in WebGPU version
+    updateUniformBuffer();
+    renderPreview();
+}
+
+function applyRenderModeUniforms() {
+    // Replaced by updateUniformBuffer in WebGPU version
+    // This is now called within updateUniformBuffer()
+}
+
+function updateCameraUniforms() {
+    // Replaced by updateUniformBuffer in WebGPU version
+}
+
+function renderPreview(prevTimestamp, rafTimestamp) {
+    if (!device || !pipeline) {
+        console.log('renderPreview: device or pipeline not ready');
+        return;
+    }
+    const perfStart = perfNow();
+    const frameTimestamp = typeof rafTimestamp === 'number' ? rafTimestamp : performance.now();
+    
+    // Update uniforms
+    updateUniformBuffer();
+    
+    // Get current texture from canvas
+    const canvasTexture = context.getCurrentTexture();
+    const view = canvasTexture.createView();
+    
+    // Create command encoder
+    const commandEncoder = device.createCommandEncoder();
+    
+    // Begin render pass
+    const renderPass = commandEncoder.beginRenderPass({
+        colorAttachments: [{
+            view: view,
+            clearValue: { r: 0.05, g: 0.05, b: 0.06, a: 1.0 },
+            loadOp: 'clear',
+            storeOp: 'store'
+        }]
+    });
+    
+    renderPass.setPipeline(pipeline);
+    renderPass.setBindGroup(0, bindGroup);
+    renderPass.setVertexBuffer(0, vertexBuffer);
+    renderPass.draw(4, 1, 0, 0);
+    console.log('Draw call issued - vertices: 4');
+    renderPass.end();
+    
+    // Submit commands
+    device.queue.submit([commandEncoder.finish()]);
+    
+    // Only update FPS for RAF frames (not event-triggered renders)
+    if (typeof rafTimestamp === 'number') {
+        updateFps(frameTimestamp);
+    }
+    
+    const renderEnd = perfLogDuration('renderPreview', perfStart);
+    if (typeof prevTimestamp === 'number') {
+        const total = renderEnd - prevTimestamp + (prevTimestamp - perfStart);
+        console.log(`[SDFperf] uniforms+render total: ${total.toFixed(2)}ms`);
+    }
+}
+
+function recompilePreview() {
+    if (!device) return;
+    const t0 = perfNow();
+    
+    const previewWGSL = generatePreviewWGSL();
+    console.log('Generated WGSL length:', previewWGSL.length);
+    
+    // Find and log the sceneSDF function
+    const sceneSdfStart = previewWGSL.indexOf('fn sceneSDF');
+    const sceneSdfEnd = previewWGSL.indexOf('}\n', sceneSdfStart) + 2;
+    console.log('sceneSDF function:', previewWGSL.substring(sceneSdfStart, sceneSdfEnd));
+    
+    // Find and log the fragment shader entry point
+    const fsStart = previewWGSL.indexOf('@fragment');
+    const fsEnd = previewWGSL.indexOf('}\n', previewWGSL.indexOf('fn fs_main', fsStart)) + 2;
+    console.log('Fragment shader (first 1500 chars):', previewWGSL.substring(fsStart, Math.min(fsStart + 1500, fsEnd)));
+
+    // Destroy old pipeline if exists
+    if (pipeline) {
+        // WebGPU pipelines don't have explicit destroy, they're GC'd
+        pipeline = null;
+    }
+    
+    pipeline = createRenderPipeline(previewWGSL);
+    if (!pipeline) return;
+    
+    graphDirty = false;
+    autoCompilePending = false;
+    updateRecompileButtonState();
+    setParamControlsEnabled(true);
+    currentParamNode = ensureValidParamNode(currentParamNode) || getFirstEditableNode();
+    renderCurrentParamPanel();
+    startPreviewLoop();
+    
+    const stats = getSceneStats();
+    perfLogDuration('recompilePreview', t0, `nodes=${stats.nodeCount} depth=${stats.maxDepth}`);
+}
+
+function startPreviewLoop() {
+    if (previewAnimationHandle) return;
+    const tick = (timestamp) => {
+        if (!device || !pipeline) {
+            previewAnimationHandle = null;
+            return;
+        }
+        renderPreview(undefined, timestamp);
+        previewAnimationHandle = requestAnimationFrame(tick);
+    };
+    previewAnimationHandle = requestAnimationFrame(tick);
+}
+
+function stopPreviewLoop() {
+    if (previewAnimationHandle) {
+        cancelAnimationFrame(previewAnimationHandle);
+        previewAnimationHandle = null;
+    }
+}
+
+function getFirstEditableNode() {
+    const primitives = [...document.querySelectorAll('.node.primitive'), ...document.querySelectorAll('.node.modifier')];
+    return primitives.length > 0 ? primitives[0] : null;
+}
+
+function ensureValidParamNode(node) {
+    if (node && document.body.contains(node) && node.dataset.type !== 'Scene') {
+        return node;
+    }
+    return null;
+}
+
+function getSceneStats() {
+    const sceneNode = document.getElementById('scene');
+    let count = 0;
+    let depth = 0;
+    
+    function traverse(node, currentDepth) {
+        if (node.dataset.type !== 'Scene') {
+            count++;
+            depth = Math.max(depth, currentDepth);
+        }
+        getNodeChildren(node).forEach(child => traverse(child, currentDepth + 1));
+    }
+    
+    traverse(sceneNode, 0);
+    return { nodeCount: count, maxDepth: depth };
+}
+
+
+
+
+function startPreviewLoop() {
+    if (previewAnimationHandle) return;
+    const tick = (timestamp) => {
+        if (!device || !pipeline) {
+            previewAnimationHandle = null;
+            return;
+        }
+        renderPreview(undefined, timestamp);
+        previewAnimationHandle = requestAnimationFrame(tick);
+    };
+    previewAnimationHandle = requestAnimationFrame(tick);
+}
+
+function stopPreviewLoop() {
+    if (previewAnimationHandle) {
+        cancelAnimationFrame(previewAnimationHandle);
+        previewAnimationHandle = null;
+    }
+}
+
+function updateFps(frameTimestamp) {
+    if (!previewFpsDisplay) return;
+    if (lastFrameTimestamp) {
+        const delta = frameTimestamp - lastFrameTimestamp;
+        if (delta > 0) {
+            const instant = 1000 / delta;
+            // Use stronger smoothing for more stable FPS display
+            smoothedFps = smoothedFps ? (smoothedFps * 0.9 + instant * 0.1) : instant;
+            // Update display every 250ms
+            if (!lastFpsUpdate || frameTimestamp - lastFpsUpdate > 250) {
+                previewFpsDisplay.textContent = `FPS: ${Math.round(smoothedFps)}`;
+                lastFpsUpdate = frameTimestamp;
+            }
+        }
+    }
+    lastFrameTimestamp = frameTimestamp;
+}
+
+init();
+</script>
+</body>
+</html>

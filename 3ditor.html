@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="author" content="John Cotterell">
+    <title>Three.js Scene Builder</title>
+    <!-- v1.0.1 -->
+    <link href="https://fonts.googleapis.com/css?family=Abel|Quicksand:500|Source+Code+Pro" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            font-family: 'Abel', sans-serif;
+        }
+
+        #drawing {
+            position: fixed;
+            left: 200px;
+            top: 0;
+            width: calc(100% - 200px - 340px);
+            height: 100%;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        #rootnode {
+            font-size: 20px;
+            position: fixed;
+            width: calc(100% - 200px - 340px);
+            height: 100%;
+            left: 200px;
+            top: 0;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #rootnode > * {
+            pointer-events: auto;
+        }
+
+        .node {
+            font-family: 'Quicksand', sans-serif;
+            font-size: .9em;
+            padding: 8px 12px;
+            border: 2px solid #cccccc;
+            border-radius: 5px;
+            background: #eeeeee;
+            position: absolute;
+            z-index: 9;
+            cursor: move;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .node .detach-wrapper {
+            position: absolute;
+            top: -32px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 30px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.35);
+            border: 1px dashed rgba(197, 48, 48, 0.6);
+            opacity: 0;
+            pointer-events: auto;
+            transition: opacity 0.2s;
+        }
+
+        .detach-wrapper .detach-handle {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid rgba(0, 0, 0, 0.25);
+            background: #fff;
+            color: #c53030;
+            font-size: 13px;
+            line-height: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            pointer-events: auto;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+        }
+
+        .node.node-hover .detach-wrapper,
+        .detach-wrapper:hover {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .node.scene {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #5a67d8;
+            color: white;
+        }
+
+        .node.mesh {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            border-color: #38b2ac;
+            color: white;
+        }
+
+        .node.light {
+            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            border-color: #f6ad55;
+            color: #2d3748;
+        }
+
+        .node.group {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            border-color: #81e6d9;
+            color: #2d3748;
+        }
+
+        .node.selected {
+            box-shadow: 0 0 0 3px #ffcc00;
+        }
+
+        .nodetitle {
+            font-weight: 500;
+            cursor: default;
+        }
+
+        #sidebar {
+            font-family: 'Abel', sans-serif;
+            font-size: 16px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 200px;
+            height: 100%;
+            background: #2d3748;
+            color: white;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        #sidebar h3 {
+            margin: 15px 0 10px 0;
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #a0aec0;
+            border-bottom: 1px solid #4a5568;
+            padding-bottom: 5px;
+        }
+
+        .menu-item {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 4px;
+            cursor: grab;
+            transition: background 0.2s;
+        }
+
+        .menu-item:hover {
+            background: #4a5568;
+        }
+
+        .menu-item.mesh {
+            border-left: 3px solid #4facfe;
+        }
+
+        .menu-item.light {
+            border-left: 3px solid #f6ad55;
+        }
+
+        .menu-item.group {
+            border-left: 3px solid #81e6d9;
+        }
+
+        #paramPanel {
+            font-family: 'Abel', sans-serif;
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 340px;
+            height: 100%;
+            background: #1a202c;
+            color: white;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        #paramPanel h3 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            color: #63b3ed;
+        }
+
+        .param-group {
+            margin: 15px 0;
+            padding: 10px;
+            background: #2d3748;
+            border-radius: 5px;
+        }
+
+        .param-group h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #a0aec0;
+            text-transform: uppercase;
+        }
+
+        .param-item {
+            margin: 8px 0;
+        }
+
+        .param-slider-container {
+            margin: 12px 0;
+        }
+
+        .param-slider-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: #cbd5e0;
+        }
+
+        .param-slider-value {
+            font-family: 'Source Code Pro', monospace;
+            color: #63b3ed;
+            font-size: 12px;
+        }
+
+        .param-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .param-slider {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: #4a5568;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .param-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #63b3ed;
+            cursor: pointer;
+            border: 2px solid #1a202c;
+        }
+
+        .param-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #63b3ed;
+            cursor: pointer;
+            border: 2px solid #1a202c;
+        }
+
+        .param-fine-control {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .param-fine-btn {
+            width: 24px;
+            height: 16px;
+            background: #4a5568;
+            border: none;
+            border-radius: 3px;
+            color: #cbd5e0;
+            cursor: pointer;
+            font-size: 10px;
+            line-height: 16px;
+            padding: 0;
+            transition: background 0.2s;
+        }
+
+        .param-fine-btn:hover {
+            background: #63b3ed;
+            color: white;
+        }
+
+        .param-fine-btn:active {
+            background: #4299e1;
+        }
+
+        .param-label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: #cbd5e0;
+        }
+
+        .param-input {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #4a5568;
+            border-radius: 3px;
+            background: #1a202c;
+            color: white;
+            font-family: 'Source Code Pro', monospace;
+            box-sizing: border-box;
+        }
+
+        #preview {
+            position: fixed;
+            left: 200px;
+            top: 0;
+            width: calc(100% - 200px - 340px);
+            height: 100%;
+            z-index: 1;
+        }
+
+        #codeOutput {
+            display: none;
+            position: fixed;
+            left: 200px;
+            top: 0;
+            right: 280px;
+            bottom: 0;
+            background: #1a202c;
+            color: #a0aec0;
+            padding: 20px;
+            overflow: auto;
+            z-index: 200;
+        }
+
+        #codeOutput pre {
+            font-family: 'Source Code Pro', monospace;
+            font-size: 13px;
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        .control-buttons {
+            position: fixed;
+            left: 50%;
+            bottom: 20px;
+            transform: translateX(-50%);
+            z-index: 120;
+            display: flex;
+            gap: 10px;
+        }
+
+        .control-buttons button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Abel', sans-serif;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .control-buttons button:hover {
+            background: #5a67d8;
+        }
+
+        .color-input {
+            width: 100%;
+            height: 30px;
+            border: 1px solid #4a5568;
+            border-radius: 3px;
+            background: #1a202c;
+            cursor: pointer;
+        }
+
+        select.param-input {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div id="sidebar">
+    <h3>Meshes</h3>
+    <div class="menu-item mesh" data-type="Box">Box</div>
+    <div class="menu-item mesh" data-type="Sphere">Sphere</div>
+    <div class="menu-item mesh" data-type="Cylinder">Cylinder</div>
+    <div class="menu-item mesh" data-type="Cone">Cone</div>
+    <div class="menu-item mesh" data-type="Torus">Torus</div>
+    <div class="menu-item mesh" data-type="TorusKnot">Torus Knot</div>
+    <div class="menu-item mesh" data-type="Plane">Plane</div>
+    <div class="menu-item mesh" data-type="Dodecahedron">Dodecahedron</div>
+    <div class="menu-item mesh" data-type="Icosahedron">Icosahedron</div>
+    <div class="menu-item mesh" data-type="Octahedron">Octahedron</div>
+    <div class="menu-item mesh" data-type="Tetrahedron">Tetrahedron</div>
+    
+    <h3>Lights</h3>
+    <div class="menu-item light" data-type="AmbientLight">Ambient</div>
+    <div class="menu-item light" data-type="DirectionalLight">Directional</div>
+    <div class="menu-item light" data-type="PointLight">Point</div>
+    <div class="menu-item light" data-type="SpotLight">Spot</div>
+    <div class="menu-item light" data-type="HemisphereLight">Hemisphere</div>
+    
+    <h3>Organization</h3>
+    <div class="menu-item group" data-type="Group">Group</div>
+</div>
+
+<div id="paramPanel">
+    <h3>Properties</h3>
+    <div id="paramContent">
+        <p style="color: #718096;">Select a node to edit properties</p>
+    </div>
+</div>
+
+<svg id="drawing"></svg>
+
+<div id="rootnode"></div>
+
+<div id="preview"></div>
+
+<div class="control-buttons">
+    <button id="generateCodeBtn">Generate Code</button>
+    <button id="closeCodeBtn" style="display: none;">Back to Editor</button>
+</div>
+
+<div id="codeOutput">
+    <pre id="codeText"></pre>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.7.1/svg.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// Node type definitions
+const NODE_TYPES = {
+    Scene: {
+        category: 'scene',
+        maxChildren: 999,
+        params: {
+            backgroundColor: { type: 'color', default: '#000000' },
+            fog: { type: 'boolean', default: false },
+            fogColor: { type: 'color', default: '#ffffff' },
+            fogNear: { type: 'number', default: 1, min: 0.1, max: 100, step: 0.1 },
+            fogFar: { type: 'number', default: 10, min: 1, max: 1000, step: 1 }
+        }
+    },
+    Group: {
+        category: 'group',
+        maxChildren: 999,
+        params: {}
+    },
+    Box: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            width: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            height: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            depth: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    Sphere: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            widthSegments: { type: 'number', default: 32, min: 3, max: 64, step: 1 },
+            heightSegments: { type: 'number', default: 32, min: 2, max: 64, step: 1 }
+        }
+    },
+    Cylinder: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radiusTop: { type: 'number', default: 1, min: 0, max: 10, step: 0.1 },
+            radiusBottom: { type: 'number', default: 1, min: 0, max: 10, step: 0.1 },
+            height: { type: 'number', default: 2, min: 0.1, max: 10, step: 0.1 },
+            radialSegments: { type: 'number', default: 32, min: 3, max: 64, step: 1 }
+        }
+    },
+    Cone: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            height: { type: 'number', default: 2, min: 0.1, max: 10, step: 0.1 },
+            radialSegments: { type: 'number', default: 32, min: 3, max: 64, step: 1 }
+        }
+    },
+    Torus: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            tube: { type: 'number', default: 0.4, min: 0.1, max: 5, step: 0.1 },
+            radialSegments: { type: 'number', default: 16, min: 3, max: 64, step: 1 },
+            tubularSegments: { type: 'number', default: 100, min: 3, max: 200, step: 1 }
+        }
+    },
+    TorusKnot: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            tube: { type: 'number', default: 0.3, min: 0.1, max: 5, step: 0.1 },
+            tubularSegments: { type: 'number', default: 64, min: 3, max: 200, step: 1 },
+            radialSegments: { type: 'number', default: 8, min: 3, max: 64, step: 1 },
+            p: { type: 'number', default: 2, min: 1, max: 10, step: 1 },
+            q: { type: 'number', default: 3, min: 1, max: 10, step: 1 }
+        }
+    },
+    Plane: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            width: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            height: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    Dodecahedron: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    Icosahedron: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    Octahedron: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    Tetrahedron: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    AmbientLight: {
+        category: 'light',
+        maxChildren: 0,
+        params: {
+            color: { type: 'color', default: '#ffffff' },
+            intensity: { type: 'number', default: 0.5, min: 0, max: 2, step: 0.1 }
+        }
+    },
+    DirectionalLight: {
+        category: 'light',
+        maxChildren: 0,
+        params: {
+            color: { type: 'color', default: '#ffffff' },
+            intensity: { type: 'number', default: 1, min: 0, max: 2, step: 0.1 },
+            castShadow: { type: 'boolean', default: true }
+        }
+    },
+    PointLight: {
+        category: 'light',
+        maxChildren: 0,
+        params: {
+            color: { type: 'color', default: '#ffffff' },
+            intensity: { type: 'number', default: 1, min: 0, max: 2, step: 0.1 },
+            distance: { type: 'number', default: 0, min: 0, max: 100, step: 1 },
+            decay: { type: 'number', default: 1, min: 0, max: 10, step: 0.1 },
+            castShadow: { type: 'boolean', default: false }
+        }
+    },
+    SpotLight: {
+        category: 'light',
+        maxChildren: 0,
+        params: {
+            color: { type: 'color', default: '#ffffff' },
+            intensity: { type: 'number', default: 1, min: 0, max: 2, step: 0.1 },
+            distance: { type: 'number', default: 0, min: 0, max: 100, step: 1 },
+            angle: { type: 'number', default: Math.PI / 3, min: 0, max: Math.PI / 2, step: 0.1 },
+            penumbra: { type: 'number', default: 0, min: 0, max: 1, step: 0.1 },
+            decay: { type: 'number', default: 1, min: 0, max: 10, step: 0.1 },
+            castShadow: { type: 'boolean', default: false }
+        }
+    },
+    HemisphereLight: {
+        category: 'light',
+        maxChildren: 0,
+        params: {
+            skyColor: { type: 'color', default: '#ffffff' },
+            groundColor: { type: 'color', default: '#444444' },
+            intensity: { type: 'number', default: 0.6, min: 0, max: 2, step: 0.1 }
+        }
+    }
+};
+
+// Transform parameters for all nodes (except Scene and lights)
+const TRANSFORM_PARAMS = {
+    posX: { type: 'number', default: 0, min: -20, max: 20, step: 0.1 },
+    posY: { type: 'number', default: 0, min: -20, max: 20, step: 0.1 },
+    posZ: { type: 'number', default: 0, min: -20, max: 20, step: 0.1 },
+    rotX: { type: 'number', default: 0, min: 0, max: 360, step: 1 },
+    rotY: { type: 'number', default: 0, min: 0, max: 360, step: 1 },
+    rotZ: { type: 'number', default: 0, min: 0, max: 360, step: 1 },
+    scaleX: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+    scaleY: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+    scaleZ: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+};
+
+// Material parameters for mesh nodes
+const MATERIAL_PARAMS = {
+    materialType: { type: 'select', default: 'standard', options: ['basic', 'standard', 'phong', 'physical'] },
+    color: { type: 'color', default: '#3498db' },
+    metalness: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1 },
+    roughness: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1 },
+    emissive: { type: 'color', default: '#000000' },
+    emissiveIntensity: { type: 'number', default: 0, min: 0, max: 2, step: 0.1 },
+    wireframe: { type: 'boolean', default: false },
+    transparent: { type: 'boolean', default: false },
+    opacity: { type: 'number', default: 1, min: 0, max: 1, step: 0.1 }
+};
+
+// Global state
+const draw = SVG('drawing').size('100%', '100%');
+let nodesArray = [];
+let lines = [];
+let nodeCounter = 0;
+let dragging = false;
+let dragged = null;
+let selectedNode = null;
+let pos3 = 0, pos4 = 0;
+let detached = false;
+let dragFromMenu = false;
+let dropPreview = null;
+let currentDropTarget = null;
+
+// Three.js scene
+let scene, camera, renderer, controls;
+let previewObjects = new Map();
+let defaultLights = [];
+
+// Initialize
+initThreeJS();
+initNodeEditor();
+
+function initNodeEditor() {
+    createSceneNode();
+    scanNodes();
+    addLines();
+    setupMenuItems();
+    setupEventListeners();
+}
+
+function scanNodes() {
+    const nodesObject = document.getElementsByClassName("node");
+    nodesArray = [];
+    for (let i = 0; i < nodesObject.length; i++) {
+        nodesArray.push(nodesObject[i]);
+        if (!nodesObject[i].id || nodesObject[i].id === '') {
+            nodesObject[i].id = 'node_' + nodeCounter++;
+        }
+        ensureDetachHandle(nodesObject[i]);
+    }
+}
+
+function ensureDetachHandle(node) {
+    if (node.dataset.type === 'Scene') return;
+    if (node.querySelector('.detach-wrapper')) return;
+    
+    const detachWrapper = document.createElement('div');
+    const detachHandle = document.createElement('div');
+    
+    detachWrapper.className = 'detach-wrapper';
+    detachHandle.className = 'detach-handle';
+    detachHandle.textContent = '×';
+    
+    detachWrapper.appendChild(detachHandle);
+    node.insertBefore(detachWrapper, node.firstChild);
+    
+    detachHandle.addEventListener('mousedown', onDetachHandleMouseDown);
+    attachNodeHoverHandlers(node);
+    attachDetachWrapperHandlers(node);
+}
+
+function attachNodeHoverHandlers(node) {
+    if (node.dataset.type === 'Scene' || node._hoverHandlersAttached) return;
+    node.addEventListener('mouseover', handleNodeMouseOver);
+    node.addEventListener('mouseout', handleNodeMouseOut);
+    node._hoverHandlersAttached = true;
+}
+
+function attachDetachWrapperHandlers(node) {
+    if (node.dataset.type === 'Scene') return;
+    const wrapper = node.querySelector('.detach-wrapper');
+    if (!wrapper || wrapper._hoverHandlersAttached) return;
+    
+    wrapper.addEventListener('mouseenter', () => {
+        node.classList.add('node-hover');
+    });
+    wrapper.addEventListener('mouseleave', (event) => {
+        const related = event.relatedTarget;
+        if (related && (node.contains(related) || wrapper.contains(related))) return;
+        node.classList.remove('node-hover');
+    });
+    wrapper._hoverHandlersAttached = true;
+}
+
+function handleNodeMouseOver(event) {
+    if (event.target !== event.currentTarget) return;
+    event.currentTarget.classList.add('node-hover');
+}
+
+function handleNodeMouseOut(event) {
+    if (event.target !== event.currentTarget) return;
+    const related = event.relatedTarget;
+    if (related && event.currentTarget.contains(related)) return;
+    event.currentTarget.classList.remove('node-hover');
+}
+
+function onDetachHandleMouseDown(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const node = event.target.closest('.node');
+    if (!node || node.dataset.type === 'Scene') return;
+    
+    detachNodeToRoot(node);
+    
+    // Start dragging the detached node
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    const rect = node.getBoundingClientRect();
+    node.dataset.dragOffsetX = event.clientX - rect.left;
+    node.dataset.dragOffsetY = event.clientY - rect.top;
+    dragging = true;
+    dragged = node;
+    detached = true; // Mark as detached so it can be reattached
+    selectNode(node);
+}
+
+function detachNodeToRoot(node) {
+    const root = document.getElementById('rootnode');
+    reparentNodePreservingPosition(node, root);
+    updateLine(node);
+    updatePreview();
+}
+
+function reparentNodePreservingPosition(node, newParent) {
+    const nodeRect = node.getBoundingClientRect();
+    const parentRect = newParent.getBoundingClientRect();
+    newParent.appendChild(node);
+    node.style.left = `${nodeRect.left - parentRect.left}px`;
+    node.style.top = `${nodeRect.top - parentRect.top}px`;
+}
+
+function addLines() {
+    for (let i = 0; i < nodesArray.length; i++) {
+        addLine(i);
+    }
+}
+
+function addLine(num) {
+    const node = nodesArray[num];
+    const box1 = node.getBoundingClientRect();
+    const box2 = node.parentNode.getBoundingClientRect();
+    const x1 = box1.left + (box1.width / 2);
+    const y1 = box1.top + (box1.height / 2);
+    const x2 = box2.left + (box2.width / 2);
+    const y2 = box2.top + (box2.height / 2);
+    
+    // Adjust for sidebar (drawing SVG starts at left: 200px)
+    const adjustedX1 = x1 - 200;
+    const adjustedX2 = x2 - 200;
+    
+    if (lines[num]) {
+        lines[num].plot([['M', adjustedX1, y1], ['C', adjustedX1, y2, adjustedX2, y1, adjustedX2, y2]]);
+    } else {
+        lines[num] = draw.path([['M', adjustedX1, y1], ['C', adjustedX1, y2, adjustedX2, y1, adjustedX2, y2]])
+            .fill('none')
+            .stroke({ width: 2, color: "#888888" });
+    }
+    
+    if (!node.parentNode.classList.contains("node")) {
+        lines[num].hide();
+    } else {
+        lines[num].show();
+    }
+}
+
+function updateLine(node) {
+    const nodeIndex = nodesArray.indexOf(node);
+    if (nodeIndex >= 0) {
+        addLine(nodeIndex);
+    }
+    
+    const children = node.querySelectorAll('.node');
+    children.forEach(child => {
+        const childIndex = nodesArray.indexOf(child);
+        if (childIndex >= 0) {
+            addLine(childIndex);
+        }
+    });
+}
+
+function updateAllLines() {
+    for (let i = 0; i < nodesArray.length; i++) {
+        addLine(i);
+    }
+}
+
+function initThreeJS() {
+    const container = document.getElementById('preview');
+    
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+    
+    // Add default lighting so objects are visible
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+    defaultLights.push(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(5, 10, 7);
+    directionalLight.castShadow = true;
+    scene.add(directionalLight);
+    defaultLights.push(directionalLight);
+    
+    camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(5, 5, 5);
+    camera.lookAt(0, 0, 0);
+    
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+    
+    // Handle window resize
+    window.addEventListener('resize', onWindowResize);
+    
+    // Simple orbit controls (manual implementation)
+    let isRotating = false;
+    let prevMouseX = 0;
+    let prevMouseY = 0;
+    let cameraRotationX = 0;
+    let cameraRotationY = 0;
+    
+    container.addEventListener('mousedown', (e) => {
+        isRotating = true;
+        prevMouseX = e.clientX;
+        prevMouseY = e.clientY;
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (isRotating) {
+            const deltaX = e.clientX - prevMouseX;
+            const deltaY = e.clientY - prevMouseY;
+            
+            cameraRotationY -= deltaX * 0.005;
+            cameraRotationX -= deltaY * 0.005;
+            cameraRotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraRotationX));
+            
+            const distance = 10;
+            camera.position.x = distance * Math.cos(cameraRotationX) * Math.sin(cameraRotationY);
+            camera.position.y = distance * Math.sin(cameraRotationX);
+            camera.position.z = distance * Math.cos(cameraRotationX) * Math.cos(cameraRotationY);
+            camera.lookAt(0, 0, 0);
+            
+            prevMouseX = e.clientX;
+            prevMouseY = e.clientY;
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        isRotating = false;
+    });
+    
+    container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const distance = Math.sqrt(camera.position.x ** 2 + camera.position.y ** 2 + camera.position.z ** 2);
+        const newDistance = Math.max(2, Math.min(50, distance + e.deltaY * 0.01));
+        const scale = newDistance / distance;
+        camera.position.multiplyScalar(scale);
+    });
+    
+    animate();
+}
+
+function onWindowResize() {
+    const container = document.getElementById('preview');
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+}
+
+function createSceneNode() {
+    const sceneNode = createNode('Scene');
+    sceneNode.style.left = '100px';
+    sceneNode.style.top = '50px';
+    document.getElementById('rootnode').appendChild(sceneNode);
+    nodesArray.push(sceneNode);
+}
+
+function setupMenuItems() {
+    const menuItems = document.querySelectorAll('.menu-item');
+    menuItems.forEach(item => {
+        item.addEventListener('mousedown', onMenuItemMouseDown);
+    });
+}
+
+function setupEventListeners() {
+    document.addEventListener('mouseup', onDocumentMouseUp);
+    document.addEventListener('mousemove', onDocumentMouseMove);
+    
+    document.getElementById('generateCodeBtn').addEventListener('click', generateCode);
+    document.getElementById('closeCodeBtn').addEventListener('click', closeCodeView);
+}
+
+function onMenuItemMouseDown(event) {
+    event.preventDefault();
+    const nodeType = event.target.dataset.type;
+    
+    const newNode = createNode(nodeType);
+    document.getElementById("rootnode").appendChild(newNode);
+    nodesArray.push(newNode);
+    
+    newNode.style.left = event.clientX - 200 - 50 + "px";
+    newNode.style.top = event.clientY - 15 + "px";
+    
+    addLine(nodesArray.length - 1);
+    
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    newNode.dataset.dragOffsetX = 50;
+    newNode.dataset.dragOffsetY = 15;
+    dragging = true;
+    dragged = newNode;
+    detached = true; // Important: dragging from menu is always detached
+    dragFromMenu = true;
+}
+
+function createNode(nodeType) {
+    const typeDef = NODE_TYPES[nodeType];
+    const newNode = document.createElement("DIV");
+    const newText = document.createElement("DIV");
+    
+    newText.className = "nodetitle";
+    newText.textContent = nodeType;
+    
+    newNode.className = "node " + typeDef.category;
+    newNode.id = 'node_' + nodeCounter++;
+    newNode.dataset.type = nodeType;
+    
+    // Initialize parameters
+    const params = {};
+    if (typeDef.params) {
+        for (const [key, val] of Object.entries(typeDef.params)) {
+            params[key] = val.default;
+        }
+    }
+    
+    // Add transform params for meshes and groups
+    if (typeDef.category === 'mesh' || typeDef.category === 'group') {
+        for (const [key, val] of Object.entries(TRANSFORM_PARAMS)) {
+            params[key] = val.default;
+        }
+    }
+    
+    // Add material params for meshes
+    if (typeDef.category === 'mesh') {
+        for (const [key, val] of Object.entries(MATERIAL_PARAMS)) {
+            params[key] = val.default;
+        }
+    }
+    
+    // Add position params for lights
+    if (typeDef.category === 'light') {
+        params.posX = 0;
+        params.posY = 5;
+        params.posZ = 5;
+    }
+    
+    setNodeParams(newNode, params);
+    
+    // Add detach handle (not for Scene)
+    if (nodeType !== 'Scene') {
+        ensureDetachHandle(newNode);
+    }
+    
+    newNode.appendChild(newText);
+    newNode.addEventListener('mousedown', onNodeMouseDown);
+    newNode.addEventListener('dblclick', onNodeDoubleClick);
+    
+    return newNode;
+}
+
+function setNodeParams(node, params) {
+    node.dataset.params = JSON.stringify(params);
+}
+
+function getNodeParams(node) {
+    return JSON.parse(node.dataset.params || '{}');
+}
+
+function onNodeMouseDown(event) {
+    if (event.target.classList.contains('param-input')) return;
+    if (event.target.classList.contains('detach-handle')) return;
+    
+    event.stopPropagation();
+    dragging = true;
+    dragged = event.currentTarget;
+    
+    // Check if this node is already detached (not attached to another node)
+    const parentIsNode = dragged.parentNode && dragged.parentNode.classList && dragged.parentNode.classList.contains('node');
+    detached = !parentIsNode; // If parent is rootnode, it's detached
+    
+    const rect = dragged.getBoundingClientRect();
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    dragged.dataset.dragOffsetX = event.clientX - rect.left;
+    dragged.dataset.dragOffsetY = event.clientY - rect.top;
+    
+    selectNode(dragged);
+}
+
+function onNodeDoubleClick(event) {
+    event.stopPropagation();
+    // Could add node title editing here
+}
+
+function onDocumentMouseMove(event) {
+    if (!dragging || !dragged) return;
+    
+    event.preventDefault();
+    
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    
+    const offsetX = Number(dragged.dataset.dragOffsetX ?? dragged.offsetWidth / 2);
+    const offsetY = Number(dragged.dataset.dragOffsetY ?? dragged.offsetHeight / 2);
+    
+    // Calculate position relative to parent
+    const parent = dragged.parentNode;
+    const parentRect = parent.getBoundingClientRect();
+    
+    dragged.style.left = (pos3 - parentRect.left - offsetX) + "px";
+    dragged.style.top = (pos4 - parentRect.top - offsetY) + "px";
+    
+    // Update the line during drag
+    updateLine(dragged);
+    
+    // Only show drop preview if node is detached (from menu or detach button)
+    if (detached) {
+        updateDropPreview();
+    }
+}
+
+function updateDropPreview() {
+    if (!dragged || !detached) {
+        clearDropPreview();
+        return;
+    }
+    
+    const pointerX = pos3;
+    const pointerY = pos4;
+    if (!Number.isFinite(pointerX) || !Number.isFinite(pointerY)) return;
+    
+    const targetInfo = findDropTarget(pointerX, pointerY);
+    if (!targetInfo) {
+        clearDropPreview();
+        // Remove all highlights
+        nodesArray.forEach(node => {
+            if (node !== dragged) {
+                node.style.boxShadow = node === selectedNode ? '0 0 0 3px #ffcc00' : '';
+            }
+        });
+        return;
+    }
+    
+    // Highlight target node
+    nodesArray.forEach(node => {
+        if (node === targetInfo.node) {
+            node.style.boxShadow = '0 0 0 3px #4ade80';
+        } else if (node !== dragged && node !== selectedNode) {
+            node.style.boxShadow = '';
+        }
+    });
+    
+    // Draw connection preview
+    if (currentDropTarget === targetInfo.node) {
+        if (dropPreview) {
+            dropPreview.plot(getPreviewPathData(targetInfo.zone, pointerX, pointerY));
+        }
+        return;
+    }
+    
+    currentDropTarget = targetInfo.node;
+    const pathData = getPreviewPathData(targetInfo.zone, pointerX, pointerY);
+    if (!dropPreview) {
+        dropPreview = draw.path(pathData)
+            .fill('none')
+            .stroke({ width: 2, color: '#4ade80', dasharray: '6 4', linecap: 'round' });
+    } else {
+        dropPreview.plot(pathData);
+    }
+}
+
+function clearDropPreview() {
+    if (dropPreview) {
+        dropPreview.remove();
+        dropPreview = null;
+    }
+    currentDropTarget = null;
+}
+
+function getDropZoneRect(node) {
+    const rect = node.getBoundingClientRect();
+    const padding = 10;
+    const width = rect.width * 1.2;
+    const height = rect.height * 2.2;
+    const centerX = rect.left + rect.width / 2;
+    return {
+        left: centerX - width / 2,
+        right: centerX + width / 2,
+        top: rect.bottom + padding,
+        bottom: rect.bottom + padding + height,
+        anchorX: centerX - 200, // Adjust for sidebar for SVG coordinates
+        anchorY: rect.top + rect.height / 2
+    };
+}
+
+function findDropTarget(x, y) {
+    for (const node of nodesArray) {
+        if (!isValidDropTarget(dragged, node)) continue;
+        const zone = getDropZoneRect(node);
+        if (x >= zone.left && x <= zone.right && y >= zone.top && y <= zone.bottom) {
+            return { node, zone };
+        }
+    }
+    return null;
+}
+
+function isValidDropTarget(draggedNode, targetNode) {
+    if (!draggedNode || !targetNode) return false;
+    if (draggedNode === targetNode) return false;
+    if (draggedNode.parentNode === targetNode) return false;
+    if (isDescendant(targetNode, draggedNode)) return false;
+    return canAcceptChild(targetNode);
+}
+
+function getPreviewPathData(zone, pointerX, pointerY) {
+    const midY = (zone.anchorY + pointerY) / 2;
+    // Adjust for sidebar offset  
+    return [
+        ['M', zone.anchorX, zone.anchorY],
+        ['C', zone.anchorX, midY, pointerX - 200, midY, pointerX - 200, pointerY]
+    ];
+}
+
+function onDocumentMouseUp(event) {
+    if (dragging && dragged) {
+        clearDropPreview();
+        
+        const targetInfo = findDropTarget(pos3, pos4);
+        
+        if (targetInfo && detached) {
+            attachNodeToParent(dragged, targetInfo.node);
+        }
+        
+        // Remove all highlights
+        nodesArray.forEach(node => {
+            node.style.boxShadow = node === selectedNode ? '0 0 0 3px #ffcc00' : '';
+        });
+        
+        // Rescan and update
+        scanNodes();
+        updateAllLines();
+        updatePreview();
+    }
+    
+    dragging = false;
+    dragged = null;
+    detached = false;
+    dragFromMenu = false;
+}
+
+function isDescendant(parent, child) {
+    let node = child.parentNode;
+    while (node) {
+        if (node === parent) return true;
+        if (node.id === 'rootnode') break;
+        node = node.parentNode;
+    }
+    return false;
+}
+
+function canAcceptChild(parentNode) {
+    const parentType = parentNode.dataset.type;
+    const typeDef = NODE_TYPES[parentType];
+    if (!typeDef) return false;
+    
+    const currentChildren = Array.from(parentNode.children).filter(child => child.classList.contains('node'));
+    return currentChildren.length < typeDef.maxChildren;
+}
+
+function attachNodeToParent(child, parent) {
+    if (!canAcceptChild(parent)) {
+        document.getElementById("rootnode").appendChild(child);
+        return false;
+    }
+    
+    reparentNodePreservingPosition(child, parent);
+    updateLine(child);
+    updatePreview();
+    return true;
+}
+
+function selectNode(node) {
+    if (selectedNode) {
+        selectedNode.classList.remove('selected');
+    }
+    
+    selectedNode = node;
+    node.classList.add('selected');
+    
+    renderParamPanel(node);
+}
+
+function renderParamPanel(node) {
+    const paramContent = document.getElementById('paramContent');
+    const nodeType = node.dataset.type;
+    const typeDef = NODE_TYPES[nodeType];
+    const params = getNodeParams(node);
+    
+    let html = `<h3>${nodeType}</h3>`;
+    
+    // Geometry/Light parameters
+    if (typeDef.params && Object.keys(typeDef.params).length > 0) {
+        html += '<div class="param-group"><h4>Properties</h4>';
+        for (const [key, def] of Object.entries(typeDef.params)) {
+            html += createParamInput(key, def, params[key]);
+        }
+        html += '</div>';
+    }
+    
+    // Transform parameters BEFORE Material
+    if (typeDef.category === 'mesh' || typeDef.category === 'group') {
+        html += '<div class="param-group"><h4>Transform</h4>';
+        for (const [key, def] of Object.entries(TRANSFORM_PARAMS)) {
+            html += createParamInput(key, def, params[key]);
+        }
+        html += '</div>';
+    }
+    
+    // Material parameters for meshes
+    if (typeDef.category === 'mesh') {
+        html += '<div class="param-group"><h4>Material</h4>';
+        for (const [key, def] of Object.entries(MATERIAL_PARAMS)) {
+            html += createParamInput(key, def, params[key]);
+        }
+        html += '</div>';
+    }
+    
+    // Position for lights
+    if (typeDef.category === 'light') {
+        html += '<div class="param-group"><h4>Position</h4>';
+        html += createParamInput('posX', { type: 'number', min: -20, max: 20, step: 0.1 }, params.posX);
+        html += createParamInput('posY', { type: 'number', min: -20, max: 20, step: 0.1 }, params.posY);
+        html += createParamInput('posZ', { type: 'number', min: -20, max: 20, step: 0.1 }, params.posZ);
+        html += '</div>';
+    }
+    
+    paramContent.innerHTML = html;
+    
+    // Attach event listeners
+    paramContent.querySelectorAll('.param-input').forEach(input => {
+        input.addEventListener('input', onParamChange);
+        input.addEventListener('change', onParamChange);
+    });
+    
+    // Attach fine control button listeners
+    paramContent.querySelectorAll('.param-fine-btn').forEach(btn => {
+        btn.addEventListener('click', onParamChange);
+    });
+}
+
+function createParamInput(key, def, value) {
+    const label = key.replace(/([A-Z])/g, ' $1').trim();
+    
+    if (def.type === 'color') {
+        return `
+            <div class="param-item">
+                <label class="param-label">${label}</label>
+                <input type="color" class="color-input param-input" data-key="${key}" value="${value}">
+            </div>
+        `;
+    } else if (def.type === 'boolean') {
+        return `
+            <div class="param-item">
+                <label class="param-label">
+                    <input type="checkbox" class="param-input" data-key="${key}" ${value ? 'checked' : ''}>
+                    ${label}
+                </label>
+            </div>
+        `;
+    } else if (def.type === 'select') {
+        const options = def.options.map(opt => 
+            `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`
+        ).join('');
+        return `
+            <div class="param-item">
+                <label class="param-label">${label}</label>
+                <select class="param-input" data-key="${key}">${options}</select>
+            </div>
+        `;
+    } else if (def.type === 'number') {
+        // Determine if this is an integer or continuous value
+        const isInteger = def.step === 1 || (def.step && def.step >= 1);
+        const min = def.min ?? 0;
+        const max = def.max ?? 100;
+        const step = def.step ?? (isInteger ? 1 : 0.01);
+        
+        if (isInteger) {
+            // Integer values: just a slider
+            return `
+                <div class="param-slider-container">
+                    <div class="param-slider-label">
+                        <span>${label}</span>
+                        <span class="param-slider-value" data-value-for="${key}">${value}</span>
+                    </div>
+                    <div class="param-slider-row">
+                        <input type="range" class="param-slider param-input" 
+                            data-key="${key}"
+                            value="${value}" 
+                            min="${min}" 
+                            max="${max}" 
+                            step="${step}">
+                    </div>
+                </div>
+            `;
+        } else {
+            // Continuous values: slider + fine control buttons
+            return `
+                <div class="param-slider-container">
+                    <div class="param-slider-label">
+                        <span>${label}</span>
+                        <span class="param-slider-value" data-value-for="${key}">${value.toFixed(2)}</span>
+                    </div>
+                    <div class="param-slider-row">
+                        <input type="range" class="param-slider param-input" 
+                            data-key="${key}"
+                            value="${value}" 
+                            min="${min}" 
+                            max="${max}" 
+                            step="${step}">
+                        <div class="param-fine-control">
+                            <button class="param-fine-btn" data-key="${key}" data-fine="up">▲</button>
+                            <button class="param-fine-btn" data-key="${key}" data-fine="down">▼</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    return '';
+}
+
+function onParamChange(event) {
+    if (!selectedNode) return;
+    
+    const target = event.target;
+    const key = target.dataset.key;
+    const params = getNodeParams(selectedNode);
+    
+    if (target.classList.contains('param-fine-btn')) {
+        // Fine control buttons
+        const direction = target.dataset.fine;
+        const currentValue = parseFloat(params[key]);
+        const step = 0.01; // Fine adjustment step
+        const newValue = direction === 'up' ? currentValue + step : currentValue - step;
+        params[key] = newValue;
+        
+        // Update the slider and value display
+        const slider = document.querySelector(`.param-slider[data-key="${key}"]`);
+        if (slider) slider.value = newValue;
+        const valueDisplay = document.querySelector(`.param-slider-value[data-value-for="${key}"]`);
+        if (valueDisplay) valueDisplay.textContent = newValue.toFixed(2);
+    } else if (target.type === 'checkbox') {
+        params[key] = target.checked;
+    } else if (target.type === 'range') {
+        // Slider
+        const newValue = parseFloat(target.value);
+        params[key] = newValue;
+        
+        // Update value display
+        const valueDisplay = document.querySelector(`.param-slider-value[data-value-for="${key}"]`);
+        if (valueDisplay) {
+            // Check if integer or float
+            const isInteger = Number.isInteger(newValue) && newValue === parseFloat(target.value);
+            valueDisplay.textContent = isInteger ? newValue.toString() : newValue.toFixed(2);
+        }
+    } else if (target.type === 'number') {
+        params[key] = parseFloat(target.value);
+    } else {
+        params[key] = target.value;
+    }
+    
+    setNodeParams(selectedNode, params);
+    updatePreview();
+}
+
+function updatePreview() {
+    // Clear existing objects (but not default lights)
+    previewObjects.forEach(obj => {
+        scene.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+    });
+    previewObjects.clear();
+    
+    // Find scene node
+    const sceneNode = nodesArray.find(n => n.dataset.type === 'Scene');
+    if (!sceneNode) {
+        return;
+    }
+    
+    // Update scene background
+    const sceneParams = getNodeParams(sceneNode);
+    scene.background = new THREE.Color(sceneParams.backgroundColor);
+    
+    // Update fog
+    if (sceneParams.fog) {
+        scene.fog = new THREE.Fog(
+            new THREE.Color(sceneParams.fogColor),
+            sceneParams.fogNear,
+            sceneParams.fogFar
+        );
+    } else {
+        scene.fog = null;
+    }
+    
+    // Build scene hierarchy
+    buildSceneHierarchy(sceneNode);
+}
+
+function buildSceneHierarchy(node, parentObject = scene) {
+    const nodeType = node.dataset.type;
+    const params = getNodeParams(node);
+    
+    let object3D = null;
+    
+    if (nodeType === 'Scene') {
+        // Scene is the root, process children only
+    } else if (nodeType === 'Group') {
+        object3D = new THREE.Group();
+    } else if (NODE_TYPES[nodeType] && NODE_TYPES[nodeType].category === 'mesh') {
+        object3D = createMesh(nodeType, params);
+    } else if (NODE_TYPES[nodeType] && NODE_TYPES[nodeType].category === 'light') {
+        object3D = createLight(nodeType, params);
+    }
+    
+    if (object3D) {
+        // Apply transforms
+        if (params.posX !== undefined) {
+            object3D.position.set(params.posX, params.posY, params.posZ);
+        }
+        if (params.rotX !== undefined) {
+            object3D.rotation.set(
+                params.rotX * Math.PI / 180,
+                params.rotY * Math.PI / 180,
+                params.rotZ * Math.PI / 180
+            );
+        }
+        if (params.scaleX !== undefined) {
+            object3D.scale.set(params.scaleX, params.scaleY, params.scaleZ);
+        }
+        
+        parentObject.add(object3D);
+        previewObjects.set(node.id, object3D);
+    }
+    
+    // Process children
+    const children = Array.from(node.children).filter(child => child.classList.contains('node'));
+    children.forEach(child => {
+        buildSceneHierarchy(child, object3D || parentObject);
+    });
+}
+
+function createMesh(type, params) {
+    let geometry;
+    
+    switch(type) {
+        case 'Box':
+            geometry = new THREE.BoxGeometry(params.width, params.height, params.depth);
+            break;
+        case 'Sphere':
+            geometry = new THREE.SphereGeometry(params.radius, params.widthSegments, params.heightSegments);
+            break;
+        case 'Cylinder':
+            geometry = new THREE.CylinderGeometry(params.radiusTop, params.radiusBottom, params.height, params.radialSegments);
+            break;
+        case 'Cone':
+            geometry = new THREE.ConeGeometry(params.radius, params.height, params.radialSegments);
+            break;
+        case 'Torus':
+            geometry = new THREE.TorusGeometry(params.radius, params.tube, params.radialSegments, params.tubularSegments);
+            break;
+        case 'TorusKnot':
+            geometry = new THREE.TorusKnotGeometry(params.radius, params.tube, params.tubularSegments, params.radialSegments, params.p, params.q);
+            break;
+        case 'Plane':
+            geometry = new THREE.PlaneGeometry(params.width, params.height);
+            break;
+        case 'Dodecahedron':
+            geometry = new THREE.DodecahedronGeometry(params.radius);
+            break;
+        case 'Icosahedron':
+            geometry = new THREE.IcosahedronGeometry(params.radius);
+            break;
+        case 'Octahedron':
+            geometry = new THREE.OctahedronGeometry(params.radius);
+            break;
+        case 'Tetrahedron':
+            geometry = new THREE.TetrahedronGeometry(params.radius);
+            break;
+        default:
+            geometry = new THREE.BoxGeometry(1, 1, 1);
+    }
+    
+    const material = createMaterial(params);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    
+    return mesh;
+}
+
+function createMaterial(params) {
+    const commonProps = {
+        color: new THREE.Color(params.color),
+        wireframe: params.wireframe,
+        transparent: params.transparent,
+        opacity: params.opacity
+    };
+    
+    switch(params.materialType) {
+        case 'basic':
+            return new THREE.MeshBasicMaterial(commonProps);
+        case 'phong':
+            return new THREE.MeshPhongMaterial({
+                ...commonProps,
+                emissive: new THREE.Color(params.emissive),
+                emissiveIntensity: params.emissiveIntensity
+            });
+        case 'physical':
+            return new THREE.MeshPhysicalMaterial({
+                ...commonProps,
+                metalness: params.metalness,
+                roughness: params.roughness,
+                emissive: new THREE.Color(params.emissive),
+                emissiveIntensity: params.emissiveIntensity
+            });
+        case 'standard':
+        default:
+            return new THREE.MeshStandardMaterial({
+                ...commonProps,
+                metalness: params.metalness,
+                roughness: params.roughness,
+                emissive: new THREE.Color(params.emissive),
+                emissiveIntensity: params.emissiveIntensity
+            });
+    }
+}
+
+function createLight(type, params) {
+    let light;
+    
+    switch(type) {
+        case 'AmbientLight':
+            light = new THREE.AmbientLight(params.color, params.intensity);
+            break;
+        case 'DirectionalLight':
+            light = new THREE.DirectionalLight(params.color, params.intensity);
+            light.castShadow = params.castShadow;
+            if (params.castShadow) {
+                light.shadow.mapSize.width = 1024;
+                light.shadow.mapSize.height = 1024;
+            }
+            break;
+        case 'PointLight':
+            light = new THREE.PointLight(params.color, params.intensity, params.distance, params.decay);
+            light.castShadow = params.castShadow;
+            break;
+        case 'SpotLight':
+            light = new THREE.SpotLight(params.color, params.intensity, params.distance, params.angle, params.penumbra, params.decay);
+            light.castShadow = params.castShadow;
+            break;
+        case 'HemisphereLight':
+            light = new THREE.HemisphereLight(params.skyColor, params.groundColor, params.intensity);
+            break;
+        default:
+            light = new THREE.AmbientLight(0xffffff, 0.5);
+    }
+    
+    return light;
+}
+
+function generateCode() {
+    const sceneNode = nodesArray.find(n => n.dataset.type === 'Scene');
+    if (!sceneNode) {
+        alert('No scene found!');
+        return;
+    }
+    
+    let code = '<!DOCTYPE html>\n';
+    code += '<html>\n';
+    code += '<head>\n';
+    code += '    <meta charset="UTF-8">\n';
+    code += '    <title>Three.js Scene</title>\n';
+    code += '    <style>\n';
+    code += '        body { margin: 0; overflow: hidden; }\n';
+    code += '        canvas { display: block; }\n';
+    code += '    </style>\n';
+    code += '</head>\n';
+    code += '<body>\n';
+    code += '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></sc' + 'ript>\n';
+    code += '<sc' + 'ript>\n';
+    code += '// Scene setup\n';
+    code += 'const scene = new THREE.Scene();\n';
+    
+    const sceneParams = getNodeParams(sceneNode);
+    code += 'scene.background = new THREE.Color(' + JSON.stringify(sceneParams.backgroundColor) + ');\n';
+    
+    if (sceneParams.fog) {
+        code += 'scene.fog = new THREE.Fog(' + JSON.stringify(sceneParams.fogColor) + ', ' + sceneParams.fogNear + ', ' + sceneParams.fogFar + ');\n';
+    }
+    
+    code += '\n// Camera\n';
+    code += 'const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);\n';
+    code += 'camera.position.set(5, 5, 5);\n';
+    code += 'camera.lookAt(0, 0, 0);\n';
+    code += '\n';
+    code += '// Renderer\n';
+    code += 'const renderer = new THREE.WebGLRenderer({ antialias: true });\n';
+    code += 'renderer.setSize(window.innerWidth, window.innerHeight);\n';
+    code += 'renderer.shadowMap.enabled = true;\n';
+    code += 'renderer.shadowMap.type = THREE.PCFSoftShadowMap;\n';
+    code += 'document.body.appendChild(renderer.domElement);\n';
+    code += '\n';
+    code += '// Handle window resize\n';
+    code += 'window.addEventListener(\'resize\', () => {\n';
+    code += '    camera.aspect = window.innerWidth / window.innerHeight;\n';
+    code += '    camera.updateProjectionMatrix();\n';
+    code += '    renderer.setSize(window.innerWidth, window.innerHeight);\n';
+    code += '});\n';
+    code += '\n';
+    
+    // Generate scene hierarchy
+    let objectCounter = 0;
+    const objectMap = new Map();
+    
+    function generateNodeCode(node, parentVarName = 'scene', indent = '') {
+        const nodeType = node.dataset.type;
+        const params = getNodeParams(node);
+        
+        if (nodeType === 'Scene') {
+            // Skip, already handled
+        } else {
+            const varName = `obj${objectCounter++}`;
+            objectMap.set(node.id, varName);
+            
+            if (nodeType === 'Group') {
+                code += `${indent}const ${varName} = new THREE.Group();\n`;
+            } else if (NODE_TYPES[nodeType].category === 'mesh') {
+                code += generateMeshCode(nodeType, params, varName, indent);
+            } else if (NODE_TYPES[nodeType].category === 'light') {
+                code += generateLightCode(nodeType, params, varName, indent);
+            }
+            
+            // Apply transforms
+            if (params.posX !== undefined) {
+                code += `${indent}${varName}.position.set(${params.posX}, ${params.posY}, ${params.posZ});\n`;
+            }
+            if (params.rotX !== undefined) {
+                code += `${indent}${varName}.rotation.set(${params.rotX * Math.PI / 180}, ${params.rotY * Math.PI / 180}, ${params.rotZ * Math.PI / 180});\n`;
+            }
+            if (params.scaleX !== undefined) {
+                code += `${indent}${varName}.scale.set(${params.scaleX}, ${params.scaleY}, ${params.scaleZ});\n`;
+            }
+            
+            code += `${indent}${parentVarName}.add(${varName});\n\n`;
+            
+            parentVarName = varName;
+        }
+        
+        // Process children
+        const children = Array.from(node.children).filter(child => child.classList.contains('node'));
+        children.forEach(child => {
+            generateNodeCode(child, parentVarName, indent);
+        });
+    }
+    
+    generateNodeCode(sceneNode);
+    
+    code += '// Animation loop\n';
+    code += 'function animate() {\n';
+    code += '    requestAnimationFrame(animate);\n';
+    code += '    renderer.render(scene, camera);\n';
+    code += '}\n';
+    code += 'animate();\n';
+    code += '</sc' + 'ript>\n';
+    code += '</body>\n';
+    code += '</html>';
+    
+    document.getElementById('codeText').textContent = code;
+    document.getElementById('codeOutput').style.display = 'block';
+    document.getElementById('generateCodeBtn').style.display = 'none';
+    document.getElementById('closeCodeBtn').style.display = 'block';
+}
+
+function generateMeshCode(type, params, varName, indent) {
+    let code = '';
+    let geomCode = '';
+    
+    switch(type) {
+        case 'Box':
+            geomCode = `new THREE.BoxGeometry(${params.width}, ${params.height}, ${params.depth})`;
+            break;
+        case 'Sphere':
+            geomCode = `new THREE.SphereGeometry(${params.radius}, ${params.widthSegments}, ${params.heightSegments})`;
+            break;
+        case 'Cylinder':
+            geomCode = `new THREE.CylinderGeometry(${params.radiusTop}, ${params.radiusBottom}, ${params.height}, ${params.radialSegments})`;
+            break;
+        case 'Cone':
+            geomCode = `new THREE.ConeGeometry(${params.radius}, ${params.height}, ${params.radialSegments})`;
+            break;
+        case 'Torus':
+            geomCode = `new THREE.TorusGeometry(${params.radius}, ${params.tube}, ${params.radialSegments}, ${params.tubularSegments})`;
+            break;
+        case 'TorusKnot':
+            geomCode = `new THREE.TorusKnotGeometry(${params.radius}, ${params.tube}, ${params.tubularSegments}, ${params.radialSegments}, ${params.p}, ${params.q})`;
+            break;
+        case 'Plane':
+            geomCode = `new THREE.PlaneGeometry(${params.width}, ${params.height})`;
+            break;
+        case 'Dodecahedron':
+            geomCode = `new THREE.DodecahedronGeometry(${params.radius})`;
+            break;
+        case 'Icosahedron':
+            geomCode = `new THREE.IcosahedronGeometry(${params.radius})`;
+            break;
+        case 'Octahedron':
+            geomCode = `new THREE.OctahedronGeometry(${params.radius})`;
+            break;
+        case 'Tetrahedron':
+            geomCode = `new THREE.TetrahedronGeometry(${params.radius})`;
+            break;
+    }
+    
+    let matType = 'MeshStandardMaterial';
+    switch(params.materialType) {
+        case 'basic': matType = 'MeshBasicMaterial'; break;
+        case 'phong': matType = 'MeshPhongMaterial'; break;
+        case 'physical': matType = 'MeshPhysicalMaterial'; break;
+    }
+    
+    code += `${indent}const ${varName} = new THREE.Mesh(\n`;
+    code += `${indent}    ${geomCode},\n`;
+    code += `${indent}    new THREE.${matType}({\n`;
+    code += `${indent}        color: ${JSON.stringify(params.color)},\n`;
+    
+    if (params.materialType !== 'basic') {
+        if (params.metalness !== undefined) {
+            code += `${indent}        metalness: ${params.metalness},\n`;
+            code += `${indent}        roughness: ${params.roughness},\n`;
+        }
+        code += `${indent}        emissive: ${JSON.stringify(params.emissive)},\n`;
+        code += `${indent}        emissiveIntensity: ${params.emissiveIntensity},\n`;
+    }
+    
+    code += `${indent}        wireframe: ${params.wireframe},\n`;
+    code += `${indent}        transparent: ${params.transparent},\n`;
+    code += `${indent}        opacity: ${params.opacity}\n`;
+    code += `${indent}    })\n`;
+    code += `${indent});\n`;
+    code += `${indent}${varName}.castShadow = true;\n`;
+    code += `${indent}${varName}.receiveShadow = true;\n`;
+    
+    return code;
+}
+
+function generateLightCode(type, params, varName, indent) {
+    let code = '';
+    
+    switch(type) {
+        case 'AmbientLight':
+            code += `${indent}const ${varName} = new THREE.AmbientLight(${JSON.stringify(params.color)}, ${params.intensity});\n`;
+            break;
+        case 'DirectionalLight':
+            code += `${indent}const ${varName} = new THREE.DirectionalLight(${JSON.stringify(params.color)}, ${params.intensity});\n`;
+            code += `${indent}${varName}.castShadow = ${params.castShadow};\n`;
+            break;
+        case 'PointLight':
+            code += `${indent}const ${varName} = new THREE.PointLight(${JSON.stringify(params.color)}, ${params.intensity}, ${params.distance}, ${params.decay});\n`;
+            code += `${indent}${varName}.castShadow = ${params.castShadow};\n`;
+            break;
+        case 'SpotLight':
+            code += `${indent}const ${varName} = new THREE.SpotLight(${JSON.stringify(params.color)}, ${params.intensity}, ${params.distance}, ${params.angle}, ${params.penumbra}, ${params.decay});\n`;
+            code += `${indent}${varName}.castShadow = ${params.castShadow};\n`;
+            break;
+        case 'HemisphereLight':
+            code += `${indent}const ${varName} = new THREE.HemisphereLight(${JSON.stringify(params.skyColor)}, ${JSON.stringify(params.groundColor)}, ${params.intensity});\n`;
+            break;
+    }
+    
+    return code;
+}
+
+function closeCodeView() {
+    document.getElementById('codeOutput').style.display = 'none';
+    document.getElementById('generateCodeBtn').style.display = 'block';
+    document.getElementById('closeCodeBtn').style.display = 'none';
+}
+
+// End of script
+</script>
+</body>
+</html>
