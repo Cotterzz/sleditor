@@ -321,10 +321,12 @@
     padding: 6px 12px;
     border-radius: 8px;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     z-index: 120;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    max-width: 800px;
 }
 
 #previewControls label {
@@ -395,6 +397,19 @@
 
 .palette-swatch.disabled {
     opacity: 0.35;
+}
+
+#previewControls .sdf-slice-control {
+    display: none;
+}
+
+#previewControls .sdf-slice-control.visible {
+    display: flex;
+}
+
+#sdfSliceLabel {
+    min-width: 30px;
+    text-align: right;
 }
 
 .preview-fps {
@@ -610,6 +625,15 @@
             <option value="normal">Normals</option>
             <option value="depth">Depth</option>
         </select>
+    </div>
+    <label class="auto-toggle">
+        <input type="checkbox" id="sdfSliceToggle">
+        SDF Slice
+    </label>
+    <div class="mode-select sdf-slice-control">
+        <span>Z Depth</span>
+        <input type="range" id="sdfSliceSlider" min="-5" max="5" step="0.1" value="0" style="width: 80px;">
+        <span id="sdfSliceLabel">0.0</span>
     </div>
     <span class="preview-fps" id="previewFps">FPS: --</span>
 </div>
@@ -992,6 +1016,10 @@ let outlineEnabled = false;
 let outlineMode = 'single'; // 'single' or 'dual'
 let mainRaymarchSteps = 100;
 let outlineRaymarchSteps = 60;
+
+// SDF Slice visualization state
+let sdfSliceEnabled = false;
+let sdfSliceZ = 0.0;
 
 // Camera state for preview orbit controls
 const CAMERA_STATE = {
@@ -1495,6 +1523,32 @@ function setupEventListeners() {
             updatePreviewUniforms(); // Update via uniform, no recompile needed
         });
         outlineRaymarchSteps = parseInt(outlineStepsInput.value);
+    }
+    
+    // SDF Slice visualization controls
+    const sdfSliceToggle = document.getElementById('sdfSliceToggle');
+    const sdfSliceSlider = document.getElementById('sdfSliceSlider');
+    const sdfSliceLabel = document.getElementById('sdfSliceLabel');
+    const sdfSliceControl = document.querySelector('.sdf-slice-control');
+    
+    if (sdfSliceToggle) {
+        sdfSliceToggle.addEventListener('change', (event) => {
+            sdfSliceEnabled = !!event.target.checked;
+            if (sdfSliceControl) {
+                sdfSliceControl.classList.toggle('visible', sdfSliceEnabled);
+            }
+            updatePreviewUniforms();
+        });
+    }
+    
+    if (sdfSliceSlider) {
+        sdfSliceSlider.addEventListener('input', (event) => {
+            sdfSliceZ = parseFloat(event.target.value);
+            if (sdfSliceLabel) {
+                sdfSliceLabel.textContent = sdfSliceZ.toFixed(1);
+            }
+            updatePreviewUniforms();
+        });
     }
 }
 
@@ -2874,6 +2928,8 @@ function generatePreviewGLSL() {
     code += '\n// Selection tracking\n';
     code += 'uniform int u_selectedID;\n';
     code += 'uniform bool u_outlineEnabled;\n';
+    code += 'uniform bool u_sdfSliceEnabled;\n';
+    code += 'uniform float u_sdfSliceZ;\n';
     code += 'int g_lastID = 0;\n';
     code += 'float distToSelected = 1e20;\n';
     code += 'float g_lastDepth = 0.0;\n'; // Track depth from object center for current surface
@@ -3741,6 +3797,67 @@ function createShaderProgram(sdfCode) {
                 col = vec3(1.0, 0.8, 0.0);
             }
             
+            // SDF Slice visualization
+            if (u_sdfSliceEnabled) {
+                // Calculate intersection with Z plane
+                float planeZ = u_sdfSliceZ;
+                float tPlane = (planeZ - ro.z) / rd.z;
+                
+                if (tPlane > 0.0 && (tPlane < t || col == background)) {
+                    vec3 planePoint = ro + rd * tPlane;
+                    
+                    // Only render within a reasonable bounds
+                    if (abs(planePoint.x) < 10.0 && abs(planePoint.y) < 10.0) {
+                        float sdfValue = sceneSDF(planePoint);
+                        
+                        // Create distance field visualization
+                        float absD = abs(sdfValue);
+                        
+                        // Contour lines - rings at regular intervals (closer together)
+                        float lineSpacing = 0.1;
+                        float lineWidth = 0.008;
+                        float contour = abs(mod(absD + lineSpacing * 0.5, lineSpacing) - lineSpacing * 0.5);
+                        float line = 1.0 - smoothstep(0.0, lineWidth, contour);
+                        
+                        // Color based on distance with gradient
+                        vec3 sliceColor;
+                        if (sdfValue < 0.0) {
+                            // Inside - blue tones (darker blue for deeper inside)
+                            float depth = clamp(-sdfValue / 2.0, 0.0, 1.0);
+                            vec3 lightBlue = vec3(0.3, 0.5, 0.9);
+                            vec3 darkBlue = vec3(0.1, 0.1, 0.4);
+                            sliceColor = mix(lightBlue, darkBlue, depth);
+                        } else {
+                            // Outside - gradient: red (close) -> orange -> yellow -> green (far)
+                            float dist = clamp(sdfValue / 2.0, 0.0, 1.0);
+                            vec3 red = vec3(0.9, 0.2, 0.1);
+                            vec3 orange = vec3(0.95, 0.5, 0.1);
+                            vec3 yellow = vec3(0.95, 0.9, 0.2);
+                            vec3 green = vec3(0.2, 0.8, 0.3);
+                            
+                            if (dist < 0.33) {
+                                sliceColor = mix(red, orange, dist * 3.0);
+                            } else if (dist < 0.66) {
+                                sliceColor = mix(orange, yellow, (dist - 0.33) * 3.0);
+                            } else {
+                                sliceColor = mix(yellow, green, (dist - 0.66) * 3.0);
+                            }
+                        }
+                        
+                        // Make lines brighter/white-ish
+                        sliceColor = mix(sliceColor, vec3(1.0), line * 0.7);
+                        
+                        // Zero crossing - bright white line
+                        float zeroCrossing = 1.0 - smoothstep(0.0, 0.015, absD);
+                        sliceColor = mix(sliceColor, vec3(1.0), zeroCrossing);
+                        
+                        // Blend with scene (20% opacity for slice, more for lines)
+                        float sliceAlpha = 0.2 + line * 0.3 + zeroCrossing * 0.5;
+                        col = mix(col, sliceColor, sliceAlpha);
+                    }
+                }
+            }
+            
             gl_FragColor = vec4(col, 1.0);
         }
     `;
@@ -3812,6 +3929,8 @@ function cacheUniformLocations() {
     uniformLocations['u_outlineMode'] = gl.getUniformLocation(program, 'u_outlineMode');
     uniformLocations['u_mainSteps'] = gl.getUniformLocation(program, 'u_mainSteps');
     uniformLocations['u_outlineSteps'] = gl.getUniformLocation(program, 'u_outlineSteps');
+    uniformLocations['u_sdfSliceEnabled'] = gl.getUniformLocation(program, 'u_sdfSliceEnabled');
+    uniformLocations['u_sdfSliceZ'] = gl.getUniformLocation(program, 'u_sdfSliceZ');
     
     perfLogDuration('cacheUniformLocations', t0, `uniforms=${uniformCount}`);
 }
@@ -3919,6 +4038,16 @@ function applyRenderModeUniforms() {
         const selectedNode = document.querySelector('.node.selected');
         const selectedID = selectedNode && nodeIdMap.has(selectedNode) ? nodeIdMap.get(selectedNode) : 0;
         gl.uniform1i(selectedIDLoc, selectedID);
+    }
+    
+    // Update SDF slice uniforms
+    const sdfSliceEnabledLoc = uniformLocations['u_sdfSliceEnabled'];
+    if (sdfSliceEnabledLoc) {
+        gl.uniform1i(sdfSliceEnabledLoc, sdfSliceEnabled ? 1 : 0);
+    }
+    const sdfSliceZLoc = uniformLocations['u_sdfSliceZ'];
+    if (sdfSliceZLoc) {
+        gl.uniform1f(sdfSliceZLoc, sdfSliceZ);
     }
 }
 
