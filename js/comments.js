@@ -122,20 +122,32 @@ function renderComment(comment, depth) {
     `;
     commentDiv.dataset.commentId = comment.id;
 
-    // Header (username, timestamp, actions)
+    // Header (avatar, username, timestamp, actions)
     const header = document.createElement('div');
     header.style.cssText = 'display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;';
     
     const userInfo = document.createElement('div');
     userInfo.style.cssText = 'display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-secondary);';
     
+    // Avatar
+    const avatar = document.createElement('img');
+    const displayName = comment.user_display_name || 'Anonymous';
+    avatar.src = comment.user_avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&size=32`;
+    avatar.alt = displayName;
+    avatar.style.cssText = 'width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-color); object-fit: cover;';
+    avatar.onerror = () => {
+        // Fallback if avatar fails to load
+        avatar.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&size=32`;
+    };
+    
     const username = document.createElement('span');
     username.style.cssText = 'font-weight: 500; color: var(--text-primary);';
-    username.textContent = comment.user_display_name || 'Anonymous';
+    username.textContent = displayName;
     
     const timestamp = document.createElement('span');
     timestamp.textContent = formatTimestamp(comment.created_at);
     
+    userInfo.appendChild(avatar);
     userInfo.appendChild(username);
     userInfo.appendChild(timestamp);
     header.appendChild(userInfo);
