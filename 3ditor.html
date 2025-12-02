@@ -333,7 +333,7 @@
             position: fixed;
             left: 200px;
             top: 0;
-            right: 280px;
+            right: 340px;
             bottom: 0;
             background: #1a202c;
             color: #a0aec0;
@@ -342,11 +342,82 @@
             z-index: 200;
         }
 
+        #codeOutput .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #4a5568;
+        }
+
+        #codeOutput .code-header h2 {
+            margin: 0;
+            color: #63b3ed;
+            font-size: 18px;
+        }
+
+        #codeOutput .code-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        #codeOutput .code-btn {
+            padding: 8px 16px;
+            background: #4a5568;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Abel', sans-serif;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        #codeOutput .code-btn:hover {
+            background: #63b3ed;
+        }
+
+        #codeOutput .code-btn.primary {
+            background: #667eea;
+        }
+
+        #codeOutput .code-btn.primary:hover {
+            background: #5a67d8;
+        }
+
         #codeOutput pre {
             font-family: 'Source Code Pro', monospace;
             font-size: 13px;
             margin: 0;
             white-space: pre-wrap;
+            user-select: text;
+            cursor: text;
+            background: #2d3748;
+            padding: 15px;
+            border-radius: 5px;
+        }
+
+        .copy-notification {
+            position: fixed;
+            top: 20px;
+            right: 360px;
+            background: #48bb78;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 5px;
+            font-family: 'Abel', sans-serif;
+            font-size: 14px;
+            z-index: 300;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+        }
+
+        .copy-notification.show {
+            opacity: 1;
+            transform: translateY(0);
         }
 
         .control-buttons {
@@ -431,11 +502,22 @@
 
 <div class="control-buttons">
     <button id="generateCodeBtn">Generate Code</button>
-    <button id="closeCodeBtn" style="display: none;">Back to Editor</button>
 </div>
 
 <div id="codeOutput">
+    <div class="code-header">
+        <h2>Generated Code</h2>
+        <div class="code-buttons">
+            <button class="code-btn" id="copyCodeBtn">Copy to Clipboard</button>
+            <button class="code-btn" id="downloadCodeBtn">Download HTML</button>
+            <button class="code-btn primary" id="closeCodeBtn">Close</button>
+        </div>
+    </div>
     <pre id="codeText"></pre>
+</div>
+
+<div class="copy-notification" id="copyNotification">
+    ✓ Code copied to clipboard!
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.7.1/svg.min.js"></script>
@@ -869,7 +951,7 @@ function initThreeJS() {
             const deltaY = e.clientY - prevMouseY;
             
             cameraRotationY -= deltaX * 0.005;
-            cameraRotationX -= deltaY * 0.005;
+            cameraRotationX += deltaY * 0.005; // REVERSED Y (was -=)
             cameraRotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraRotationX));
             
             const distance = 10;
@@ -930,7 +1012,13 @@ function setupEventListeners() {
     document.addEventListener('mousemove', onDocumentMouseMove);
     
     document.getElementById('generateCodeBtn').addEventListener('click', generateCode);
-    document.getElementById('closeCodeBtn').addEventListener('click', closeCodeView);
+    
+    // Code output buttons (will be added after code is generated)
+    document.addEventListener('click', (e) => {
+        if (e.target.id === 'closeCodeBtn') closeCodeView();
+        if (e.target.id === 'copyCodeBtn') copyCodeToClipboard();
+        if (e.target.id === 'downloadCodeBtn') downloadCode();
+    });
 }
 
 function onMenuItemMouseDown(event) {
@@ -1642,6 +1730,7 @@ function generateCode() {
     code += '</head>\n';
     code += '<body>\n';
     code += '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></sc' + 'ript>\n';
+    code += '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></sc' + 'ript>\n';
     code += '<sc' + 'ript>\n';
     code += '// Scene setup\n';
     code += 'const scene = new THREE.Scene();\n';
@@ -1665,6 +1754,14 @@ function generateCode() {
     code += 'renderer.shadowMap.type = THREE.PCFSoftShadowMap;\n';
     code += 'document.body.appendChild(renderer.domElement);\n';
     code += '\n';
+    code += '// OrbitControls\n';
+    code += 'const controls = new THREE.OrbitControls(camera, renderer.domElement);\n';
+    code += 'controls.enableDamping = true;\n';
+    code += 'controls.dampingFactor = 0.05;\n';
+    code += 'controls.screenSpacePanning = false;\n';
+    code += 'controls.minDistance = 2;\n';
+    code += 'controls.maxDistance = 50;\n';
+    code += '\n';
     code += '// Handle window resize\n';
     code += 'window.addEventListener(\'resize\', () => {\n';
     code += '    camera.aspect = window.innerWidth / window.innerHeight;\n';
@@ -1676,6 +1773,7 @@ function generateCode() {
     // Generate scene hierarchy
     let objectCounter = 0;
     const objectMap = new Map();
+    let hasLights = false;
     
     function generateNodeCode(node, parentVarName = 'scene', indent = '') {
         const nodeType = node.dataset.type;
@@ -1692,6 +1790,7 @@ function generateCode() {
             } else if (NODE_TYPES[nodeType].category === 'mesh') {
                 code += generateMeshCode(nodeType, params, varName, indent);
             } else if (NODE_TYPES[nodeType].category === 'light') {
+                hasLights = true;
                 code += generateLightCode(nodeType, params, varName, indent);
             }
             
@@ -1720,9 +1819,21 @@ function generateCode() {
     
     generateNodeCode(sceneNode);
     
+    // Add default lights if no lights were added by user
+    if (!hasLights) {
+        code += '// Default lights (auto-added)\n';
+        code += 'const defaultAmbient = new THREE.AmbientLight(0xffffff, 0.5);\n';
+        code += 'scene.add(defaultAmbient);\n';
+        code += 'const defaultDirectional = new THREE.DirectionalLight(0xffffff, 0.8);\n';
+        code += 'defaultDirectional.position.set(5, 10, 7);\n';
+        code += 'defaultDirectional.castShadow = true;\n';
+        code += 'scene.add(defaultDirectional);\n\n';
+    }
+    
     code += '// Animation loop\n';
     code += 'function animate() {\n';
     code += '    requestAnimationFrame(animate);\n';
+    code += '    controls.update();\n';
     code += '    renderer.render(scene, camera);\n';
     code += '}\n';
     code += 'animate();\n';
@@ -1730,10 +1841,15 @@ function generateCode() {
     code += '</body>\n';
     code += '</html>';
     
+    // Store the generated code globally for copying/downloading
+    window.generatedCode = code;
+    
+    // Display the code
     document.getElementById('codeText').textContent = code;
     document.getElementById('codeOutput').style.display = 'block';
-    document.getElementById('generateCodeBtn').style.display = 'none';
-    document.getElementById('closeCodeBtn').style.display = 'block';
+    
+    // Auto-copy to clipboard
+    copyCodeToClipboard();
 }
 
 function generateMeshCode(type, params, varName, indent) {
@@ -1837,8 +1953,37 @@ function generateLightCode(type, params, varName, indent) {
 
 function closeCodeView() {
     document.getElementById('codeOutput').style.display = 'none';
-    document.getElementById('generateCodeBtn').style.display = 'block';
-    document.getElementById('closeCodeBtn').style.display = 'none';
+}
+
+function copyCodeToClipboard() {
+    const code = window.generatedCode || document.getElementById('codeText').textContent;
+    
+    navigator.clipboard.writeText(code).then(() => {
+        // Show notification
+        const notification = document.getElementById('copyNotification');
+        notification.classList.add('show');
+        
+        setTimeout(() => {
+            notification.classList.remove('show');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        alert('Failed to copy to clipboard. Please select and copy manually.');
+    });
+}
+
+function downloadCode() {
+    const code = window.generatedCode || document.getElementById('codeText').textContent;
+    const blob = new Blob([code], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'threejs-scene.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // End of script
