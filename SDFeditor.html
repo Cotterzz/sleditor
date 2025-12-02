@@ -450,6 +450,60 @@
     opacity: 0.4;
     cursor: default;
 }
+
+.edit-collapsed-controls {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    padding: 10px 20px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    z-index: 200;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    font-family: 'Abel', sans-serif;
+    color: white;
+}
+
+.edit-collapsed-controls.hidden {
+    display: none;
+}
+
+.edit-collapsed-controls .edit-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-family: 'Abel', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+}
+
+.edit-collapsed-controls .edit-btn.save {
+    background: #48bb78;
+    color: white;
+}
+
+.edit-collapsed-controls .edit-btn.save:hover {
+    background: #38a169;
+}
+
+.edit-collapsed-controls .edit-btn.cancel {
+    background: #718096;
+    color: white;
+}
+
+.edit-collapsed-controls .edit-btn.cancel:hover {
+    background: #4a5568;
+}
+
+#editCollapsedLabel {
+    font-size: 14px;
+}
+
         #sidebarControls {
             margin-bottom: 20px;
         }
@@ -638,6 +692,12 @@
     <span class="preview-fps" id="previewFps">FPS: --</span>
 </div>
 <button id="recompileButton" title="Recompile Preview">⟳</button>
+
+<div id="editCollapsedControls" class="edit-collapsed-controls hidden">
+    <span id="editCollapsedLabel">Editing: <strong id="editCollapsedName"></strong></span>
+    <button id="saveCollapsedBtn" class="edit-btn save">Save Changes</button>
+    <button id="cancelCollapsedBtn" class="edit-btn cancel">Cancel</button>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.7.1/svg.min.js"></script>
 <script>
@@ -977,11 +1037,16 @@ let selectedNode = null;
 let nodeCounter = 0;
 
 // Collapsed primitives storage
-let collapsedPrimitives = {}; // { 'Collapsed_123': { code, displayName, boundingRadius } }
+let collapsedPrimitives = {}; // { 'Collapsed_123': { code, displayName, boundingRadius, nodeTree } }
 let collapsedCounter = 0;
 let collapseHintElement = null;
 const saveGraphButton = document.getElementById('saveGraphButton');
 const LOCAL_STORAGE_KEY = 'sdfEditorState';
+
+// Collapsed node editing state
+let editingCollapsedId = null;
+let savedGraphStateForEdit = null;
+let hiddenCollapsedTypes = new Set(); // Types hidden during edit to prevent recursion
 
 let dropPreview = null;
 let currentDropTarget = null;
@@ -1550,6 +1615,26 @@ function setupEventListeners() {
             updatePreviewUniforms();
         });
     }
+    
+    // Collapsed node editing buttons
+    const saveCollapsedBtn = document.getElementById('saveCollapsedBtn');
+    const cancelCollapsedBtn = document.getElementById('cancelCollapsedBtn');
+    if (saveCollapsedBtn) {
+        saveCollapsedBtn.addEventListener('click', saveCollapsedEdit);
+    }
+    if (cancelCollapsedBtn) {
+        cancelCollapsedBtn.addEventListener('click', cancelCollapsedEdit);
+    }
+    
+    // Double-click on collapsed nodes to edit them
+    document.getElementById('rootnode').addEventListener('dblclick', (event) => {
+        const node = event.target.closest('.node');
+        if (!node) return;
+        const nodeType = node.dataset.type;
+        if (nodeType && nodeType.startsWith('Collapsed_')) {
+            handleCollapsedNodeDoubleClick(event);
+        }
+    });
 }
 
 function onMenuItemMouseDown(event) {
@@ -1725,8 +1810,8 @@ function updateCameraDrag(x, y) {
         CAMERA_STATE.target.y += (dy * panScale) * up.y;
         CAMERA_STATE.target.z += (dy * panScale) * up.z;
     }
-        updateCameraUniforms();
-        renderPreview();
+    updateCameraUniforms();
+    // Don't call renderPreview() - animation loop already handles it
 }
 
 function endCameraDrag() {
@@ -1740,7 +1825,7 @@ function handleCameraWheel(event) {
     const zoomFactor = Math.exp(event.deltaY * 0.001);
     CAMERA_STATE.distance = clamp(CAMERA_STATE.distance * zoomFactor, 0.8, 50);
     updateCameraUniforms();
-    renderPreview();
+    // Don't call renderPreview() - animation loop already handles it
 }
 
 function isStageInteractionTarget(target) {
@@ -2330,6 +2415,9 @@ function collapseNodeToPrimitive(node) {
     // Generate unique ID
     const collapsedId = 'Collapsed_' + (++collapsedCounter);
     
+    // Serialize the node tree BEFORE generating code (so we can edit it later)
+    const nodeTree = serializeNodeTree(node);
+    
     // Generate SDF code for this subtree
     resetExportVarCounters();
     const sdfCode = generateExportNodeCode(node, 'p');
@@ -2345,11 +2433,12 @@ ${sdfCode}    return ${returnVar};
     // Calculate bounding radius
     const boundingRadius = calculateBoundForNode(node);
     
-    // Store collapsed primitive
+    // Store collapsed primitive (including node tree for editing)
     collapsedPrimitives[collapsedId] = {
         code: functionCode,
         displayName: displayName,
-        boundingRadius: boundingRadius
+        boundingRadius: boundingRadius,
+        nodeTree: nodeTree
     };
     
     // Add to NODE_TYPES
@@ -2499,6 +2588,14 @@ function handleNodeTitleDoubleClick(event) {
     if (event.target.classList && event.target.classList.contains('nodetitleinput')) return;
     const node = event.target.closest && event.target.closest('.node');
     if (!node || node.dataset.type === 'Scene') return;
+    
+    // If it's a collapsed node, edit it instead of collapsing
+    const nodeType = node.dataset.type;
+    if (nodeType && nodeType.startsWith('Collapsed_')) {
+        handleCollapsedNodeDoubleClick(event);
+        return;
+    }
+    
     event.preventDefault();
     event.stopPropagation();
     initiateCollapseWithRename(node, { showHint: false });
@@ -2536,7 +2633,7 @@ function addCollapsedPrimitiveToMenu(collapsedId) {
         return;
     }
     const menuItem = document.createElement('div');
-    menuItem.className = 'menu-item primitive';
+    menuItem.className = 'menu-item primitive collapsed-menu-item';
     menuItem.dataset.type = collapsedId;
     menuItem.textContent = data.displayName || collapsedId;
     menuItem.style.fontStyle = 'italic';
@@ -2548,6 +2645,280 @@ function addCollapsedPrimitiveToMenu(collapsedId) {
         primitivesHeader.parentNode.appendChild(menuItem);
     }
     menuItem.addEventListener('mousedown', onMenuItemMouseDown, false);
+    menuItem.addEventListener('dblclick', onCollapsedMenuItemDblClick, false);
+}
+
+function onCollapsedMenuItemDblClick(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const menuItem = event.target;
+    const collapsedId = menuItem.dataset.type;
+    if (!collapsedId || !collapsedId.startsWith('Collapsed_')) return;
+    
+    const data = collapsedPrimitives[collapsedId];
+    const displayName = data ? data.displayName : collapsedId;
+    
+    // Check if any instances exist in the current scene
+    const instances = document.querySelectorAll(`.node[data-type="${collapsedId}"]`);
+    let confirmMsg = `Delete custom node "${displayName}"?`;
+    if (instances.length > 0) {
+        confirmMsg += `\n\nWarning: ${instances.length} instance(s) in your scene will be removed.`;
+    }
+    
+    if (!confirm(confirmMsg)) return;
+    
+    // Remove all instances from scene
+    instances.forEach(node => {
+        removeNodeFromGraph(node);
+    });
+    
+    // Remove from collapsedPrimitives
+    delete collapsedPrimitives[collapsedId];
+    
+    // Remove from NODE_TYPES
+    delete NODE_TYPES[collapsedId];
+    
+    // Remove menu item
+    menuItem.remove();
+    
+    // Rebuild lines and recompile
+    draw.clear();
+    lines = [];
+    addLines();
+    recompilePreview();
+    handleGraphChanged();
+    
+    console.log('[SDF] Deleted collapsed node:', collapsedId);
+}
+
+// ========================
+// COLLAPSED NODE EDITING
+// ========================
+
+function findCollapsedNodesUsing(targetId, visited = new Set()) {
+    // Find all collapsed nodes that reference targetId (directly or indirectly)
+    const result = new Set();
+    if (visited.has(targetId)) return result;
+    visited.add(targetId);
+    
+    for (const [id, data] of Object.entries(collapsedPrimitives)) {
+        if (!data.nodeTree) continue;
+        if (nodeTreeContainsType(data.nodeTree, targetId)) {
+            result.add(id);
+            // Recursively find nodes that use this one
+            const indirect = findCollapsedNodesUsing(id, visited);
+            indirect.forEach(x => result.add(x));
+        }
+    }
+    return result;
+}
+
+function nodeTreeContainsType(tree, typeName) {
+    if (!tree) return false;
+    if (tree.type === typeName) return true;
+    if (tree.children) {
+        for (const child of tree.children) {
+            if (nodeTreeContainsType(child, typeName)) return true;
+        }
+    }
+    return false;
+}
+
+function startEditCollapsed(collapsedId) {
+    const data = collapsedPrimitives[collapsedId];
+    if (!data || !data.nodeTree) {
+        alert('Cannot edit this collapsed node - no stored structure found.');
+        return;
+    }
+    
+    // Save current graph state
+    const sceneNode = document.getElementById('scene');
+    if (!sceneNode) return;
+    
+    // Save original Scene title
+    const sceneTitleEl = sceneNode.querySelector('.nodetitle');
+    const originalSceneTitle = sceneTitleEl ? sceneTitleEl.textContent : 'Scene';
+    
+    savedGraphStateForEdit = {
+        nodes: serializeNodeTree(sceneNode),
+        editingId: collapsedId,
+        originalSceneTitle: originalSceneTitle
+    };
+    editingCollapsedId = collapsedId;
+    
+    // Change Scene title to collapsed node name
+    if (sceneTitleEl) {
+        sceneTitleEl.textContent = data.displayName || collapsedId;
+    }
+    
+    // Find types to hide (prevent recursion: the node being edited + any that contain it)
+    hiddenCollapsedTypes.clear();
+    hiddenCollapsedTypes.add(collapsedId);
+    const usersOfThis = findCollapsedNodesUsing(collapsedId);
+    usersOfThis.forEach(id => hiddenCollapsedTypes.add(id));
+    
+    // Hide the relevant menu items
+    hiddenCollapsedTypes.forEach(id => {
+        const menuItem = document.querySelector(`.menu-item[data-type="${id}"]`);
+        if (menuItem) menuItem.style.display = 'none';
+    });
+    
+    // Clear current graph (keep Scene node)
+    clearAllChildNodes(sceneNode);
+    draw.clear();
+    nodesArray = [sceneNode];
+    
+    // Rebuild from collapsed node's stored tree (use original type names)
+    const nodeTree = data.nodeTree;
+    const rootNode = rebuildNodesFromData(nodeTree, sceneNode, true);
+    
+    // Position at center
+    if (rootNode && rootNode !== sceneNode) {
+        rootNode.style.left = '200px';
+        rootNode.style.top = '100px';
+    }
+    
+    // Redraw all lines
+    setTimeout(() => {
+        nodesArray.forEach(updateLine);
+        recompilePreview();
+    }, 50);
+    
+    // Show edit UI
+    const controls = document.getElementById('editCollapsedControls');
+    const nameLabel = document.getElementById('editCollapsedName');
+    if (controls) {
+        controls.classList.remove('hidden');
+        nameLabel.textContent = data.displayName || collapsedId;
+    }
+    
+    console.log('[SDF] Started editing collapsed node:', collapsedId);
+}
+
+function clearAllChildNodes(parentNode) {
+    const children = getNodeChildren(parentNode);
+    children.forEach(child => {
+        removeNodeFromGraph(child);
+    });
+}
+
+function saveCollapsedEdit() {
+    if (!editingCollapsedId || !savedGraphStateForEdit) {
+        console.warn('No collapsed node is being edited');
+        return;
+    }
+    
+    const sceneNode = document.getElementById('scene');
+    if (!sceneNode) return;
+    
+    const data = collapsedPrimitives[editingCollapsedId];
+    if (!data) return;
+    
+    // Serialize the edited tree (first child of scene, or all children if multiple)
+    const children = getNodeChildren(sceneNode);
+    if (children.length === 0) {
+        alert('Cannot save empty collapsed node.');
+        return;
+    }
+    
+    // Take first child as root of collapsed node (or wrap in an operation if multiple)
+    const editRoot = children[0];
+    
+    // Update the nodeTree
+    data.nodeTree = serializeNodeTree(editRoot);
+    
+    // Regenerate the SDF code
+    resetExportVarCounters();
+    const sdfCode = generateExportNodeCode(editRoot, 'p');
+    const returnVar = getExportVarName(editRoot);
+    data.code = `float sd${editingCollapsedId}(vec3 p) {
+${sdfCode}    return ${returnVar};
+}
+
+`;
+    
+    // Update bounding radius
+    data.boundingRadius = calculateBoundForNode(editRoot);
+    
+    console.log('[SDF] Saved collapsed node:', editingCollapsedId);
+    
+    // Exit edit mode
+    exitCollapsedEdit();
+}
+
+function cancelCollapsedEdit() {
+    if (!editingCollapsedId || !savedGraphStateForEdit) {
+        console.warn('No collapsed node is being edited');
+        return;
+    }
+    
+    console.log('[SDF] Cancelled edit of collapsed node:', editingCollapsedId);
+    exitCollapsedEdit();
+}
+
+function exitCollapsedEdit() {
+    if (!savedGraphStateForEdit) return;
+    
+    const sceneNode = document.getElementById('scene');
+    if (!sceneNode) return;
+    
+    // Restore original Scene title
+    const sceneTitleEl = sceneNode.querySelector('.nodetitle');
+    if (sceneTitleEl && savedGraphStateForEdit.originalSceneTitle) {
+        sceneTitleEl.textContent = savedGraphStateForEdit.originalSceneTitle;
+    }
+    
+    // Clear current edit graph
+    clearAllChildNodes(sceneNode);
+    draw.clear();
+    nodesArray = [sceneNode];
+    
+    // Restore original graph
+    const savedNodes = savedGraphStateForEdit.nodes;
+    if (savedNodes && savedNodes.children) {
+        savedNodes.children.forEach(child => rebuildNodesFromData(child, sceneNode));
+    }
+    
+    // Unhide menu items
+    hiddenCollapsedTypes.forEach(id => {
+        const menuItem = document.querySelector(`.menu-item[data-type="${id}"]`);
+        if (menuItem) menuItem.style.display = '';
+    });
+    
+    // Reset state
+    savedGraphStateForEdit = null;
+    editingCollapsedId = null;
+    hiddenCollapsedTypes.clear();
+    
+    // Hide edit UI
+    const controls = document.getElementById('editCollapsedControls');
+    if (controls) controls.classList.add('hidden');
+    
+    // Redraw
+    setTimeout(() => {
+        nodesArray.forEach(updateLine);
+        recompilePreview();
+    }, 50);
+}
+
+function handleCollapsedNodeDoubleClick(event) {
+    const node = event.target.closest('.node');
+    if (!node) return;
+    
+    const nodeType = node.dataset.type;
+    if (!nodeType || !nodeType.startsWith('Collapsed_')) return;
+    
+    // Check if we're already editing
+    if (editingCollapsedId) {
+        alert('Already editing a collapsed node. Save or cancel first.');
+        return;
+    }
+    
+    event.preventDefault();
+    event.stopPropagation();
+    
+    startEditCollapsed(nodeType);
 }
 
 function serializeNodeTree(node) {
@@ -2567,18 +2938,18 @@ function serializeNodeTree(node) {
     return data;
 }
 
-function rebuildNodesFromData(data, parent) {
+function rebuildNodesFromData(data, parent, useOriginalNames = false) {
     if (!data || !parent) return null;
     if (data.type === 'Scene') {
         const sceneNode = parent;
         const titleEl = sceneNode.querySelector('.nodetitle');
-        if (titleEl && data.title) {
+        if (titleEl && data.title && !useOriginalNames) {
             titleEl.textContent = data.title;
         }
         if (data.params) {
             setNodeParams(sceneNode, data.params);
         }
-        (data.children || []).forEach(child => rebuildNodesFromData(child, sceneNode));
+        (data.children || []).forEach(child => rebuildNodesFromData(child, sceneNode, useOriginalNames));
         return sceneNode;
     }
     if (!NODE_TYPES[data.type]) {
@@ -2586,9 +2957,16 @@ function rebuildNodesFromData(data, parent) {
         return null;
     }
     const node = createNode(data.type);
+    nodesArray.push(node); // Track node in nodesArray
     const titleEl = node.querySelector('.nodetitle');
-    if (titleEl && data.title) {
-        titleEl.textContent = data.title;
+    if (titleEl) {
+        if (useOriginalNames) {
+            // Use original type name from NODE_TYPES
+            const typeDef = NODE_TYPES[data.type];
+            titleEl.textContent = typeDef.displayName || data.type;
+        } else if (data.title) {
+            titleEl.textContent = data.title;
+        }
     }
     if (data.params) {
         setNodeParams(node, data.params);
@@ -2598,7 +2976,7 @@ function rebuildNodesFromData(data, parent) {
         if (data.style.top) node.style.top = data.style.top;
     }
     parent.appendChild(node);
-    (data.children || []).forEach(child => rebuildNodesFromData(child, node));
+    (data.children || []).forEach(child => rebuildNodesFromData(child, node, useOriginalNames));
     return node;
 }
 
