@@ -279,6 +279,168 @@ function setupUI() {
         console.log('Signup result:', result);
     });
     
+    // ==================== Profile Popup ====================
+    
+    const profileModal = document.getElementById('profileModal');
+    const profileAvatarPreview = document.getElementById('profileAvatarPreview');
+    const profileAvatarInput = document.getElementById('profileAvatarInput');
+    const profileDisplayName = document.getElementById('profileDisplayName');
+    const profileMessage = document.getElementById('profileMessage');
+    const profileSaveBtn = document.getElementById('profileSaveBtn');
+    const profileCancelBtn = document.getElementById('profileCancelBtn');
+    const userProfileBtn = document.getElementById('userProfileBtn');
+    
+    let pendingAvatarFile = null; // Store file to upload on save
+    let currentAvatarUrl = null;  // Track current avatar URL for deletion
+    
+    // Open profile popup when clicking user name/avatar
+    userProfileBtn.addEventListener('click', () => {
+        // Populate with current values
+        profileDisplayName.value = state.userDisplayName || '';
+        profileAvatarPreview.src = state.userAvatarUrl || 'https://ui-avatars.com/api/?name=User&background=random';
+        currentAvatarUrl = state.userProfile?.avatar_url || null;
+        pendingAvatarFile = null;
+        profileMessage.style.display = 'none';
+        profileModal.style.display = 'flex';
+    });
+    
+    // Hover effect for profile button
+    userProfileBtn.addEventListener('mouseenter', () => {
+        userProfileBtn.style.background = 'var(--bg-secondary)';
+    });
+    userProfileBtn.addEventListener('mouseleave', () => {
+        userProfileBtn.style.background = 'transparent';
+    });
+    
+    // Handle avatar file selection
+    profileAvatarInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            showProfileMessage('Please select an image file', 'error');
+            return;
+        }
+        
+        // Validate file size (max 5MB before resize)
+        if (file.size > 5 * 1024 * 1024) {
+            showProfileMessage('Image too large (max 5MB)', 'error');
+            return;
+        }
+        
+        // Preview the image
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            profileAvatarPreview.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        
+        pendingAvatarFile = file;
+        showProfileMessage('Avatar selected - click Save to upload', 'info');
+    });
+    
+    // Save profile
+    profileSaveBtn.addEventListener('click', async () => {
+        const displayName = profileDisplayName.value.trim();
+        
+        // Validate display name
+        if (displayName.length < 2 || displayName.length > 32) {
+            showProfileMessage('Display name must be 2-32 characters', 'error');
+            return;
+        }
+        
+        profileSaveBtn.disabled = true;
+        profileSaveBtn.textContent = 'Saving...';
+        
+        try {
+            let newAvatarUrl = currentAvatarUrl;
+            
+            // Upload new avatar if selected
+            if (pendingAvatarFile) {
+                showProfileMessage('Uploading avatar...', 'info');
+                
+                const uploadResult = await backend.uploadAvatar(pendingAvatarFile, state.currentUser.id);
+                
+                if (!uploadResult.success) {
+                    showProfileMessage('Failed to upload avatar: ' + uploadResult.error, 'error');
+                    profileSaveBtn.disabled = false;
+                    profileSaveBtn.textContent = 'Save Profile';
+                    return;
+                }
+                
+                // Delete old avatar if exists
+                if (currentAvatarUrl) {
+                    const oldFilename = currentAvatarUrl.split('/').pop();
+                    backend.deleteAvatar(oldFilename);
+                }
+                
+                newAvatarUrl = uploadResult.url;
+            }
+            
+            // Save profile to database
+            showProfileMessage('Saving profile...', 'info');
+            const saveResult = await backend.saveProfile(state.currentUser.id, displayName, newAvatarUrl);
+            
+            if (!saveResult.success) {
+                showProfileMessage('Failed to save: ' + saveResult.error, 'error');
+                profileSaveBtn.disabled = false;
+                profileSaveBtn.textContent = 'Save Profile';
+                return;
+            }
+            
+            // Update local state
+            state.userDisplayName = displayName;
+            state.userAvatarUrl = newAvatarUrl || state.userAvatarUrl;
+            state.userProfile = saveResult.profile;
+            
+            // Update header UI
+            document.getElementById('username').textContent = displayName;
+            if (newAvatarUrl) {
+                document.getElementById('userAvatar').src = newAvatarUrl;
+            }
+            
+            showProfileMessage('Profile saved!', 'success');
+            
+            // Close modal after short delay
+            setTimeout(() => {
+                profileModal.style.display = 'none';
+            }, 1000);
+            
+        } catch (error) {
+            console.error('Profile save error:', error);
+            showProfileMessage('Error: ' + error.message, 'error');
+        } finally {
+            profileSaveBtn.disabled = false;
+            profileSaveBtn.textContent = 'Save Profile';
+        }
+    });
+    
+    // Cancel profile edit
+    profileCancelBtn.addEventListener('click', () => {
+        pendingAvatarFile = null;
+        profileModal.style.display = 'none';
+    });
+    
+    // Close on backdrop click
+    profileModal.addEventListener('click', (e) => {
+        if (e.target === profileModal) {
+            pendingAvatarFile = null;
+            profileModal.style.display = 'none';
+        }
+    });
+    
+    function showProfileMessage(message, type) {
+        profileMessage.textContent = message;
+        profileMessage.style.display = 'block';
+        profileMessage.style.background = type === 'error' ? '#ff4444' : 
+                                          type === 'success' ? '#44aa44' : 
+                                          'var(--bg-secondary)';
+        profileMessage.style.color = type === 'info' ? 'var(--text-primary)' : 'white';
+    }
+    
+    // ==================== End Profile Popup ====================
+    
     // Volume control
     document.getElementById('volumeSlider').addEventListener('input', (e) => {
         const vol = e.target.value / 100;

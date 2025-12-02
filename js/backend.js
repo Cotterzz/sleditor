@@ -194,22 +194,43 @@ export async function signOut() {
 }
 
 // Called when user signs in
-function onUserSignedIn(user) {
+async function onUserSignedIn(user) {
     console.log('User signed in:', user);
     state.currentUser = user;
     
-    // Extract user info (different providers have different metadata)
+    // Extract default user info from auth provider
     // Priority: display_name (email signup) > full_name (OAuth) > user_name > name > email prefix
-    const username = user.user_metadata?.display_name
+    const defaultUsername = user.user_metadata?.display_name
                   || user.user_metadata?.full_name 
                   || user.user_metadata?.user_name 
                   || user.user_metadata?.name
                   || user.email?.split('@')[0]
                   || 'User';
     
-    const avatarUrl = user.user_metadata?.avatar_url 
+    const defaultAvatarUrl = user.user_metadata?.avatar_url 
                    || user.user_metadata?.picture 
-                   || `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random`;
+                   || `https://ui-avatars.com/api/?name=${encodeURIComponent(defaultUsername)}&background=random`;
+    
+    // Try to get user's custom profile (overrides defaults)
+    let username = defaultUsername;
+    let avatarUrl = defaultAvatarUrl;
+    
+    const profile = await getProfile(user.id);
+    if (profile) {
+        // Use profile data if available (override auth defaults)
+        if (profile.display_name) {
+            username = profile.display_name;
+        }
+        if (profile.avatar_url) {
+            avatarUrl = profile.avatar_url;
+        }
+        console.log('✓ Profile loaded:', profile);
+    }
+    
+    // Store effective display name and avatar for use elsewhere
+    state.userDisplayName = username;
+    state.userAvatarUrl = avatarUrl;
+    state.userProfile = profile; // null if no custom profile exists
     
     // Update UI - show user menu, hide sign in button
     document.getElementById('signInBtn').style.display = 'none';
@@ -236,6 +257,9 @@ function onUserSignedOut() {
     console.log('User signed out');
     state.currentUser = null;
     state.currentDatabaseShader = null;
+    state.userDisplayName = null;
+    state.userAvatarUrl = null;
+    state.userProfile = null;
     
     // Update UI - hide user menu, show sign in button
     document.getElementById('signInBtn').style.display = 'flex';
@@ -315,14 +339,8 @@ export async function saveShader(shaderData) {
     }
 
     try {
-        // Get current user's display name
-        const currentUser = state.currentUser;
-        const creatorName = currentUser?.user_metadata?.display_name 
-                         || currentUser?.user_metadata?.full_name
-                         || currentUser?.user_metadata?.user_name
-                         || currentUser?.user_metadata?.name
-                         || currentUser?.email?.split('@')[0]
-                         || 'Anonymous';
+        // Get current user's display name (prefer profile, fallback to auth)
+        const creatorName = state.userDisplayName || 'Anonymous';
         
         // Prepare data
         const data = {
@@ -771,6 +789,175 @@ export async function captureThumbnailBlob() {
     });
 }
 
+// ============= USER PROFILES =============
+
+/**
+ * Get user profile by user ID
+ * Returns null if profile doesn't exist (user hasn't created one yet)
+ */
+export async function getProfile(userId) {
+    if (!supabase || !userId) return null;
+    
+    try {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('display_name, avatar_url')
+            .eq('id', userId)
+            .single();
+        
+        if (error) {
+            // PGRST116 = no rows found, which is expected for new users
+            if (error.code !== 'PGRST116') {
+                console.error('Get profile error:', error);
+            }
+            return null;
+        }
+        
+        return data;
+    } catch (error) {
+        console.error('Get profile error:', error);
+        return null;
+    }
+}
+
+/**
+ * Create or update user profile (upsert)
+ */
+export async function saveProfile(userId, displayName, avatarUrl) {
+    if (!supabase || !userId) {
+        return { success: false, error: 'Not initialized or missing user ID' };
+    }
+    
+    // Validate display name
+    if (!displayName || displayName.length < 2 || displayName.length > 32) {
+        return { success: false, error: 'Display name must be 2-32 characters' };
+    }
+    
+    // Sanitize display name (remove potential XSS)
+    const sanitizedName = displayName
+        .replace(/[<>]/g, '') // Remove angle brackets
+        .trim();
+    
+    try {
+        const { data, error } = await supabase
+            .from('profiles')
+            .upsert({
+                id: userId,
+                display_name: sanitizedName,
+                avatar_url: avatarUrl || null,
+                updated_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+        
+        if (error) throw error;
+        
+        console.log('✓ Profile saved:', data);
+        return { success: true, profile: data };
+    } catch (error) {
+        console.error('Save profile error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Upload avatar image to storage
+ * Resizes to 256x256 and converts to JPEG
+ * Uses thumbnails/avatars/ folder to reuse existing bucket policies
+ */
+export async function uploadAvatar(imageFile, userId) {
+    if (!supabase || !userId || !imageFile) {
+        return { success: false, error: 'Missing required parameters' };
+    }
+    
+    try {
+        // Create image element to load the file
+        const img = new Image();
+        const loadPromise = new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+        });
+        img.src = URL.createObjectURL(imageFile);
+        await loadPromise;
+        
+        // Resize to 256x256 (centered crop)
+        const AVATAR_SIZE = 256;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = AVATAR_SIZE;
+        canvas.height = AVATAR_SIZE;
+        
+        // Calculate crop to center
+        const sourceSize = Math.min(img.width, img.height);
+        const sx = (img.width - sourceSize) / 2;
+        const sy = (img.height - sourceSize) / 2;
+        
+        ctx.drawImage(img, sx, sy, sourceSize, sourceSize, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
+        
+        // Clean up object URL
+        URL.revokeObjectURL(img.src);
+        
+        // Convert to blob
+        const blob = await new Promise((resolve, reject) => {
+            canvas.toBlob((b) => {
+                if (b) resolve(b);
+                else reject(new Error('Failed to create avatar blob'));
+            }, 'image/jpeg', 0.85);
+        });
+        
+        console.log(`Avatar: ${Math.round(blob.size / 1024)}KB (JPEG 256×256)`);
+        
+        // Generate filename with avatars/ prefix (stored in thumbnails bucket)
+        const filename = `avatars/avatar_${userId}_${Date.now()}.jpg`;
+        
+        // Upload to thumbnails bucket (avatars folder)
+        const { error: uploadError } = await supabase.storage
+            .from('thumbnails')
+            .upload(filename, blob, {
+                contentType: 'image/jpeg',
+                upsert: false
+            });
+        
+        if (uploadError) throw uploadError;
+        
+        const url = getStorageUrl('thumbnails', filename);
+        console.log('✓ Avatar uploaded:', url);
+        
+        return { success: true, url, filename };
+    } catch (error) {
+        console.error('Upload avatar error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Delete an avatar from storage
+ * Avatars are stored in thumbnails/avatars/ folder
+ */
+export async function deleteAvatar(filename) {
+    if (!supabase || !filename) return;
+    
+    try {
+        // If filename doesn't include path, it might be just the filename from URL
+        // Extract just the path portion after the bucket name
+        let filePath = filename;
+        if (filename.includes('/avatars/')) {
+            // Extract everything from 'avatars/' onwards
+            const match = filename.match(/avatars\/[^?]+/);
+            if (match) filePath = match[0];
+        }
+        
+        const { error } = await supabase.storage
+            .from('thumbnails')
+            .remove([filePath]);
+        
+        if (error) throw error;
+        console.log('✓ Old avatar deleted:', filePath);
+    } catch (error) {
+        console.error('Delete avatar error:', error);
+    }
+}
+
 // ============= VIEWS AND LIKES =============
 
 export async function incrementViewCount(shaderId) {
@@ -960,22 +1147,47 @@ export async function loadComments(shaderId) {
     }
 
     try {
-        // Fetch comments (without user join - not allowed from client)
-        const { data, error } = await supabase
+        // Fetch comments
+        const { data: commentsData, error: commentsError } = await supabase
             .from('shader_comments')
             .select('id, shader_id, user_id, content, parent_comment_id, created_at, user_display_name')
             .eq('shader_id', shaderId)
             .order('created_at', { ascending: true });
 
-        if (error) throw error;
+        if (commentsError) throw commentsError;
+
+        // Get unique user IDs from comments
+        const userIds = [...new Set(commentsData.map(c => c.user_id).filter(Boolean))];
+        
+        // Fetch profiles for those users (if any)
+        let profilesMap = {};
+        if (userIds.length > 0) {
+            const { data: profilesData, error: profilesError } = await supabase
+                .from('profiles')
+                .select('id, display_name, avatar_url')
+                .in('id', userIds);
+            
+            if (!profilesError && profilesData) {
+                // Create a map for quick lookup
+                profilesData.forEach(p => {
+                    profilesMap[p.id] = p;
+                });
+            }
+        }
 
         // Map content to comment_text for consistency with UI
-        const comments = data.map(comment => ({
-            ...comment,
-            comment_text: comment.content,
-            // If user_display_name is null/empty, show as "Anonymous"
-            user_display_name: comment.user_display_name || 'Anonymous'
-        }));
+        // Use profile data if available (overrides stored display_name)
+        const comments = commentsData.map(comment => {
+            const profile = profilesMap[comment.user_id];
+            return {
+                ...comment,
+                comment_text: comment.content,
+                // Prefer profile display_name over stored user_display_name
+                user_display_name: profile?.display_name || comment.user_display_name || 'Anonymous',
+                // Add avatar URL from profile
+                user_avatar_url: profile?.avatar_url || null
+            };
+        });
 
         return { success: true, comments };
     } catch (error) {
@@ -990,10 +1202,8 @@ export async function addComment(shaderId, commentText, parentCommentId = null) 
     }
 
     try {
-        // Get display name from current user
-        const displayName = state.currentUser.user_metadata?.display_name || 
-                           state.currentUser.email?.split('@')[0] || 
-                           'Anonymous';
+        // Get display name (prefer profile, fallback to auth)
+        const displayName = state.userDisplayName || 'Anonymous';
 
         const { data, error } = await supabase
             .from('shader_comments')

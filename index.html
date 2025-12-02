@@ -137,8 +137,10 @@
         <div id="authSection" class="flex-row pr-1">
             <!-- Logged in (hidden by default) -->
             <div id="userMenu" class="flex-row gap-xs" style="display: none;">
-                <span id="username" class="text-sm" style="color: var(--text-primary);"></span>
-                <img id="userAvatar" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-color);" alt="User" />
+                <div id="userProfileBtn" class="flex-row gap-xs" style="cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.2s;" title="Edit profile">
+                    <span id="username" class="text-sm" style="color: var(--text-primary);"></span>
+                    <img id="userAvatar" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-color);" alt="User" />
+                </div>
                 <button id="signOutBtn" class="uiBtn text-sm" style="padding: 4px 10px; height: 24px; border-radius: 3px">Sign Out</button>
             </div>
             
@@ -359,6 +361,48 @@
                 <div id="galleryContent" class="flex-1" style="overflow-y: auto;">
                 <!-- Gallery items will be populated here -->
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Edit Modal -->
+    <div id="profileModal" class="flex-center" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+                                 background: rgba(0,0,0,0.7); z-index: 10000;">
+        <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; 
+                    padding: 30px; max-width: 400px; width: 90%;">
+            <h2 style="margin: 0 0 20px 0; color: var(--text-primary);">Edit Profile</h2>
+            
+            <!-- Avatar Section -->
+            <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;">
+                <img id="profileAvatarPreview" style="width: 128px; height: 128px; border-radius: 50%; border: 2px solid var(--border-color); object-fit: cover; margin-bottom: 10px;" alt="Avatar" />
+                <label style="cursor: pointer; padding: 8px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; color: var(--text-primary);">
+                    📷 Change Avatar
+                    <input type="file" id="profileAvatarInput" accept="image/*" style="display: none;" />
+                </label>
+                <span style="font-size: 11px; color: var(--text-secondary); margin-top: 6px;">Max 256×256, auto-resized</span>
+            </div>
+            
+            <!-- Display Name -->
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">Display Name</label>
+                <input type="text" id="profileDisplayName" placeholder="Your display name" maxlength="32"
+                       style="width: 100%; padding: 10px; border-radius: 4px; 
+                              border: 1px solid var(--border-color); background: var(--bg-secondary); 
+                              color: var(--text-primary); box-sizing: border-box;">
+                <span style="font-size: 11px; color: var(--text-secondary);">2-32 characters</span>
+            </div>
+            
+            <!-- Status Message -->
+            <div id="profileMessage" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 4px; font-size: 13px;"></div>
+            
+            <!-- Buttons -->
+            <div style="display: flex; gap: 10px;">
+                <button id="profileSaveBtn" class="uiBtn" style="flex: 1; padding: 10px; background: var(--accent-color); color: white;">
+                    Save Profile
+                </button>
+                <button id="profileCancelBtn" class="uiBtn" style="flex: 1; padding: 10px;">
+                    Cancel
+                </button>
             </div>
         </div>
     </div>
