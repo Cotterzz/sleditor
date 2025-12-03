@@ -85,15 +85,11 @@ function enterframe(state, api) {
     //api.uniforms.setCustomFloat(0, state.parameter);
 }`;
 
-export const MINIMAL_AUDIO_GLSL = `// Shadertoy-compatible GLSL Audio
-// vec2 mainSound(int samp, float time)
-//   samp = absolute sample index (use for precision!)
-//   time = time in seconds (has precision issues after ~40s)
+export const MINIMAL_AUDIO_GLSL = `
+// This should work the same as exising shadertoy audio shaders.
+//   samp = absolute sample index
+//   time = time in seconds
 //   iSampleRate = sample rate uniform (e.g. 48000.0)
-//
-// TIP: For oscillators, use samp to avoid float precision issues:
-//   float phase = fract(float(samp) * freq / iSampleRate);
-//   return vec2(sin(6.2831 * phase));
 
 vec2 mainSound(int samp, float time) {
     float freq = 440.0;
@@ -107,6 +103,16 @@ vec2 mainSound(int samp, float time) {
     
     return vec2(wave * envelope * 0.5);
 }
+
+// IMPORTANT: For oscillators, use samp to avoid float precision issues:
+//   float phase = fract(float(samp) * freq / iSampleRate);
+//   float wave = sin(6.2831 * phase);
+//   return vec2(wave);
+// DO NOT USE:
+//   float wave = sin(6.2831 * freq * time)
+// This will degrade very quickly
+// ~40 seconds on intel GPU, maybe a few minutes on Nvidia
+// To test: add an offset to time, eg 600.0
 `;
 
 export const MINIMAL_AUDIO_GPU = `// Simple sine wave (GPU)
