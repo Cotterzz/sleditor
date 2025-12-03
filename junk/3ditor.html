@@ -558,7 +558,7 @@
         }
     </style>
 </head>
-<body data-server-no-reload>
+<body>
 
 <div id="sidebar">
     <h3>Meshes</h3>
@@ -1095,31 +1095,12 @@ function initThreeJS() {
     let prevMouseY = 0;
     let cameraRotationX = 0;
     let cameraRotationY = 0;
-    let cameraDistance = 10;
-    let cameraTarget = { x: 0, y: 0, z: 0 };
-    let isPanning = false;
-    
-    function updateCameraPosition() {
-        camera.position.x = cameraTarget.x + cameraDistance * Math.cos(cameraRotationX) * Math.sin(cameraRotationY);
-        camera.position.y = cameraTarget.y + cameraDistance * Math.sin(cameraRotationX);
-        camera.position.z = cameraTarget.z + cameraDistance * Math.cos(cameraRotationX) * Math.cos(cameraRotationY);
-        camera.lookAt(cameraTarget.x, cameraTarget.y, cameraTarget.z);
-    }
     
     container.addEventListener('mousedown', (e) => {
-        if (e.button === 2) {
-            // Right click - pan
-            isPanning = true;
-            e.preventDefault();
-        } else if (e.button === 0) {
-            // Left click - rotate
-            isRotating = true;
-        }
+        isRotating = true;
         prevMouseX = e.clientX;
         prevMouseY = e.clientY;
     });
-    
-    container.addEventListener('contextmenu', (e) => e.preventDefault());
     
     document.addEventListener('mousemove', (e) => {
         if (isRotating) {
@@ -1127,30 +1108,14 @@ function initThreeJS() {
             const deltaY = e.clientY - prevMouseY;
             
             cameraRotationY -= deltaX * 0.005;
-            cameraRotationX += deltaY * 0.005;
+            cameraRotationX += deltaY * 0.005; // REVERSED Y (was -=)
             cameraRotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraRotationX));
             
-            updateCameraPosition();
-            
-            prevMouseX = e.clientX;
-            prevMouseY = e.clientY;
-        } else if (isPanning) {
-            const deltaX = e.clientX - prevMouseX;
-            const deltaY = e.clientY - prevMouseY;
-            
-            // Calculate right and up vectors
-            const right = new THREE.Vector3();
-            const up = new THREE.Vector3(0, 1, 0);
-            camera.getWorldDirection(right);
-            right.cross(up).normalize();
-            up.copy(camera.up);
-            
-            const panScale = cameraDistance * 0.002;
-            cameraTarget.x -= deltaX * panScale * right.x;
-            cameraTarget.y += deltaY * panScale;
-            cameraTarget.z -= deltaX * panScale * right.z;
-            
-            updateCameraPosition();
+            const distance = 10;
+            camera.position.x = distance * Math.cos(cameraRotationX) * Math.sin(cameraRotationY);
+            camera.position.y = distance * Math.sin(cameraRotationX);
+            camera.position.z = distance * Math.cos(cameraRotationX) * Math.cos(cameraRotationY);
+            camera.lookAt(0, 0, 0);
             
             prevMouseX = e.clientX;
             prevMouseY = e.clientY;
@@ -1159,13 +1124,14 @@ function initThreeJS() {
     
     document.addEventListener('mouseup', () => {
         isRotating = false;
-        isPanning = false;
     });
     
     container.addEventListener('wheel', (e) => {
         e.preventDefault();
-        cameraDistance = Math.max(2, Math.min(50, cameraDistance + e.deltaY * 0.01));
-        updateCameraPosition();
+        const distance = Math.sqrt(camera.position.x ** 2 + camera.position.y ** 2 + camera.position.z ** 2);
+        const newDistance = Math.max(2, Math.min(50, distance + e.deltaY * 0.01));
+        const scale = newDistance / distance;
+        camera.position.multiplyScalar(scale);
     });
     
     animate();
@@ -1904,10 +1870,6 @@ function initLatheEditor(container, key) {
     
     function updatePoints(newPoints) {
         points = newPoints;
-        // Also update the stored reference so add/remove work correctly
-        if (container._latheEditor) {
-            container._latheEditor.points = points;
-        }
         input.value = JSON.stringify(points);
         draw();
         
@@ -2040,12 +2002,11 @@ function initLoftLatheEditor(container, key) {
         const availWidth = canvas.width - padding * 2;
         const availHeight = canvas.height - padding * 2;
         // Scale based on max values in head data (roughly 6 for x, 8 for y)
-        // Don't flip Y - matches the rotated 3D model
         const scaleX = availWidth / 8;
         const scaleY = availHeight / 10;
         return {
             x: padding + p[0] * scaleX,
-            y: padding + p[1] * scaleY
+            y: padding + (10 - p[1]) * scaleY // Flip Y, max Y is ~8
         };
     }
     
@@ -2057,7 +2018,7 @@ function initLoftLatheEditor(container, key) {
         const scaleY = availHeight / 10;
         return [
             Math.max(0, (cx - padding) / scaleX),
-            Math.max(0, (cy - padding) / scaleY)
+            Math.max(0, 10 - (cy - padding) / scaleY)
         ];
     }
     
