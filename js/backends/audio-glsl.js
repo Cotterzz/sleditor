@@ -251,6 +251,8 @@ function updateShader(shaderCode) {
     \`;
     
     // Wrap user's mainSound function with boilerplate
+    // Shadertoy-compatible: mainSound(int samp, float time)
+    // For precision, users should use samp with fract() instead of time for oscillators
     const fragmentShaderSource = \`#version 300 es
         precision highp float;
         precision highp int;
@@ -267,10 +269,12 @@ function updateShader(shaderCode) {
             // Calculate absolute sample index (integer, no precision loss)
             int samp = iSampleOffset + int(gl_FragCoord.x - 0.5);
             
-            // Calculate time from sample index (full precision)
+            // Calculate time (for Shadertoy compatibility)
+            // WARNING: time has precision issues after ~40s for oscillators
+            // Use: fract(float(samp) * freq / iSampleRate) instead
             float time = float(samp) / iSampleRate;
             
-            // Call user's mainSound function
+            // Call user's mainSound function (Shadertoy-compatible signature)
             vec2 sound = mainSound(samp, time);
             
             // Clamp to valid audio range

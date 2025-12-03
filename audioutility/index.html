@@ -80,13 +80,27 @@
 		</div>
 		
 		<textarea id="shaderText" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">// Shadertoy-compatible audio shader
-// Try pasting any Shadertoy sound shader here!
+// Shadertoy-compatible GLSL Audio
+// vec2 mainSound(int samp, float time)
+// samp = absolute sample index (use for precision!)
+// time = time in seconds (has precision issues after ~40s)
+// iSampleRate = sample rate uniform (e.g. 48000.0)
+//
+// TIP: For oscillators, use samp to avoid float precision issues:
+// float phase = fract(float(samp) * freq / iSampleRate);
+// return vec2(sin(6.2831 * phase));
 
 vec2 mainSound(int samp, float time) {
-    // A 440 Hz sine wave that fades out
-    float envelope = exp(-0.5 * time);
-    float wave = sin(6.2831 * 440.0 * time);
-    return vec2(wave * envelope);
+	float freq = 440.0;
+
+	// Use samp for phase (works forever, no precision loss)
+	float phase = fract(float(samp) * freq / iSampleRate);
+	float wave = sin(6.2831 * phase);
+
+	// Envelope uses time (OK for slow changes)
+	float envelope = exp(-0.5 * time)*0.5;
+
+	return vec2(wave * envelope * 0.5);
 }
 </textarea>
 

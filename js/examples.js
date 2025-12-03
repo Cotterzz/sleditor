@@ -85,16 +85,26 @@ function enterframe(state, api) {
     //api.uniforms.setCustomFloat(0, state.parameter);
 }`;
 
-export const MINIMAL_AUDIO_GLSL = `// Shadertoy-compatible audio shader
+export const MINIMAL_AUDIO_GLSL = `// Shadertoy-compatible GLSL Audio
 // vec2 mainSound(int samp, float time)
-//   samp = absolute sample index from start
-//   time = absolute time in seconds
-//   returns stereo audio (-1.0 to 1.0)
+//   samp = absolute sample index (use for precision!)
+//   time = time in seconds (has precision issues after ~40s)
+//   iSampleRate = sample rate uniform (e.g. 48000.0)
+//
+// TIP: For oscillators, use samp to avoid float precision issues:
+//   float phase = fract(float(samp) * freq / iSampleRate);
+//   return vec2(sin(6.2831 * phase));
 
 vec2 mainSound(int samp, float time) {
-    // A 440 Hz sine wave that fades out
+    float freq = 440.0;
+    
+    // Use samp for phase (works forever, no precision loss)
+    float phase = fract(float(samp) * freq / iSampleRate);
+    float wave = sin(6.2831 * phase);
+    
+    // Envelope uses time (OK for slow changes)
     float envelope = exp(-0.5 * time);
-    float wave = sin(6.2831 * 440.0 * time);
+    
     return vec2(wave * envelope * 0.5);
 }
 `;
