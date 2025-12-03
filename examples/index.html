@@ -1,0 +1,48 @@
+<html>
+	<head>
+		<title>Audio Shader</title>
+		<style>
+			body {
+				background: black;
+				color: white;
+				display: flex;
+				flex-direction: column;
+				gap: 20px;
+				height: 100vh;
+				margin: 0;
+			}
+			textarea {
+				display: block;
+				width: 100%;
+				flex: 1;
+			}
+		</style>
+	</head>
+	<body>
+		<textarea id="shaderText">
+vec2 mainSound(float time) {
+  return vec2(sin(time * 440.0 * 6.28318));
+}
+</textarea
+		>
+		<button id="buttonAudioStart">Start Audio</button>
+	</body>
+	<script type="module">
+		import { WebGLAudioShader } from './index.js'
+
+		const buttonAudioStart = document.getElementById('buttonAudioStart')
+		const shaderText = document.getElementById('shaderText')
+
+		const shader = new WebGLAudioShader()
+		await shader.init(shaderText.value)
+
+		buttonAudioStart.addEventListener('click', () => {
+			shader.start()
+			buttonAudioStart.remove()
+		})
+
+		shaderText.addEventListener('input', () => {
+			shader.setShader(shaderText.value)
+		})
+	</script>
+</html>

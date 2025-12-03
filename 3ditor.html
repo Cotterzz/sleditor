@@ -575,6 +575,7 @@
     <div class="menu-item mesh" data-type="Tetrahedron">Tetrahedron</div>
     <div class="menu-item mesh" data-type="Lathe">Lathe</div>
     <div class="menu-item mesh" data-type="LoftLathe">Loft Lathe</div>
+    <div class="menu-item mesh" data-type="Tube">Tube</div>
     
     <h3>Lights</h3>
     <div class="menu-item light" data-type="AmbientLight">Ambient</div>
@@ -606,6 +607,7 @@
 <div id="preview"></div>
 
 <div class="control-buttons">
+    <button id="saveSceneBtn">Save Scene</button>
     <button id="generateCodeBtn">Generate Code</button>
 </div>
 
@@ -798,6 +800,23 @@ const NODE_TYPES = {
             scale: { type: 'number', default: 0.1, min: 0.01, max: 1, step: 0.01 }
         }
     },
+    Tube: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            // Tube geometry params
+            tubularSegments: { type: 'number', default: 24, min: 3, max: 128, step: 1 },
+            radius: { type: 'number', default: 0.3, min: 0.01, max: 5, step: 0.01 },
+            radialSegments: { type: 'number', default: 8, min: 3, max: 32, step: 1 },
+            closed: { type: 'boolean', default: false },
+            // Sin curve params
+            curveScale: { type: 'number', default: 2, min: 0.1, max: 10, step: 0.1 },
+            curveLength: { type: 'number', default: 3, min: 0.5, max: 10, step: 0.1 },
+            frequency: { type: 'number', default: 1, min: 0.1, max: 5, step: 0.1 },
+            amplitude: { type: 'number', default: 1, min: 0, max: 5, step: 0.1 },
+            phase: { type: 'number', default: 0, min: 0, max: 6.28, step: 0.1 }
+        }
+    },
     AmbientLight: {
         category: 'light',
         maxChildren: 0,
@@ -908,6 +927,13 @@ function initNodeEditor() {
     addLines();
     setupMenuItems();
     setupEventListeners();
+    
+    // Try to load saved scene (after initial setup)
+    setTimeout(() => {
+        if (loadSceneFromStorage()) {
+            console.log('[3ditor] Restored saved scene');
+        }
+    }, 100);
 }
 
 function scanNodes() {
@@ -1205,6 +1231,144 @@ function createSceneNode() {
     nodesArray.push(directionalNode);
 }
 
+// ========================
+// SCENE SAVE/LOAD
+// ========================
+
+const STORAGE_KEY = '3ditorSceneState';
+
+function serializeNodeTree(node) {
+    if (!node) return null;
+    const params = JSON.parse(JSON.stringify(getNodeParams(node) || {}));
+    const titleEl = node.querySelector('.nodetitle');
+    const childNodes = Array.from(node.children).filter(child => child.classList.contains('node'));
+    
+    return {
+        type: node.dataset.type,
+        title: titleEl ? titleEl.textContent.trim() : '',
+        params: params,
+        style: {
+            left: node.style.left || '',
+            top: node.style.top || ''
+        },
+        children: childNodes.map(child => serializeNodeTree(child))
+    };
+}
+
+function rebuildNodesFromData(data, parent) {
+    if (!data || !parent) return null;
+    
+    if (data.type === 'Scene') {
+        // Scene node already exists, just update it
+        const sceneNode = parent;
+        const titleEl = sceneNode.querySelector('.nodetitle');
+        if (titleEl && data.title) {
+            titleEl.textContent = data.title;
+        }
+        if (data.params) {
+            setNodeParams(sceneNode, data.params);
+        }
+        (data.children || []).forEach(child => rebuildNodesFromData(child, sceneNode));
+        return sceneNode;
+    }
+    
+    if (!NODE_TYPES[data.type]) {
+        console.warn('Unknown node type in saved scene:', data.type);
+        return null;
+    }
+    
+    const node = createNode(data.type);
+    nodesArray.push(node);
+    
+    const titleEl = node.querySelector('.nodetitle');
+    if (titleEl && data.title) {
+        titleEl.textContent = data.title;
+    }
+    if (data.params) {
+        setNodeParams(node, data.params);
+    }
+    if (data.style) {
+        if (data.style.left) node.style.left = data.style.left;
+        if (data.style.top) node.style.top = data.style.top;
+    }
+    
+    parent.appendChild(node);
+    (data.children || []).forEach(child => rebuildNodesFromData(child, node));
+    
+    return node;
+}
+
+function saveSceneToStorage() {
+    try {
+        const sceneNode = nodesArray.find(n => n.dataset.type === 'Scene');
+        if (!sceneNode) {
+            console.warn('No scene node found to save');
+            return;
+        }
+        
+        const state = {
+            version: 1,
+            nodes: serializeNodeTree(sceneNode)
+        };
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        
+        // Visual feedback
+        const btn = document.getElementById('saveSceneBtn');
+        const original = btn.textContent;
+        btn.textContent = 'Saved ✓';
+        btn.disabled = true;
+        setTimeout(() => {
+            btn.textContent = original;
+            btn.disabled = false;
+        }, 1200);
+        
+        console.log('[3ditor] Scene saved to localStorage');
+    } catch (err) {
+        console.error('Failed to save scene:', err);
+        alert('Failed to save scene: ' + err.message);
+    }
+}
+
+function loadSceneFromStorage() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        
+        const state = JSON.parse(raw);
+        if (!state || !state.nodes) return false;
+        
+        // Clear existing nodes (except Scene)
+        const sceneNode = nodesArray.find(n => n.dataset.type === 'Scene');
+        if (!sceneNode) return false;
+        
+        // Remove all children from scene
+        const children = Array.from(sceneNode.children).filter(c => c.classList.contains('node'));
+        children.forEach(child => child.remove());
+        
+        // Reset nodesArray to just scene
+        nodesArray = [sceneNode];
+        
+        // Rebuild from saved data
+        rebuildNodesFromData(state.nodes, sceneNode);
+        
+        // Rebuild lines
+        draw.clear();
+        lines = [];
+        scanNodes();
+        addLines();
+        
+        // Update preview
+        updatePreview();
+        
+        console.log('[3ditor] Scene loaded from localStorage');
+        return true;
+    } catch (err) {
+        console.error('Failed to load saved scene:', err);
+        return false;
+    }
+}
+
 function setupMenuItems() {
     const menuItems = document.querySelectorAll('.menu-item');
     menuItems.forEach(item => {
@@ -1217,6 +1381,7 @@ function setupEventListeners() {
     document.addEventListener('mousemove', onDocumentMouseMove);
     
     document.getElementById('generateCodeBtn').addEventListener('click', generateCode);
+    document.getElementById('saveSceneBtn').addEventListener('click', saveSceneToStorage);
     
     // Code output buttons (will be added after code is generated)
     document.addEventListener('click', (e) => {
@@ -2390,6 +2555,23 @@ function createMesh(type, params) {
             // Rotate geometry 180° around X axis to flip right-side up (preserves normals)
             geometry.rotateX(Math.PI);
             break;
+        case 'Tube':
+            // Create custom sin curve for tube path
+            const tubeCurve = new THREE.Curve();
+            tubeCurve.getPoint = function(t) {
+                const tx = (t * params.curveLength - params.curveLength / 2) * params.curveScale;
+                const ty = Math.sin(params.frequency * 2 * Math.PI * t + params.phase) * params.amplitude;
+                const tz = 0;
+                return new THREE.Vector3(tx, ty, tz);
+            };
+            geometry = new THREE.TubeGeometry(
+                tubeCurve,
+                params.tubularSegments,
+                params.radius,
+                params.radialSegments,
+                params.closed
+            );
+            break;
         default:
             geometry = new THREE.BoxGeometry(1, 1, 1);
     }
@@ -2718,6 +2900,17 @@ function generateMeshCode(type, params, varName, indent) {
             }).join(',\n        ');
             // Special case: need to create geometry first, rotate it, then use
             geomCode = `(() => { const g = new LoftLatheBufferGeometry([\n        ${slicesCode}\n    ], ${params.segments}); g.rotateX(Math.PI); return g; })()`;
+            break;
+        case 'Tube':
+            geomCode = `(() => {
+        const curve = new THREE.Curve();
+        curve.getPoint = function(t) {
+            const tx = (t * ${params.curveLength} - ${params.curveLength / 2}) * ${params.curveScale};
+            const ty = Math.sin(${params.frequency} * 2 * Math.PI * t + ${params.phase}) * ${params.amplitude};
+            return new THREE.Vector3(tx, ty, 0);
+        };
+        return new THREE.TubeGeometry(curve, ${params.tubularSegments}, ${params.radius}, ${params.radialSegments}, ${params.closed});
+    })()`;
             break;
     }
     
