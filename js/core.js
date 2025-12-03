@@ -5,6 +5,7 @@
 export const AUDIO_MODES = {
     GPU: 'gpu',
     WORKLET: 'worklet',
+    GLSL: 'glsl',
     NONE: 'none'
 };
 

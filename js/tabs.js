@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { state, logStatus, saveSettings } from './core.js';
-import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF } from './examples.js';
+import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET, MINIMAL_AUDIO_GLSL, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF } from './examples.js';
 import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, getChannelNumber, createImageChannelTabName, createVideoChannelTabName, createAudioChannelTabName, createBufferChannelTabName } from './tab-config.js';
 import * as mediaSelector from './ui/media-selector.js';
 import * as audioSelector from './ui/audio-selector.js';
@@ -247,7 +247,8 @@ export function switchTab(tabName) {
         glsl_stoy: document.getElementById('graphicsContainer'),      // S-Toy GLSL also uses graphics container
         glsl_golf: document.getElementById('graphicsContainer'),      // Golf GLSL also uses graphics container
         audio_gpu: document.getElementById('audioContainer'),
-        audio_worklet: document.getElementById('audioContainer'),  // Both audio tabs use same container
+        audio_worklet: document.getElementById('audioContainer'),  // All audio tabs use same container
+        audio_glsl: document.getElementById('audioContainer'),     // GLSL audio also uses audio container
         js: document.getElementById('jsEditorContainer')
     };
     
@@ -262,7 +263,8 @@ export function switchTab(tabName) {
         glsl_stoy: state.graphicsEditor,      // S-Toy GLSL also uses graphics editor
         glsl_golf: state.graphicsEditor,      // Golf GLSL also uses graphics editor
         audio_gpu: state.audioEditor,
-        audio_worklet: state.audioEditor,  // Both audio tabs use same editor
+        audio_worklet: state.audioEditor,  // All audio tabs use same editor
+        audio_glsl: state.audioEditor,     // GLSL audio also uses audio editor
         js: state.jsEditor
     };
     
@@ -296,6 +298,8 @@ export function switchTab(tabName) {
         monaco.editor.setModelLanguage(state.audioEditor.getModel(), 'wgsl');
     } else if (tabName === 'audio_worklet' && state.audioEditor) {
         monaco.editor.setModelLanguage(state.audioEditor.getModel(), 'javascript');
+    } else if (tabName === 'audio_glsl' && state.audioEditor) {
+        monaco.editor.setModelLanguage(state.audioEditor.getModel(), 'glsl');
     }
     
     if (usesGraphicsEditor(tabName)) {
@@ -350,6 +354,8 @@ export function addTab(tabName) {
             state.audioEditor.setValue(MINIMAL_AUDIO_GPU);
         } else if (tabName === 'audio_worklet') {
             state.audioEditor.setValue(MINIMAL_AUDIO_WORKLET);
+        } else if (tabName === 'audio_glsl') {
+            state.audioEditor.setValue(MINIMAL_AUDIO_GLSL);
         }
     }
     
@@ -509,7 +515,7 @@ export function removeTab(tabName) {
     }
     
     // If removing an audio tab, clear audio type and stop audio
-    if (tabName === 'audio_gpu' || tabName === 'audio_worklet') {
+    if (tabName === 'audio_gpu' || tabName === 'audio_worklet' || tabName === 'audio_glsl') {
         state.currentAudioType = null;
         // Dispatch event for audio cleanup
         window.dispatchEvent(new CustomEvent('stop-audio'));
@@ -556,6 +562,7 @@ export function showAddPassMenu() {
     // Note: Main pass types (glsl_regular, glsl_stoy, glsl_golf, glsl_fragment) 
     // are only available in the "New Shader" menu, not here
     const availableTabs = [
+        { name: 'audio_glsl', label: '🔊 Audio (GLSL)' },
         { name: 'audio_gpu', label: '🔊 Audio (WGSL)' },
         { name: 'audio_worklet', label: '🎵 Audio (Worklet)' },
         { name: 'js', label: '⚡ JavaScript' },
@@ -570,6 +577,8 @@ export function showAddPassMenu() {
     // Check if any audio tab is active for mutual exclusion
     const hasAudioGpu = state.activeTabs.includes('audio_gpu');
     const hasAudioWorklet = state.activeTabs.includes('audio_worklet');
+    const hasAudioGlsl = state.activeTabs.includes('audio_glsl');
+    const hasAnyAudio = hasAudioGpu || hasAudioWorklet || hasAudioGlsl;
     const hasGLSL = state.activeTabs.some(t => t === 'glsl_fragment' || t === 'glsl_regular' || t === 'glsl_stoy' || t === 'glsl_golf');
     const hasWGSL = state.activeTabs.includes('graphics'); // WGSL graphics tab
     
@@ -577,14 +586,15 @@ export function showAddPassMenu() {
         const isActive = state.activeTabs.includes(tab.name);
         
         // Grey out incompatible tabs:
-        // - Other audio tab if one is active (mutual exclusion)
+        // - Other audio tab if one is active (mutual exclusion between all audio types)
         // - WGSL audio if GLSL graphics is active (incompatible backends)
         // - Channels not yet supported for WGSL
         // - Buffer pass only available with GLSL
         const isChannelTab = tab.name === '_image_channel' || tab.name === '_audio_channel' || tab.name === '_video_channel';
-        const isDisabled = (tab.name === 'audio_gpu' && (hasAudioWorklet || hasGLSL)) || 
-                          (tab.name === 'audio_worklet' && hasAudioGpu) ||
-                          (isChannelTab && hasWGSL) ||  // Channels not supported for WGSL yet
+        const isAudioTab = tab.name === 'audio_gpu' || tab.name === 'audio_worklet' || tab.name === 'audio_glsl';
+        const isDisabled = (isAudioTab && hasAnyAudio && !isActive) ||  // Only one audio tab at a time
+                          (tab.name === 'audio_gpu' && hasGLSL) ||       // WGSL audio incompatible with GLSL graphics
+                          (isChannelTab && hasWGSL) ||                   // Channels not supported for WGSL yet
                           (tab.name === '_buffer_channel' && (!getActiveGlslTab() || hasWGSL));
         
         const option = document.createElement('div');

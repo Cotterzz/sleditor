@@ -1,15 +1,22 @@
 /**
- * WebGL-based audio shader processor (Infinite streaming with background rendering)
+ * WebGL-based audio shader processor (Shadertoy compatible)
+ *
+ * Supports Shadertoy's sound shader signature:
+ *   vec2 mainSound(int samp, float time)
+ *
+ * Where:
+ *   samp = absolute sample index from start (0, 1, 2, 3...)
+ *   time = absolute time in seconds
  *
  * Usage:
  *
- * import { WebGLAudioShader } from './audio-shader.js';
+ * import { WebGLAudioShader } from './index.js';
  *
  * const shader = new WebGLAudioShader();
  *
  * await shader.init(`
- *   vec2 mainSound(float time) {
- *     return vec2(sin(time * 440.0 * 6.28318));
+ *   vec2 mainSound(int samp, float time) {
+ *     return vec2(sin(6.2831 * 440.0 * time) * exp(-3.0 * time));
  *   }
  * `);
  *
@@ -17,9 +24,9 @@
  *
  * // Update shader (seamlessly transitions)
  * shader.setShader(`
- *   vec2 mainSound(float time) {
+ *   vec2 mainSound(int samp, float time) {
  *     float freq = 220.0 + sin(time) * 100.0;
- *     return vec2(sin(time * freq * 6.28318));
+ *     return vec2(sin(6.2831 * freq * time));
  *   }
  * `);
  *
@@ -32,25 +39,30 @@ export class WebGLAudioShader {
   constructor() {
     this.audioContext = null
     this.isRunning = false
-    this.currentTime = 0
+    this.sampleOffset = 0  // Cumulative sample count (integer)
     this.scheduledUntil = 0
     this.renderWorker = null
     this.shaderCode = null
     this.scheduledSources = []
     this.maxTextureSize = 4096
-    this.bufferAheadTime = 1.0 // Keep 1 second of audio buffered
+    this.bufferAheadTime = 0.5 // Keep 0.5 second of audio buffered
     this.generating = false
+    this.gainNode = null
   }
 
   async init(shaderCode) {
     this.audioContext = new AudioContext()
+    
+    // Create gain node for volume control
+    this.gainNode = this.audioContext.createGain()
+    this.gainNode.connect(this.audioContext.destination)
 
     // Create Web Worker for background rendering
     const workerCode = `
       let gl = null;
       let program = null;
       let sampleRateLocation = null;
-      let timeOffsetLocation = null;
+      let sampleOffsetLocation = null;
       let framebuffer = null;
       let texture = null;
       let maxTextureSize = 4096;
@@ -61,10 +73,10 @@ export class WebGLAudioShader {
           const { canvas, shaderCode } = e.data;
           setupWebGL(canvas, shaderCode);
         } else if (e.data.type === 'render') {
-          const { numSamples, sampleRate, timeOffset } = e.data;
-          const audioData = generateAudio(numSamples, sampleRate, timeOffset);
+          const { numSamples, sampleRate, sampleOffset } = e.data;
+          const audioData = generateAudio(numSamples, sampleRate, sampleOffset);
           if (audioData) {
-            self.postMessage({ type: 'audioData', audioData }, [audioData.buffer]);
+            self.postMessage({ type: 'audioData', audioData, numSamples }, [audioData.buffer]);
           } else {
             self.postMessage({ type: 'error', error: 'Generation failed' });
           }
@@ -116,17 +128,34 @@ export class WebGLAudioShader {
           }
         \`;
         
+        // Wrap user's mainSound function with our boilerplate
+        // User writes: vec2 mainSound(int samp, float time) { ... }
+        // We provide samp and time automatically
         const fragmentShaderSource = \`#version 300 es
           precision highp float;
+          precision highp int;
+          
           uniform float iSampleRate;
-          uniform float iTimeOffset;
+          uniform int iSampleOffset;
+          
           out vec4 fragColor;
           
+          // User's shader code (must define mainSound)
           \${shaderCode}
           
           void main() {
-            float time = (gl_FragCoord.x - 0.5) / iSampleRate + iTimeOffset;
-            vec2 sound = mainSound(time);
+            // Calculate absolute sample index (integer, no precision loss)
+            int samp = iSampleOffset + int(gl_FragCoord.x - 0.5);
+            
+            // Calculate time from sample index (full precision)
+            float time = float(samp) / iSampleRate;
+            
+            // Call user's mainSound function
+            vec2 sound = mainSound(samp, time);
+            
+            // Clamp to valid audio range
+            sound = clamp(sound, -1.0, 1.0);
+            
             fragColor = vec4(sound, 0.0, 1.0);
           }
         \`;
@@ -150,7 +179,7 @@ export class WebGLAudioShader {
         gl.useProgram(program);
         
         sampleRateLocation = gl.getUniformLocation(program, 'iSampleRate');
-        timeOffsetLocation = gl.getUniformLocation(program, 'iTimeOffset');
+        sampleOffsetLocation = gl.getUniformLocation(program, 'iSampleOffset');
         
         self.postMessage({ type: 'ready' });
       }
@@ -168,7 +197,7 @@ export class WebGLAudioShader {
         return shader;
       }
       
-      function generateAudio(numSamples, sampleRate, timeOffset) {
+      function generateAudio(numSamples, sampleRate, sampleOffset) {
         const clampedSamples = Math.min(numSamples, maxTextureSize);
         
         if (currentWidth !== clampedSamples) {
@@ -177,7 +206,7 @@ export class WebGLAudioShader {
           
           texture = gl.createTexture();
           gl.bindTexture(gl.TEXTURE_2D, texture);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, clampedSamples, 1, 0, gl.RGBA, gl.FLOAT, null);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, clampedSamples, 1, 0, gl.RGBA, gl.FLOAT, null);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -199,7 +228,7 @@ export class WebGLAudioShader {
         }
         
         gl.uniform1f(sampleRateLocation, sampleRate);
-        gl.uniform1f(timeOffsetLocation, timeOffset);
+        gl.uniform1i(sampleOffsetLocation, sampleOffset);
         
         gl.viewport(0, 0, clampedSamples, 1);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -209,10 +238,11 @@ export class WebGLAudioShader {
         
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         
+        // Extract stereo audio from RGBA (R=left, G=right)
         const audioData = new Float32Array(clampedSamples * 2);
         for (let i = 0; i < clampedSamples; i++) {
-          audioData[i * 2] = pixelData[i * 4];
-          audioData[i * 2 + 1] = pixelData[i * 4 + 1];
+          audioData[i * 2] = pixelData[i * 4];       // Left channel
+          audioData[i * 2 + 1] = pixelData[i * 4 + 1]; // Right channel
         }
         
         return audioData;
@@ -228,14 +258,21 @@ export class WebGLAudioShader {
     this.renderWorker.onmessage = (e) => {
       if (e.data.type === 'ready') {
         this.workerReady = true
+        // Clear any previous errors on successful compile
+        if (this.onSuccess) {
+          this.onSuccess()
+        }
       } else if (e.data.type === 'maxTextureSize') {
         this.maxTextureSize = e.data.size
       } else if (e.data.type === 'audioData') {
         this.generating = false
-        this.onAudioDataGenerated(e.data.audioData)
+        this.onAudioDataGenerated(e.data.audioData, e.data.numSamples)
       } else if (e.data.type === 'error') {
-        console.error('Worker error:', e.data.error)
+        console.error('Audio shader error:', e.data.error)
         this.generating = false
+        if (this.onError) {
+          this.onError(e.data.error)
+        }
       }
     }
 
@@ -268,13 +305,14 @@ export class WebGLAudioShader {
       this.generating = true
 
       const sampleRate = this.audioContext.sampleRate
-      const maxSafeSamples = Math.min(this.maxTextureSize, 8192)
+      // Generate ~100ms of audio per batch (balance between latency and efficiency)
+      const samplesToGenerate = Math.min(Math.floor(sampleRate * 0.1), this.maxTextureSize)
 
       this.renderWorker.postMessage({
         type: 'render',
-        numSamples: maxSafeSamples,
+        numSamples: samplesToGenerate,
         sampleRate,
-        timeOffset: this.currentTime
+        sampleOffset: this.sampleOffset
       })
     }
 
@@ -295,28 +333,10 @@ export class WebGLAudioShader {
         [offscreen]
       )
     } else {
-      const wasRunning = this.isRunning
-      if (wasRunning) {
-        this.stop()
-      }
-
       this.renderWorker.postMessage({
         type: 'updateShader',
         shaderCode
       })
-
-      await new Promise((resolve) => {
-        const checkReady = setInterval(() => {
-          if (this.workerReady) {
-            clearInterval(checkReady)
-            resolve()
-          }
-        }, 10)
-      })
-
-      if (wasRunning) {
-        this.start()
-      }
     }
 
     // Wait for worker to be ready
@@ -330,18 +350,18 @@ export class WebGLAudioShader {
     })
   }
 
-  onAudioDataGenerated(audioData) {
+  onAudioDataGenerated(audioData, numSamples) {
     if (!this.isRunning) return
 
     const sampleRate = this.audioContext.sampleRate
-    const numSamples = audioData.length / 2
+    const actualSamples = audioData.length / 2
 
     // Create AudioBuffer
-    const buffer = this.audioContext.createBuffer(2, numSamples, sampleRate)
+    const buffer = this.audioContext.createBuffer(2, actualSamples, sampleRate)
     const leftChannel = buffer.getChannelData(0)
     const rightChannel = buffer.getChannelData(1)
 
-    for (let i = 0; i < numSamples; i++) {
+    for (let i = 0; i < actualSamples; i++) {
       leftChannel[i] = audioData[i * 2]
       rightChannel[i] = audioData[i * 2 + 1]
     }
@@ -349,17 +369,19 @@ export class WebGLAudioShader {
     // Schedule playback
     const source = this.audioContext.createBufferSource()
     source.buffer = buffer
-    source.connect(this.audioContext.destination)
+    source.connect(this.gainNode)
 
     // Schedule from either current scheduled position or current time + small buffer
     const now = this.audioContext.currentTime
-    const startTime = Math.max(this.scheduledUntil, now + 0.1)
+    const startTime = Math.max(this.scheduledUntil, now + 0.05)
 
     source.start(startTime)
 
     this.scheduledSources.push(source)
     this.scheduledUntil = startTime + buffer.duration
-    this.currentTime += buffer.duration
+    
+    // Advance sample offset for next batch
+    this.sampleOffset += actualSamples
 
     // Clean up old sources
     source.onended = () => {
@@ -377,7 +399,7 @@ export class WebGLAudioShader {
     // Initialize timing
     const now = this.audioContext.currentTime
     this.scheduledUntil = now
-    this.currentTime = 0
+    this.sampleOffset = 0  // Reset to start
   }
 
   stop() {
@@ -391,8 +413,29 @@ export class WebGLAudioShader {
     })
     this.scheduledSources = []
 
-    this.currentTime = 0
+    this.sampleOffset = 0
     this.scheduledUntil = 0
+  }
+  
+  // Restart from beginning (like visual shader restart)
+  restart() {
+    const wasRunning = this.isRunning
+    this.stop()
+    if (wasRunning) {
+      this.start()
+    }
+  }
+  
+  // Set volume (0.0 to 1.0)
+  setVolume(volume) {
+    if (this.gainNode) {
+      this.gainNode.gain.value = Math.max(0, Math.min(1, volume))
+    }
+  }
+  
+  // Get current playback time in seconds
+  getCurrentTime() {
+    return this.sampleOffset / this.audioContext.sampleRate
   }
 
   dispose() {

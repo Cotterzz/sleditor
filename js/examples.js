@@ -85,6 +85,20 @@ function enterframe(state, api) {
     //api.uniforms.setCustomFloat(0, state.parameter);
 }`;
 
+export const MINIMAL_AUDIO_GLSL = `// Shadertoy-compatible audio shader
+// vec2 mainSound(int samp, float time)
+//   samp = absolute sample index from start
+//   time = absolute time in seconds
+//   returns stereo audio (-1.0 to 1.0)
+
+vec2 mainSound(int samp, float time) {
+    // A 440 Hz sine wave that fades out
+    float envelope = exp(-0.5 * time);
+    float wave = sin(6.2831 * 440.0 * time);
+    return vec2(wave * envelope * 0.5);
+}
+`;
+
 export const MINIMAL_AUDIO_GPU = `// Simple sine wave (GPU)
 @compute @workgroup_size(128, 1, 1)
 fn audio_main(@builtin(global_invocation_id) gid: vec3<u32>) {

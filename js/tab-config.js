@@ -78,6 +78,15 @@ export const TAB_CONFIG = {
     // AUDIO TABS
     // ========================================================================
     
+    audio_glsl: {
+        label: 'Audio (GLSL)',
+        icon: '🔊',
+        dbKey: 'audio_glsl',
+        editor: 'audio',
+        type: 'webgl',
+        language: 'glsl'
+    },
+    
     audio_gpu: {
         label: 'Audio (WGSL)',
         icon: '🔊',
@@ -311,7 +320,7 @@ export function getAllTabNames() {
  */
 export function tabsAreMutuallyExclusive(tab1, tab2) {
     // Audio tabs are mutually exclusive
-    const audioTabs = ['audio_gpu', 'audio_worklet'];
+    const audioTabs = ['audio_glsl', 'audio_gpu', 'audio_worklet'];
     if (audioTabs.includes(tab1) && audioTabs.includes(tab2)) {
         return true;
     }

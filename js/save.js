@@ -651,6 +651,8 @@ export async function loadDatabaseShader(shader) {
                 monaco.editor.setModelLanguage(editor.getModel(), 'javascript');
             } else if (tabName === 'audio_gpu') {
                 monaco.editor.setModelLanguage(editor.getModel(), 'wgsl');
+            } else if (tabName === 'audio_glsl') {
+                monaco.editor.setModelLanguage(editor.getModel(), 'glsl');
             }
         }
         });

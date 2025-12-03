@@ -11,7 +11,7 @@
 // - Top-level panel switching
 // ============================================================================
 
-import { state, CONFIG, saveSettings, logStatus } from './core.js';
+import { state, CONFIG, AUDIO_MODES, saveSettings, logStatus } from './core.js';
 import * as vim from './vim.js';
 import * as render from './render.js';
 import * as editor from './editor.js';
@@ -20,6 +20,7 @@ import * as comments from './comments.js';
 import * as channels from './channels.js';
 import * as webgl from './backends/webgl.js';
 import * as recording from './recording.js';
+import * as audioGlsl from './backends/audio-glsl.js';
 
 let compileOverlay;
 let compileOverlayText;
@@ -261,6 +262,15 @@ export async function restart(userInitiated = false) {
         channels.restartVideoChannels(state.isPlaying)
     ]);
     
+    // Restart GLSL audio if active
+    if (state.audioMode === AUDIO_MODES.GLSL) {
+        audioGlsl.restart();
+        // If playing, start it again (restart stops it)
+        if (state.isPlaying) {
+            audioGlsl.start();
+        }
+    }
+    
     // Reset user state
     if (state.userState && state.userInit) {
         try {
@@ -303,6 +313,11 @@ async function startPlayback() {
     state.pausedTime += pauseDuration;
     state.lastPauseTime = 0;
     
+    // Start GLSL audio if active
+    if (state.audioMode === AUDIO_MODES.GLSL) {
+        audioGlsl.start();
+    }
+    
     updatePlayPauseButton();
 }
 
@@ -314,6 +329,12 @@ function pausePlayback() {
     }
     channels.pauseAudioChannels();
     channels.pauseVideoChannels();
+    
+    // Stop GLSL audio if active
+    if (state.audioMode === AUDIO_MODES.GLSL) {
+        audioGlsl.stop();
+    }
+    
     updatePlayPauseButton();
 }
 

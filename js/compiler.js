@@ -9,6 +9,7 @@ import { state, CONFIG, DERIVED, AUDIO_MODES, logStatus } from './core.js';
 import * as webgpu from './backends/webgpu.js';
 import * as webgl from './backends/webgl.js';
 import * as audioWorklet from './backends/audio-worklet.js';
+import * as audioGlsl from './backends/audio-glsl.js';
 import * as render from './render.js';
 import * as editor from './editor.js';
 import * as jsRuntime from './js-runtime.js';
@@ -71,7 +72,7 @@ function adjustGLSLErrors(errors, boilerplateLines, channelUniformLines) {
 // GLSL Compilation Path
 // ============================================================================
 
-export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
+export async function compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioReload) {
     const compileToken = ++state.currentCompileToken;
     state.isRecompiling = true;
     setCompileOverlay(true);
@@ -210,16 +211,30 @@ export async function compileGLSL(hasAudioWorklet, skipAudioWorkletReload) {
         state.graphicsBackend = 'webgl';
         state.glProgram = compiledPasses.find(pass => pass.type === 'main')?.program || null;
         
-        // Load AudioWorklet if present
+        // Load Audio if present
         let audioSuccess = true;
-        if (hasAudioWorklet && !skipAudioWorkletReload) {
-            const audioCode = state.audioEditor.getValue();
-            const result = await audioWorklet.load(audioCode);
-            if (!result.success) {
-                editor.setAudioWorkletErrors(result.errors);
-                const errMsg = result.errors[0] ? `Line ${result.errors[0].lineNum || '?'}: ${result.errors[0].message}` : 'Unknown error';
-                logStatus(`✗ AudioWorklet error: ${errMsg}`, 'error');
-                audioSuccess = false;
+        if (!skipAudioReload) {
+            if (hasAudioGlsl) {
+                // Initialize GLSL audio backend
+                await audioGlsl.init(state.audioContext, state.gainNode);
+                
+                const audioCode = state.audioEditor.getValue();
+                const result = await audioGlsl.load(audioCode);
+                if (!result.success) {
+                    editor.setAudioWorkletErrors(result.errors); // Reuse error display
+                    const errMsg = result.errors[0] ? `Line ${result.errors[0].lineNum || '?'}: ${result.errors[0].message}` : 'Unknown error';
+                    logStatus(`✗ GLSL Audio error: ${errMsg}`, 'error');
+                    audioSuccess = false;
+                }
+            } else if (hasAudioWorklet) {
+                const audioCode = state.audioEditor.getValue();
+                const result = await audioWorklet.load(audioCode);
+                if (!result.success) {
+                    editor.setAudioWorkletErrors(result.errors);
+                    const errMsg = result.errors[0] ? `Line ${result.errors[0].lineNum || '?'}: ${result.errors[0].message}` : 'Unknown error';
+                    logStatus(`✗ AudioWorklet error: ${errMsg}`, 'error');
+                    audioSuccess = false;
+                }
             }
         }
         
@@ -287,7 +302,8 @@ function queueCompileRerun(hasAudioWorklet, skipAudioWorkletReload) {
         }
         state.isRecompiling = true;
         setCompileOverlay(true);
-        compileGLSL(hasAudioWorklet, skipAudioWorkletReload);
+        const hasAudioGlsl = state.activeTabs.includes('audio_glsl');
+        compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioWorkletReload);
     }, 50);
 }
 
@@ -310,6 +326,7 @@ export async function reloadShader(isResizeOnly = false) {
                            state.activeTabs.includes('glsl_golf');
     const hasAudioGpu = state.activeTabs.includes('audio_gpu');
     const hasAudioWorklet = state.activeTabs.includes('audio_worklet');
+    const hasAudioGlsl = state.activeTabs.includes('audio_glsl');
     
     // Determine backend based on active tabs
     const needsWebGPU = hasGraphicsWGSL || hasAudioGpu;
@@ -317,18 +334,19 @@ export async function reloadShader(isResizeOnly = false) {
     
     // Stop old audio
     const isWorkletActive = state.audioMode === AUDIO_MODES.WORKLET && state.audioWorkletNode;
-    const skipAudioWorkletReload = isResizeOnly && isWorkletActive && hasAudioWorklet;
+    const isGlslAudioActive = state.audioMode === AUDIO_MODES.GLSL;
+    const skipAudioReload = isResizeOnly && (isWorkletActive || isGlslAudioActive);
     
-    if (!skipAudioWorkletReload) {
+    if (!skipAudioReload) {
         stopAudio();
     }
     
     // Handle GLSL (WebGL) compilation
     if (needsWebGL) {
-        return await compileGLSL(hasAudioWorklet, skipAudioWorkletReload);
+        return await compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioReload);
     }
     
-    // Non-graphics mode (JS + AudioWorklet only)
+    // Non-graphics mode (JS + Audio only)
     if (!needsWebGPU || !state.hasWebGPU) {
         try {
             logStatus('Compiling...', 'info');
@@ -338,14 +356,25 @@ export async function reloadShader(isResizeOnly = false) {
             let audioSuccess = true;
             let jsSuccess = true;
             
-            // Load AudioWorklet if present
-            if (hasAudioWorklet && !skipAudioWorkletReload) {
-                const audioCode = state.audioEditor.getValue();
-                const result = await audioWorklet.load(audioCode);
-                if (!result.success) {
-                    editor.setAudioWorkletErrors(result.errors);
-                    logStatus(`✗ AudioWorklet error: ${result.errors[0].message}`, 'error');
-                    audioSuccess = false;
+            // Load Audio if present
+            if (!skipAudioReload) {
+                if (hasAudioGlsl) {
+                    await audioGlsl.init(state.audioContext, state.gainNode);
+                    const audioCode = state.audioEditor.getValue();
+                    const result = await audioGlsl.load(audioCode);
+                    if (!result.success) {
+                        editor.setAudioWorkletErrors(result.errors);
+                        logStatus(`✗ GLSL Audio error: ${result.errors[0].message}`, 'error');
+                        audioSuccess = false;
+                    }
+                } else if (hasAudioWorklet) {
+                    const audioCode = state.audioEditor.getValue();
+                    const result = await audioWorklet.load(audioCode);
+                    if (!result.success) {
+                        editor.setAudioWorkletErrors(result.errors);
+                        logStatus(`✗ AudioWorklet error: ${result.errors[0].message}`, 'error');
+                        audioSuccess = false;
+                    }
                 }
             }
             
@@ -441,8 +470,8 @@ export async function reloadShader(isResizeOnly = false) {
             return false;
         }
         
-        // Load AudioWorklet if present
-        if (hasAudioWorklet && !skipAudioWorkletReload) {
+        // Load Audio if present (AudioWorklet - GLSL audio wouldn't be used with WebGPU graphics)
+        if (hasAudioWorklet && !skipAudioReload) {
             const audioCode = state.audioEditor.getValue();
             const result = await audioWorklet.load(audioCode);
             if (!result.success) {
@@ -495,6 +524,7 @@ export function stopAudio() {
     state.audioPipeline = null;
     state.pendingAudio = false;
     audioWorklet.cleanup();
+    audioGlsl.cleanup();
     state.audioMode = AUDIO_MODES.NONE;
 }
 

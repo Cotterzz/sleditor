@@ -1,0 +1,200 @@
+<html>
+	<head>
+		<title>GLSL Audio Shader (Shadertoy Compatible)</title>
+		<style>
+			body {
+				background: #1e1e1e;
+				color: #d4d4d4;
+				font-family: 'Consolas', 'Monaco', monospace;
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+				height: 100vh;
+				margin: 0;
+				padding: 10px;
+				box-sizing: border-box;
+			}
+			h3 {
+				margin: 0;
+				color: #569cd6;
+			}
+			.info {
+				font-size: 12px;
+				color: #808080;
+			}
+			textarea {
+				display: block;
+				width: 100%;
+				flex: 1;
+				background: #2d2d2d;
+				color: #d4d4d4;
+				border: 1px solid #3c3c3c;
+				padding: 10px;
+				font-family: 'Consolas', 'Monaco', monospace;
+				font-size: 14px;
+				resize: none;
+			}
+			.controls {
+				display: flex;
+				gap: 10px;
+				align-items: center;
+			}
+			button {
+				padding: 10px 20px;
+				background: #0e639c;
+				color: white;
+				border: none;
+				cursor: pointer;
+				font-size: 14px;
+			}
+			button:hover {
+				background: #1177bb;
+			}
+			button:disabled {
+				background: #3c3c3c;
+				cursor: not-allowed;
+			}
+			#status {
+				color: #4ec9b0;
+				font-size: 12px;
+			}
+			#error {
+				color: #f44747;
+				font-size: 12px;
+				min-height: 20px;
+			}
+			.time {
+				color: #dcdcaa;
+				font-size: 14px;
+				min-width: 100px;
+			}
+		</style>
+	</head>
+	<body>
+		<h3>🔊 GLSL Audio Shader</h3>
+		<div class="info">
+			Shadertoy compatible: <code>vec2 mainSound(int samp, float time)</code><br>
+			• <code>samp</code> = absolute sample index (0, 1, 2, 3...)<br>
+			• <code>time</code> = absolute time in seconds<br>
+			• Returns stereo audio (-1.0 to 1.0)
+		</div>
+		
+		<textarea id="shaderText" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">// Shadertoy-compatible audio shader
+// Try pasting any Shadertoy sound shader here!
+
+vec2 mainSound(int samp, float time) {
+    // A 440 Hz sine wave that fades out
+    float envelope = exp(-0.5 * time);
+    float wave = sin(6.2831 * 440.0 * time);
+    return vec2(wave * envelope);
+}
+</textarea>
+
+		<div id="error"></div>
+		
+		<div class="controls">
+			<button id="buttonStart">▶ Start</button>
+			<button id="buttonStop" disabled>⏹ Stop</button>
+			<button id="buttonRestart" disabled>↺ Restart</button>
+			<span class="time">Time: <span id="timeDisplay">0.00</span>s</span>
+			<span id="status">Ready</span>
+		</div>
+	</body>
+	<script type="module">
+		import { WebGLAudioShader } from './index.js'
+
+		const buttonStart = document.getElementById('buttonStart')
+		const buttonStop = document.getElementById('buttonStop')
+		const buttonRestart = document.getElementById('buttonRestart')
+		const shaderText = document.getElementById('shaderText')
+		const statusEl = document.getElementById('status')
+		const errorEl = document.getElementById('error')
+		const timeDisplay = document.getElementById('timeDisplay')
+
+		let shader = null
+		let timeUpdateInterval = null
+
+		async function initShader() {
+			shader = new WebGLAudioShader()
+			
+			shader.onError = (error) => {
+				errorEl.textContent = '❌ ' + error
+				statusEl.textContent = 'Error'
+			}
+			
+			shader.onSuccess = () => {
+				errorEl.textContent = ''
+			}
+			
+			try {
+				await shader.init(shaderText.value)
+				statusEl.textContent = 'Initialized'
+				errorEl.textContent = ''
+			} catch (e) {
+				errorEl.textContent = '❌ ' + e.message
+			}
+		}
+
+		await initShader()
+
+		buttonStart.addEventListener('click', async () => {
+			if (!shader) await initShader()
+			
+			shader.start()
+			buttonStart.disabled = true
+			buttonStop.disabled = false
+			buttonRestart.disabled = false
+			statusEl.textContent = '🔊 Playing'
+			errorEl.textContent = ''
+			
+			// Update time display
+			timeUpdateInterval = setInterval(() => {
+				timeDisplay.textContent = shader.getCurrentTime().toFixed(2)
+			}, 100)
+		})
+
+		buttonStop.addEventListener('click', () => {
+			if (shader) {
+				shader.stop()
+			}
+			buttonStart.disabled = false
+			buttonStop.disabled = true
+			buttonRestart.disabled = true
+			statusEl.textContent = 'Stopped'
+			timeDisplay.textContent = '0.00'
+			
+			if (timeUpdateInterval) {
+				clearInterval(timeUpdateInterval)
+				timeUpdateInterval = null
+			}
+		})
+
+		buttonRestart.addEventListener('click', () => {
+			if (shader) {
+				shader.restart()
+				statusEl.textContent = '🔊 Restarted'
+			}
+		})
+
+		// Live update shader on edit
+		let updateTimeout = null
+		shaderText.addEventListener('input', () => {
+			// Debounce updates
+			if (updateTimeout) clearTimeout(updateTimeout)
+			
+			updateTimeout = setTimeout(async () => {
+				if (shader) {
+					// Clear error immediately when attempting compile
+					errorEl.textContent = ''
+					
+					try {
+						await shader.setShader(shaderText.value)
+						statusEl.textContent = shader.isRunning ? '🔊 Updated' : 'Updated'
+					} catch (e) {
+						errorEl.textContent = '❌ ' + e.message
+					}
+				}
+			}, 300)
+		})
+	</script>
+</html>
