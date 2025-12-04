@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
 <title>Shadertoy Library Browser</title>
 <style>
 :root {
@@ -708,6 +709,10 @@ button.primary:hover {
                 <option value="48">48 per page</option>
                 <option value="96">96 per page</option>
             </select>
+            
+            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-dim);">
+                <input type="checkbox" id="proxyToggle" checked> Use proxy
+            </label>
         </div>
     </div>
 </header>
@@ -812,6 +817,17 @@ let currentPage = 1;
 let perPage = 24;
 let selectedShader = null;
 let viewMode = 'grid';
+let useProxy = true; // Use proxy by default (Shadertoy blocks direct hotlinking)
+
+// Thumbnail URL helper - can use proxy if needed
+function getThumbUrl(id) {
+    const direct = `https://www.shadertoy.com/media/shaders/${id}.jpg`;
+    if (useProxy) {
+        // weserv.nl is a free image proxy that strips referer
+        return `https://images.weserv.nl/?url=${encodeURIComponent(direct)}`;
+    }
+    return direct;
+}
 
 // DOM elements
 const dropZone = document.getElementById('dropZone');
@@ -1007,7 +1023,7 @@ function renderShaders() {
 function renderCard(shader) {
     const info = shader.info || {};
     const id = info.id || '';
-    const thumbUrl = `https://www.shadertoy.com/media/shaders/${id}.jpg`;
+    const thumbUrl = getThumbUrl(id);
     const date = info.date ? new Date(parseInt(info.date) * 1000).toLocaleDateString() : '-';
     const passes = (shader.renderpass || []).length;
     const isSelected = selectedShader?.info?.id === id;
@@ -1015,7 +1031,7 @@ function renderCard(shader) {
     return `
         <div class="shader-card ${isSelected ? 'selected' : ''}" onclick="selectShader('${id}')">
             <div class="shader-thumb">
-                <img data-src="${thumbUrl}" alt="${info.name}" style="opacity: 0; transition: opacity 0.3s;">
+                <img data-src="${thumbUrl}" alt="${info.name}" referrerPolicy="no-referrer" style="opacity: 0; transition: opacity 0.3s;">
                 <div class="shader-status">
                     <span class="status-badge ${isPublic(info.published) ? 'public' : 'private'}">
                         ${isPublic(info.published) ? 'Public' : 'Private'}
@@ -1038,14 +1054,14 @@ function renderCard(shader) {
 function renderListItem(shader) {
     const info = shader.info || {};
     const id = info.id || '';
-    const thumbUrl = `https://www.shadertoy.com/media/shaders/${id}.jpg`;
+    const thumbUrl = getThumbUrl(id);
     const date = info.date ? new Date(parseInt(info.date) * 1000).toLocaleDateString() : '-';
     const isSelected = selectedShader?.info?.id === id;
     
     return `
         <div class="shader-list-item ${isSelected ? 'selected' : ''}" onclick="selectShader('${id}')">
             <div class="shader-list-thumb">
-                <img data-src="${thumbUrl}" alt="${info.name}" style="opacity: 0; transition: opacity 0.3s;">
+                <img data-src="${thumbUrl}" alt="${info.name}" referrerPolicy="no-referrer" style="opacity: 0; transition: opacity 0.3s;">
             </div>
             <div class="shader-list-info">
                 <div class="shader-list-title">${escapeHtml(info.name || 'Untitled')}</div>
@@ -1119,8 +1135,8 @@ function selectShader(id) {
     document.getElementById('detailDescription').textContent = info.description || 'No description';
     
     // Thumbnail
-    const thumbUrl = `https://www.shadertoy.com/media/shaders/${info.id}.jpg`;
-    document.getElementById('detailThumb').innerHTML = `<img src="${thumbUrl}" alt="${info.name}" onerror="this.parentElement.innerHTML='<div class=\\'shader-thumb-placeholder\\'>🎨</div>'">`;
+    const thumbUrl = getThumbUrl(info.id);
+    document.getElementById('detailThumb').innerHTML = `<img src="${thumbUrl}" alt="${info.name}" referrerPolicy="no-referrer" onerror="this.parentElement.innerHTML='<div class=\\'shader-thumb-placeholder\\'>🎨</div>'">`;
     
     // Tags
     const tagsHtml = (info.tags || []).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('');
@@ -1203,6 +1219,14 @@ perPageSelect.addEventListener('change', (e) => {
     perPage = parseInt(e.target.value);
     currentPage = 1;
     renderShaders();
+});
+
+document.getElementById('proxyToggle').addEventListener('change', (e) => {
+    useProxy = e.target.checked;
+    renderShaders();
+    if (selectedShader) {
+        selectShader(selectedShader.info.id);
+    }
 });
 
 // Utility
