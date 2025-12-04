@@ -223,13 +223,26 @@ button.primary:hover {
     text-align: center;
 }
 
+.shader-date.estimated {
+    font-style: italic;
+    opacity: 0.7;
+}
+
 .shader-status {
-    width: 70px;
+    width: 85px;
     text-align: center;
 }
 
-.shader-status.public {
+.shader-status.public-api {
     color: var(--success);
+}
+
+.shader-status.public {
+    color: #4ade80;
+}
+
+.shader-status.unlisted {
+    color: #60a5fa;
 }
 
 .shader-status.private {
@@ -520,13 +533,6 @@ button.primary:hover {
     }
 }
 
-.overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 150;
-}
 
 /* Close button */
 .close-btn {
@@ -564,7 +570,7 @@ button.primary:hover {
         </div>
         
         <div class="search-box">
-            <input type="text" id="searchInput" placeholder="Search shaders..." disabled>
+            <input type="text" id="searchInput" placeholder="Search (comma for multiple)..." disabled>
         </div>
         
         <div class="controls">
@@ -579,7 +585,9 @@ button.primary:hover {
             
             <select id="filterSelect" disabled>
                 <option value="all">All Shaders</option>
+                <option value="public-api">Public + API</option>
                 <option value="public">Public Only</option>
+                <option value="unlisted">Unlisted Only</option>
                 <option value="private">Private Only</option>
                 <option value="multipass">Multi-pass</option>
             </select>
@@ -692,7 +700,6 @@ button.primary:hover {
     </div>
 </div>
 
-<div class="overlay" id="overlay" onclick="closeDetail()"></div>
 
 <script>
 // State
@@ -714,7 +721,6 @@ const filterSelect = document.getElementById('filterSelect');
 const perPageSelect = document.getElementById('perPageSelect');
 const statsBar = document.getElementById('statsBar');
 const detailPanel = document.getElementById('detailPanel');
-const overlay = document.getElementById('overlay');
 
 // File handling
 dropZone.addEventListener('dragover', (e) => {
@@ -760,6 +766,9 @@ function loadFile(file) {
 function initializeData(data) {
     allShaders = data.shaders || [];
     
+    // Estimate dates for shaders without dates (private shaders)
+    estimateMissingDates();
+    
     // Update UI
     document.getElementById('userName').textContent = data.userName || 'Unknown';
     document.getElementById('shaderCount').textContent = `${allShaders.length} shaders`;
@@ -787,7 +796,8 @@ function initializeData(data) {
 
 // Filtering and sorting
 function applyFilters() {
-    const searchTerm = searchInput.value.toLowerCase();
+    const searchValue = searchInput.value.toLowerCase().trim();
+    const searchTerms = searchValue ? searchValue.split(',').map(t => t.trim()).filter(t => t) : [];
     const filter = filterSelect.value;
     const sort = sortSelect.value;
     
@@ -795,8 +805,8 @@ function applyFilters() {
     filteredShaders = allShaders.filter(shader => {
         const info = shader.info || {};
         
-        // Search filter
-        if (searchTerm) {
+        // Search filter (all comma-separated terms must match)
+        if (searchTerms.length > 0) {
             const searchFields = [
                 info.name || '',
                 info.description || '',
@@ -804,12 +814,18 @@ function applyFilters() {
                 (shader.renderpass || []).map(p => p.code || '').join(' ')
             ].join(' ').toLowerCase();
             
-            if (!searchFields.includes(searchTerm)) return false;
+            // All terms must be found
+            for (const term of searchTerms) {
+                if (!searchFields.includes(term)) return false;
+            }
         }
         
         // Status filter
-        if (filter === 'public' && !isPublic(info.published)) return false;
-        if (filter === 'private' && isPublic(info.published)) return false;
+        const status = getStatus(info.published);
+        if (filter === 'public-api' && status !== 'public-api') return false;
+        if (filter === 'public' && status !== 'public') return false;
+        if (filter === 'unlisted' && status !== 'unlisted') return false;
+        if (filter === 'private' && status !== 'private') return false;
         if (filter === 'multipass' && (shader.renderpass || []).length < 2) return false;
         
         return true;
@@ -857,8 +873,78 @@ function applyFilters() {
     renderShaders();
 }
 
-function isPublic(status) {
-    return status && (status.toLowerCase().includes('public'));
+function getStatus(published) {
+    if (!published) return 'private';
+    const p = published.toLowerCase();
+    if (p.includes('api')) return 'public-api';
+    if (p === 'public') return 'public';
+    if (p.includes('unlisted')) return 'unlisted';
+    if (p.includes('private')) return 'private';
+    return 'private';
+}
+
+function getStatusLabel(published) {
+    const status = getStatus(published);
+    switch (status) {
+        case 'public-api': return 'Public+API';
+        case 'public': return 'Public';
+        case 'unlisted': return 'Unlisted';
+        case 'private': return 'Private';
+        default: return 'Private';
+    }
+}
+
+// Check if shader has a valid date (not 0, not empty)
+function hasValidDate(shader) {
+    const date = shader?.info?.date;
+    return date && date !== "0" && parseInt(date) > 0;
+}
+
+// Estimate dates for shaders without dates based on position in JSON
+function estimateMissingDates() {
+    for (let i = 0; i < allShaders.length; i++) {
+        const shader = allShaders[i];
+        
+        // If shader already has a valid date, skip
+        if (hasValidDate(shader)) continue;
+        
+        // Find nearest previous shader with a date
+        let prevDate = null;
+        for (let j = i - 1; j >= 0; j--) {
+            if (hasValidDate(allShaders[j])) {
+                prevDate = parseInt(allShaders[j].info.date);
+                break;
+            }
+        }
+        
+        // Find nearest next shader with a date
+        let nextDate = null;
+        for (let j = i + 1; j < allShaders.length; j++) {
+            if (hasValidDate(allShaders[j])) {
+                nextDate = parseInt(allShaders[j].info.date);
+                break;
+            }
+        }
+        
+        // Estimate date
+        let estimatedDate = null;
+        if (prevDate && nextDate) {
+            // Average of prev and next
+            estimatedDate = Math.round((prevDate + nextDate) / 2);
+        } else if (prevDate) {
+            // Use prev date (shader is after all dated ones)
+            estimatedDate = prevDate;
+        } else if (nextDate) {
+            // Use next date (shader is before all dated ones)
+            estimatedDate = nextDate;
+        }
+        
+        if (estimatedDate) {
+            if (!shader.info) shader.info = {};
+            shader.info.date = String(estimatedDate);
+            shader.info.dateEstimated = true;
+        }
+    }
 }
 
 // Rendering
@@ -874,16 +960,19 @@ function renderShaders() {
 function renderRow(shader) {
     const info = shader.info || {};
     const id = info.id || '';
-    const date = info.date ? new Date(parseInt(info.date) * 1000).toLocaleDateString() : '-';
+    const hasDate = info.date && info.date !== "0" && parseInt(info.date) > 0;
+    const dateStr = hasDate ? new Date(parseInt(info.date) * 1000).toLocaleDateString() : '-';
+    const dateDisplay = info.dateEstimated ? `c.${dateStr}` : dateStr;
     const passes = (shader.renderpass || []).length;
     const isSelected = selectedShader?.info?.id === id;
-    const pub = isPublic(info.published);
+    const status = getStatus(info.published);
+    const statusLabel = getStatusLabel(info.published);
     
     return `
         <div class="shader-row ${isSelected ? 'selected' : ''}" onclick="selectShader('${id}')">
             <span class="shader-title">${escapeHtml(info.name || 'Untitled')}</span>
-            <span class="shader-date">${date}</span>
-            <span class="shader-status ${pub ? 'public' : 'private'}">${pub ? 'Public' : 'Private'}</span>
+            <span class="shader-date ${info.dateEstimated ? 'estimated' : ''}" title="${info.dateEstimated ? 'Estimated from surrounding shaders' : ''}">${dateDisplay}</span>
+            <span class="shader-status ${status}">${statusLabel}</span>
             <span class="shader-views">👁 ${(info.viewed || 0).toLocaleString()}</span>
             <span class="shader-likes">❤️ ${info.likes || 0}</span>
             <span class="shader-passes">${passes}</span>
@@ -942,9 +1031,9 @@ function selectShader(id) {
     document.getElementById('detailLikes').textContent = info.likes || 0;
     document.getElementById('detailPasses').textContent = passes.length;
     document.getElementById('detailStatus').textContent = info.published || 'Unknown';
-    document.getElementById('detailDate').textContent = info.date 
-        ? new Date(parseInt(info.date) * 1000).toLocaleString() 
-        : '-';
+    const hasDate = info.date && info.date !== "0" && parseInt(info.date) > 0;
+    const dateStr = hasDate ? new Date(parseInt(info.date) * 1000).toLocaleString() : '-';
+    document.getElementById('detailDate').textContent = info.dateEstimated ? `circa ${dateStr}` : dateStr;
     document.getElementById('detailDescription').textContent = info.description || 'No description';
     
     // Tags
@@ -966,7 +1055,6 @@ function selectShader(id) {
     
     // Show panel
     detailPanel.classList.add('open');
-    overlay.style.display = 'block';
     
     // Update selection in list
     renderShaders();
@@ -974,7 +1062,6 @@ function selectShader(id) {
 
 function closeDetail() {
     detailPanel.classList.remove('open');
-    overlay.style.display = 'none';
     selectedShader = null;
     renderShaders();
 }
