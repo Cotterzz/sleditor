@@ -766,13 +766,25 @@ function loadFile(file) {
 }
 
 function initializeData(data) {
-    allShaders = data.shaders || [];
+    // Handle both formats: { shaders: [...] } or just [...]
+    if (Array.isArray(data)) {
+        allShaders = data;
+    } else {
+        allShaders = data.shaders || [];
+    }
+    
+    if (allShaders.length === 0) {
+        return;
+    }
     
     // Estimate dates for shaders without dates (private shaders)
     estimateMissingDates();
     
+    // Try to get username from data wrapper or first shader
+    const userName = data.userName || allShaders[0]?.info?.username || 'Unknown';
+    
     // Update UI
-    document.getElementById('userName').textContent = data.userName || 'Unknown';
+    document.getElementById('userName').textContent = userName;
     document.getElementById('shaderCount').textContent = `${allShaders.length} shaders`;
     
     // Calculate totals
@@ -876,8 +888,20 @@ function applyFilters() {
 }
 
 function getStatus(published) {
-    if (!published) return 'private';
-    const p = published.toLowerCase();
+    if (published === undefined || published === null) return 'private';
+    
+    // Handle numeric values (Shadertoy API format)
+    // 0 = private, 1 = unlisted, 2 = public, 3 = public+api
+    if (typeof published === 'number' || !isNaN(parseInt(published))) {
+        const num = parseInt(published);
+        if (num === 0) return 'private';
+        if (num === 1) return 'unlisted';
+        if (num === 2) return 'public';
+        if (num === 3) return 'public-api';
+    }
+    
+    // Handle string values
+    const p = String(published).toLowerCase();
     if (p.includes('api')) return 'public-api';
     if (p === 'public') return 'public';
     if (p.includes('unlisted')) return 'unlisted';
