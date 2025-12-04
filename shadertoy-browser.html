@@ -823,8 +823,8 @@ let useProxy = true; // Use proxy by default (Shadertoy blocks direct hotlinking
 function getThumbUrl(id) {
     const direct = `https://www.shadertoy.com/media/shaders/${id}.jpg`;
     if (useProxy) {
-        // weserv.nl is a free image proxy that strips referer
-        const url = `https://images.weserv.nl/?url=${encodeURIComponent(direct)}`;
+        // Try corsproxy.io which may handle this better
+        const url = `https://corsproxy.io/?${encodeURIComponent(direct)}`;
         console.log('Proxy URL:', url);
         return url;
     }
