@@ -5,8 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="referrer" content="no-referrer">
 <title>Shadertoy Library Browser</title>
-<!-- echo.js for lazy loading (same approach as working Shadertoy galleries) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/echo/1.7.3/echo.min.js"></script>
 <style>
 :root {
     --bg-dark: #0a0a0f;
@@ -826,8 +824,11 @@ function getThumbUrl(id) {
     const direct = `https://www.shadertoy.com/media/shaders/${id}.jpg`;
     if (useProxy) {
         // weserv.nl is a free image proxy that strips referer
-        return `https://images.weserv.nl/?url=${encodeURIComponent(direct)}`;
+        const url = `https://images.weserv.nl/?url=${encodeURIComponent(direct)}`;
+        console.log('Proxy URL:', url);
+        return url;
     }
+    console.log('Direct URL:', direct);
     return direct;
 }
 
@@ -1004,29 +1005,6 @@ function renderShaders() {
         shaderGrid.innerHTML = pageShaders.map(shader => renderListItem(shader)).join('');
     }
     
-    // Initialize echo.js for lazy loading (same approach as working Shadertoy galleries)
-    if (typeof echo !== 'undefined') {
-        echo.init({
-            offset: 100,
-            throttle: 250,
-            unload: false,
-            callback: function(element, op) {
-                if (op === 'load') {
-                    element.style.opacity = 1;
-                }
-            }
-        });
-        // Re-render to pick up new images
-        echo.render();
-    }
-    
-    // Handle image errors
-    shaderGrid.querySelectorAll('img').forEach(img => {
-        img.onerror = () => {
-            img.parentElement.innerHTML = '<div class="shader-thumb-placeholder">🎨</div>';
-        };
-    });
-    
     renderPagination();
 }
 
@@ -1041,7 +1019,7 @@ function renderCard(shader) {
     return `
         <div class="shader-card ${isSelected ? 'selected' : ''}" onclick="selectShader('${id}')">
             <div class="shader-thumb">
-                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-echo="${thumbUrl}" alt="${info.name}" style="opacity: 0; transition: opacity 0.3s;">
+                <img src="${thumbUrl}" alt="${info.name}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=shader-thumb-placeholder>🎨</div>'">
                 <div class="shader-status">
                     <span class="status-badge ${isPublic(info.published) ? 'public' : 'private'}">
                         ${isPublic(info.published) ? 'Public' : 'Private'}
@@ -1071,7 +1049,7 @@ function renderListItem(shader) {
     return `
         <div class="shader-list-item ${isSelected ? 'selected' : ''}" onclick="selectShader('${id}')">
             <div class="shader-list-thumb">
-                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-echo="${thumbUrl}" alt="${info.name}" style="opacity: 0; transition: opacity 0.3s;">
+                <img src="${thumbUrl}" alt="${info.name}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=shader-thumb-placeholder>🎨</div>'">
             </div>
             <div class="shader-list-info">
                 <div class="shader-list-title">${escapeHtml(info.name || 'Untitled')}</div>
@@ -1146,7 +1124,7 @@ function selectShader(id) {
     
     // Thumbnail
     const thumbUrl = getThumbUrl(info.id);
-    document.getElementById('detailThumb').innerHTML = `<img src="${thumbUrl}" alt="${info.name}" referrerPolicy="no-referrer" onerror="this.parentElement.innerHTML='<div class=\\'shader-thumb-placeholder\\'>🎨</div>'">`;
+    document.getElementById('detailThumb').innerHTML = `<img src="${thumbUrl}" alt="${info.name}" onerror="this.parentElement.innerHTML='<div class=shader-thumb-placeholder>🎨</div>'">`;
     
     // Tags
     const tagsHtml = (info.tags || []).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('');
