@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="referrer" content="no-referrer">
 <title>Shadertoy Library Browser</title>
 <style>
 :root {
@@ -19,7 +18,6 @@
     --border: #1e293b;
     --success: #22c55e;
     --warning: #f59e0b;
-    --error: #ef4444;
 }
 
 * {
@@ -173,122 +171,111 @@ button.primary:hover {
     min-height: calc(100vh - 120px);
 }
 
-/* Grid area */
-.grid-area {
+/* List area */
+.list-area {
     flex: 1;
-    padding: 1.5rem;
+    padding: 1rem 1.5rem;
     overflow-y: auto;
 }
 
-/* Shader grid */
-.shader-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1.25rem;
-}
-
-/* Shader card */
-.shader-card {
-    background: var(--bg-card);
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.shader-card:hover {
-    border-color: var(--accent);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-}
-
-.shader-card.selected {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent);
-}
-
-.shader-thumb {
-    aspect-ratio: 16/9;
-    background: var(--bg-dark);
-    position: relative;
-    overflow: hidden;
-}
-
-.shader-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform 0.3s;
-}
-
-.shader-card:hover .shader-thumb img {
-    transform: scale(1.05);
-}
-
-.shader-thumb-placeholder {
-    width: 100%;
-    height: 100%;
+/* Shader list */
+.shader-list {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-muted);
-    font-size: 2rem;
+    flex-direction: column;
+    gap: 2px;
 }
 
-.shader-status {
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
-    display: flex;
-    gap: 0.25rem;
-}
-
-.status-badge {
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.625rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(4px);
-}
-
-.status-badge.public { color: var(--success); }
-.status-badge.private { color: var(--warning); }
-.status-badge.buffers { color: var(--accent); }
-
-.shader-info {
-    padding: 1rem;
-}
-
-.shader-title {
-    font-weight: 600;
-    font-size: 0.9375rem;
-    margin-bottom: 0.5rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.shader-meta {
+.shader-row {
     display: flex;
     align-items: center;
     gap: 1rem;
-    font-size: 0.75rem;
-    color: var(--text-muted);
+    padding: 0.5rem 1rem;
+    background: var(--bg-card);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 0.875rem;
 }
 
-.shader-meta span {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
+.shader-row:hover {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.shader-row.selected {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.shader-title {
+    flex: 1;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 200px;
 }
 
 .shader-date {
+    width: 100px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.shader-status {
+    width: 70px;
+    text-align: center;
+}
+
+.shader-status.public {
+    color: var(--success);
+}
+
+.shader-status.private {
+    color: var(--warning);
+}
+
+.shader-views, .shader-likes {
+    width: 80px;
+    color: var(--text-dim);
+    text-align: right;
+}
+
+.shader-passes {
+    width: 60px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.shader-id {
+    width: 70px;
+    font-family: monospace;
     font-size: 0.75rem;
     color: var(--text-muted);
-    margin-top: 0.5rem;
+}
+
+/* Column headers */
+.list-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.5rem;
+}
+
+.list-header > span {
+    cursor: pointer;
+}
+
+.list-header > span:hover {
+    color: var(--text);
 }
 
 /* Detail panel */
@@ -307,21 +294,6 @@ button.primary:hover {
 .detail-header {
     padding: 1.5rem;
     border-bottom: 1px solid var(--border);
-}
-
-.detail-thumb {
-    width: 100%;
-    aspect-ratio: 16/9;
-    border-radius: 8px;
-    overflow: hidden;
-    margin-bottom: 1rem;
-    background: var(--bg-dark);
-}
-
-.detail-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
 }
 
 .detail-title {
@@ -527,10 +499,6 @@ button.primary:hover {
         z-index: 200;
         box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
     }
-    
-    .detail-panel.open ~ .overlay {
-        display: block;
-    }
 }
 
 @media (max-width: 768px) {
@@ -545,6 +513,10 @@ button.primary:hover {
     
     .detail-panel {
         width: 100%;
+    }
+    
+    .shader-date, .shader-id {
+        display: none;
     }
 }
 
@@ -577,93 +549,6 @@ button.primary:hover {
 
 .close-btn:hover {
     background: var(--bg-hover);
-}
-
-/* View toggle */
-.view-toggle {
-    display: flex;
-    background: var(--bg-dark);
-    border-radius: 6px;
-    padding: 2px;
-}
-
-.view-toggle button {
-    padding: 0.375rem 0.75rem;
-    border: none;
-    background: transparent;
-}
-
-.view-toggle button.active {
-    background: var(--accent);
-}
-
-/* List view */
-.shader-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.shader-list-item {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 1rem;
-    background: var(--bg-card);
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.shader-list-item:hover {
-    border-color: var(--accent);
-    background: var(--bg-hover);
-}
-
-.shader-list-item.selected {
-    border-color: var(--accent);
-}
-
-.shader-list-thumb {
-    width: 80px;
-    height: 45px;
-    border-radius: 4px;
-    overflow: hidden;
-    flex-shrink: 0;
-    background: var(--bg-dark);
-}
-
-.shader-list-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.shader-list-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.shader-list-title {
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.shader-list-meta {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    display: flex;
-    gap: 1rem;
-}
-
-.shader-list-stats {
-    display: flex;
-    gap: 1.5rem;
-    color: var(--text-muted);
-    font-size: 0.8125rem;
 }
 </style>
 </head>
@@ -699,20 +584,12 @@ button.primary:hover {
                 <option value="multipass">Multi-pass</option>
             </select>
             
-            <div class="view-toggle">
-                <button id="gridViewBtn" class="active" title="Grid view">▦</button>
-                <button id="listViewBtn" title="List view">☰</button>
-            </div>
-            
             <select id="perPageSelect" disabled>
-                <option value="24">24 per page</option>
-                <option value="48">48 per page</option>
-                <option value="96">96 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100" selected>100 per page</option>
+                <option value="200">200 per page</option>
+                <option value="500">500 per page</option>
             </select>
-            
-            <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: var(--text-dim);">
-                <input type="checkbox" id="proxyToggle" checked> Use proxy
-            </label>
         </div>
     </div>
 </header>
@@ -732,7 +609,7 @@ button.primary:hover {
 </div>
 
 <div class="main-container">
-    <div class="grid-area" id="gridArea">
+    <div class="list-area" id="listArea">
         <!-- Drop zone (shown when no data) -->
         <div class="drop-zone" id="dropZone">
             <h2>📁 Load Your Shadertoy Library</h2>
@@ -743,9 +620,18 @@ button.primary:hover {
             <input type="file" id="fileInput" accept=".json">
         </div>
         
-        <!-- Shader grid (hidden until data loaded) -->
+        <!-- Shader list (hidden until data loaded) -->
         <div id="shaderContainer" style="display: none;">
-            <div class="shader-grid" id="shaderGrid"></div>
+            <div class="list-header">
+                <span class="shader-title">Name</span>
+                <span class="shader-date">Date</span>
+                <span class="shader-status">Status</span>
+                <span class="shader-views">Views</span>
+                <span class="shader-likes">Likes</span>
+                <span class="shader-passes">Passes</span>
+                <span class="shader-id">ID</span>
+            </div>
+            <div class="shader-list" id="shaderList"></div>
             <div class="pagination" id="pagination"></div>
         </div>
     </div>
@@ -753,7 +639,6 @@ button.primary:hover {
     <div class="detail-panel" id="detailPanel">
         <button class="close-btn" onclick="closeDetail()">×</button>
         <div class="detail-header">
-            <div class="detail-thumb" id="detailThumb"></div>
             <h2 class="detail-title" id="detailTitle">-</h2>
             <div class="detail-id" id="detailId">-</div>
         </div>
@@ -814,29 +699,14 @@ button.primary:hover {
 let allShaders = [];
 let filteredShaders = [];
 let currentPage = 1;
-let perPage = 24;
+let perPage = 100;
 let selectedShader = null;
-let viewMode = 'grid';
-let useProxy = true; // Use proxy by default (Shadertoy blocks direct hotlinking)
-
-// Thumbnail URL helper - can use proxy if needed
-function getThumbUrl(id) {
-    const direct = `https://www.shadertoy.com/media/shaders/${id}.jpg`;
-    if (useProxy) {
-        // Try corsproxy.io which may handle this better
-        const url = `https://corsproxy.io/?${encodeURIComponent(direct)}`;
-        console.log('Proxy URL:', url);
-        return url;
-    }
-    console.log('Direct URL:', direct);
-    return direct;
-}
 
 // DOM elements
 const dropZone = document.getElementById('dropZone');
 const fileInput = document.getElementById('fileInput');
 const shaderContainer = document.getElementById('shaderContainer');
-const shaderGrid = document.getElementById('shaderGrid');
+const shaderList = document.getElementById('shaderList');
 const pagination = document.getElementById('pagination');
 const searchInput = document.getElementById('searchInput');
 const sortSelect = document.getElementById('sortSelect');
@@ -997,72 +867,27 @@ function renderShaders() {
     const end = start + perPage;
     const pageShaders = filteredShaders.slice(start, end);
     
-    if (viewMode === 'grid') {
-        shaderGrid.className = 'shader-grid';
-        shaderGrid.innerHTML = pageShaders.map(shader => renderCard(shader)).join('');
-    } else {
-        shaderGrid.className = 'shader-list';
-        shaderGrid.innerHTML = pageShaders.map(shader => renderListItem(shader)).join('');
-    }
-    
+    shaderList.innerHTML = pageShaders.map(shader => renderRow(shader)).join('');
     renderPagination();
 }
 
-function renderCard(shader) {
+function renderRow(shader) {
     const info = shader.info || {};
     const id = info.id || '';
-    const thumbUrl = getThumbUrl(id);
     const date = info.date ? new Date(parseInt(info.date) * 1000).toLocaleDateString() : '-';
     const passes = (shader.renderpass || []).length;
     const isSelected = selectedShader?.info?.id === id;
+    const pub = isPublic(info.published);
     
     return `
-        <div class="shader-card ${isSelected ? 'selected' : ''}" onclick="selectShader('${id}')">
-            <div class="shader-thumb">
-                <img src="${thumbUrl}" alt="${info.name}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=shader-thumb-placeholder>🎨</div>'">
-                <div class="shader-status">
-                    <span class="status-badge ${isPublic(info.published) ? 'public' : 'private'}">
-                        ${isPublic(info.published) ? 'Public' : 'Private'}
-                    </span>
-                    ${passes > 1 ? `<span class="status-badge buffers">${passes} passes</span>` : ''}
-                </div>
-            </div>
-            <div class="shader-info">
-                <div class="shader-title">${escapeHtml(info.name || 'Untitled')}</div>
-                <div class="shader-meta">
-                    <span>👁 ${(info.viewed || 0).toLocaleString()}</span>
-                    <span>❤️ ${info.likes || 0}</span>
-                </div>
-                <div class="shader-date">${date}</div>
-            </div>
-        </div>
-    `;
-}
-
-function renderListItem(shader) {
-    const info = shader.info || {};
-    const id = info.id || '';
-    const thumbUrl = getThumbUrl(id);
-    const date = info.date ? new Date(parseInt(info.date) * 1000).toLocaleDateString() : '-';
-    const isSelected = selectedShader?.info?.id === id;
-    
-    return `
-        <div class="shader-list-item ${isSelected ? 'selected' : ''}" onclick="selectShader('${id}')">
-            <div class="shader-list-thumb">
-                <img src="${thumbUrl}" alt="${info.name}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=shader-thumb-placeholder>🎨</div>'">
-            </div>
-            <div class="shader-list-info">
-                <div class="shader-list-title">${escapeHtml(info.name || 'Untitled')}</div>
-                <div class="shader-list-meta">
-                    <span>${date}</span>
-                    <span>${isPublic(info.published) ? 'Public' : 'Private'}</span>
-                    <span>${(shader.renderpass || []).length} pass(es)</span>
-                </div>
-            </div>
-            <div class="shader-list-stats">
-                <span>👁 ${(info.viewed || 0).toLocaleString()}</span>
-                <span>❤️ ${info.likes || 0}</span>
-            </div>
+        <div class="shader-row ${isSelected ? 'selected' : ''}" onclick="selectShader('${id}')">
+            <span class="shader-title">${escapeHtml(info.name || 'Untitled')}</span>
+            <span class="shader-date">${date}</span>
+            <span class="shader-status ${pub ? 'public' : 'private'}">${pub ? 'Public' : 'Private'}</span>
+            <span class="shader-views">👁 ${(info.viewed || 0).toLocaleString()}</span>
+            <span class="shader-likes">❤️ ${info.likes || 0}</span>
+            <span class="shader-passes">${passes}</span>
+            <span class="shader-id">${id}</span>
         </div>
     `;
 }
@@ -1099,7 +924,7 @@ function renderPagination() {
 function goToPage(page) {
     currentPage = page;
     renderShaders();
-    document.getElementById('gridArea').scrollTop = 0;
+    document.getElementById('listArea').scrollTop = 0;
 }
 
 // Detail panel
@@ -1122,10 +947,6 @@ function selectShader(id) {
         : '-';
     document.getElementById('detailDescription').textContent = info.description || 'No description';
     
-    // Thumbnail
-    const thumbUrl = getThumbUrl(info.id);
-    document.getElementById('detailThumb').innerHTML = `<img src="${thumbUrl}" alt="${info.name}" onerror="this.parentElement.innerHTML='<div class=shader-thumb-placeholder>🎨</div>'">`;
-    
     // Tags
     const tagsHtml = (info.tags || []).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('');
     document.getElementById('detailTags').innerHTML = tagsHtml || '<span class="tag">No tags</span>';
@@ -1147,7 +968,7 @@ function selectShader(id) {
     detailPanel.classList.add('open');
     overlay.style.display = 'block';
     
-    // Update selection in grid
+    // Update selection in list
     renderShaders();
 }
 
@@ -1178,21 +999,6 @@ function copyCode() {
     });
 }
 
-// View toggle
-document.getElementById('gridViewBtn').addEventListener('click', () => {
-    viewMode = 'grid';
-    document.getElementById('gridViewBtn').classList.add('active');
-    document.getElementById('listViewBtn').classList.remove('active');
-    renderShaders();
-});
-
-document.getElementById('listViewBtn').addEventListener('click', () => {
-    viewMode = 'list';
-    document.getElementById('listViewBtn').classList.add('active');
-    document.getElementById('gridViewBtn').classList.remove('active');
-    renderShaders();
-});
-
 // Event listeners
 let searchTimeout;
 searchInput.addEventListener('input', () => {
@@ -1207,14 +1013,6 @@ perPageSelect.addEventListener('change', (e) => {
     perPage = parseInt(e.target.value);
     currentPage = 1;
     renderShaders();
-});
-
-document.getElementById('proxyToggle').addEventListener('change', (e) => {
-    useProxy = e.target.checked;
-    renderShaders();
-    if (selectedShader) {
-        selectShader(selectedShader.info.id);
-    }
 });
 
 // Utility
@@ -1234,4 +1032,3 @@ document.addEventListener('keydown', (e) => {
 
 </body>
 </html>
-
