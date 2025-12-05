@@ -676,7 +676,7 @@ body {
 
 /* Empty zone placeholder */
 .sl-mobile-zone .sl-zone-content:empty::after {
-    content: 'Tap a panel icon';
+    content: attr(data-empty-text);
     position: absolute;
     top: 50%;
     left: 50%;

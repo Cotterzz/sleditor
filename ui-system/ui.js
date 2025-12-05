@@ -252,6 +252,45 @@ const SLUI = (function() {
             const key = el.dataset.i18nTitle;
             el.title = t(key);
         });
+        
+        // Update elements with data-i18n-placeholder attribute
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            const key = el.dataset.i18nPlaceholder;
+            el.placeholder = t(key);
+        });
+        
+        // Update window titles
+        document.querySelectorAll('.sl-window').forEach(win => {
+            const panelId = win.dataset.windowId;
+            if (panelId) {
+                const titleEl = win.querySelector('.sl-window-title');
+                if (titleEl) {
+                    titleEl.textContent = t(`panels.${panelId}.title`) || panels.get(panelId)?.title || panelId;
+                }
+            }
+        });
+        
+        // Update zone headers
+        document.querySelectorAll('.sl-zone-title').forEach(el => {
+            const panelId = el.closest('.sl-zone-content')?.querySelector('[data-panel]')?.dataset.panel;
+            if (panelId) {
+                el.textContent = t(`panels.${panelId}.title`) || panels.get(panelId)?.title || panelId;
+            }
+        });
+        
+        // Update mobile zone empty text
+        document.querySelectorAll('.sl-zone-content[data-empty-text]').forEach(el => {
+            el.dataset.emptyText = t('mobile.tapToLoad');
+        });
+        
+        // Update toolbar item titles
+        document.querySelectorAll('.sl-toolbar-item[data-panel-id]').forEach(btn => {
+            const panelId = btn.dataset.panelId;
+            const panel = panels.get(panelId);
+            if (panel) {
+                btn.title = t(`panels.${panelId}.title`) || panel.title || panelId;
+            }
+        });
     }
     
     // ========================================
@@ -685,14 +724,14 @@ const SLUI = (function() {
                 <div class="sl-menu-user-avatar">${state.user.avatar ? `<img src="${state.user.avatar}">` : state.user.name.charAt(0).toUpperCase()}</div>
                 <div class="sl-menu-user-info">
                     <div class="sl-menu-user-name">${state.user.name}</div>
-                    <div class="sl-menu-user-status sl-text-muted">Online</div>
+                    <div class="sl-menu-user-status sl-text-muted">${t('panels.profile.statusOptions.online')}</div>
                 </div>
             </div>
             <div class="sl-menu-divider"></div>
-            <div class="sl-menu-item" data-action="profile">👤 Profile</div>
-            <div class="sl-menu-item" data-action="settings">⚙ Settings</div>
+            <div class="sl-menu-item" data-action="profile">👤 ${t('user.profile')}</div>
+            <div class="sl-menu-item" data-action="settings">⚙ ${t('user.settings')}</div>
             <div class="sl-menu-divider"></div>
-            <div class="sl-menu-item" data-action="logout">🚪 Log out</div>
+            <div class="sl-menu-item" data-action="logout">🚪 ${t('user.logout')}</div>
         `;
         
         // Handle menu clicks
@@ -745,34 +784,42 @@ const SLUI = (function() {
     function createProfileContent() {
         const div = document.createElement('div');
         div.className = 'sl-profile-content';
-        div.innerHTML = `
-            <div class="sl-profile-header">
-                <div class="sl-profile-avatar">${state.user.avatar ? `<img src="${state.user.avatar}">` : state.user.name.charAt(0).toUpperCase()}</div>
-                <div class="sl-profile-info">
-                    <div class="sl-profile-name">${state.user.name}</div>
-                    <div class="sl-profile-status sl-text-muted">Online</div>
-                </div>
-            </div>
-            <div class="sl-settings-group">
-                <label class="sl-settings-label">Display Name</label>
-                <input type="text" class="sl-input" id="sl-profile-name-input" value="${state.user.name}" style="width: 100%;">
-            </div>
-            <div class="sl-settings-group">
-                <label class="sl-settings-label">Status</label>
-                <select class="sl-select" style="width: 100%;">
-                    <option selected>Online</option>
-                    <option>Away</option>
-                    <option>Busy</option>
-                    <option>Offline</option>
-                </select>
-            </div>
-        `;
         
-        setTimeout(() => {
-            document.getElementById('sl-profile-name-input')?.addEventListener('change', (e) => {
+        const render = () => {
+            div.innerHTML = `
+                <div class="sl-profile-header">
+                    <div class="sl-profile-avatar">${state.user.avatar ? `<img src="${state.user.avatar}">` : state.user.name.charAt(0).toUpperCase()}</div>
+                    <div class="sl-profile-info">
+                        <div class="sl-profile-name">${state.user.name}</div>
+                        <div class="sl-profile-status sl-text-muted">${t('panels.profile.statusOptions.online')}</div>
+                    </div>
+                </div>
+                <div class="sl-settings-group">
+                    <label class="sl-settings-label" data-i18n="panels.profile.displayName">${t('panels.profile.displayName')}</label>
+                    <input type="text" class="sl-input" id="sl-profile-name-input" value="${state.user.name}" style="width: 100%;">
+                </div>
+                <div class="sl-settings-group">
+                    <label class="sl-settings-label" data-i18n="panels.profile.status">${t('panels.profile.status')}</label>
+                    <select class="sl-select" style="width: 100%;">
+                        <option selected>${t('panels.profile.statusOptions.online')}</option>
+                        <option>${t('panels.profile.statusOptions.away')}</option>
+                        <option>${t('panels.profile.statusOptions.busy')}</option>
+                        <option>${t('panels.profile.statusOptions.offline')}</option>
+                    </select>
+                </div>
+            `;
+            
+            div.querySelector('#sl-profile-name-input')?.addEventListener('change', (e) => {
                 setUser(e.target.value, state.user.avatar);
             });
-        }, 0);
+        };
+        
+        render();
+        
+        // Listen for language changes
+        const langHandler = () => render();
+        document.addEventListener('sl-lang-change', langHandler);
+        div._cleanup = () => document.removeEventListener('sl-lang-change', langHandler);
         
         return div;
     }
@@ -781,61 +828,78 @@ const SLUI = (function() {
     function createSettingsContent() {
         const div = document.createElement('div');
         div.className = 'sl-settings-content';
-        div.innerHTML = `
-            <div class="sl-settings-group">
-                <label class="sl-settings-label">Theme</label>
-                <select class="sl-select sl-settings-select" id="sl-theme-select-panel">
-                    ${getThemes().map(t => `<option value="${t}" ${t === state.theme ? 'selected' : ''}>${state.themes[t].name}</option>`).join('')}
-                </select>
-            </div>
-            
-            <div class="sl-settings-group" id="sl-toolbar-group">
-                <label class="sl-settings-label">Toolbar Position</label>
-                <select class="sl-select sl-settings-select" id="sl-toolbar-select-panel">
-                    <option value="top" ${state.toolbarPosition === 'top' ? 'selected' : ''}>Top</option>
-                    <option value="bottom" ${state.toolbarPosition === 'bottom' ? 'selected' : ''}>Bottom</option>
-                    <option value="left" ${state.toolbarPosition === 'left' ? 'selected' : ''}>Left</option>
-                    <option value="right" ${state.toolbarPosition === 'right' ? 'selected' : ''}>Right</option>
-                    <option value="float" ${state.toolbarPosition === 'float' ? 'selected' : ''}>Float</option>
-                </select>
-            </div>
-            
-            <div class="sl-settings-group">
-                <label class="sl-settings-label">Device Mode</label>
-                <select class="sl-select sl-settings-select" id="sl-mode-select-panel">
-                    <option value="" ${!state.forceMode ? 'selected' : ''}>Auto (${isMobileDevice() ? 'Mobile' : 'Desktop'})</option>
-                    <option value="desktop" ${state.forceMode === 'desktop' ? 'selected' : ''}>Force Desktop</option>
-                    <option value="mobile" ${state.forceMode === 'mobile' ? 'selected' : ''}>Force Mobile</option>
-                </select>
-            </div>
-            
-            <div class="sl-settings-info">
-                <p class="sl-text-muted" style="font-size: 0.75rem;">
-                    Detected: ${isMobileDevice() ? 'Mobile Device' : 'Desktop Browser'}<br>
-                    User Agent: ${navigator.userAgent.substring(0, 50)}...
-                </p>
-            </div>
-        `;
         
-        // Add event listeners after a tick
-        setTimeout(() => {
-            document.getElementById('sl-theme-select-panel')?.addEventListener('change', (e) => {
+        const renderSettings = () => {
+            div.innerHTML = `
+                <div class="sl-settings-group">
+                    <label class="sl-settings-label" data-i18n="settings.appearance.theme">${t('settings.appearance.theme')}</label>
+                    <select class="sl-select sl-settings-select" id="sl-theme-select-panel">
+                        ${getThemes().map(th => `<option value="${th}" ${th === state.theme ? 'selected' : ''}>${state.themes[th].name}</option>`).join('')}
+                    </select>
+                </div>
+                
+                <div class="sl-settings-group">
+                    <label class="sl-settings-label" data-i18n="settings.appearance.language">${t('settings.appearance.language')}</label>
+                    <select class="sl-select sl-settings-select" id="sl-lang-select-panel">
+                        <option value="en" ${state.lang === 'en' ? 'selected' : ''}>English</option>
+                        <option value="fr" ${state.lang === 'fr' ? 'selected' : ''}>Français</option>
+                        <option value="it" ${state.lang === 'it' ? 'selected' : ''}>Italiano</option>
+                        <option value="vi" ${state.lang === 'vi' ? 'selected' : ''}>Tiếng Việt</option>
+                    </select>
+                </div>
+                
+                <div class="sl-settings-group" id="sl-toolbar-group">
+                    <label class="sl-settings-label" data-i18n="toolbar.position">${t('toolbar.position')}</label>
+                    <select class="sl-select sl-settings-select" id="sl-toolbar-select-panel">
+                        <option value="top" ${state.toolbarPosition === 'top' ? 'selected' : ''} data-i18n="toolbar.dock.top">${t('toolbar.dock.top')}</option>
+                        <option value="bottom" ${state.toolbarPosition === 'bottom' ? 'selected' : ''} data-i18n="toolbar.dock.bottom">${t('toolbar.dock.bottom')}</option>
+                        <option value="left" ${state.toolbarPosition === 'left' ? 'selected' : ''} data-i18n="toolbar.dock.left">${t('toolbar.dock.left')}</option>
+                        <option value="right" ${state.toolbarPosition === 'right' ? 'selected' : ''} data-i18n="toolbar.dock.right">${t('toolbar.dock.right')}</option>
+                        <option value="float" ${state.toolbarPosition === 'float' ? 'selected' : ''} data-i18n="toolbar.dock.float">${t('toolbar.dock.float')}</option>
+                    </select>
+                </div>
+                
+                <div class="sl-settings-group">
+                    <label class="sl-settings-label" data-i18n="settings.device.title">${t('settings.device.title')}</label>
+                    <select class="sl-select sl-settings-select" id="sl-mode-select-panel">
+                        <option value="" ${!state.forceMode ? 'selected' : ''}>${t('settings.device.auto')} (${isMobileDevice() ? 'Mobile' : 'Desktop'})</option>
+                        <option value="desktop" ${state.forceMode === 'desktop' ? 'selected' : ''} data-i18n="settings.device.forceDesktop">${t('settings.device.forceDesktop')}</option>
+                        <option value="mobile" ${state.forceMode === 'mobile' ? 'selected' : ''} data-i18n="settings.device.forceMobile">${t('settings.device.forceMobile')}</option>
+                    </select>
+                </div>
+            `;
+            
+            // Re-attach event listeners (query within div, not document)
+            div.querySelector('#sl-theme-select-panel')?.addEventListener('change', (e) => {
                 setTheme(e.target.value);
             });
             
-            document.getElementById('sl-toolbar-select-panel')?.addEventListener('change', (e) => {
+            div.querySelector('#sl-lang-select-panel')?.addEventListener('change', (e) => {
+                setLanguage(e.target.value);
+            });
+            
+            div.querySelector('#sl-toolbar-select-panel')?.addEventListener('change', (e) => {
                 setToolbarPosition(e.target.value);
             });
             
-            document.getElementById('sl-mode-select-panel')?.addEventListener('change', (e) => {
+            div.querySelector('#sl-mode-select-panel')?.addEventListener('change', (e) => {
                 setForceMode(e.target.value || null);
             });
             
             // Hide toolbar position on mobile
             if (state.deviceMode === 'mobile') {
-                document.getElementById('sl-toolbar-group')?.classList.add('hidden');
+                div.querySelector('#sl-toolbar-group')?.classList.add('hidden');
             }
-        }, 0);
+        };
+        
+        renderSettings();
+        
+        // Listen for language changes to re-render
+        const langHandler = () => renderSettings();
+        document.addEventListener('sl-lang-change', langHandler);
+        
+        // Store cleanup function for later if needed
+        div._cleanup = () => document.removeEventListener('sl-lang-change', langHandler);
         
         return div;
     }
@@ -850,12 +914,13 @@ const SLUI = (function() {
         container.id = 'sl-mobile-zones';
         
         const isLandscape = state.mobileOrientation === 'landscape';
+        const emptyText = t('mobile.tapToLoad');
         
         // Zone 1 (top or left)
         const zone1 = document.createElement('div');
         zone1.className = `sl-mobile-zone sl-zone-${isLandscape ? 'left' : 'top'}`;
         zone1.dataset.zone = isLandscape ? 'left' : 'top';
-        zone1.innerHTML = '<div class="sl-zone-content" id="sl-zone-1-content"></div>';
+        zone1.innerHTML = `<div class="sl-zone-content" id="sl-zone-1-content" data-empty-text="${emptyText}"></div>`;
         zone1.addEventListener('click', () => focusZone(isLandscape ? 'left' : 'top'));
         container.appendChild(zone1);
         
@@ -870,7 +935,7 @@ const SLUI = (function() {
         const zone2 = document.createElement('div');
         zone2.className = `sl-mobile-zone sl-zone-${isLandscape ? 'right' : 'bottom'}`;
         zone2.dataset.zone = isLandscape ? 'right' : 'bottom';
-        zone2.innerHTML = '<div class="sl-zone-content" id="sl-zone-2-content"></div>';
+        zone2.innerHTML = `<div class="sl-zone-content" id="sl-zone-2-content" data-empty-text="${emptyText}"></div>`;
         zone2.addEventListener('click', () => focusZone(isLandscape ? 'right' : 'bottom'));
         container.appendChild(zone2);
         

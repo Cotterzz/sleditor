@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "language": "Tiếng Việt",
+    "code": "vi",
+    "direction": "ltr"
+  },
+  
+  "app": {
+    "title": "SL Editor",
+    "subtitle": "Môi Trường Phát Triển Shader"
+  },
+  
+  "toolbar": {
+    "title": "Thanh công cụ",
+    "dock": {
+      "top": "Neo trên",
+      "bottom": "Neo dưới",
+      "left": "Neo trái",
+      "right": "Neo phải",
+      "float": "Nổi"
+    },
+    "position": "Vị trí thanh công cụ",
+    "settings": "Cài đặt",
+    "theme": "Giao diện",
+    "language": "Ngôn ngữ"
+  },
+  
+  "window": {
+    "close": "Đóng",
+    "minimize": "Thu nhỏ",
+    "maximize": "Phóng to",
+    "restore": "Khôi phục"
+  },
+  
+  "panels": {
+    "editor": {
+      "title": "Trình soạn thảo",
+      "description": "Trình soạn thảo mã shader",
+      "codeTitle": "Mã Shader",
+      "codeHint": "Đây là nơi trình soạn thảo Monaco sẽ được tích hợp. Font mã sẽ thích ứng với giao diện hiện tại."
+    },
+    "preview": {
+      "title": "Xem trước",
+      "description": "Xem trước shader trực tiếp",
+      "liveTitle": "Xem Trước Trực Tiếp",
+      "canvasPlaceholder": "Canvas Xem Trước Shader",
+      "hint": "Kết xuất WebGL thời gian thực sẽ xuất hiện ở đây."
+    },
+    "nodes": {
+      "title": "Nút",
+      "description": "Trình soạn thảo dựa trên nút",
+      "editorTitle": "Trình Soạn Thảo Nút",
+      "hint": "Giao diện lập trình shader trực quan dựa trên nút.",
+      "types": {
+        "sphere": "SDF Hình cầu",
+        "box": "SDF Hộp",
+        "smoothUnion": "Kết hợp Mượt",
+        "transform": "Biến đổi",
+        "material": "Vật liệu",
+        "output": "Đầu ra"
+      }
+    },
+    "inspector": {
+      "title": "Thanh tra",
+      "description": "Thuộc tính và tham số",
+      "propertiesTitle": "Thuộc tính",
+      "radius": "Bán kính",
+      "smoothness": "Độ mượt",
+      "color": "Màu sắc"
+    },
+    "library": {
+      "title": "Thư viện",
+      "description": "Trình duyệt thư viện shader",
+      "searchPlaceholder": "Tìm kiếm shader...",
+      "templateLabel": "Shader mẫu",
+      "items": {
+        "raymarching": "Cơ bản Raymarching",
+        "fractalNoise": "Nhiễu Fractal",
+        "pbrLighting": "Ánh sáng PBR",
+        "postProcessing": "Hậu xử lý",
+        "volumetricFog": "Sương mù Thể tích"
+      }
+    },
+    "console": {
+      "title": "Bảng điều khiển",
+      "description": "Đầu ra và lỗi",
+      "outputTitle": "Bảng Điều Khiển Đầu Ra",
+      "messages": {
+        "compiled": "Biên dịch shader thành công",
+        "frameTime": "Thời gian khung: 16.2ms",
+        "unusedUniform": "Uniform 'iTime' không được sử dụng",
+        "resolution": "Độ phân giải: 1920x1080",
+        "previewUpdated": "Đã cập nhật xem trước"
+      }
+    },
+    "settings": {
+      "title": "Cài đặt",
+      "description": "Cài đặt ứng dụng"
+    },
+    "profile": {
+      "title": "Hồ sơ",
+      "description": "Cài đặt hồ sơ người dùng",
+      "displayName": "Tên hiển thị",
+      "status": "Trạng thái",
+      "statusOptions": {
+        "online": "Trực tuyến",
+        "away": "Vắng mặt",
+        "busy": "Bận",
+        "offline": "Ngoại tuyến"
+      }
+    }
+  },
+  
+  "settings": {
+    "appearance": {
+      "title": "Giao diện",
+      "theme": "Chủ đề",
+      "language": "Ngôn ngữ",
+      "fontSize": "Cỡ chữ",
+      "windowMode": "Chế độ cửa sổ",
+      "modes": {
+        "docked": "Neo (Không chồng chéo)",
+        "overlay": "Phủ (Di chuyển tự do)"
+      }
+    },
+    "device": {
+      "title": "Chế độ thiết bị",
+      "auto": "Tự động phát hiện",
+      "forceDesktop": "Buộc Desktop",
+      "forceMobile": "Buộc Di động"
+    },
+    "editor": {
+      "title": "Trình soạn thảo",
+      "lineNumbers": "Số dòng",
+      "wordWrap": "Xuống dòng tự động",
+      "minimap": "Bản đồ thu nhỏ",
+      "autoSave": "Tự động lưu"
+    }
+  },
+  
+  "user": {
+    "profile": "Hồ sơ",
+    "settings": "Cài đặt",
+    "logout": "Đăng xuất"
+  },
+  
+  "actions": {
+    "save": "Lưu",
+    "load": "Tải",
+    "export": "Xuất",
+    "import": "Nhập",
+    "copy": "Sao chép",
+    "paste": "Dán",
+    "undo": "Hoàn tác",
+    "redo": "Làm lại",
+    "cancel": "Hủy",
+    "confirm": "Xác nhận",
+    "apply": "Áp dụng",
+    "reset": "Đặt lại"
+  },
+  
+  "status": {
+    "ready": "Sẵn sàng",
+    "loading": "Đang tải...",
+    "saving": "Đang lưu...",
+    "error": "Lỗi",
+    "success": "Thành công"
+  },
+  
+  "errors": {
+    "generic": "Đã xảy ra lỗi",
+    "loadFailed": "Tải thất bại",
+    "saveFailed": "Lưu thất bại",
+    "invalidFile": "Định dạng tệp không hợp lệ"
+  },
+  
+  "mobile": {
+    "tapToLoad": "Nhấn vào biểu tượng"
+  }
+}
+

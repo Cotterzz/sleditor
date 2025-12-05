@@ -103,15 +103,14 @@
                     const div = document.createElement('div');
                     div.className = 'demo-content';
                     div.innerHTML = `
-                        <h3 class="sl-text-ui">Shader Code</h3>
+                        <h3 class="sl-text-ui" data-i18n="panels.editor.codeTitle">${SLUI.t('panels.editor.codeTitle')}</h3>
                         <div class="demo-code">void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = fragCoord / iResolution.xy;
     vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx + vec3(0, 2, 4));
     fragColor = vec4(col, 1.0);
 }</div>
-                        <p style="margin-top: 12px;" class="sl-text-content">
-                            This is where the Monaco editor would go. 
-                            The code font adapts to the current theme.
+                        <p style="margin-top: 12px;" class="sl-text-content" data-i18n="panels.editor.codeHint">
+                            ${SLUI.t('panels.editor.codeHint')}
                         </p>
                     `;
                     return div;
@@ -127,12 +126,12 @@
                     const div = document.createElement('div');
                     div.className = 'demo-content';
                     div.innerHTML = `
-                        <h3 class="sl-text-ui">Live Preview</h3>
-                        <div class="demo-preview">
-                            Shader Preview Canvas
+                        <h3 class="sl-text-ui" data-i18n="panels.preview.liveTitle">${SLUI.t('panels.preview.liveTitle')}</h3>
+                        <div class="demo-preview" data-i18n="panels.preview.canvasPlaceholder">
+                            ${SLUI.t('panels.preview.canvasPlaceholder')}
                         </div>
-                        <p style="margin-top: 12px;" class="sl-text-content">
-                            Real-time WebGL rendering would appear here.
+                        <p style="margin-top: 12px;" class="sl-text-content" data-i18n="panels.preview.hint">
+                            ${SLUI.t('panels.preview.hint')}
                         </p>
                     `;
                     return div;
@@ -148,17 +147,17 @@
                     const div = document.createElement('div');
                     div.className = 'demo-content';
                     div.innerHTML = `
-                        <h3 class="sl-text-ui">Node Editor</h3>
+                        <h3 class="sl-text-ui" data-i18n="panels.nodes.editorTitle">${SLUI.t('panels.nodes.editorTitle')}</h3>
                         <div class="demo-nodes">
-                            <div class="demo-node selected">Sphere SDF</div>
-                            <div class="demo-node">Box SDF</div>
-                            <div class="demo-node">Smooth Union</div>
-                            <div class="demo-node">Transform</div>
-                            <div class="demo-node">Material</div>
-                            <div class="demo-node">Output</div>
+                            <div class="demo-node selected" data-i18n="panels.nodes.types.sphere">${SLUI.t('panels.nodes.types.sphere')}</div>
+                            <div class="demo-node" data-i18n="panels.nodes.types.box">${SLUI.t('panels.nodes.types.box')}</div>
+                            <div class="demo-node" data-i18n="panels.nodes.types.smoothUnion">${SLUI.t('panels.nodes.types.smoothUnion')}</div>
+                            <div class="demo-node" data-i18n="panels.nodes.types.transform">${SLUI.t('panels.nodes.types.transform')}</div>
+                            <div class="demo-node" data-i18n="panels.nodes.types.material">${SLUI.t('panels.nodes.types.material')}</div>
+                            <div class="demo-node" data-i18n="panels.nodes.types.output">${SLUI.t('panels.nodes.types.output')}</div>
                         </div>
-                        <p style="margin-top: 16px;" class="sl-text-content">
-                            Visual node-based shader programming interface.
+                        <p style="margin-top: 16px;" class="sl-text-content" data-i18n="panels.nodes.hint">
+                            ${SLUI.t('panels.nodes.hint')}
                         </p>
                     `;
                     return div;
@@ -174,18 +173,18 @@
                     const div = document.createElement('div');
                     div.className = 'demo-content';
                     div.innerHTML = `
-                        <h3 class="sl-text-ui">Properties</h3>
+                        <h3 class="sl-text-ui" data-i18n="panels.inspector.propertiesTitle">${SLUI.t('panels.inspector.propertiesTitle')}</h3>
                         <div style="display: flex; flex-direction: column; gap: 12px;">
                             <div>
-                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;">Radius</label>
+                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;" data-i18n="panels.inspector.radius">${SLUI.t('panels.inspector.radius')}</label>
                                 <input type="range" style="width: 100%;" value="50">
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;">Smoothness</label>
+                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;" data-i18n="panels.inspector.smoothness">${SLUI.t('panels.inspector.smoothness')}</label>
                                 <input type="range" style="width: 100%;" value="30">
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;">Color</label>
+                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;" data-i18n="panels.inspector.color">${SLUI.t('panels.inspector.color')}</label>
                                 <input type="color" value="#e94560" style="width: 100%; height: 32px; border: none; cursor: pointer;">
                             </div>
                         </div>
@@ -202,14 +201,15 @@
                 createContent: () => {
                     const div = document.createElement('div');
                     div.className = 'demo-content';
+                    const items = ['raymarching', 'fractalNoise', 'pbrLighting', 'postProcessing', 'volumetricFog'];
                     div.innerHTML = `
-                        <h3 class="sl-text-ui">Shader Library</h3>
-                        <input type="text" class="sl-input" placeholder="Search shaders..." style="width: 100%; margin-bottom: 12px;">
+                        <h3 class="sl-text-ui" data-i18n="panels.library.title">${SLUI.t('panels.library.title')}</h3>
+                        <input type="text" class="sl-input" data-i18n-placeholder="panels.library.searchPlaceholder" placeholder="${SLUI.t('panels.library.searchPlaceholder')}" style="width: 100%; margin-bottom: 12px;">
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                            ${['Raymarching Basics', 'Fractal Noise', 'PBR Lighting', 'Post Processing', 'Volumetric Fog'].map(name => `
+                            ${items.map(key => `
                                 <div style="padding: 8px 12px; background: var(--bg-secondary); border-radius: var(--border-radius); cursor: pointer; transition: background var(--transition);" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-secondary)'">
-                                    <div style="font-weight: 500;">${name}</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Template shader</div>
+                                    <div style="font-weight: 500;" data-i18n="panels.library.items.${key}">${SLUI.t('panels.library.items.' + key)}</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);" data-i18n="panels.library.templateLabel">${SLUI.t('panels.library.templateLabel')}</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -227,13 +227,13 @@
                     const div = document.createElement('div');
                     div.className = 'demo-content';
                     div.innerHTML = `
-                        <h3 class="sl-text-ui">Output Console</h3>
+                        <h3 class="sl-text-ui" data-i18n="panels.console.outputTitle">${SLUI.t('panels.console.outputTitle')}</h3>
                         <div style="font-family: var(--font-code); font-size: 0.8rem; background: var(--bg-primary); padding: 12px; border-radius: var(--border-radius); border: 1px solid var(--border); height: 200px; overflow: auto;">
-                            <div style="color: var(--success);">[INFO] Shader compiled successfully</div>
-                            <div style="color: var(--text-muted);">[DEBUG] Frame time: 16.2ms</div>
-                            <div style="color: var(--warning);">[WARN] Uniform 'iTime' not used</div>
-                            <div style="color: var(--text-muted);">[DEBUG] Resolution: 1920x1080</div>
-                            <div style="color: var(--success);">[INFO] Preview updated</div>
+                            <div style="color: var(--success);">[INFO] <span data-i18n="panels.console.messages.compiled">${SLUI.t('panels.console.messages.compiled')}</span></div>
+                            <div style="color: var(--text-muted);">[DEBUG] <span data-i18n="panels.console.messages.frameTime">${SLUI.t('panels.console.messages.frameTime')}</span></div>
+                            <div style="color: var(--warning);">[WARN] <span data-i18n="panels.console.messages.unusedUniform">${SLUI.t('panels.console.messages.unusedUniform')}</span></div>
+                            <div style="color: var(--text-muted);">[DEBUG] <span data-i18n="panels.console.messages.resolution">${SLUI.t('panels.console.messages.resolution')}</span></div>
+                            <div style="color: var(--success);">[INFO] <span data-i18n="panels.console.messages.previewUpdated">${SLUI.t('panels.console.messages.previewUpdated')}</span></div>
                         </div>
                     `;
                     return div;

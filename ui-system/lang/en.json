@@ -19,6 +19,7 @@
       "right": "Dock Right",
       "float": "Float"
     },
+    "position": "Toolbar Position",
     "settings": "Settings",
     "theme": "Theme",
     "language": "Language"
@@ -34,31 +35,79 @@
   "panels": {
     "editor": {
       "title": "Editor",
-      "description": "Code editor for shaders"
+      "description": "Code editor for shaders",
+      "codeTitle": "Shader Code",
+      "codeHint": "This is where the Monaco editor would go. The code font adapts to the current theme."
     },
     "preview": {
       "title": "Preview",
-      "description": "Live shader preview"
+      "description": "Live shader preview",
+      "liveTitle": "Live Preview",
+      "canvasPlaceholder": "Shader Preview Canvas",
+      "hint": "Real-time WebGL rendering would appear here."
     },
     "nodes": {
       "title": "Nodes",
-      "description": "Node-based editor"
+      "description": "Node-based editor",
+      "editorTitle": "Node Editor",
+      "hint": "Visual node-based shader programming interface.",
+      "types": {
+        "sphere": "Sphere SDF",
+        "box": "Box SDF",
+        "smoothUnion": "Smooth Union",
+        "transform": "Transform",
+        "material": "Material",
+        "output": "Output"
+      }
     },
     "inspector": {
       "title": "Inspector",
-      "description": "Properties and parameters"
+      "description": "Properties and parameters",
+      "propertiesTitle": "Properties",
+      "radius": "Radius",
+      "smoothness": "Smoothness",
+      "color": "Color"
     },
     "library": {
       "title": "Library",
-      "description": "Shader library browser"
+      "description": "Shader library browser",
+      "searchPlaceholder": "Search shaders...",
+      "templateLabel": "Template shader",
+      "items": {
+        "raymarching": "Raymarching Basics",
+        "fractalNoise": "Fractal Noise",
+        "pbrLighting": "PBR Lighting",
+        "postProcessing": "Post Processing",
+        "volumetricFog": "Volumetric Fog"
+      }
     },
     "console": {
       "title": "Console",
-      "description": "Output and errors"
+      "description": "Output and errors",
+      "outputTitle": "Output Console",
+      "messages": {
+        "compiled": "Shader compiled successfully",
+        "frameTime": "Frame time: 16.2ms",
+        "unusedUniform": "Uniform 'iTime' not used",
+        "resolution": "Resolution: 1920x1080",
+        "previewUpdated": "Preview updated"
+      }
     },
     "settings": {
       "title": "Settings",
       "description": "Application settings"
+    },
+    "profile": {
+      "title": "Profile",
+      "description": "User profile settings",
+      "displayName": "Display Name",
+      "status": "Status",
+      "statusOptions": {
+        "online": "Online",
+        "away": "Away",
+        "busy": "Busy",
+        "offline": "Offline"
+      }
     }
   },
   
@@ -74,6 +123,12 @@
         "overlay": "Overlay (Free Move)"
       }
     },
+    "device": {
+      "title": "Device Mode",
+      "auto": "Auto Detect",
+      "forceDesktop": "Force Desktop",
+      "forceMobile": "Force Mobile"
+    },
     "editor": {
       "title": "Editor",
       "lineNumbers": "Line Numbers",
@@ -81,6 +136,12 @@
       "minimap": "Minimap",
       "autoSave": "Auto Save"
     }
+  },
+  
+  "user": {
+    "profile": "Profile",
+    "settings": "Settings",
+    "logout": "Log out"
   },
   
   "actions": {
@@ -111,6 +172,9 @@
     "loadFailed": "Failed to load",
     "saveFailed": "Failed to save",
     "invalidFile": "Invalid file format"
+  },
+  
+  "mobile": {
+    "tapToLoad": "Tap a panel icon"
   }
 }
-
