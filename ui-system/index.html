@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>SL Editor - UI System Prototype</title>
+    
+    <!-- Google Fonts for themes -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+    
+    <!-- UI Stylesheet -->
+    <link rel="stylesheet" href="ui.css">
+    
+    <style>
+        /* Demo-specific styles */
+        .demo-content {
+            padding: 16px;
+        }
+        
+        .demo-content h3 {
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+        
+        .demo-content p {
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            line-height: 1.6;
+        }
+        
+        .demo-code {
+            font-family: var(--font-code);
+            background: var(--bg-primary);
+            padding: 12px;
+            border-radius: calc(var(--border-radius) * 0.5);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            font-size: 0.8rem;
+            overflow-x: auto;
+            white-space: pre;
+        }
+        
+        .demo-preview {
+            width: 100%;
+            height: 200px;
+            background: linear-gradient(135deg, var(--accent) 0%, var(--bg-tertiary) 100%);
+            border-radius: var(--border-radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-inverse);
+            font-weight: 600;
+        }
+        
+        .demo-nodes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .demo-node {
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--border-radius);
+            color: var(--text-primary);
+            font-size: 0.8rem;
+        }
+        
+        .demo-node.selected {
+            border-color: var(--accent);
+            background: var(--bg-active);
+        }
+    </style>
+</head>
+<body>
+    <!-- App will be built by JavaScript -->
+    <noscript>
+        <div style="padding: 2rem; text-align: center; color: #fff; background: #1a1a2e;">
+            <h1>JavaScript Required</h1>
+            <p>Please enable JavaScript to use SL Editor.</p>
+        </div>
+    </noscript>
+    
+    <!-- UI Module -->
+    <script src="ui.js"></script>
+    
+    <!-- Demo Application -->
+    <script>
+        // Initialize UI system
+        SLUI.init().then(() => {
+            
+            // Register demo panels
+            
+            // Editor panel
+            SLUI.registerPanel({
+                id: 'editor',
+                icon: '📝',
+                title: 'Editor',
+                createContent: () => {
+                    const div = document.createElement('div');
+                    div.className = 'demo-content';
+                    div.innerHTML = `
+                        <h3 class="sl-text-ui">Shader Code</h3>
+                        <div class="demo-code">void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / iResolution.xy;
+    vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx + vec3(0, 2, 4));
+    fragColor = vec4(col, 1.0);
+}</div>
+                        <p style="margin-top: 12px;" class="sl-text-content">
+                            This is where the Monaco editor would go. 
+                            The code font adapts to the current theme.
+                        </p>
+                    `;
+                    return div;
+                }
+            });
+            
+            // Preview panel
+            SLUI.registerPanel({
+                id: 'preview',
+                icon: '🎬',
+                title: 'Preview',
+                createContent: () => {
+                    const div = document.createElement('div');
+                    div.className = 'demo-content';
+                    div.innerHTML = `
+                        <h3 class="sl-text-ui">Live Preview</h3>
+                        <div class="demo-preview">
+                            Shader Preview Canvas
+                        </div>
+                        <p style="margin-top: 12px;" class="sl-text-content">
+                            Real-time WebGL rendering would appear here.
+                        </p>
+                    `;
+                    return div;
+                }
+            });
+            
+            // Nodes panel
+            SLUI.registerPanel({
+                id: 'nodes',
+                icon: '🔗',
+                title: 'Nodes',
+                createContent: () => {
+                    const div = document.createElement('div');
+                    div.className = 'demo-content';
+                    div.innerHTML = `
+                        <h3 class="sl-text-ui">Node Editor</h3>
+                        <div class="demo-nodes">
+                            <div class="demo-node selected">Sphere SDF</div>
+                            <div class="demo-node">Box SDF</div>
+                            <div class="demo-node">Smooth Union</div>
+                            <div class="demo-node">Transform</div>
+                            <div class="demo-node">Material</div>
+                            <div class="demo-node">Output</div>
+                        </div>
+                        <p style="margin-top: 16px;" class="sl-text-content">
+                            Visual node-based shader programming interface.
+                        </p>
+                    `;
+                    return div;
+                }
+            });
+            
+            // Inspector panel
+            SLUI.registerPanel({
+                id: 'inspector',
+                icon: '🔍',
+                title: 'Inspector',
+                createContent: () => {
+                    const div = document.createElement('div');
+                    div.className = 'demo-content';
+                    div.innerHTML = `
+                        <h3 class="sl-text-ui">Properties</h3>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;">Radius</label>
+                                <input type="range" style="width: 100%;" value="50">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;">Smoothness</label>
+                                <input type="range" style="width: 100%;" value="30">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;">Color</label>
+                                <input type="color" value="#e94560" style="width: 100%; height: 32px; border: none; cursor: pointer;">
+                            </div>
+                        </div>
+                    `;
+                    return div;
+                }
+            });
+            
+            // Library panel
+            SLUI.registerPanel({
+                id: 'library',
+                icon: '📚',
+                title: 'Library',
+                createContent: () => {
+                    const div = document.createElement('div');
+                    div.className = 'demo-content';
+                    div.innerHTML = `
+                        <h3 class="sl-text-ui">Shader Library</h3>
+                        <input type="text" class="sl-input" placeholder="Search shaders..." style="width: 100%; margin-bottom: 12px;">
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            ${['Raymarching Basics', 'Fractal Noise', 'PBR Lighting', 'Post Processing', 'Volumetric Fog'].map(name => `
+                                <div style="padding: 8px 12px; background: var(--bg-secondary); border-radius: var(--border-radius); cursor: pointer; transition: background var(--transition);" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-secondary)'">
+                                    <div style="font-weight: 500;">${name}</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Template shader</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    return div;
+                }
+            });
+            
+            // Console panel
+            SLUI.registerPanel({
+                id: 'console',
+                icon: '💬',
+                title: 'Console',
+                createContent: () => {
+                    const div = document.createElement('div');
+                    div.className = 'demo-content';
+                    div.innerHTML = `
+                        <h3 class="sl-text-ui">Output Console</h3>
+                        <div style="font-family: var(--font-code); font-size: 0.8rem; background: var(--bg-primary); padding: 12px; border-radius: var(--border-radius); border: 1px solid var(--border); height: 200px; overflow: auto;">
+                            <div style="color: var(--success);">[INFO] Shader compiled successfully</div>
+                            <div style="color: var(--text-muted);">[DEBUG] Frame time: 16.2ms</div>
+                            <div style="color: var(--warning);">[WARN] Uniform 'iTime' not used</div>
+                            <div style="color: var(--text-muted);">[DEBUG] Resolution: 1920x1080</div>
+                            <div style="color: var(--success);">[INFO] Preview updated</div>
+                        </div>
+                    `;
+                    return div;
+                }
+            });
+            
+            // Profile panel (opened from user menu)
+            SLUI.registerPanel({
+                id: 'profile',
+                icon: '👤',
+                title: 'Profile',
+                createContent: SLUI.createProfileContent,
+                showInToolbar: false  // Not in main toolbar, accessed via user menu
+            });
+            
+            // Settings panel (registered like any other panel)
+            SLUI.registerPanel({
+                id: 'settings',
+                icon: '⚙',
+                title: 'Settings',
+                createContent: SLUI.createSettingsContent
+            });
+            
+            // Open a couple of demo panels by default
+            setTimeout(() => {
+                document.querySelector('[data-panel-id="editor"]')?.click();
+                setTimeout(() => {
+                    document.querySelector('[data-panel-id="preview"]')?.click();
+                }, 200);
+            }, 300);
+            
+            // Log device info
+            console.log('Device mode:', SLUI.state.deviceMode);
+            console.log('Is mobile device:', SLUI.isMobileDevice());
+            
+        });
+    </script>
+</body>
+</html>
+

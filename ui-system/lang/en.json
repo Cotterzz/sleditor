@@ -1,0 +1,116 @@
+{
+  "meta": {
+    "language": "English",
+    "code": "en",
+    "direction": "ltr"
+  },
+  
+  "app": {
+    "title": "SL Editor",
+    "subtitle": "Shader Development Environment"
+  },
+  
+  "toolbar": {
+    "title": "Toolbar",
+    "dock": {
+      "top": "Dock Top",
+      "bottom": "Dock Bottom",
+      "left": "Dock Left",
+      "right": "Dock Right",
+      "float": "Float"
+    },
+    "settings": "Settings",
+    "theme": "Theme",
+    "language": "Language"
+  },
+  
+  "window": {
+    "close": "Close",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore"
+  },
+  
+  "panels": {
+    "editor": {
+      "title": "Editor",
+      "description": "Code editor for shaders"
+    },
+    "preview": {
+      "title": "Preview",
+      "description": "Live shader preview"
+    },
+    "nodes": {
+      "title": "Nodes",
+      "description": "Node-based editor"
+    },
+    "inspector": {
+      "title": "Inspector",
+      "description": "Properties and parameters"
+    },
+    "library": {
+      "title": "Library",
+      "description": "Shader library browser"
+    },
+    "console": {
+      "title": "Console",
+      "description": "Output and errors"
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Application settings"
+    }
+  },
+  
+  "settings": {
+    "appearance": {
+      "title": "Appearance",
+      "theme": "Theme",
+      "language": "Language",
+      "fontSize": "Font Size",
+      "windowMode": "Window Mode",
+      "modes": {
+        "docked": "Docked (No Overlap)",
+        "overlay": "Overlay (Free Move)"
+      }
+    },
+    "editor": {
+      "title": "Editor",
+      "lineNumbers": "Line Numbers",
+      "wordWrap": "Word Wrap",
+      "minimap": "Minimap",
+      "autoSave": "Auto Save"
+    }
+  },
+  
+  "actions": {
+    "save": "Save",
+    "load": "Load",
+    "export": "Export",
+    "import": "Import",
+    "copy": "Copy",
+    "paste": "Paste",
+    "undo": "Undo",
+    "redo": "Redo",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "apply": "Apply",
+    "reset": "Reset"
+  },
+  
+  "status": {
+    "ready": "Ready",
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "error": "Error",
+    "success": "Success"
+  },
+  
+  "errors": {
+    "generic": "An error occurred",
+    "loadFailed": "Failed to load",
+    "saveFailed": "Failed to save",
+    "invalidFile": "Invalid file format"
+  }
+}
+

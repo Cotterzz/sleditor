@@ -1,0 +1,152 @@
+{
+  "themes": {
+    "hacker": {
+      "name": "Hacker",
+      "type": "dark",
+      "fonts": {
+        "code": "'Fira Code', 'Consolas', monospace",
+        "ui": "'Share Tech Mono', 'Courier New', monospace",
+        "content": "'VT323', 'Courier New', monospace"
+      },
+      "colors": {
+        "bg-primary": "#0a0a0a",
+        "bg-secondary": "#0f0f0f",
+        "bg-tertiary": "#1a1a1a",
+        "bg-panel": "#0d0d0d",
+        "bg-hover": "#1f1f1f",
+        "bg-active": "#002200",
+        
+        "text-primary": "#00ff00",
+        "text-secondary": "#00cc00",
+        "text-muted": "#008800",
+        "text-inverse": "#000000",
+        
+        "accent": "#00ff00",
+        "accent-hover": "#00cc00",
+        "accent-active": "#009900",
+        
+        "border": "#003300",
+        "border-focus": "#00ff00",
+        
+        "success": "#00ff00",
+        "warning": "#ffff00",
+        "error": "#ff0000",
+        "info": "#00ffff",
+        
+        "shadow": "rgba(0, 255, 0, 0.1)",
+        "overlay": "rgba(0, 0, 0, 0.8)",
+        
+        "toolbar-bg": "#000000",
+        "window-header": "#001100",
+        "scrollbar": "#003300",
+        "scrollbar-thumb": "#00ff00"
+      },
+      "effects": {
+        "glow": "0 0 10px rgba(0, 255, 0, 0.5)",
+        "border-radius": "0px",
+        "transition": "0.1s"
+      }
+    },
+    
+    "architect": {
+      "name": "Architect",
+      "type": "dark",
+      "fonts": {
+        "code": "'JetBrains Mono', 'Fira Code', monospace",
+        "ui": "'Inter', 'Segoe UI', sans-serif",
+        "content": "'IBM Plex Sans', 'Helvetica Neue', sans-serif"
+      },
+      "colors": {
+        "bg-primary": "#08090d",
+        "bg-secondary": "#0d0f15",
+        "bg-tertiary": "#12151d",
+        "bg-panel": "#0f1118",
+        "bg-hover": "#181c28",
+        "bg-active": "#1a1f2e",
+        
+        "text-primary": "#e8eaf0",
+        "text-secondary": "#a0a8b8",
+        "text-muted": "#5a6478",
+        "text-inverse": "#08090d",
+        
+        "accent": "#e94560",
+        "accent-hover": "#ff6b6b",
+        "accent-active": "#c73e54",
+        
+        "border": "#1e2233",
+        "border-focus": "#e94560",
+        
+        "success": "#4ade80",
+        "warning": "#fbbf24",
+        "error": "#ef4444",
+        "info": "#38bdf8",
+        
+        "shadow": "rgba(0, 0, 0, 0.5)",
+        "overlay": "rgba(5, 5, 10, 0.9)",
+        
+        "toolbar-bg": "#050608",
+        "window-header": "#0d0f15",
+        "scrollbar": "#1a1f2e",
+        "scrollbar-thumb": "#e94560"
+      },
+      "effects": {
+        "glow": "0 4px 24px rgba(233, 69, 96, 0.2)",
+        "border-radius": "8px",
+        "transition": "0.2s"
+      }
+    },
+    
+    "designer": {
+      "name": "Designer",
+      "type": "light",
+      "fonts": {
+        "code": "'SF Mono', 'Monaco', monospace",
+        "ui": "'SF Pro Display', 'Helvetica Neue', sans-serif",
+        "content": "'SF Pro Text', 'Helvetica', sans-serif"
+      },
+      "colors": {
+        "bg-primary": "#c8cdd8",
+        "bg-secondary": "#d4d8e2",
+        "bg-tertiary": "#e0e4ec",
+        "bg-panel": "#e8ecf6",
+        "bg-hover": "#c0c5d2",
+        "bg-active": "#b8bdcc",
+        
+        "text-primary": "#1a1e28",
+        "text-secondary": "#3a4050",
+        "text-muted": "#6a7085",
+        "text-inverse": "#ffffff",
+        
+        "accent": "#5558e8",
+        "accent-hover": "#6b6ef5",
+        "accent-active": "#4245d0",
+        
+        "border": "#a8aec0",
+        "border-focus": "#5558e8",
+        
+        "success": "#1a9050",
+        "warning": "#c88000",
+        "error": "#d03030",
+        "info": "#2068c8",
+        
+        "shadow": "rgba(30, 40, 60, 0.12)",
+        "overlay": "rgba(200, 205, 216, 0.95)",
+        
+        "toolbar-bg": "#b8bdc8",
+        "window-header": "#ccd1dc",
+        "scrollbar": "#b0b5c5",
+        "scrollbar-thumb": "#8088a0"
+      },
+      "effects": {
+        "glow": "0 4px 16px rgba(85, 88, 232, 0.1)",
+        "border-radius": "16px",
+        "transition": "0.25s",
+        "neumorphic-raised": "6px 6px 12px #a8adb8, -6px -6px 12px #e8edf8",
+        "neumorphic-inset": "inset 4px 4px 8px #a8adb8, inset -4px -4px 8px #e8edf8"
+      }
+    }
+  },
+  
+  "defaultTheme": "architect"
+}
+
