@@ -166,8 +166,33 @@ export async function createAudioSelector(tabName, channelNumber) {
     
     const urlLabel = document.createElement('div');
     urlLabel.style.cssText = 'font-size: 11px; font-weight: bold; margin-bottom: 6px; color: var(--text-secondary);';
-    urlLabel.textContent = 'Import from GitHub';
+    urlLabel.textContent = 'Import from URL';
     urlSection.appendChild(urlLabel);
+    
+    // Source selector row
+    const sourceRow = document.createElement('div');
+    sourceRow.style.cssText = 'display: flex; gap: 6px; align-items: center; margin-bottom: 6px;';
+    
+    const sourceLabel = document.createElement('span');
+    sourceLabel.style.cssText = 'font-size: 11px; color: var(--text-secondary);';
+    sourceLabel.textContent = 'Source:';
+    sourceRow.appendChild(sourceLabel);
+    
+    const sourceSelect = document.createElement('select');
+    sourceSelect.style.cssText = `
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        padding: 4px 8px;
+        font-size: 11px;
+        border-radius: 2px;
+    `;
+    sourceSelect.innerHTML = `
+        <option value="github">GitHub</option>
+        <option value="cloudinary">Cloudinary</option>
+    `;
+    sourceRow.appendChild(sourceSelect);
+    urlSection.appendChild(sourceRow);
     
     const urlRow = document.createElement('div');
     urlRow.style.cssText = 'display: flex; gap: 6px; align-items: center;';
@@ -191,6 +216,17 @@ export async function createAudioSelector(tabName, channelNumber) {
         font-family: monospace;
     `;
     urlRow.appendChild(urlInput);
+    
+    // Update prefix and placeholder when source changes
+    sourceSelect.onchange = () => {
+        if (sourceSelect.value === 'cloudinary') {
+            urlPrefix.textContent = 'https://res.cloudinary.com/';
+            urlInput.placeholder = 'cloud_name/video/upload/path/audio.mp3';
+        } else {
+            urlPrefix.textContent = 'https://raw.githubusercontent.com/';
+            urlInput.placeholder = 'user/repo/branch/path/audio.mp3';
+        }
+    };
     
     const importBtn = document.createElement('button');
     importBtn.textContent = 'Import';
@@ -219,7 +255,7 @@ export async function createAudioSelector(tabName, channelNumber) {
     importBtn.onclick = async () => {
         const userPath = urlInput.value.trim();
         if (!userPath) {
-            alert('Please enter a GitHub path');
+            alert('Please enter a path');
             return;
         }
         
@@ -229,13 +265,22 @@ export async function createAudioSelector(tabName, channelNumber) {
             return;
         }
         
-        const fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+        // Build full URL based on source
+        let fullUrl;
+        let source = 'guc';
+        if (sourceSelect.value === 'cloudinary') {
+            fullUrl = 'https://res.cloudinary.com/' + userPath;
+            source = 'cloudinary';
+        } else {
+            fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+            source = 'guc';
+        }
         
         importBtn.disabled = true;
         importBtn.textContent = 'Loading...';
         
         try {
-            await handleUrlImport(fullUrl, userPath, channelNumber);
+            await handleUrlImport(fullUrl, userPath, source, channelNumber);
             urlInput.value = '';
             importBtn.textContent = 'Import';
         } catch (error) {
@@ -266,7 +311,8 @@ export async function createAudioSelector(tabName, channelNumber) {
     const allItems = [...items];
     
     // Add external media if current selection is external
-    if (currentMedia && currentMedia.source === 'guc' && !allItems.find(item => item.id === currentMedia.id)) {
+    const externalSources = ['guc', 'cloudinary'];
+    if (currentMedia && externalSources.includes(currentMedia.source) && !allItems.find(item => item.id === currentMedia.id)) {
         allItems.unshift(currentMedia);
     }
     
@@ -407,16 +453,17 @@ async function handleAudioSelect(audioId, channelNumber) {
 }
 
 /**
- * Handle URL import from GitHub
- * @param {string} fullUrl - Complete GitHub raw URL
+ * Handle URL import from external source
+ * @param {string} fullUrl - Complete URL
  * @param {string} userPath - User-provided path
+ * @param {string} source - Source identifier ('guc' or 'cloudinary')
  * @param {number} channelNumber - Channel number
  */
-async function handleUrlImport(fullUrl, userPath, channelNumber) {
-    console.log(`Importing audio from URL: ${fullUrl}`);
+async function handleUrlImport(fullUrl, userPath, source, channelNumber) {
+    console.log(`Importing audio from ${source}: ${fullUrl}`);
     
     // Create a special media ID for URL-sourced audio
-    const mediaId = 'guc:' + userPath;
+    const mediaId = source + ':' + userPath;
     
     // Extract title from path
     const filename = userPath.split('/').pop();
@@ -428,7 +475,7 @@ async function handleUrlImport(fullUrl, userPath, channelNumber) {
         type: 'audio',
         name: title,
         path: fullUrl,
-        source: 'guc',
+        source: source,
         url: fullUrl,
         userPath: userPath
     };
@@ -443,7 +490,7 @@ async function handleUrlImport(fullUrl, userPath, channelNumber) {
         throw new Error('Failed to update channel');
     }
     
-    console.log(`✓ URL imported: ${title}`);
+    console.log(`✓ Audio imported from ${source}: ${title}`);
     
     // Refresh the audio selector UI
     const tabName = `audio_ch${channelNumber}`;

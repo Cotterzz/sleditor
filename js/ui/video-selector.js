@@ -208,15 +208,45 @@ export async function createVideoSelector(tabName, channelNumber) {
     
     const urlLabel = document.createElement('div');
     urlLabel.style.cssText = 'font-size: 12px; color: var(--text-secondary);';
-    urlLabel.textContent = 'Or load from URL (GitHub, etc.):';
+    urlLabel.textContent = 'Import from URL:';
     urlSection.appendChild(urlLabel);
     
+    // Source selector row
+    const sourceRow = document.createElement('div');
+    sourceRow.style.cssText = 'display: flex; gap: 6px; align-items: center; margin-bottom: 6px;';
+    
+    const sourceLabel = document.createElement('span');
+    sourceLabel.style.cssText = 'font-size: 11px; color: var(--text-secondary);';
+    sourceLabel.textContent = 'Source:';
+    sourceRow.appendChild(sourceLabel);
+    
+    const sourceSelect = document.createElement('select');
+    sourceSelect.style.cssText = `
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 1px solid var(--border-color);
+        padding: 4px 8px;
+        font-size: 11px;
+        border-radius: 2px;
+    `;
+    sourceSelect.innerHTML = `
+        <option value="github">GitHub</option>
+        <option value="cloudinary">Cloudinary</option>
+    `;
+    sourceRow.appendChild(sourceSelect);
+    urlSection.appendChild(sourceRow);
+    
     const urlInputContainer = document.createElement('div');
-    urlInputContainer.style.cssText = 'display: flex; gap: 6px;';
+    urlInputContainer.style.cssText = 'display: flex; gap: 6px; align-items: center;';
+    
+    const urlPrefix = document.createElement('span');
+    urlPrefix.style.cssText = 'font-size: 11px; color: var(--text-secondary); font-family: monospace; white-space: nowrap;';
+    urlPrefix.textContent = 'https://raw.githubusercontent.com/';
+    urlInputContainer.appendChild(urlPrefix);
     
     const urlInput = document.createElement('input');
     urlInput.type = 'text';
-    urlInput.placeholder = 'https://example.com/video.mp4';
+    urlInput.placeholder = 'user/repo/branch/path/video.mp4';
     urlInput.style.cssText = `
         flex: 1;
         background: var(--bg-primary);
@@ -225,7 +255,19 @@ export async function createVideoSelector(tabName, channelNumber) {
         padding: 6px 8px;
         color: var(--text-primary);
         font-size: 11px;
+        font-family: monospace;
     `;
+    
+    // Update prefix and placeholder when source changes
+    sourceSelect.onchange = () => {
+        if (sourceSelect.value === 'cloudinary') {
+            urlPrefix.textContent = 'https://res.cloudinary.com/';
+            urlInput.placeholder = 'cloud_name/video/upload/path/video.mp4';
+        } else {
+            urlPrefix.textContent = 'https://raw.githubusercontent.com/';
+            urlInput.placeholder = 'user/repo/branch/path/video.mp4';
+        }
+    };
     
     const loadBtn = document.createElement('button');
     loadBtn.textContent = 'Load';
@@ -241,30 +283,33 @@ export async function createVideoSelector(tabName, channelNumber) {
     `;
     
     loadBtn.addEventListener('click', async () => {
-        const url = urlInput.value.trim();
-        if (!url) return;
-        
-        // Validate URL
-        try {
-            new URL(url);
-        } catch (e) {
-            alert('Invalid URL');
-            return;
-        }
+        const userPath = urlInput.value.trim();
+        if (!userPath) return;
         
         // Check file extension
         const validExts = ['.mp4', '.webm', '.ogv', '.mov'];
-        const hasValidExt = validExts.some(ext => url.toLowerCase().endsWith(ext));
+        const hasValidExt = validExts.some(ext => userPath.toLowerCase().endsWith(ext));
         if (!hasValidExt) {
-            alert('URL must point to a video file (.mp4, .webm, .ogv, .mov)');
+            alert('Path must point to a video file (.mp4, .webm, .ogv, .mov)');
             return;
+        }
+        
+        // Build full URL based on source
+        let fullUrl;
+        let source = 'guc';
+        if (sourceSelect.value === 'cloudinary') {
+            fullUrl = 'https://res.cloudinary.com/' + userPath;
+            source = 'cloudinary';
+        } else {
+            fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+            source = 'guc';
         }
         
         loadBtn.disabled = true;
         loadBtn.textContent = 'Loading...';
         
         try {
-            await loadVideoFromUrl(url, channelNumber, channel, videoPreview, statusText, loopCheckbox);
+            await loadVideoFromUrl(fullUrl, userPath, source, channelNumber, channel, videoPreview, statusText, loopCheckbox);
             urlInput.value = '';
         } catch (error) {
             alert('Failed to load video: ' + error.message);
@@ -438,8 +483,11 @@ async function loadVideoFromCatalog(videoInfo, channelNumber, channel, videoPrev
 
 /**
  * Load video from external URL
+ * @param {string} fullUrl - Complete URL
+ * @param {string} userPath - User-provided path (used for mediaId)
+ * @param {string} source - Source identifier ('guc' or 'cloudinary')
  */
-async function loadVideoFromUrl(url, channelNumber, channel, videoPreview, statusText, loopCheckbox) {
+async function loadVideoFromUrl(fullUrl, userPath, source, channelNumber, channel, videoPreview, statusText, loopCheckbox) {
     // Show loading state
     videoPreview.innerHTML = `
         <div style="color: var(--text-secondary); display: flex; flex-direction: column; align-items: center; gap: 8px;">
@@ -459,13 +507,16 @@ async function loadVideoFromUrl(url, channelNumber, channel, videoPreview, statu
     }
     
     // Load new video
-    const videoData = await videoInput.loadVideoChannel(gl, url);
+    const videoData = await videoInput.loadVideoChannel(gl, fullUrl);
+    
+    // Create mediaId with source prefix for save/load
+    const mediaId = source + ':' + userPath;
     
     // Update channel
     channel.videoData = videoData;
     channel.texture = videoData.texture;
     channel.resolution = { width: videoData.width, height: videoData.height };
-    channel.mediaId = url; // Store URL as mediaId for external videos
+    channel.mediaId = mediaId;
     
     // Update loop state from checkbox
     videoInput.setVideoLoop(channel, loopCheckbox.checked);
@@ -480,6 +531,6 @@ async function loadVideoFromUrl(url, channelNumber, channel, videoPreview, statu
     const loopText = videoData.loop ? ' · Loop' : '';
     statusText.textContent = `⏸ Paused${loopText} · ${videoData.width}×${videoData.height}`;
     
-    console.log(`✓ Video channel ${channelNumber} loaded from URL`);
+    console.log(`✓ Video channel ${channelNumber} loaded from ${source}: ${userPath}`);
 }
 

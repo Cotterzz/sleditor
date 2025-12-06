@@ -284,7 +284,8 @@ function renderSettings() {
                            id="apiKey_${provider.id}" 
                            class="uiInput" 
                            placeholder="Enter API key"
-                           style="flex: 1; padding: 8px;">
+                           style="flex: 1; padding: 8px;"
+                           autocomplete="off">
                     <button class="uiBtn addKeyBtn" data-provider="${provider.id}">${buttonText}</button>
                     ${hasKey ? `<button class="uiBtn deleteKeyBtn" data-provider="${provider.id}" style="background: var(--error-color);">Remove</button>` : ''}
                 </div>
