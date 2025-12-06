@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Node Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #stage {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        .instructions {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            color: rgba(255,255,255,0.6);
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .node {
+            position: absolute;
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            background: #4a4a6a;
+            border: 3px solid #6a6a8a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            user-select: none;
+            z-index: 10;
+            box-shadow: 
+                0 4px 12px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            transform: translate(-50%, -50%);
+        }
+
+        .node:not(.editing):not(.dragging):hover {
+            transform: translate(-50%, -50%) scale(1.08);
+            box-shadow: 
+                0 6px 16px rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        .node.editing {
+            z-index: 100;
+            box-shadow: 
+                0 8px 24px rgba(0,0,0,0.6),
+                0 0 0 3px rgba(255,255,255,0.2);
+        }
+
+        .node.dragging {
+            cursor: grabbing;
+        }
+
+        .node.blank {
+            background: linear-gradient(145deg, #5a5a7a 0%, #3a3a5a 100%);
+        }
+
+        .grid-container {
+            position: fixed;
+            z-index: 5;
+            pointer-events: none;
+            left: 0;
+            top: 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(5, 56px);
+            grid-template-rows: repeat(5, 56px);
+            gap: 10px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            position: absolute;
+            transform: translate(-50%, -50%);
+        }
+
+        .grid.visible {
+            opacity: 1;
+        }
+
+        .grid-item {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: bold;
+            color: white;
+            opacity: 0.7;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+
+        .grid-item.center {
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .grid-item.highlighted {
+            opacity: 1;
+            transform: scale(1.1);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+
+        .hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        .hint.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="stage"></div>
+    
+    <div class="instructions">
+        Click & drag anywhere to create a node
+    </div>
+    
+    <div class="hint" id="hint"></div>
+
+    <script>
+        // Node type definitions - 24 types for 5x5 grid minus center
+        const nodeTypes = [
+            { icon: '📁', color: '#e74c3c', name: 'Folder' },
+            { icon: '📄', color: '#3498db', name: 'File' },
+            { icon: '🔗', color: '#2ecc71', name: 'Link' },
+            { icon: '⚙️', color: '#f39c12', name: 'Settings' },
+            { icon: '👤', color: '#9b59b6', name: 'User' },
+            { icon: '💬', color: '#1abc9c', name: 'Chat' },
+            { icon: '🔔', color: '#e67e22', name: 'Alert' },
+            { icon: '📊', color: '#34495e', name: 'Chart' },
+            { icon: '🎨', color: '#e91e63', name: 'Design' },
+            { icon: '🔍', color: '#00bcd4', name: 'Search' },
+            { icon: '📝', color: '#8bc34a', name: 'Edit' },
+            { icon: '🗑️', color: '#ff5722', name: 'Delete' },
+            // Center is empty (index 12)
+            { icon: '➕', color: '#673ab7', name: 'Add' },
+            { icon: '📤', color: '#009688', name: 'Upload' },
+            { icon: '📥', color: '#ffc107', name: 'Download' },
+            { icon: '🔒', color: '#795548', name: 'Lock' },
+            { icon: '🔓', color: '#607d8b', name: 'Unlock' },
+            { icon: '❤️', color: '#f44336', name: 'Favorite' },
+            { icon: '⭐', color: '#ff9800', name: 'Star' },
+            { icon: '🏠', color: '#4caf50', name: 'Home' },
+            { icon: '📧', color: '#2196f3', name: 'Email' },
+            { icon: '📅', color: '#9c27b0', name: 'Calendar' },
+            { icon: '🎵', color: '#00bcd4', name: 'Music' },
+            { icon: '📷', color: '#cddc39', name: 'Photo' },
+        ];
+
+        const stage = document.getElementById('stage');
+        const hintEl = document.getElementById('hint');
+        
+        let activeNode = null;
+        let activeGridContainer = null;
+        let isEditing = false;
+        let isDraggingNode = false;
+        let isCreatingNew = false;
+        let longPressTimer = null;
+        
+        let pointerDownX = 0;
+        let pointerDownY = 0;
+        let nodeStartX = 0;
+        let nodeStartY = 0;
+        let gridBaseX = 0;
+        let gridBaseY = 0;
+        let currentHighlightIndex = -1;
+        let hasMoved = false;
+
+        const LONG_PRESS_DURATION = 400;
+        const NODE_SIZE = 56;
+        const GRID_GAP = 10;
+        const GRID_CELL_SIZE = NODE_SIZE + GRID_GAP;
+        const MOVE_THRESHOLD = 5;
+
+        // Show hint message
+        function showHint(message, duration = 2000) {
+            hintEl.textContent = message;
+            hintEl.classList.add('visible');
+            setTimeout(() => hintEl.classList.remove('visible'), duration);
+        }
+
+        // Get pointer position from mouse or touch event
+        function getPointer(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
+
+        // Stage mousedown/touchstart - create new node
+        stage.addEventListener('mousedown', onStagePointerDown);
+        stage.addEventListener('touchstart', onStagePointerDown, { passive: false });
+
+        function onStagePointerDown(e) {
+            // Only handle if clicking directly on stage
+            if (e.target !== stage) return;
+            
+            e.preventDefault();
+            const pointer = getPointer(e);
+            
+            pointerDownX = pointer.x;
+            pointerDownY = pointer.y;
+            hasMoved = false;
+            isCreatingNew = true;
+            
+            // Create blank node immediately
+            activeNode = createNode(pointer.x, pointer.y);
+            nodeStartX = pointer.x;
+            nodeStartY = pointer.y;
+            
+            // Start timer to show grid
+            longPressTimer = setTimeout(() => {
+                if (!hasMoved && isCreatingNew) {
+                    enterEditMode(activeNode, pointer.x, pointer.y);
+                }
+            }, LONG_PRESS_DURATION);
+        }
+
+        function createNode(x, y) {
+            const node = document.createElement('div');
+            node.className = 'node blank';
+            node.innerHTML = '?';
+            node.style.left = x + 'px';
+            node.style.top = y + 'px';
+            node.dataset.configured = 'false';
+            node.dataset.typeIndex = '-1';
+            
+            setupNodeInteractions(node);
+            stage.appendChild(node);
+            return node;
+        }
+
+        function setupNodeInteractions(node) {
+            const onNodePointerDown = (e) => {
+                // Stop propagation so stage doesn't create a new node
+                e.stopPropagation();
+                e.preventDefault();
+                
+                const pointer = getPointer(e);
+                pointerDownX = pointer.x;
+                pointerDownY = pointer.y;
+                nodeStartX = parseInt(node.style.left);
+                nodeStartY = parseInt(node.style.top);
+                hasMoved = false;
+                activeNode = node;
+
+                if (node.dataset.configured === 'true') {
+                    // Configured node - start long press detection for edit mode
+                    longPressTimer = setTimeout(() => {
+                        if (!hasMoved) {
+                            enterEditMode(node, nodeStartX, nodeStartY);
+                            showHint('Drag to select new type');
+                        }
+                    }, LONG_PRESS_DURATION);
+                } else if (node.dataset.configured === 'false' && !isEditing) {
+                    // Blank node that was just clicked - enter edit mode immediately
+                    isCreatingNew = false;
+                    clearTimeout(longPressTimer);
+                    
+                    longPressTimer = setTimeout(() => {
+                        if (!hasMoved) {
+                            enterEditMode(node, nodeStartX, nodeStartY);
+                            showHint('Drag to select type');
+                        }
+                    }, LONG_PRESS_DURATION);
+                }
+            };
+
+            node.addEventListener('mousedown', onNodePointerDown);
+            node.addEventListener('touchstart', onNodePointerDown, { passive: false });
+        }
+
+        // Global pointer move
+        document.addEventListener('mousemove', onGlobalPointerMove);
+        document.addEventListener('touchmove', onGlobalPointerMove, { passive: false });
+
+        function onGlobalPointerMove(e) {
+            if (!activeNode) return;
+            
+            const pointer = getPointer(e);
+            const dx = pointer.x - pointerDownX;
+            const dy = pointer.y - pointerDownY;
+
+            if (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD) {
+                hasMoved = true;
+                clearTimeout(longPressTimer);
+            }
+
+            if (isEditing && activeGridContainer) {
+                // In edit mode - move grid and update preview
+                e.preventDefault();
+                moveGrid(dx, dy);
+                updateNodePreview(activeNode);
+            } else if (hasMoved && activeNode.dataset.configured === 'true' && !isEditing) {
+                // Configured node being dragged
+                e.preventDefault();
+                isDraggingNode = true;
+                activeNode.classList.add('dragging');
+                activeNode.style.left = (nodeStartX + dx) + 'px';
+                activeNode.style.top = (nodeStartY + dy) + 'px';
+            } else if (hasMoved && isCreatingNew && !isEditing) {
+                // Cancel creation if moved before long press
+                clearTimeout(longPressTimer);
+                if (activeNode) {
+                    activeNode.remove();
+                    activeNode = null;
+                }
+                isCreatingNew = false;
+            }
+        }
+
+        // Global pointer up
+        document.addEventListener('mouseup', onGlobalPointerUp);
+        document.addEventListener('touchend', onGlobalPointerUp);
+
+        function onGlobalPointerUp(e) {
+            clearTimeout(longPressTimer);
+            
+            if (isEditing && activeNode) {
+                finishEditing(activeNode);
+            } else if (isCreatingNew && activeNode && !hasMoved) {
+                // Quick click without drag - remove the node
+                activeNode.remove();
+                activeNode = null;
+                showHint('Hold and drag to create node', 2000);
+            } else if (isCreatingNew && !hasMoved && !activeNode) {
+                // Just reset
+            }
+            
+            if (activeNode) {
+                activeNode.classList.remove('dragging');
+            }
+            
+            isDraggingNode = false;
+            isCreatingNew = false;
+            activeNode = null;
+        }
+
+        function enterEditMode(node, centerX, centerY) {
+            // Clean up any existing grid
+            if (activeGridContainer) {
+                activeGridContainer.remove();
+            }
+
+            activeNode = node;
+            isEditing = true;
+            node.classList.add('editing');
+
+            gridBaseX = centerX;
+            gridBaseY = centerY;
+
+            // Create grid container
+            activeGridContainer = document.createElement('div');
+            activeGridContainer.className = 'grid-container';
+
+            // Create grid
+            const grid = document.createElement('div');
+            grid.className = 'grid';
+            grid.style.left = centerX + 'px';
+            grid.style.top = centerY + 'px';
+
+            // Add grid items
+            let typeIndex = 0;
+            for (let i = 0; i < 25; i++) {
+                const item = document.createElement('div');
+                item.className = 'grid-item';
+
+                if (i === 12) {
+                    // Center position - empty for the node
+                    item.classList.add('center');
+                    item.dataset.gridIndex = '-1';
+                } else {
+                    const type = nodeTypes[typeIndex];
+                    item.style.background = type.color;
+                    item.innerHTML = type.icon;
+                    item.dataset.gridIndex = i.toString();
+                    item.dataset.typeIndex = typeIndex.toString();
+                    typeIndex++;
+                }
+
+                grid.appendChild(item);
+            }
+
+            activeGridContainer.appendChild(grid);
+            stage.appendChild(activeGridContainer);
+
+            // Fade in grid
+            requestAnimationFrame(() => {
+                grid.classList.add('visible');
+            });
+
+            currentHighlightIndex = -1;
+            
+            // Initial preview update
+            updateNodePreview(node);
+        }
+
+        function moveGrid(dx, dy) {
+            if (!activeGridContainer) return;
+
+            const grid = activeGridContainer.querySelector('.grid');
+            if (grid) {
+                grid.style.left = (gridBaseX + dx) + 'px';
+                grid.style.top = (gridBaseY + dy) + 'px';
+            }
+        }
+
+        function updateNodePreview(node) {
+            if (!activeGridContainer) return;
+
+            const grid = activeGridContainer.querySelector('.grid');
+            if (!grid) return;
+
+            const nodeX = parseInt(node.style.left);
+            const nodeY = parseInt(node.style.top);
+            const gridX = parseFloat(grid.style.left);
+            const gridY = parseFloat(grid.style.top);
+
+            // Calculate offset from center
+            const offsetX = nodeX - gridX;
+            const offsetY = nodeY - gridY;
+
+            // Convert to grid cell coordinates
+            const cellX = Math.round(offsetX / GRID_CELL_SIZE) + 2;
+            const cellY = Math.round(offsetY / GRID_CELL_SIZE) + 2;
+
+            // Clamp to grid bounds
+            const clampedX = Math.max(0, Math.min(4, cellX));
+            const clampedY = Math.max(0, Math.min(4, cellY));
+            const gridIndex = clampedY * 5 + clampedX;
+
+            // Update highlighting
+            const gridItems = activeGridContainer.querySelectorAll('.grid-item');
+            
+            if (gridIndex !== currentHighlightIndex) {
+                // Remove old highlight
+                gridItems.forEach(item => item.classList.remove('highlighted'));
+                
+                // Add new highlight
+                const hoveredItem = gridItems[gridIndex];
+                if (hoveredItem && !hoveredItem.classList.contains('center')) {
+                    hoveredItem.classList.add('highlighted');
+                    
+                    const typeIndex = parseInt(hoveredItem.dataset.typeIndex);
+                    const type = nodeTypes[typeIndex];
+                    
+                    // Update node preview
+                    node.style.background = type.color;
+                    node.innerHTML = type.icon;
+                    node.dataset.previewType = typeIndex.toString();
+                    node.classList.remove('blank');
+                } else {
+                    // Reset to blank if over center
+                    node.style.background = '';
+                    node.innerHTML = '?';
+                    node.dataset.previewType = '-1';
+                    node.classList.add('blank');
+                }
+                
+                currentHighlightIndex = gridIndex;
+            }
+        }
+
+        function finishEditing(node) {
+            const previewType = node.dataset.previewType;
+            
+            if (previewType && previewType !== '-1') {
+                node.dataset.configured = 'true';
+                node.dataset.typeIndex = previewType;
+                showHint('Node created! Drag to move, long-press to edit');
+            } else {
+                // No valid selection - remove the node
+                node.remove();
+            }
+
+            node.classList.remove('editing');
+
+            // Fade out and remove grid
+            if (activeGridContainer) {
+                const grid = activeGridContainer.querySelector('.grid');
+                if (grid) {
+                    grid.classList.remove('visible');
+                }
+                setTimeout(() => {
+                    if (activeGridContainer) {
+                        activeGridContainer.remove();
+                        activeGridContainer = null;
+                    }
+                }, 200);
+            }
+
+            isEditing = false;
+            currentHighlightIndex = -1;
+        }
+
+        // Prevent context menu on long press
+        document.addEventListener('contextmenu', (e) => {
+            if (isEditing || isCreatingNew) e.preventDefault();
+        });
+
+        // Initial hint
+        setTimeout(() => showHint('Click & hold, then drag to create a node', 3000), 500);
+    </script>
+</body>
+</html>

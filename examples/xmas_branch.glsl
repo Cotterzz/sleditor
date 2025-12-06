@@ -55,11 +55,11 @@ vec2 getNeedleID(vec3 p) {
 }
 
 // Distance to a single needle (line segment radiating outward)
-float sdNeedle(vec3 p, vec3 needleStart, vec3 needleDir, float length) {
+float sdNeedle(vec3 p, vec3 needleStart, vec3 needleDir, float len) {
     // Project p onto needle line
     vec3 toP = p - needleStart;
-    float t = clamp(dot(toP, needleDir) / length, 0.0, 1.0);
-    vec3 closest = needleStart + needleDir * t * length;
+    float t = clamp(dot(toP, needleDir) / len, 0.0, 1.0);
+    vec3 closest = needleStart + needleDir * t * len;
     
     // Thickness tapers from base to tip
     float thickness = mix(NEEDLE_BASE_THICKNESS, NEEDLE_TIP_THICKNESS, t);

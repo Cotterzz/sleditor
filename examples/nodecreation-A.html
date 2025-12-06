@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Node Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        #stage {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        .instructions {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            color: rgba(255,255,255,0.6);
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 1000;
+            line-height: 1.6;
+        }
+
+        .node {
+            position: absolute;
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            background: #4a4a6a;
+            border: 3px solid #6a6a8a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 
+                0 4px 12px rgba(0,0,0,0.4),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+            transition: box-shadow 0.15s ease;
+            transform: translate(-50%, -50%);
+        }
+
+        .node:hover {
+            box-shadow: 
+                0 6px 16px rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        .node.editing {
+            z-index: 100;
+            box-shadow: 
+                0 8px 24px rgba(0,0,0,0.6),
+                0 0 0 3px rgba(255,255,255,0.2);
+        }
+
+        .node.dragging {
+            cursor: grabbing;
+            z-index: 50;
+        }
+
+        .node.blank {
+            background: linear-gradient(145deg, #5a5a7a 0%, #3a3a5a 100%);
+        }
+
+        .grid-container {
+            position: absolute;
+            z-index: 5;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(5, 56px);
+            grid-template-rows: repeat(5, 56px);
+            gap: 10px;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        .grid.visible {
+            opacity: 1;
+        }
+
+        .grid-item {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: bold;
+            color: white;
+            opacity: 0.7;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+
+        .grid-item.center {
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .grid-item.highlighted {
+            opacity: 1;
+            transform: scale(1.1);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+        }
+
+        .hint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        .hint.visible {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="stage"></div>
+    
+    <div class="instructions">
+        Click → Create node<br>
+        Press & drag → Select type<br>
+        Long press → Edit type<br>
+        Drag → Move node
+    </div>
+    
+    <div class="hint" id="hint"></div>
+
+    <script>
+        const nodeTypes = [
+            { icon: '📁', color: '#e74c3c', name: 'Folder' },
+            { icon: '📄', color: '#3498db', name: 'File' },
+            { icon: '🔗', color: '#2ecc71', name: 'Link' },
+            { icon: '⚙️', color: '#f39c12', name: 'Settings' },
+            { icon: '👤', color: '#9b59b6', name: 'User' },
+            { icon: '💬', color: '#1abc9c', name: 'Chat' },
+            { icon: '🔔', color: '#e67e22', name: 'Alert' },
+            { icon: '📊', color: '#34495e', name: 'Chart' },
+            { icon: '🎨', color: '#e91e63', name: 'Design' },
+            { icon: '🔍', color: '#00bcd4', name: 'Search' },
+            { icon: '📝', color: '#8bc34a', name: 'Edit' },
+            { icon: '🗑️', color: '#ff5722', name: 'Delete' },
+            { icon: '➕', color: '#673ab7', name: 'Add' },
+            { icon: '📤', color: '#009688', name: 'Upload' },
+            { icon: '📥', color: '#ffc107', name: 'Download' },
+            { icon: '🔒', color: '#795548', name: 'Lock' },
+            { icon: '🔓', color: '#607d8b', name: 'Unlock' },
+            { icon: '❤️', color: '#f44336', name: 'Favorite' },
+            { icon: '⭐', color: '#ff9800', name: 'Star' },
+            { icon: '🏠', color: '#4caf50', name: 'Home' },
+            { icon: '📧', color: '#2196f3', name: 'Email' },
+            { icon: '📅', color: '#9c27b0', name: 'Calendar' },
+            { icon: '🎵', color: '#00bcd4', name: 'Music' },
+            { icon: '📷', color: '#cddc39', name: 'Photo' },
+        ];
+
+        const stage = document.getElementById('stage');
+        const hintEl = document.getElementById('hint');
+
+        const LONG_PRESS_DURATION = 400;
+        const NODE_SIZE = 56;
+        const GRID_GAP = 10;
+        const GRID_CELL_SIZE = NODE_SIZE + GRID_GAP;
+        const MOVE_THRESHOLD = 8;
+
+        let blockNextStageClick = false;
+
+        function showHint(message, duration = 2000) {
+            hintEl.textContent = message;
+            hintEl.classList.add('visible');
+            setTimeout(() => hintEl.classList.remove('visible'), duration);
+        }
+
+        function getPointer(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
+
+        // Stage click to create node
+        stage.addEventListener('click', (e) => {
+            if (blockNextStageClick) {
+                blockNextStageClick = false;
+                return;
+            }
+            if (e.target === stage) {
+                createNode(e.clientX, e.clientY);
+                showHint('Press and drag to select type');
+            }
+        });
+
+        function createNode(x, y) {
+            const node = document.createElement('div');
+            node.className = 'node blank';
+            node.innerHTML = '?';
+            node.style.left = x + 'px';
+            node.style.top = y + 'px';
+            node.dataset.configured = 'false';
+            node.dataset.typeIndex = '-1';
+
+            // Each node gets its own state
+            const state = {
+                node: node,
+                gridContainer: null,
+                isEditing: false,
+                isDragging: false,
+                longPressTimer: null,
+                pointerDown: false,
+                startX: 0,
+                startY: 0,
+                nodeStartX: 0,
+                nodeStartY: 0,
+                gridBaseX: 0,
+                gridBaseY: 0,
+                currentHighlightIndex: -1,
+                hasMoved: false,
+                longPressTriggered: false
+            };
+
+            setupNodeInteractions(state);
+            stage.appendChild(node);
+            return node;
+        }
+
+        function setupNodeInteractions(state) {
+            const { node } = state;
+
+            const onPointerDown = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const pointer = getPointer(e);
+                state.pointerDown = true;
+                state.startX = pointer.x;
+                state.startY = pointer.y;
+                state.nodeStartX = parseInt(node.style.left);
+                state.nodeStartY = parseInt(node.style.top);
+                state.hasMoved = false;
+                state.longPressTriggered = false;
+
+                if (node.dataset.configured === 'false') {
+                    // Blank node: immediately enter edit mode
+                    enterEditMode(state, pointer.x, pointer.y);
+                } else {
+                    // Configured node: wait for long press or movement
+                    state.longPressTimer = setTimeout(() => {
+                        if (state.pointerDown && !state.hasMoved) {
+                            state.longPressTriggered = true;
+                            enterEditMode(state, pointer.x, pointer.y);
+                        }
+                    }, LONG_PRESS_DURATION);
+                }
+
+                // Add temporary global listeners for this interaction
+                document.addEventListener('mousemove', onPointerMove);
+                document.addEventListener('mouseup', onPointerUp);
+                document.addEventListener('touchmove', onPointerMove, { passive: false });
+                document.addEventListener('touchend', onPointerUp);
+            };
+
+            const onPointerMove = (e) => {
+                if (!state.pointerDown) return;
+                e.preventDefault();
+
+                const pointer = getPointer(e);
+                const dx = pointer.x - state.startX;
+                const dy = pointer.y - state.startY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > MOVE_THRESHOLD) {
+                    state.hasMoved = true;
+                }
+
+                if (state.isEditing) {
+                    // Move grid while in edit mode
+                    moveGrid(state, dx, dy);
+                    updateNodePreview(state);
+                } else if (node.dataset.configured === 'true' && !state.longPressTriggered) {
+                    // Move configured node if not waiting for long press
+                    if (state.hasMoved) {
+                        clearTimeout(state.longPressTimer);
+                        state.isDragging = true;
+                        node.classList.add('dragging');
+                        node.style.left = (state.nodeStartX + dx) + 'px';
+                        node.style.top = (state.nodeStartY + dy) + 'px';
+                    }
+                }
+            };
+
+            const onPointerUp = (e) => {
+                if (!state.pointerDown) return;
+
+                clearTimeout(state.longPressTimer);
+                state.pointerDown = false;
+
+                // Block next stage click if we did something
+                if (state.isEditing || state.isDragging || state.hasMoved) {
+                    blockNextStageClick = true;
+                    setTimeout(() => { blockNextStageClick = false; }, 100);
+                }
+
+                if (state.isEditing) {
+                    finishEditing(state);
+                }
+
+                if (state.isDragging) {
+                    node.classList.remove('dragging');
+                    state.isDragging = false;
+                }
+
+                // Clean up global listeners
+                document.removeEventListener('mousemove', onPointerMove);
+                document.removeEventListener('mouseup', onPointerUp);
+                document.removeEventListener('touchmove', onPointerMove);
+                document.removeEventListener('touchend', onPointerUp);
+            };
+
+            // Attach initial listeners to node
+            node.addEventListener('mousedown', onPointerDown);
+            node.addEventListener('touchstart', onPointerDown, { passive: false });
+        }
+
+        function enterEditMode(state, pointerX, pointerY) {
+            const { node } = state;
+
+            // Clean up any existing grid
+            if (state.gridContainer) {
+                state.gridContainer.remove();
+            }
+
+            state.isEditing = true;
+            node.classList.add('editing');
+
+            const nodeX = parseInt(node.style.left);
+            const nodeY = parseInt(node.style.top);
+
+            // Create grid container centered on node
+            state.gridContainer = document.createElement('div');
+            state.gridContainer.className = 'grid-container';
+            state.gridContainer.style.left = nodeX + 'px';
+            state.gridContainer.style.top = nodeY + 'px';
+
+            state.gridBaseX = nodeX;
+            state.gridBaseY = nodeY;
+
+            // Reset drag start to current pointer position
+            state.startX = pointerX;
+            state.startY = pointerY;
+
+            // Create grid
+            const grid = document.createElement('div');
+            grid.className = 'grid';
+
+            let typeIndex = 0;
+            for (let i = 0; i < 25; i++) {
+                const item = document.createElement('div');
+                item.className = 'grid-item';
+
+                if (i === 12) {
+                    item.classList.add('center');
+                    item.dataset.typeIndex = '-1';
+                } else {
+                    const type = nodeTypes[typeIndex];
+                    item.style.background = type.color;
+                    item.innerHTML = type.icon;
+                    item.dataset.typeIndex = typeIndex.toString();
+                    typeIndex++;
+                }
+
+                grid.appendChild(item);
+            }
+
+            state.gridContainer.appendChild(grid);
+            stage.insertBefore(state.gridContainer, node);
+
+            // Fade in grid
+            requestAnimationFrame(() => {
+                grid.classList.add('visible');
+            });
+
+            state.currentHighlightIndex = -1;
+        }
+
+        function moveGrid(state, dx, dy) {
+            if (!state.gridContainer) return;
+            state.gridContainer.style.left = (state.gridBaseX + dx) + 'px';
+            state.gridContainer.style.top = (state.gridBaseY + dy) + 'px';
+        }
+
+        function updateNodePreview(state) {
+            const { node, gridContainer } = state;
+            if (!gridContainer) return;
+
+            const nodeX = parseInt(node.style.left);
+            const nodeY = parseInt(node.style.top);
+            const gridX = parseInt(gridContainer.style.left);
+            const gridY = parseInt(gridContainer.style.top);
+
+            // Calculate offset from grid center
+            const offsetX = nodeX - gridX;
+            const offsetY = nodeY - gridY;
+
+            // Convert to grid cell coordinates (center is 2,2)
+            const cellX = Math.round(offsetX / GRID_CELL_SIZE) + 2;
+            const cellY = Math.round(offsetY / GRID_CELL_SIZE) + 2;
+
+            // Clamp to grid bounds
+            const clampedX = Math.max(0, Math.min(4, cellX));
+            const clampedY = Math.max(0, Math.min(4, cellY));
+            const gridIndex = clampedY * 5 + clampedX;
+
+            if (gridIndex !== state.currentHighlightIndex) {
+                const gridItems = gridContainer.querySelectorAll('.grid-item');
+
+                // Remove old highlight
+                gridItems.forEach(item => item.classList.remove('highlighted'));
+
+                // Get hovered item
+                const hoveredItem = gridItems[gridIndex];
+                const typeIndex = parseInt(hoveredItem.dataset.typeIndex);
+
+                if (typeIndex >= 0) {
+                    hoveredItem.classList.add('highlighted');
+                    const type = nodeTypes[typeIndex];
+
+                    // Update node preview
+                    node.style.background = type.color;
+                    node.style.borderColor = type.color;
+                    node.innerHTML = type.icon;
+                    node.dataset.previewType = typeIndex.toString();
+                    node.classList.remove('blank');
+                } else {
+                    // Over center - reset to blank/original
+                    if (node.dataset.configured === 'true') {
+                        const originalType = parseInt(node.dataset.typeIndex);
+                        const type = nodeTypes[originalType];
+                        node.style.background = type.color;
+                        node.style.borderColor = type.color;
+                        node.innerHTML = type.icon;
+                    } else {
+                        node.style.background = '';
+                        node.style.borderColor = '';
+                        node.innerHTML = '?';
+                        node.classList.add('blank');
+                    }
+                    node.dataset.previewType = '-1';
+                }
+
+                state.currentHighlightIndex = gridIndex;
+            }
+        }
+
+        function finishEditing(state) {
+            const { node } = state;
+            const previewType = node.dataset.previewType;
+
+            if (previewType && previewType !== '-1') {
+                const type = nodeTypes[parseInt(previewType)];
+                node.dataset.configured = 'true';
+                node.dataset.typeIndex = previewType;
+                node.style.background = type.color;
+                node.style.borderColor = type.color;
+                node.innerHTML = type.icon;
+                node.classList.remove('blank');
+                showHint('Drag to move, long-press to change');
+            } else if (node.dataset.configured === 'true') {
+                // Restore original type
+                const originalType = parseInt(node.dataset.typeIndex);
+                const type = nodeTypes[originalType];
+                node.style.background = type.color;
+                node.style.borderColor = type.color;
+                node.innerHTML = type.icon;
+            } else {
+                // Still blank
+                node.style.background = '';
+                node.style.borderColor = '';
+                node.innerHTML = '?';
+                node.classList.add('blank');
+            }
+
+            node.classList.remove('editing');
+
+            // Fade out and remove grid
+            if (state.gridContainer) {
+                const grid = state.gridContainer.querySelector('.grid');
+                if (grid) {
+                    grid.classList.remove('visible');
+                }
+                const containerToRemove = state.gridContainer;
+                setTimeout(() => {
+                    containerToRemove.remove();
+                }, 150);
+                state.gridContainer = null;
+            }
+
+            state.isEditing = false;
+            state.currentHighlightIndex = -1;
+        }
+
+        // Prevent context menu on long press
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Initial hint
+        setTimeout(() => showHint('Click anywhere to create a node', 3000), 500);
+    </script>
+</body>
+</html>
