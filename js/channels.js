@@ -863,9 +863,18 @@ export async function loadChannelConfig(config) {
         
         if (ch.type === 'audio' && ch.mediaId) {
             // Re-register external audio if needed
-            if (ch.mediaId.startsWith('guc:')) {
-                const userPath = ch.mediaId.substring(4);
-                const fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+            if (ch.mediaId.startsWith('guc:') || ch.mediaId.startsWith('cloudinary:')) {
+                const source = ch.mediaId.startsWith('cloudinary:') ? 'cloudinary' : 'guc';
+                const prefixLength = source === 'cloudinary' ? 11 : 4;
+                const userPath = ch.mediaId.substring(prefixLength);
+                
+                let fullUrl;
+                if (source === 'cloudinary') {
+                    fullUrl = 'https://res.cloudinary.com/' + userPath;
+                } else {
+                    fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+                }
+                
                 const filename = userPath.split('/').pop();
                 const title = filename.replace(/\.(mp3|wav|ogg|m4a)$/i, '');
                 
@@ -874,7 +883,7 @@ export async function loadChannelConfig(config) {
                     type: 'audio',
                     name: title,
                     path: fullUrl,
-                    source: 'guc',
+                    source: source,
                     url: fullUrl,
                     userPath: userPath
                 };
@@ -904,9 +913,18 @@ export async function loadChannelConfig(config) {
             }
         } else if (ch.type === 'video' && ch.mediaId) {
             // Re-register external video if needed
-            if (ch.mediaId.startsWith('guc:')) {
-                const userPath = ch.mediaId.substring(4);
-                const fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+            if (ch.mediaId.startsWith('guc:') || ch.mediaId.startsWith('cloudinary:')) {
+                const source = ch.mediaId.startsWith('cloudinary:') ? 'cloudinary' : 'guc';
+                const prefixLength = source === 'cloudinary' ? 11 : 4;
+                const userPath = ch.mediaId.substring(prefixLength);
+                
+                let fullUrl;
+                if (source === 'cloudinary') {
+                    fullUrl = 'https://res.cloudinary.com/' + userPath;
+                } else {
+                    fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+                }
+                
                 const filename = userPath.split('/').pop();
                 const title = filename.replace(/\.(mp4|webm|ogv|mov)$/i, '');
                 
@@ -916,7 +934,7 @@ export async function loadChannelConfig(config) {
                     name: title,
                     path: fullUrl,
                     thumb: null, // No thumbnail for external videos
-                    source: 'guc',
+                    source: source,
                     url: fullUrl,
                     userPath: userPath
                 };
@@ -946,17 +964,27 @@ export async function loadChannelConfig(config) {
             }
         } else if (ch.type === 'image' && ch.mediaId) {
             // If this is an external media (URL import), re-register it
-            if (ch.mediaId.startsWith('guc:') || ch.mediaId.startsWith('polyhaven:')) {
-                const source = ch.mediaId.startsWith('polyhaven:') ? 'polyhaven' : 'guc';
-                const prefixLength = source === 'polyhaven' ? 10 : 4; // 'polyhaven:' or 'guc:'
-                const userPath = ch.mediaId.substring(prefixLength);
+            const externalPrefixes = ['guc:', 'polyhaven:', 'imgbb:', 'cloudinary:'];
+            const matchedPrefix = externalPrefixes.find(p => ch.mediaId.startsWith(p));
+            
+            if (matchedPrefix) {
+                const source = matchedPrefix.slice(0, -1); // Remove trailing ':'
+                const userPath = ch.mediaId.substring(matchedPrefix.length);
                 
                 // Build full URL based on source
                 let fullUrl;
-                if (source === 'polyhaven') {
-                    fullUrl = 'https://dl.polyhaven.org/file/ph-assets/' + userPath;
-                } else {
-                    fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+                switch (source) {
+                    case 'polyhaven':
+                        fullUrl = 'https://dl.polyhaven.org/file/ph-assets/' + userPath;
+                        break;
+                    case 'imgbb':
+                        fullUrl = 'https://i.ibb.co/' + userPath;
+                        break;
+                    case 'cloudinary':
+                        fullUrl = 'https://res.cloudinary.com/' + userPath;
+                        break;
+                    default: // guc
+                        fullUrl = 'https://raw.githubusercontent.com/' + userPath;
                 }
                 
                 const filename = userPath.split('/').pop();

@@ -235,6 +235,8 @@ export async function createMediaSelector(tabName, channelType, channelNumber) {
         sourceSelect.innerHTML = `
             <option value="github">GitHub</option>
             <option value="polyhaven">Poly Haven</option>
+            <option value="imgbb">ImgBB</option>
+            <option value="cloudinary">Cloudinary</option>
         `;
         sourceRow.appendChild(sourceSelect);
         urlSection.appendChild(sourceRow);
@@ -266,12 +268,22 @@ export async function createMediaSelector(tabName, channelType, channelNumber) {
     // Update prefix and placeholder when source changes (images only)
     if (channelType === 'image' && sourceSelect) {
         sourceSelect.onchange = () => {
-            if (sourceSelect.value === 'polyhaven') {
-                urlPrefix.textContent = 'https://dl.polyhaven.org/file/ph-assets/';
-                urlInput.placeholder = 'HDRIs/hdri_name/hdri_file.png';
-            } else {
-                urlPrefix.textContent = 'https://raw.githubusercontent.com/';
-                urlInput.placeholder = 'user/repo/branch/path/image.png';
+            switch (sourceSelect.value) {
+                case 'polyhaven':
+                    urlPrefix.textContent = 'https://dl.polyhaven.org/file/ph-assets/';
+                    urlInput.placeholder = 'HDRIs/hdri_name/hdri_file.png';
+                    break;
+                case 'imgbb':
+                    urlPrefix.textContent = 'https://i.ibb.co/';
+                    urlInput.placeholder = 'XXXXXXXX/image.png';
+                    break;
+                case 'cloudinary':
+                    urlPrefix.textContent = 'https://res.cloudinary.com/';
+                    urlInput.placeholder = 'cloud_name/image/upload/path/image.png';
+                    break;
+                default: // github
+                    urlPrefix.textContent = 'https://raw.githubusercontent.com/';
+                    urlInput.placeholder = 'user/repo/branch/path/image.png';
             }
         };
     }
@@ -318,11 +330,22 @@ export async function createMediaSelector(tabName, channelType, channelNumber) {
         let source = 'guc'; // Default to GitHub User Content
         
         if (channelType === 'image' && sourceSelect) {
-            if (sourceSelect.value === 'polyhaven') {
-                fullUrl = 'https://dl.polyhaven.org/file/ph-assets/' + userPath;
-                source = 'polyhaven';
-            } else {
-                fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+            switch (sourceSelect.value) {
+                case 'polyhaven':
+                    fullUrl = 'https://dl.polyhaven.org/file/ph-assets/' + userPath;
+                    source = 'polyhaven';
+                    break;
+                case 'imgbb':
+                    fullUrl = 'https://i.ibb.co/' + userPath;
+                    source = 'imgbb';
+                    break;
+                case 'cloudinary':
+                    fullUrl = 'https://res.cloudinary.com/' + userPath;
+                    source = 'cloudinary';
+                    break;
+                default: // github
+                    fullUrl = 'https://raw.githubusercontent.com/' + userPath;
+                    source = 'guc';
             }
         } else {
             fullUrl = 'https://raw.githubusercontent.com/' + userPath;
@@ -363,7 +386,8 @@ export async function createMediaSelector(tabName, channelType, channelNumber) {
     const allItems = [...items];
     
     // Add external media if current selection is external
-    if (currentMedia && (currentMedia.source === 'guc' || currentMedia.source === 'polyhaven') && !allItems.find(item => item.id === currentMedia.id)) {
+    const externalSources = ['guc', 'polyhaven', 'imgbb', 'cloudinary'];
+    if (currentMedia && externalSources.includes(currentMedia.source) && !allItems.find(item => item.id === currentMedia.id)) {
         allItems.unshift(currentMedia); // Add at beginning
     }
     
