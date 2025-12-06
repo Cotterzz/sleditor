@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "language": "Français",
+    "code": "fr",
+    "direction": "ltr"
+  },
+  
+  "app": {
+    "title": "SL Editor",
+    "subtitle": "Environnement de Développement de Shaders"
+  },
+  
+  "toolbar": {
+    "title": "Barre d'outils",
+    "dock": {
+      "top": "Ancrer en haut",
+      "bottom": "Ancrer en bas",
+      "left": "Ancrer à gauche",
+      "right": "Ancrer à droite",
+      "float": "Flottant"
+    },
+    "position": "Position de la barre",
+    "settings": "Paramètres",
+    "theme": "Thème",
+    "language": "Langue"
+  },
+  
+  "window": {
+    "close": "Fermer",
+    "minimize": "Réduire",
+    "maximize": "Agrandir",
+    "restore": "Restaurer"
+  },
+  
+  "panels": {
+    "editor": {
+      "title": "Éditeur",
+      "description": "Éditeur de code pour shaders",
+      "codeTitle": "Code du Shader",
+      "codeHint": "C'est ici que l'éditeur Monaco serait intégré. La police de code s'adapte au thème actuel."
+    },
+    "preview": {
+      "title": "Aperçu",
+      "description": "Aperçu du shader en direct",
+      "liveTitle": "Aperçu en Direct",
+      "canvasPlaceholder": "Canevas d'aperçu du Shader",
+      "hint": "Le rendu WebGL en temps réel apparaîtrait ici."
+    },
+    "nodes": {
+      "title": "Nœuds",
+      "description": "Éditeur basé sur les nœuds",
+      "editorTitle": "Éditeur de Nœuds",
+      "hint": "Interface de programmation visuelle par nœuds.",
+      "types": {
+        "sphere": "SDF Sphère",
+        "box": "SDF Boîte",
+        "smoothUnion": "Union Lisse",
+        "transform": "Transformation",
+        "material": "Matériau",
+        "output": "Sortie"
+      }
+    },
+    "inspector": {
+      "title": "Inspecteur",
+      "description": "Propriétés et paramètres",
+      "propertiesTitle": "Propriétés",
+      "radius": "Rayon",
+      "smoothness": "Lissage",
+      "color": "Couleur"
+    },
+    "library": {
+      "title": "Bibliothèque",
+      "description": "Navigateur de bibliothèque de shaders",
+      "searchPlaceholder": "Rechercher des shaders...",
+      "templateLabel": "Shader modèle",
+      "items": {
+        "raymarching": "Bases du Raymarching",
+        "fractalNoise": "Bruit Fractal",
+        "pbrLighting": "Éclairage PBR",
+        "postProcessing": "Post-traitement",
+        "volumetricFog": "Brouillard Volumétrique"
+      }
+    },
+    "console": {
+      "title": "Console",
+      "description": "Sorties et erreurs",
+      "outputTitle": "Console de Sortie",
+      "messages": {
+        "compiled": "Shader compilé avec succès",
+        "frameTime": "Temps par image: 16.2ms",
+        "unusedUniform": "Uniform 'iTime' non utilisé",
+        "resolution": "Résolution: 1920x1080",
+        "previewUpdated": "Aperçu mis à jour"
+      }
+    },
+    "settings": {
+      "title": "Paramètres",
+      "description": "Paramètres de l'application"
+    },
+    "profile": {
+      "title": "Profil",
+      "description": "Paramètres du profil utilisateur",
+      "displayName": "Nom d'affichage",
+      "status": "Statut",
+      "statusOptions": {
+        "online": "En ligne",
+        "away": "Absent",
+        "busy": "Occupé",
+        "offline": "Hors ligne"
+      }
+    }
+  },
+  
+  "settings": {
+    "appearance": {
+      "title": "Apparence",
+      "theme": "Thème",
+      "language": "Langue",
+      "fontSize": "Taille de police",
+      "windowMode": "Mode fenêtre",
+      "modes": {
+        "docked": "Ancré (Sans chevauchement)",
+        "overlay": "Superposition (Déplacement libre)"
+      }
+    },
+    "device": {
+      "title": "Mode appareil",
+      "auto": "Détection auto",
+      "forceDesktop": "Forcer Bureau",
+      "forceMobile": "Forcer Mobile"
+    },
+    "editor": {
+      "title": "Éditeur",
+      "lineNumbers": "Numéros de ligne",
+      "wordWrap": "Retour à la ligne",
+      "minimap": "Minicarte",
+      "autoSave": "Sauvegarde auto"
+    }
+  },
+  
+  "user": {
+    "profile": "Profil",
+    "settings": "Paramètres",
+    "logout": "Déconnexion"
+  },
+  
+  "actions": {
+    "save": "Enregistrer",
+    "load": "Charger",
+    "export": "Exporter",
+    "import": "Importer",
+    "copy": "Copier",
+    "paste": "Coller",
+    "undo": "Annuler",
+    "redo": "Rétablir",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "apply": "Appliquer",
+    "reset": "Réinitialiser"
+  },
+  
+  "status": {
+    "ready": "Prêt",
+    "loading": "Chargement...",
+    "saving": "Enregistrement...",
+    "error": "Erreur",
+    "success": "Succès"
+  },
+  
+  "errors": {
+    "generic": "Une erreur s'est produite",
+    "loadFailed": "Échec du chargement",
+    "saveFailed": "Échec de l'enregistrement",
+    "invalidFile": "Format de fichier invalide"
+  },
+  
+  "mobile": {
+    "tapToLoad": "Appuyez sur une icône"
+  }
+}
+

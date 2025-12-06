@@ -576,6 +576,7 @@
     <div class="menu-item mesh" data-type="Lathe">Lathe</div>
     <div class="menu-item mesh" data-type="LoftLathe">Loft Lathe</div>
     <div class="menu-item mesh" data-type="Tube">Tube</div>
+    <div class="menu-item mesh" data-type="Parametric">Parametric</div>
     
     <h3>Lights</h3>
     <div class="menu-item light" data-type="AmbientLight">Ambient</div>
@@ -629,6 +630,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.7.1/svg.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/ParametricGeometry.js"></script>
 <script src="LoftLatheBufferGeometry.js"></script>
 <script>
 // Node type definitions
@@ -817,6 +819,25 @@ const NODE_TYPES = {
             phase: { type: 'number', default: 0, min: 0, max: 6.28, step: 0.1 }
         }
     },
+    Parametric: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            shape: { 
+                type: 'select', 
+                default: 'klein',
+                options: ['klein', 'mobius', 'helicoid', 'catenoid', 'enneper', 'dini', 'heart', 'apple']
+            },
+            scale: { type: 'number', default: 1, min: 0.1, max: 5, step: 0.1 },
+            segmentsU: { type: 'number', default: 32, min: 8, max: 128, step: 1 },
+            segmentsV: { type: 'number', default: 32, min: 8, max: 128, step: 1 },
+            // Shape-specific params
+            twist: { type: 'number', default: 1, min: 0.1, max: 5, step: 0.1, forShapes: ['helicoid', 'dini'] },
+            fatness: { type: 'number', default: 1, min: 0.5, max: 2, step: 0.1, forShapes: ['heart', 'apple'] },
+            indent: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1, forShapes: ['apple'] },
+            seamOffset: { type: 'number', default: 0, min: -0.5, max: 0.5, step: 0.01, forShapes: ['klein'] }
+        }
+    },
     AmbientLight: {
         category: 'light',
         maxChildren: 0,
@@ -892,8 +913,12 @@ const MATERIAL_PARAMS = {
     emissiveIntensity: { type: 'number', default: 0, min: 0, max: 2, step: 0.1 },
     wireframe: { type: 'boolean', default: false },
     transparent: { type: 'boolean', default: false },
-    opacity: { type: 'number', default: 1, min: 0, max: 1, step: 0.1 }
+    opacity: { type: 'number', default: 1, min: 0, max: 1, step: 0.1 },
+    doubleSided: { type: 'boolean', default: false }
 };
+
+// Non-orientable surfaces that should default to double-sided
+const NON_ORIENTABLE_SHAPES = ['klein', 'mobius'];
 
 // Global state
 const draw = SVG('drawing').size('100%', '100%');
@@ -1446,6 +1471,10 @@ function createNode(nodeType) {
         for (const [key, val] of Object.entries(MATERIAL_PARAMS)) {
             params[key] = val.default;
         }
+        // Default to double-sided for non-orientable surfaces
+        if (nodeType === 'Parametric' && NON_ORIENTABLE_SHAPES.includes(params.shape)) {
+            params.doubleSided = true;
+        }
     }
     
     // Add position params for lights
@@ -1778,7 +1807,12 @@ function renderParamPanel(node) {
     // Geometry/Light parameters
     if (typeDef.params && Object.keys(typeDef.params).length > 0) {
         html += '<div class="param-group"><h4>Properties</h4>';
+        const currentShape = params.shape; // For Parametric type
         for (const [key, def] of Object.entries(typeDef.params)) {
+            // Skip params that are for specific shapes if current shape doesn't match
+            if (def.forShapes && (!currentShape || !def.forShapes.includes(currentShape))) {
+                continue;
+            }
             html += createParamInput(key, def, params[key]);
         }
         html += '</div>';
@@ -2423,6 +2457,11 @@ function onParamChange(event) {
     
     setNodeParams(selectedNode, params);
     updatePreview();
+    
+    // Re-render panel if shape changed (to show/hide shape-specific params)
+    if (key === 'shape') {
+        renderParamPanel(selectedNode);
+    }
 }
 
 function updatePreview() {
@@ -2502,6 +2541,143 @@ function buildSceneHierarchy(node, parentObject = scene) {
     });
 }
 
+// Parametric surface functions
+function getParametricFunction(shape, params) {
+    const twist = params.twist || 1;
+    const fatness = params.fatness || 1;
+    const appleIndent = params.indent || 0.5;
+    const seamOffset = params.seamOffset || 0;
+    
+    switch(shape) {
+        case 'klein':
+            // Klein Bottle (official Three.js formula - note v,u swap)
+            // Note: Klein bottle is non-orientable, so normals flip at the seam
+            // seamOffset rotates the seam around the tube circumference
+            return function(v, u, target) {
+                u *= Math.PI;
+                v = (v + seamOffset) * 2 * Math.PI;
+                u = u * 2;
+                let x, z;
+                if (u < Math.PI) {
+                    x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(u) * Math.cos(v);
+                    z = -8 * Math.sin(u) - 2 * (1 - Math.cos(u) / 2) * Math.sin(u) * Math.cos(v);
+                } else {
+                    x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(v + Math.PI);
+                    z = -8 * Math.sin(u);
+                }
+                const y = -2 * (1 - Math.cos(u) / 2) * Math.sin(v);
+                target.set(x, y, z).multiplyScalar(0.15);
+            };
+            
+        case 'mobius':
+            // Möbius Strip
+            return function(u, v, target) {
+                u = u * Math.PI * 2;
+                v = (v - 0.5) * 2;
+                const x = (1 + v / 2 * Math.cos(u / 2)) * Math.cos(u);
+                const y = (1 + v / 2 * Math.cos(u / 2)) * Math.sin(u);
+                const z = v / 2 * Math.sin(u / 2);
+                target.set(x, y, z);
+            };
+            
+        case 'helicoid':
+            // Helicoid (spiral ramp)
+            return function(u, v, target) {
+                u = u * Math.PI * 4 - Math.PI * 2;
+                v = (v - 0.5) * 4;
+                const x = v * Math.cos(u);
+                const y = u * twist * 0.3;
+                const z = v * Math.sin(u);
+                target.set(x, y, z);
+            };
+            
+        case 'catenoid':
+            // Catenoid (minimal surface)
+            return function(u, v, target) {
+                u = u * Math.PI * 2;
+                v = (v - 0.5) * 4;
+                const c = 1;
+                const x = c * Math.cosh(v / c) * Math.cos(u);
+                const y = c * Math.cosh(v / c) * Math.sin(u);
+                const z = v;
+                target.set(x * 0.5, z * 0.5, y * 0.5);
+            };
+            
+        case 'enneper':
+            // Enneper Surface (minimal surface with folds)
+            return function(u, v, target) {
+                u = (u - 0.5) * 3;
+                v = (v - 0.5) * 3;
+                const x = u - u*u*u / 3 + u * v*v;
+                const y = v - v*v*v / 3 + v * u*u;
+                const z = u*u - v*v;
+                target.set(x * 0.3, z * 0.3, y * 0.3);
+            };
+            
+        case 'dini':
+            // Dini's Surface (twisted pseudosphere)
+            return function(u, v, target) {
+                u = u * Math.PI * 4;
+                v = v * 2 + 0.1; // Avoid singularity at 0
+                const a = twist * 0.2;
+                const x = Math.cos(u) * Math.sin(v);
+                const y = Math.sin(u) * Math.sin(v);
+                const z = Math.cos(v) + Math.log(Math.tan(v / 2)) + a * u;
+                target.set(x, z * 0.3, y);
+            };
+            
+        case 'heart':
+            // Heart Surface
+            return function(u, v, target) {
+                u = u * Math.PI;
+                v = v * Math.PI * 2;
+                const sinU = Math.sin(u);
+                const cosU = Math.cos(u);
+                const sinV = Math.sin(v);
+                const cosV = Math.cos(v);
+                const f = fatness;
+                const x = sinU * cosV * f;
+                const y = sinU * sinV * f;
+                const z = cosU + Math.pow(Math.abs(sinU * cosV), 0.5) * cosU * 0.5 * f;
+                // Heart shape modification
+                const heartMod = 1 - Math.pow(Math.abs(cosV), 0.8) * 0.3;
+                target.set(x * heartMod, z - 0.5, y * heartMod);
+            };
+            
+        case 'apple':
+            // Apple Surface
+            return function(u, v, target) {
+                u = u * Math.PI * 2;
+                v = v * Math.PI;
+                const cosU = Math.cos(u);
+                const sinU = Math.sin(u);
+                const cosV = Math.cos(v);
+                const sinV = Math.sin(v);
+                const f = fatness;
+                const i = appleIndent;
+                // Apple profile: wider at bottom, indent at top
+                const r = sinV * (1 + 0.2 * cosV) * f;
+                const topIndent = Math.pow(Math.max(0, cosV), 2) * i;
+                const x = r * cosU;
+                const y = cosV - topIndent * 0.5;
+                const z = r * sinU;
+                target.set(x, y, z);
+            };
+            
+        default:
+            // Default sphere
+            return function(u, v, target) {
+                u *= Math.PI * 2;
+                v *= Math.PI;
+                target.set(
+                    Math.sin(v) * Math.cos(u),
+                    Math.cos(v),
+                    Math.sin(v) * Math.sin(u)
+                );
+            };
+    }
+}
+
 function createMesh(type, params) {
     let geometry;
     
@@ -2572,6 +2748,11 @@ function createMesh(type, params) {
                 params.closed
             );
             break;
+        case 'Parametric':
+            const paramFunc = getParametricFunction(params.shape, params);
+            geometry = new THREE.ParametricGeometry(paramFunc, params.segmentsU, params.segmentsV);
+            geometry.scale(params.scale, params.scale, params.scale);
+            break;
         default:
             geometry = new THREE.BoxGeometry(1, 1, 1);
     }
@@ -2589,7 +2770,8 @@ function createMaterial(params) {
         color: new THREE.Color(params.color),
         wireframe: params.wireframe,
         transparent: params.transparent,
-        opacity: params.opacity
+        opacity: params.opacity,
+        side: params.doubleSided ? THREE.DoubleSide : THREE.FrontSide
     };
     
     switch(params.materialType) {
@@ -2674,6 +2856,7 @@ function generateCode() {
     code += '<body>\n';
     code += '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></sc' + 'ript>\n';
     code += '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></sc' + 'ript>\n';
+    code += '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/ParametricGeometry.js"></sc' + 'ript>\n';
     code += '<sc' + 'ript>\n';
     
     // Check if any LoftLathe nodes exist - if so, include the geometry class
@@ -2847,6 +3030,128 @@ function generateCode() {
     copyCodeToClipboard();
 }
 
+// Generate parametric function code for output
+function generateParametricFunctionCode(shape, params) {
+    const twist = params.twist || 1;
+    const fatness = params.fatness || 1;
+    const appleIndent = params.indent || 0.5;
+    
+    switch(shape) {
+        case 'klein':
+            // Official Three.js Klein bottle formula (note v,u swap)
+            // Klein bottle is non-orientable - seamOffset rotates the seam around the tube
+            const seamOffset = params.seamOffset || 0;
+            return `const paramFunc = function(v, u, target) {
+            u *= Math.PI;
+            v = (v + ${seamOffset}) * 2 * Math.PI;
+            u = u * 2;
+            let x, z;
+            if (u < Math.PI) {
+                x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(u) * Math.cos(v);
+                z = -8 * Math.sin(u) - 2 * (1 - Math.cos(u) / 2) * Math.sin(u) * Math.cos(v);
+            } else {
+                x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(v + Math.PI);
+                z = -8 * Math.sin(u);
+            }
+            const y = -2 * (1 - Math.cos(u) / 2) * Math.sin(v);
+            target.set(x, y, z).multiplyScalar(0.15);
+        };`;
+        
+        case 'mobius':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI * 2;
+            v = (v - 0.5) * 2;
+            const x = (1 + v / 2 * Math.cos(u / 2)) * Math.cos(u);
+            const y = (1 + v / 2 * Math.cos(u / 2)) * Math.sin(u);
+            const z = v / 2 * Math.sin(u / 2);
+            target.set(x, y, z);
+        };`;
+        
+        case 'helicoid':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI * 4 - Math.PI * 2;
+            v = (v - 0.5) * 4;
+            const x = v * Math.cos(u);
+            const y = u * ${twist} * 0.3;
+            const z = v * Math.sin(u);
+            target.set(x, y, z);
+        };`;
+        
+        case 'catenoid':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI * 2;
+            v = (v - 0.5) * 4;
+            const c = 1;
+            const x = c * Math.cosh(v / c) * Math.cos(u);
+            const y = c * Math.cosh(v / c) * Math.sin(u);
+            const z = v;
+            target.set(x * 0.5, z * 0.5, y * 0.5);
+        };`;
+        
+        case 'enneper':
+            return `const paramFunc = function(u, v, target) {
+            u = (u - 0.5) * 3;
+            v = (v - 0.5) * 3;
+            const x = u - u*u*u / 3 + u * v*v;
+            const y = v - v*v*v / 3 + v * u*u;
+            const z = u*u - v*v;
+            target.set(x * 0.3, z * 0.3, y * 0.3);
+        };`;
+        
+        case 'dini':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI * 4;
+            v = v * 2 + 0.1;
+            const a = ${twist} * 0.2;
+            const x = Math.cos(u) * Math.sin(v);
+            const y = Math.sin(u) * Math.sin(v);
+            const z = Math.cos(v) + Math.log(Math.tan(v / 2)) + a * u;
+            target.set(x, z * 0.3, y);
+        };`;
+        
+        case 'heart':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI;
+            v = v * Math.PI * 2;
+            const sinU = Math.sin(u);
+            const cosU = Math.cos(u);
+            const sinV = Math.sin(v);
+            const cosV = Math.cos(v);
+            const f = ${fatness};
+            const x = sinU * cosV * f;
+            const y = sinU * sinV * f;
+            const z = cosU + Math.pow(Math.abs(sinU * cosV), 0.5) * cosU * 0.5 * f;
+            const heartMod = 1 - Math.pow(Math.abs(cosV), 0.8) * 0.3;
+            target.set(x * heartMod, z - 0.5, y * heartMod);
+        };`;
+        
+        case 'apple':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI * 2;
+            v = v * Math.PI;
+            const cosU = Math.cos(u);
+            const sinU = Math.sin(u);
+            const cosV = Math.cos(v);
+            const sinV = Math.sin(v);
+            const f = ${fatness};
+            const i = ${appleIndent};
+            const r = sinV * (1 + 0.2 * cosV) * f;
+            const topIndent = Math.pow(Math.max(0, cosV), 2) * i;
+            const x = r * cosU;
+            const y = cosV - topIndent * 0.5;
+            const z = r * sinU;
+            target.set(x, y, z);
+        };`;
+        
+        default:
+            return `const paramFunc = function(u, v, target) {
+            u *= Math.PI * 2;
+            v *= Math.PI;
+            target.set(Math.sin(v) * Math.cos(u), Math.cos(v), Math.sin(v) * Math.sin(u));
+        };`;
+    }
+}
+
 function generateMeshCode(type, params, varName, indent) {
     let code = '';
     let geomCode = '';
@@ -2912,6 +3217,14 @@ function generateMeshCode(type, params, varName, indent) {
         return new THREE.TubeGeometry(curve, ${params.tubularSegments}, ${params.radius}, ${params.radialSegments}, ${params.closed});
     })()`;
             break;
+        case 'Parametric':
+            geomCode = `(() => {
+        ${generateParametricFunctionCode(params.shape, params)}
+        const g = new THREE.ParametricGeometry(paramFunc, ${params.segmentsU}, ${params.segmentsV});
+        g.scale(${params.scale}, ${params.scale}, ${params.scale});
+        return g;
+    })()`;
+            break;
     }
     
     let matType = 'MeshStandardMaterial';
@@ -2937,7 +3250,8 @@ function generateMeshCode(type, params, varName, indent) {
     
     code += `${indent}        wireframe: ${params.wireframe},\n`;
     code += `${indent}        transparent: ${params.transparent},\n`;
-    code += `${indent}        opacity: ${params.opacity}\n`;
+    code += `${indent}        opacity: ${params.opacity},\n`;
+    code += `${indent}        side: ${params.doubleSided ? 'THREE.DoubleSide' : 'THREE.FrontSide'}\n`;
     code += `${indent}    })\n`;
     code += `${indent});\n`;
     code += `${indent}${varName}.castShadow = true;\n`;

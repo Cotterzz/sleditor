@@ -1,0 +1,181 @@
+{
+  "meta": {
+    "language": "Italiano",
+    "code": "it",
+    "direction": "ltr"
+  },
+  
+  "app": {
+    "title": "SL Editor",
+    "subtitle": "Ambiente di Sviluppo Shader"
+  },
+  
+  "toolbar": {
+    "title": "Barra degli strumenti",
+    "dock": {
+      "top": "Ancora in alto",
+      "bottom": "Ancora in basso",
+      "left": "Ancora a sinistra",
+      "right": "Ancora a destra",
+      "float": "Fluttuante"
+    },
+    "position": "Posizione barra",
+    "settings": "Impostazioni",
+    "theme": "Tema",
+    "language": "Lingua"
+  },
+  
+  "window": {
+    "close": "Chiudi",
+    "minimize": "Riduci a icona",
+    "maximize": "Ingrandisci",
+    "restore": "Ripristina"
+  },
+  
+  "panels": {
+    "editor": {
+      "title": "Editor",
+      "description": "Editor di codice per shader",
+      "codeTitle": "Codice Shader",
+      "codeHint": "Qui verrebbe integrato l'editor Monaco. Il font del codice si adatta al tema corrente."
+    },
+    "preview": {
+      "title": "Anteprima",
+      "description": "Anteprima shader in tempo reale",
+      "liveTitle": "Anteprima dal Vivo",
+      "canvasPlaceholder": "Canvas Anteprima Shader",
+      "hint": "Il rendering WebGL in tempo reale apparirebbe qui."
+    },
+    "nodes": {
+      "title": "Nodi",
+      "description": "Editor basato su nodi",
+      "editorTitle": "Editor Nodi",
+      "hint": "Interfaccia di programmazione visuale a nodi.",
+      "types": {
+        "sphere": "SDF Sfera",
+        "box": "SDF Cubo",
+        "smoothUnion": "Unione Liscia",
+        "transform": "Trasformazione",
+        "material": "Materiale",
+        "output": "Output"
+      }
+    },
+    "inspector": {
+      "title": "Ispettore",
+      "description": "Proprietà e parametri",
+      "propertiesTitle": "Proprietà",
+      "radius": "Raggio",
+      "smoothness": "Morbidezza",
+      "color": "Colore"
+    },
+    "library": {
+      "title": "Libreria",
+      "description": "Browser libreria shader",
+      "searchPlaceholder": "Cerca shader...",
+      "templateLabel": "Shader modello",
+      "items": {
+        "raymarching": "Basi del Raymarching",
+        "fractalNoise": "Rumore Frattale",
+        "pbrLighting": "Illuminazione PBR",
+        "postProcessing": "Post Elaborazione",
+        "volumetricFog": "Nebbia Volumetrica"
+      }
+    },
+    "console": {
+      "title": "Console",
+      "description": "Output ed errori",
+      "outputTitle": "Console di Output",
+      "messages": {
+        "compiled": "Shader compilato con successo",
+        "frameTime": "Tempo per frame: 16.2ms",
+        "unusedUniform": "Uniform 'iTime' non utilizzato",
+        "resolution": "Risoluzione: 1920x1080",
+        "previewUpdated": "Anteprima aggiornata"
+      }
+    },
+    "settings": {
+      "title": "Impostazioni",
+      "description": "Impostazioni dell'applicazione"
+    },
+    "profile": {
+      "title": "Profilo",
+      "description": "Impostazioni profilo utente",
+      "displayName": "Nome visualizzato",
+      "status": "Stato",
+      "statusOptions": {
+        "online": "Online",
+        "away": "Assente",
+        "busy": "Occupato",
+        "offline": "Offline"
+      }
+    }
+  },
+  
+  "settings": {
+    "appearance": {
+      "title": "Aspetto",
+      "theme": "Tema",
+      "language": "Lingua",
+      "fontSize": "Dimensione carattere",
+      "windowMode": "Modalità finestra",
+      "modes": {
+        "docked": "Ancorato (Senza sovrapposizione)",
+        "overlay": "Sovrapposizione (Movimento libero)"
+      }
+    },
+    "device": {
+      "title": "Modalità dispositivo",
+      "auto": "Rilevamento automatico",
+      "forceDesktop": "Forza Desktop",
+      "forceMobile": "Forza Mobile"
+    },
+    "editor": {
+      "title": "Editor",
+      "lineNumbers": "Numeri di riga",
+      "wordWrap": "A capo automatico",
+      "minimap": "Minimappa",
+      "autoSave": "Salvataggio automatico"
+    }
+  },
+  
+  "user": {
+    "profile": "Profilo",
+    "settings": "Impostazioni",
+    "logout": "Esci"
+  },
+  
+  "actions": {
+    "save": "Salva",
+    "load": "Carica",
+    "export": "Esporta",
+    "import": "Importa",
+    "copy": "Copia",
+    "paste": "Incolla",
+    "undo": "Annulla",
+    "redo": "Ripeti",
+    "cancel": "Annulla",
+    "confirm": "Conferma",
+    "apply": "Applica",
+    "reset": "Ripristina"
+  },
+  
+  "status": {
+    "ready": "Pronto",
+    "loading": "Caricamento...",
+    "saving": "Salvataggio...",
+    "error": "Errore",
+    "success": "Successo"
+  },
+  
+  "errors": {
+    "generic": "Si è verificato un errore",
+    "loadFailed": "Caricamento fallito",
+    "saveFailed": "Salvataggio fallito",
+    "invalidFile": "Formato file non valido"
+  },
+  
+  "mobile": {
+    "tapToLoad": "Tocca un'icona"
+  }
+}
+

@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shadertoy Library Browser</title>
+<style>
+:root {
+    --bg-dark: #0a0a0f;
+    --bg-card: #12121a;
+    --bg-hover: #1a1a25;
+    --bg-panel: #0d0d14;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --border: #1e293b;
+    --success: #22c55e;
+    --warning: #f59e0b;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-dark);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+}
+
+/* Header */
+.header {
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-content {
+    max-width: 1800px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.logo {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.logo svg {
+    width: 24px;
+    height: 24px;
+}
+
+/* Search */
+.search-box {
+    flex: 1;
+    min-width: 200px;
+    max-width: 400px;
+    position: relative;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 0.625rem 2rem 0.625rem 2.5rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.search-box input:focus {
+    border-color: var(--accent);
+}
+
+.search-box::before {
+    content: "🔍";
+    position: absolute;
+    left: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.875rem;
+    z-index: 1;
+}
+
+.search-clear {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.25rem;
+    display: none;
+}
+
+.search-clear:hover {
+    color: var(--text);
+}
+
+.search-box.has-value .search-clear {
+    display: block;
+    opacity: 0.5;
+}
+
+/* Controls */
+.controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+select, button {
+    padding: 0.5rem 1rem;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+select:hover, button:hover {
+    border-color: var(--accent);
+}
+
+button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+button.primary:hover {
+    background: var(--accent-hover);
+}
+
+/* Stats bar */
+.stats-bar {
+    background: var(--bg-card);
+    padding: 0.75rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.875rem;
+    color: var(--text-dim);
+}
+
+.stats-bar-content {
+    max-width: 1800px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.user-name {
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* Main layout */
+.main-container {
+    display: flex;
+    max-width: 1800px;
+    margin: 0 auto;
+    height: calc(100vh - 120px);
+}
+
+/* List area */
+.list-area {
+    flex: 1;
+    padding: 1rem 1.5rem;
+    overflow-y: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.shader-list-scroll {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+/* Shader list */
+.shader-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.shader-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-card);
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 0.875rem;
+}
+
+.shader-row:hover {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.shader-row.selected {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.shader-title {
+    flex: 1;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 200px;
+}
+
+.shader-date {
+    width: 100px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.shader-date.estimated {
+    font-style: italic;
+    opacity: 0.7;
+}
+
+.shader-status {
+    width: 85px;
+    text-align: center;
+}
+
+.shader-status.public-api {
+    color: var(--success);
+}
+
+.shader-status.public {
+    color: #4ade80;
+}
+
+.shader-status.unlisted {
+    color: #60a5fa;
+}
+
+.shader-status.private {
+    color: var(--warning);
+}
+
+.shader-views, .shader-likes {
+    width: 80px;
+    color: var(--text-dim);
+    text-align: right;
+}
+
+.shader-passes {
+    width: 60px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.shader-id {
+    width: 70px;
+    font-family: monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Column headers */
+.list-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.5rem;
+    flex-shrink: 0;
+}
+
+.list-header > span[data-sort] {
+    cursor: pointer;
+    user-select: none;
+}
+
+.list-header > span[data-sort]:hover {
+    color: var(--text);
+}
+
+.list-header > span[data-sort].sort-asc::after {
+    content: " ▲";
+}
+
+.list-header > span[data-sort].sort-desc::after {
+    content: " ▼";
+}
+
+/* Detail panel */
+.detail-panel {
+    width: 400px;
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    display: none;
+    height: 100%;
+}
+
+.detail-panel.open {
+    display: block;
+}
+
+.detail-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.detail-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.detail-id {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: monospace;
+    margin-bottom: 0.75rem;
+}
+
+.detail-actions-top {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.detail-actions-top button {
+    flex: 1;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+}
+
+.detail-section {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.detail-section h4 {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.detail-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.detail-description {
+    font-size: 0.875rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.detail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.tag {
+    padding: 0.25rem 0.75rem;
+    background: var(--bg-dark);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
+.detail-buffers {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.buffer-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-dark);
+    border-radius: 6px;
+    font-size: 0.8125rem;
+}
+
+.buffer-type {
+    font-weight: 500;
+}
+
+.buffer-inputs {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+/* Pagination */
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.5rem;
+}
+
+.pagination button {
+    min-width: 40px;
+}
+
+.pagination button.active {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.page-info {
+    padding: 0 1rem;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+/* Drop zone */
+.drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    padding: 4rem 2rem;
+    text-align: center;
+    margin: 2rem;
+    transition: all 0.2s;
+}
+
+.drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.drop-zone h2 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.drop-zone p {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+}
+
+.drop-zone input[type="file"] {
+    display: none;
+}
+
+/* Loading */
+.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem;
+    color: var(--text-muted);
+}
+
+.loading::after {
+    content: "";
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-left: 0.75rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* No results */
+.no-results {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-muted);
+}
+
+.no-results h3 {
+    font-size: 1.25rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-dim);
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .detail-panel {
+        position: fixed;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        z-index: 200;
+        box-shadow: -8px 0 32px rgba(0, 0, 0, 0.5);
+    }
+}
+
+@media (max-width: 768px) {
+    .header-content {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-box {
+        max-width: none;
+    }
+    
+    .detail-panel {
+        width: 100%;
+    }
+    
+    .shader-date, .shader-id {
+        display: none;
+    }
+}
+
+
+/* Close button */
+.close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-dark);
+    border: 1px solid var(--border);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    z-index: 10;
+}
+
+.close-btn:hover {
+    background: var(--bg-hover);
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+    <div class="header-content">
+        <div class="logo">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+            </svg>
+            Shadertoy Browser
+        </div>
+        
+        <div class="search-box" id="searchBox">
+            <input type="text" id="searchInput" placeholder="Search (comma for multiple, &quot;exact&quot;)..." disabled>
+            <button class="search-clear" id="searchClear" title="Clear search">×</button>
+        </div>
+        
+        <div class="controls">
+            <select id="sortSelect" disabled>
+                <option value="date-desc">Newest First</option>
+                <option value="date-asc">Oldest First</option>
+                <option value="name-asc">Name A-Z</option>
+                <option value="name-desc">Name Z-A</option>
+                <option value="views-desc">Most Viewed</option>
+                <option value="views-asc">Least Viewed</option>
+                <option value="likes-desc">Most Liked</option>
+                <option value="likes-asc">Least Liked</option>
+            </select>
+            
+            <select id="filterSelect" disabled>
+                <option value="all">All Shaders</option>
+                <option value="public-api">Public + API</option>
+                <option value="public">Public Only</option>
+                <option value="unlisted">Unlisted Only</option>
+                <option value="private">Private Only</option>
+                <option value="multipass">Multi-pass</option>
+            </select>
+            
+            <select id="perPageSelect" disabled>
+                <option value="50">50 per page</option>
+                <option value="100" selected>100 per page</option>
+                <option value="200">200 per page</option>
+                <option value="500">500 per page</option>
+                <option value="1000">1k per page</option>
+                <option value="2000">2k per page</option>
+                <option value="4000">4k per page</option>
+            </select>
+            
+            <label style="display:flex;align-items:center;gap:0.25rem;font-size:0.75rem;color:var(--text-muted);">
+                <input type="checkbox" id="caseSensitive"> Aa
+            </label>
+        </div>
+    </div>
+</header>
+
+<div class="stats-bar" id="statsBar" style="display: none;">
+    <div class="stats-bar-content">
+        <div class="user-info">
+            <span>Library: <span class="user-name" id="userName">-</span></span>
+            <span id="shaderCount">0 shaders</span>
+            <span id="filteredCount"></span>
+        </div>
+        <div>
+            <span id="totalViews">0 total views</span> · 
+            <span id="totalLikes">0 total likes</span>
+        </div>
+    </div>
+</div>
+
+<div class="main-container">
+    <div class="list-area" id="listArea">
+        <!-- Drop zone (shown when no data) -->
+        <div class="drop-zone" id="dropZone">
+            <h2>📁 Load Your Shadertoy Library</h2>
+            <p>Drag and drop your shaders.json file here, or click to browse</p>
+            <button class="primary" onclick="document.getElementById('fileInput').click()">
+                Choose File
+            </button>
+            <input type="file" id="fileInput" accept=".json">
+        </div>
+        
+        <!-- Shader list (hidden until data loaded) -->
+        <div id="shaderContainer" style="display: none; flex-direction: column; flex: 1; min-height: 0;">
+            <div class="list-header" id="listHeader">
+                <span class="shader-title" data-sort="name">Name ↕</span>
+                <span class="shader-date" data-sort="date">Date ↕</span>
+                <span class="shader-status">Status</span>
+                <span class="shader-views" data-sort="views">Views ↕</span>
+                <span class="shader-likes" data-sort="likes">Likes ↕</span>
+                <span class="shader-passes">Passes</span>
+                <span class="shader-id">ID</span>
+            </div>
+            <div class="shader-list-scroll" id="shaderListScroll">
+                <div class="shader-list" id="shaderList"></div>
+            </div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+    </div>
+    
+    <div class="detail-panel" id="detailPanel">
+        <button class="close-btn" onclick="closeDetail()">×</button>
+        <div class="detail-header">
+            <h2 class="detail-title" id="detailTitle">-</h2>
+            <div class="detail-id" id="detailId">-</div>
+            <div class="detail-actions-top">
+                <button onclick="openInShadertoy()">Open in Shadertoy ↗</button>
+                <button onclick="copyCode()">Copy Code</button>
+            </div>
+        </div>
+        
+        <div class="detail-section">
+            <div class="detail-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="detailViews">0</div>
+                    <div class="stat-label">Views</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="detailLikes">0</div>
+                    <div class="stat-label">Likes</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="detailPasses">1</div>
+                    <div class="stat-label">Passes</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="detail-section">
+            <h4>Status</h4>
+            <div id="detailStatus">-</div>
+        </div>
+        
+        <div class="detail-section">
+            <h4>Published</h4>
+            <div id="detailDate">-</div>
+        </div>
+        
+        <div class="detail-section">
+            <h4>Description</h4>
+            <div class="detail-description" id="detailDescription">-</div>
+        </div>
+        
+        <div class="detail-section">
+            <h4>Tags</h4>
+            <div class="detail-tags" id="detailTags"></div>
+        </div>
+        
+        <div class="detail-section">
+            <h4>Render Passes</h4>
+            <div class="detail-buffers" id="detailBuffers"></div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+// State
+let allShaders = [];
+let filteredShaders = [];
+let currentPage = 1;
+let perPage = 100;
+let selectedShader = null;
+
+// DOM elements
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const shaderContainer = document.getElementById('shaderContainer');
+const shaderList = document.getElementById('shaderList');
+const pagination = document.getElementById('pagination');
+const searchInput = document.getElementById('searchInput');
+const sortSelect = document.getElementById('sortSelect');
+const filterSelect = document.getElementById('filterSelect');
+const perPageSelect = document.getElementById('perPageSelect');
+const statsBar = document.getElementById('statsBar');
+const detailPanel = document.getElementById('detailPanel');
+
+// File handling
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file) loadFile(file);
+});
+
+fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) loadFile(file);
+});
+
+function loadFile(file) {
+    dropZone.innerHTML = '<div class="loading">Loading shaders</div>';
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            initializeData(data);
+        } catch (err) {
+            dropZone.innerHTML = `
+                <h2>❌ Error Loading File</h2>
+                <p>${err.message}</p>
+                <button class="primary" onclick="location.reload()">Try Again</button>
+            `;
+        }
+    };
+    reader.readAsText(file);
+}
+
+function initializeData(data) {
+    // Handle both formats: { shaders: [...] } or just [...]
+    if (Array.isArray(data)) {
+        allShaders = data;
+    } else {
+        allShaders = data.shaders || [];
+    }
+    
+    if (allShaders.length === 0) {
+        return;
+    }
+    
+    // Estimate dates for shaders without dates (private shaders)
+    estimateMissingDates();
+    
+    // Try to get username from data wrapper or first shader
+    const userName = data.userName || allShaders[0]?.info?.username || 'Unknown';
+    
+    // Update UI
+    document.getElementById('userName').textContent = userName;
+    document.getElementById('shaderCount').textContent = `${allShaders.length} shaders`;
+    
+    // Calculate totals
+    const totalViews = allShaders.reduce((sum, s) => sum + (s.info?.viewed || 0), 0);
+    const totalLikes = allShaders.reduce((sum, s) => sum + (s.info?.likes || 0), 0);
+    document.getElementById('totalViews').textContent = `${totalViews.toLocaleString()} total views`;
+    document.getElementById('totalLikes').textContent = `${totalLikes.toLocaleString()} total likes`;
+    
+    // Enable controls
+    searchInput.disabled = false;
+    sortSelect.disabled = false;
+    filterSelect.disabled = false;
+    perPageSelect.disabled = false;
+    
+    // Show UI
+    dropZone.style.display = 'none';
+    shaderContainer.style.display = 'flex';
+    statsBar.style.display = 'block';
+    
+    // Initial render
+    applyFilters();
+}
+
+// Current sort state for column headers
+let currentSort = { field: 'date', dir: 'desc' };
+
+// Filtering and sorting
+function applyFilters() {
+    const searchValue = searchInput.value.trim();
+    const caseSensitive = document.getElementById('caseSensitive')?.checked || false;
+    const searchTerms = searchValue ? searchValue.split(',').map(t => t.trim()).filter(t => t) : [];
+    const filter = filterSelect.value;
+    const sort = sortSelect.value;
+    
+    // Update search box state for clear button
+    document.getElementById('searchBox').classList.toggle('has-value', searchValue.length > 0);
+    
+    // Filter
+    filteredShaders = allShaders.filter(shader => {
+        const info = shader.info || {};
+        
+        // Search filter (all comma-separated terms must match)
+        if (searchTerms.length > 0) {
+            let searchFields = [
+                info.name || '',
+                info.description || '',
+                (info.tags || []).join(' '),
+                (shader.renderpass || []).map(p => p.code || '').join(' ')
+            ].join(' ');
+            
+            if (!caseSensitive) {
+                searchFields = searchFields.toLowerCase();
+            }
+            
+            // All terms must be found
+            for (let term of searchTerms) {
+                if (!caseSensitive) term = term.toLowerCase();
+                
+                // Check for quoted exact word match
+                const exactMatch = term.match(/^"(.+)"$/);
+                if (exactMatch) {
+                    const word = exactMatch[1];
+                    const regex = new RegExp(`\\b${word}\\b`, caseSensitive ? '' : 'i');
+                    if (!regex.test(searchFields)) return false;
+                } else {
+                    if (!searchFields.includes(term)) return false;
+                }
+            }
+        }
+        
+        // Status filter
+        const status = getStatus(info.published);
+        if (filter === 'public-api' && status !== 'public-api') return false;
+        if (filter === 'public' && status !== 'public') return false;
+        if (filter === 'unlisted' && status !== 'unlisted') return false;
+        if (filter === 'private' && status !== 'private') return false;
+        if (filter === 'multipass' && (shader.renderpass || []).length < 2) return false;
+        
+        return true;
+    });
+    
+    // Sort
+    const [sortField, sortDir] = sort.split('-');
+    filteredShaders.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch (sortField) {
+            case 'name':
+                aVal = (a.info?.name || '').toLowerCase();
+                bVal = (b.info?.name || '').toLowerCase();
+                break;
+            case 'date':
+                aVal = parseInt(a.info?.date || 0);
+                bVal = parseInt(b.info?.date || 0);
+                break;
+            case 'views':
+                aVal = a.info?.viewed || 0;
+                bVal = b.info?.viewed || 0;
+                break;
+            case 'likes':
+                aVal = a.info?.likes || 0;
+                bVal = b.info?.likes || 0;
+                break;
+        }
+        
+        if (sortDir === 'asc') {
+            return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+        } else {
+            return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+        }
+    });
+    
+    // Update filtered count
+    document.getElementById('filteredCount').textContent = 
+        filteredShaders.length !== allShaders.length 
+            ? `(${filteredShaders.length} shown)` 
+            : '';
+    
+    // Reset to page 1
+    currentPage = 1;
+    renderShaders();
+}
+
+function getStatus(published) {
+    if (published === undefined || published === null) return 'private';
+    
+    // Handle numeric values (Shadertoy API format)
+    // 0 = private, 1 = unlisted, 2 = public, 3 = public+api
+    if (typeof published === 'number' || !isNaN(parseInt(published))) {
+        const num = parseInt(published);
+        if (num === 0) return 'private';
+        if (num === 1) return 'unlisted';
+        if (num === 2) return 'public';
+        if (num === 3) return 'public-api';
+    }
+    
+    // Handle string values
+    const p = String(published).toLowerCase();
+    if (p.includes('api')) return 'public-api';
+    if (p === 'public') return 'public';
+    if (p.includes('unlisted')) return 'unlisted';
+    if (p.includes('private')) return 'private';
+    return 'private';
+}
+
+function getStatusLabel(published) {
+    const status = getStatus(published);
+    switch (status) {
+        case 'public-api': return 'Public+API';
+        case 'public': return 'Public';
+        case 'unlisted': return 'Unlisted';
+        case 'private': return 'Private';
+        default: return 'Private';
+    }
+}
+
+// Check if shader has a valid date (not 0, not empty)
+function hasValidDate(shader) {
+    const date = shader?.info?.date;
+    return date && date !== "0" && parseInt(date) > 0;
+}
+
+// Estimate dates for shaders without dates based on position in JSON
+function estimateMissingDates() {
+    for (let i = 0; i < allShaders.length; i++) {
+        const shader = allShaders[i];
+        
+        // If shader already has a valid date, skip
+        if (hasValidDate(shader)) continue;
+        
+        // Find nearest previous shader with a date
+        let prevDate = null;
+        for (let j = i - 1; j >= 0; j--) {
+            if (hasValidDate(allShaders[j])) {
+                prevDate = parseInt(allShaders[j].info.date);
+                break;
+            }
+        }
+        
+        // Find nearest next shader with a date
+        let nextDate = null;
+        for (let j = i + 1; j < allShaders.length; j++) {
+            if (hasValidDate(allShaders[j])) {
+                nextDate = parseInt(allShaders[j].info.date);
+                break;
+            }
+        }
+        
+        // Estimate date
+        let estimatedDate = null;
+        if (prevDate && nextDate) {
+            // Average of prev and next
+            estimatedDate = Math.round((prevDate + nextDate) / 2);
+        } else if (prevDate) {
+            // Use prev date (shader is after all dated ones)
+            estimatedDate = prevDate;
+        } else if (nextDate) {
+            // Use next date (shader is before all dated ones)
+            estimatedDate = nextDate;
+        }
+        
+        if (estimatedDate) {
+            if (!shader.info) shader.info = {};
+            shader.info.date = String(estimatedDate);
+            shader.info.dateEstimated = true;
+        }
+    }
+}
+
+// Rendering
+function renderShaders() {
+    const start = (currentPage - 1) * perPage;
+    const end = start + perPage;
+    const pageShaders = filteredShaders.slice(start, end);
+    
+    shaderList.innerHTML = pageShaders.map(shader => renderRow(shader)).join('');
+    renderPagination();
+}
+
+function renderRow(shader) {
+    const info = shader.info || {};
+    const id = info.id || '';
+    const hasDate = info.date && info.date !== "0" && parseInt(info.date) > 0;
+    const dateStr = hasDate ? new Date(parseInt(info.date) * 1000).toLocaleDateString() : '-';
+    const dateDisplay = info.dateEstimated ? `c.${dateStr}` : dateStr;
+    const passes = (shader.renderpass || []).length;
+    const isSelected = selectedShader?.info?.id === id;
+    const status = getStatus(info.published);
+    const statusLabel = getStatusLabel(info.published);
+    
+    return `
+        <div class="shader-row ${isSelected ? 'selected' : ''}" onclick="selectShader('${id}')">
+            <span class="shader-title">${escapeHtml(info.name || 'Untitled')}</span>
+            <span class="shader-date ${info.dateEstimated ? 'estimated' : ''}" title="${info.dateEstimated ? 'Estimated from surrounding shaders' : ''}">${dateDisplay}</span>
+            <span class="shader-status ${status}">${statusLabel}</span>
+            <span class="shader-views">👁 ${(info.viewed || 0).toLocaleString()}</span>
+            <span class="shader-likes">❤️ ${info.likes || 0}</span>
+            <span class="shader-passes">${passes}</span>
+            <span class="shader-id">${id}</span>
+        </div>
+    `;
+}
+
+function renderPagination() {
+    const totalPages = Math.ceil(filteredShaders.length / perPage);
+    
+    if (totalPages <= 1) {
+        pagination.innerHTML = '';
+        return;
+    }
+    
+    let html = '';
+    
+    // Previous
+    html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">‹</button>`;
+    
+    // Page numbers
+    const range = 2;
+    for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - range && i <= currentPage + range)) {
+            html += `<button class="${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+        } else if (i === currentPage - range - 1 || i === currentPage + range + 1) {
+            html += `<span class="page-info">...</span>`;
+        }
+    }
+    
+    // Next
+    html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">›</button>`;
+    
+    pagination.innerHTML = html;
+}
+
+function goToPage(page) {
+    currentPage = page;
+    renderShaders();
+    document.getElementById('shaderListScroll').scrollTop = 0;
+}
+
+// Detail panel
+function selectShader(id) {
+    selectedShader = allShaders.find(s => s.info?.id === id);
+    if (!selectedShader) return;
+    
+    const info = selectedShader.info || {};
+    const passes = selectedShader.renderpass || [];
+    
+    // Update detail panel
+    document.getElementById('detailTitle').textContent = info.name || 'Untitled';
+    document.getElementById('detailId').textContent = `ID: ${info.id}`;
+    document.getElementById('detailViews').textContent = (info.viewed || 0).toLocaleString();
+    document.getElementById('detailLikes').textContent = info.likes || 0;
+    document.getElementById('detailPasses').textContent = passes.length;
+    document.getElementById('detailStatus').textContent = info.published || 'Unknown';
+    const hasDate = info.date && info.date !== "0" && parseInt(info.date) > 0;
+    const dateStr = hasDate ? new Date(parseInt(info.date) * 1000).toLocaleString() : '-';
+    document.getElementById('detailDate').textContent = info.dateEstimated ? `circa ${dateStr}` : dateStr;
+    document.getElementById('detailDescription').innerHTML = parseDescription(info.description || 'No description');
+    
+    // Tags
+    const tagsHtml = (info.tags || []).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('');
+    document.getElementById('detailTags').innerHTML = tagsHtml || '<span class="tag">No tags</span>';
+    
+    // Buffers
+    const buffersHtml = passes.map(pass => {
+        const inputCount = (pass.inputs || []).length;
+        const inputTypes = (pass.inputs || []).map(i => i.type).join(', ');
+        return `
+            <div class="buffer-item">
+                <span class="buffer-type">${pass.name || pass.type}</span>
+                <span class="buffer-inputs">${inputCount ? `${inputCount} inputs (${inputTypes})` : 'No inputs'}</span>
+            </div>
+        `;
+    }).join('');
+    document.getElementById('detailBuffers').innerHTML = buffersHtml;
+    
+    // Show panel
+    detailPanel.classList.add('open');
+    
+    // Update selection in list
+    renderShaders();
+}
+
+function closeDetail() {
+    detailPanel.classList.remove('open');
+    selectedShader = null;
+    renderShaders();
+}
+
+function openInShadertoy() {
+    if (selectedShader?.info?.id) {
+        window.open(`https://www.shadertoy.com/view/${selectedShader.info.id}`, '_blank');
+    }
+}
+
+function copyCode() {
+    if (!selectedShader) return;
+    
+    const code = (selectedShader.renderpass || [])
+        .map(p => `// === ${p.name || p.type} ===\n${p.code || ''}`)
+        .join('\n\n');
+    
+    navigator.clipboard.writeText(code).then(() => {
+        const btn = event.target;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy Code', 1500);
+    });
+}
+
+// Parse Shadertoy description [url] and [img] tags
+function parseDescription(text) {
+    if (!text) return '';
+    let html = escapeHtml(text);
+    // Convert [url]link[/url] to clickable links
+    html = html.replace(/\[url\](https?:\/\/[^\[]+)\[\/url\]/gi, '<a href="$1" target="_blank" style="color:var(--accent)">$1</a>');
+    // Convert [url=link]text[/url] to clickable links
+    html = html.replace(/\[url=(https?:\/\/[^\]]+)\]([^\[]+)\[\/url\]/gi, '<a href="$1" target="_blank" style="color:var(--accent)">$2</a>');
+    // Convert [img]link[/img] to images (small thumbnails)
+    html = html.replace(/\[img\](https?:\/\/[^\[]+)\[\/img\]/gi, '<img src="$1" style="max-width:100%;max-height:100px;margin:0.5rem 0;border-radius:4px;" onerror="this.style.display=\'none\'">');
+    // Convert newlines to <br>
+    html = html.replace(/\n/g, '<br>');
+    return html;
+}
+
+// Search clear button
+document.getElementById('searchClear').addEventListener('click', () => {
+    searchInput.value = '';
+    document.getElementById('searchBox').classList.remove('has-value');
+    applyFilters();
+});
+
+// Column header click sorting
+document.getElementById('listHeader').addEventListener('click', (e) => {
+    const sortField = e.target.dataset.sort;
+    if (!sortField) return;
+    
+    // Toggle direction if same field, otherwise default to desc
+    if (currentSort.field === sortField) {
+        currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSort.field = sortField;
+        currentSort.dir = 'desc';
+    }
+    
+    // Update dropdown to match
+    sortSelect.value = `${currentSort.field}-${currentSort.dir}`;
+    
+    // Update visual indicators
+    document.querySelectorAll('.list-header [data-sort]').forEach(el => {
+        el.classList.remove('sort-asc', 'sort-desc');
+        el.textContent = el.textContent.replace(/ [▲▼↕]$/, '') + ' ↕';
+    });
+    e.target.classList.add(`sort-${currentSort.dir}`);
+    e.target.textContent = e.target.textContent.replace(/ [▲▼↕]$/, '');
+    
+    applyFilters();
+});
+
+// Case sensitive toggle
+document.getElementById('caseSensitive').addEventListener('change', applyFilters);
+
+// Event listeners
+let searchTimeout;
+searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(applyFilters, 300);
+});
+
+sortSelect.addEventListener('change', applyFilters);
+filterSelect.addEventListener('change', applyFilters);
+
+perPageSelect.addEventListener('change', (e) => {
+    perPage = parseInt(e.target.value);
+    currentPage = 1;
+    renderShaders();
+});
+
+// Utility
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeDetail();
+    }
+});
+</script>
+
+</body>
+</html>
