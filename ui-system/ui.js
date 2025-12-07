@@ -347,7 +347,7 @@ const SLUI = (function() {
         // Divider
         const divider = document.createElement('div');
         divider.className = 'sl-toolbar-divider';
-        toolbar.appendChild(divider);
+        items.appendChild(divider);
         
         // User profile button
         const userBtn = document.createElement('button');
@@ -358,7 +358,7 @@ const SLUI = (function() {
             ? `<img src="${state.user.avatar}" alt="${state.user.name}">`
             : `<span class="sl-user-initial">${state.user.name.charAt(0).toUpperCase()}</span>`;
         userBtn.addEventListener('click', toggleUserMenu);
-        toolbar.appendChild(userBtn);
+        items.appendChild(userBtn);
         
         // Setup floating toolbar drag (drag header moves wrapper)
         setupToolbarDrag(wrapper, header);

@@ -1119,6 +1119,15 @@ body {
     height: 32px;
 }
 
+/* Mobile: remove window headers to save space */
+.sl-app[data-mode="mobile"] .sl-window {
+    padding-top: 0;
+}
+
+.sl-app[data-mode="mobile"] .sl-window-header {
+    display: none !important;
+}
+
 /* ========================================
    THEME-SPECIFIC OVERRIDES
    ======================================== */
