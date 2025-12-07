@@ -25,6 +25,38 @@
         "height": 512
     },
     {
+        "id": "sky2",
+        "name": "Stars - ST",
+        "path": "media/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46cST.jpg",
+        "thumb": "media/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46cST.jpg",
+        "width": 512,
+        "height": 512
+    },
+    {
+        "id": "sky3",
+        "name": "Stars 2",
+        "path": "media/Blue Nebula 7 - 512x512.png",
+        "thumb": "media/Blue Nebula 7 - 512x512.png",
+        "width": 512,
+        "height": 512
+    },
+    {
+        "id": "sky4",
+        "name": "Stars purple",
+        "path": "media/Purple Nebula 1 - 512x512.png",
+        "thumb": "media/Purple Nebula 1 - 512x512.png",
+        "width": 512,
+        "height": 512
+    },
+    {
+        "id": "sky5",
+        "name": "Stars blue",
+        "path": "media/Blue Nebula 8 - 512x512.png",
+        "thumb": "media/Blue Nebula 8 - 512x512.png",
+        "width": 512,
+        "height": 512
+    },
+    {
         "id": "noise2",
         "name": "Blue Noise - 256",
         "path": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec256.png",
