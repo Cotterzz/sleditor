@@ -1022,10 +1022,6 @@ body {
     height: 100dvh; /* Dynamic viewport height for mobile browsers */
 }
 
-.sl-app[data-mode="mobile"] .sl-window {
-    display: none !important;
-}
-
 .sl-app[data-mode="mobile"] .sl-toolbar {
     flex-shrink: 0;
 }
