@@ -610,6 +610,9 @@ const SLUI = (function() {
         // Always bring new windows to front
         bringToFront(id);
         
+        // Reflect state in toolbar (mark as open/loaded)
+        updateToolbarItem(id, true, true, false);
+        
         return win;
     }
     
