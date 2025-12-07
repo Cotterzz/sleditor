@@ -169,17 +169,117 @@ body {
     order: 1;
 }
 
-/* Floating toolbar */
-.sl-app[data-toolbar-position="float"] .sl-toolbar {
+/* Floating toolbar - use wrapper for layered approach */
+.sl-toolbar-wrapper {
+    display: contents; /* Don't affect layout in docked modes */
+}
+
+.sl-app[data-toolbar-position="float"] .sl-toolbar-wrapper {
+    display: block;
     position: fixed;
     top: 50%;
     left: 10px;
     transform: translateY(-50%);
+    z-index: 1000;
+    /* Always reserve space for header */
+    padding-top: var(--window-header-height);
+}
+
+/* Floating toolbar header - always in position, visibility controlled */
+.sl-toolbar-header {
+    display: none;
+}
+
+.sl-app[data-toolbar-position="float"] .sl-toolbar-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    height: var(--window-header-height);
+    background: var(--window-header);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    cursor: grab;
+    user-select: none;
+    box-sizing: border-box;
+    /* Hidden until hover */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.sl-app[data-toolbar-position="float"] .sl-toolbar-wrapper:hover .sl-toolbar-header,
+.sl-app[data-toolbar-position="float"] .sl-toolbar-wrapper.dragging .sl-toolbar-header {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.sl-toolbar-header:active {
+    cursor: grabbing;
+}
+
+.sl-toolbar-header-title {
+    flex: 1;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.sl-toolbar-header-icon {
+    font-size: 1rem;
+}
+
+/* Floating toolbar body - fixed size, always visible */
+.sl-app[data-toolbar-position="float"] .sl-toolbar {
+    position: relative;
     flex-direction: column;
-    width: var(--toolbar-size);
+    width: auto;
     border: 1px solid var(--border);
     border-radius: var(--border-radius);
     box-shadow: var(--glow);
+    padding: 4px;
+}
+
+/* Rounded corners normally, square when header visible */
+.sl-app[data-toolbar-position="float"] .sl-toolbar-wrapper:hover .sl-toolbar,
+.sl-app[data-toolbar-position="float"] .sl-toolbar-wrapper.dragging .sl-toolbar {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+/* Floating toolbar grid layout for many items */
+.sl-app[data-toolbar-position="float"] .sl-toolbar-items {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 40px);
+    gap: 2px;
+    max-width: calc(40px * 4 + 8px);
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+/* Single column when few items */
+.sl-app[data-toolbar-position="float"] .sl-toolbar-items.few-items {
+    grid-template-columns: 1fr;
+}
+
+/* Toolbar items container */
+.sl-toolbar-items {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.sl-app[data-toolbar-position="left"] .sl-toolbar-items,
+.sl-app[data-toolbar-position="right"] .sl-toolbar-items {
+    flex-direction: column;
 }
 
 /* Toolbar items */
@@ -265,19 +365,25 @@ body {
     position: absolute;
     display: flex;
     flex-direction: column;
+    min-width: var(--window-min-width);
+    min-height: var(--window-min-height);
+    /* Hover area above window for header trigger */
+    padding-top: var(--window-header-height);
+}
+
+/* Window body wrapper - the visible window */
+.sl-window-body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: var(--border-radius);
     box-shadow: var(--glow);
-    min-width: var(--window-min-width);
-    min-height: var(--window-min-height);
-    transition: box-shadow var(--transition);
     overflow: hidden;
-}
-
-.sl-window:hover,
-.sl-window.focused {
-    box-shadow: var(--glow), 0 8px 32px var(--shadow);
+    transition: border-radius 0.15s ease;
 }
 
 .sl-window.focused {
@@ -290,18 +396,46 @@ body {
     border: none;
 }
 
-/* Window header */
+/* Window header - in padding area above body, fades in on hover */
 .sl-window-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 0 8px;
     height: var(--window-header-height);
     background: var(--window-header);
-    border-bottom: 1px solid var(--border);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    box-shadow: var(--glow);
+    /* Clip shadow so it doesn't cast onto body below */
+    clip-path: inset(-100px -100px 0 -100px);
     cursor: move;
     user-select: none;
-    flex-shrink: 0;
+    z-index: 1;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.sl-window:hover .sl-window-header,
+.sl-window.dragging .sl-window-header,
+.sl-window.resizing .sl-window-header {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Square corners on body when header visible - looks like one window */
+.sl-window:hover .sl-window-body,
+.sl-window.dragging .sl-window-body,
+.sl-window.resizing .sl-window-body {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-top-color: var(--window-header);
 }
 
 .sl-window-title {
@@ -323,6 +457,7 @@ body {
 .sl-window-controls {
     display: flex;
     gap: 4px;
+    flex-shrink: 0;
 }
 
 .sl-window-btn {
@@ -359,13 +494,20 @@ body {
 
 /* Minimized windows */
 .sl-window.minimized {
-    height: var(--window-header-height) !important;
-    min-height: var(--window-header-height) !important;
-    overflow: hidden;
+    padding-top: 0;
 }
 
-.sl-window.minimized .sl-window-content {
+.sl-window.minimized .sl-window-body {
     display: none;
+}
+
+.sl-window.minimized .sl-window-header {
+    position: relative;
+    opacity: 1;
+    pointer-events: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    box-shadow: var(--glow);
 }
 
 /* ========================================
@@ -553,6 +695,11 @@ body {
 
 .sl-user-menu {
     min-width: 200px;
+}
+
+/* Utility */
+.sl-fullwidth {
+    width: 100%;
 }
 
 .sl-menu-header {
@@ -895,6 +1042,48 @@ body {
     border-bottom: 1px solid var(--border);
     border-right: none;
     order: -1; /* Ensure toolbar is first */
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Hide header on mobile */
+.sl-app[data-mode="mobile"] .sl-toolbar-header {
+    display: none !important;
+}
+
+/* Mobile toolbar items container - horizontal scroll */
+.sl-app[data-mode="mobile"] .sl-toolbar-items {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 2px;
+}
+
+/* Overflow indicator for mobile */
+.sl-toolbar-overflow {
+    display: none;
+}
+
+.sl-app[data-mode="mobile"] .sl-toolbar.has-overflow .sl-toolbar-overflow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 40px;
+    background: linear-gradient(to right, transparent, var(--toolbar-bg) 50%);
+    color: var(--text-muted);
+    position: sticky;
+    right: 0;
+    flex-shrink: 0;
+}
+
+.sl-app[data-mode="mobile"][data-orientation="landscape"] .sl-toolbar.has-overflow .sl-toolbar-overflow {
+    width: 40px;
+    height: 32px;
+    background: linear-gradient(to bottom, transparent, var(--toolbar-bg) 50%);
+    bottom: 0;
+    right: auto;
 }
 
 /* Landscape: toolbar at left */
@@ -909,6 +1098,13 @@ body {
     border-right: 1px solid var(--border);
     border-bottom: none;
     order: -1; /* Ensure toolbar is first */
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+.sl-app[data-mode="mobile"][data-orientation="landscape"] .sl-toolbar-items {
+    flex-direction: column;
 }
 
 /* Mobile toolbar items */
@@ -944,7 +1140,12 @@ body {
 }
 
 /* Designer theme: neumorphic shadows */
-[data-theme="designer"] .sl-window {
+[data-theme="designer"] .sl-window-body {
+    box-shadow: var(--neumorphic-raised);
+    border: none;
+}
+
+[data-theme="designer"] .sl-window-header {
     box-shadow: var(--neumorphic-raised);
     border: none;
 }

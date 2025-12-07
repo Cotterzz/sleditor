@@ -312,16 +312,37 @@ const SLUI = (function() {
     }
     
     function buildToolbar() {
+        // Wrapper (for layered float mode)
+        const wrapper = document.createElement('div');
+        wrapper.className = 'sl-toolbar-wrapper';
+        wrapper.id = 'sl-toolbar-wrapper';
+        
+        // Header (positioned above toolbar in float mode)
+        const header = document.createElement('div');
+        header.className = 'sl-toolbar-header';
+        header.id = 'sl-toolbar-header';
+        header.innerHTML = `
+            <span class="sl-toolbar-header-icon">🔧</span>
+            <span class="sl-toolbar-header-title" data-i18n="toolbar.title">${t('toolbar.title')}</span>
+        `;
+        wrapper.appendChild(header);
+        
+        // Toolbar body
         const toolbar = document.createElement('div');
         toolbar.className = 'sl-toolbar';
         toolbar.id = 'sl-toolbar';
+        wrapper.appendChild(toolbar);
         
-        // Will be populated by registerPanel
+        // Items container (for grid layout in float mode)
+        const items = document.createElement('div');
+        items.className = 'sl-toolbar-items';
+        items.id = 'sl-toolbar-items';
+        toolbar.appendChild(items);
         
-        // Spacer
+        // Spacer (pushed to items container by registerPanel)
         const spacer = document.createElement('div');
         spacer.className = 'sl-toolbar-spacer';
-        toolbar.appendChild(spacer);
+        items.appendChild(spacer);
         
         // Divider
         const divider = document.createElement('div');
@@ -339,7 +360,115 @@ const SLUI = (function() {
         userBtn.addEventListener('click', toggleUserMenu);
         toolbar.appendChild(userBtn);
         
-        return toolbar;
+        // Setup floating toolbar drag (drag header moves wrapper)
+        setupToolbarDrag(wrapper, header);
+        
+        return wrapper;
+    }
+    
+    function setupToolbarDrag(wrapper, header) {
+        let isDragging = false;
+        let startX, startY, startLeft, startTop;
+        
+        header.addEventListener('mousedown', (e) => {
+            if (state.toolbarPosition !== 'float') return;
+            isDragging = true;
+            
+            // Get wrapper's current position (includes header in padding)
+            const wrapperRect = wrapper.getBoundingClientRect();
+            
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = wrapperRect.left;
+            startTop = wrapperRect.top;
+            
+            // Set exact position, remove transform
+            wrapper.style.left = `${startLeft}px`;
+            wrapper.style.top = `${startTop}px`;
+            wrapper.style.transform = 'none';
+            
+            wrapper.classList.add('dragging');
+            e.preventDefault();
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            
+            wrapper.style.left = `${startLeft + dx}px`;
+            wrapper.style.top = `${startTop + dy}px`;
+            wrapper.style.transform = 'none';
+        });
+        
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                wrapper.classList.remove('dragging');
+            }
+        });
+        
+        // Touch support
+        header.addEventListener('touchstart', (e) => {
+            if (state.toolbarPosition !== 'float') return;
+            isDragging = true;
+            
+            const touch = e.touches[0];
+            const wrapperRect = wrapper.getBoundingClientRect();
+            startX = touch.clientX;
+            startY = touch.clientY;
+            startLeft = wrapperRect.left;
+            startTop = wrapperRect.top;
+            
+            // Set position and clear centering
+            wrapper.style.left = `${startLeft}px`;
+            wrapper.style.top = `${startTop}px`;
+            wrapper.style.transform = 'none';
+            
+            wrapper.classList.add('dragging');
+        }, { passive: true });
+        
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            
+            const touch = e.touches[0];
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+            
+            wrapper.style.left = `${startLeft + dx}px`;
+            wrapper.style.top = `${startTop + dy}px`;
+            wrapper.style.transform = 'none';
+        }, { passive: true });
+        
+        document.addEventListener('touchend', () => {
+            if (isDragging) {
+                isDragging = false;
+                wrapper.classList.remove('dragging');
+            }
+        });
+    }
+    
+    function checkToolbarOverflow() {
+        const toolbar = document.getElementById('sl-toolbar');
+        const itemsContainer = document.getElementById('sl-toolbar-items');
+        if (!toolbar || !itemsContainer) return;
+        
+        // Count items (excluding spacer)
+        const items = itemsContainer.querySelectorAll('.sl-toolbar-item');
+        const itemCount = items.length;
+        
+        // Check for overflow on mobile
+        if (state.deviceMode === 'mobile') {
+            const isOverflow = itemsContainer.scrollWidth > itemsContainer.clientWidth ||
+                               itemsContainer.scrollHeight > itemsContainer.clientHeight;
+            toolbar.classList.toggle('has-overflow', isOverflow);
+        }
+        
+        // For float mode, add class if few items (single column)
+        if (state.toolbarPosition === 'float') {
+            itemsContainer.classList.toggle('few-items', itemCount <= 6);
+        }
     }
     
     function createToolbarItem(icon, id, title) {
@@ -438,6 +567,10 @@ const SLUI = (function() {
         header.appendChild(controls);
         win.appendChild(header);
         
+        // Body wrapper (contains content, has margin for header space)
+        const body = document.createElement('div');
+        body.className = 'sl-window-body';
+        
         // Content
         const contentEl = document.createElement('div');
         contentEl.className = 'sl-window-content';
@@ -448,7 +581,8 @@ const SLUI = (function() {
                 contentEl.appendChild(content);
             }
         }
-        win.appendChild(contentEl);
+        body.appendChild(contentEl);
+        win.appendChild(body);
         
         // Resize handles
         if (resizable) {
@@ -472,6 +606,9 @@ const SLUI = (function() {
         setupWindowDrag(win, header);
         if (resizable) setupWindowResize(win);
         setupWindowFocus(win);
+        
+        // Always bring new windows to front
+        bringToFront(id);
         
         return win;
     }
@@ -796,11 +933,11 @@ const SLUI = (function() {
                 </div>
                 <div class="sl-settings-group">
                     <label class="sl-settings-label" data-i18n="panels.profile.displayName">${t('panels.profile.displayName')}</label>
-                    <input type="text" class="sl-input" id="sl-profile-name-input" value="${state.user.name}" style="width: 100%;">
+                    <input type="text" class="sl-input sl-fullwidth" id="sl-profile-name-input" value="${state.user.name}">
                 </div>
                 <div class="sl-settings-group">
                     <label class="sl-settings-label" data-i18n="panels.profile.status">${t('panels.profile.status')}</label>
-                    <select class="sl-select" style="width: 100%;">
+                    <select class="sl-select sl-fullwidth">
                         <option selected>${t('panels.profile.statusOptions.online')}</option>
                         <option>${t('panels.profile.statusOptions.away')}</option>
                         <option>${t('panels.profile.statusOptions.busy')}</option>
@@ -1188,10 +1325,10 @@ const SLUI = (function() {
         // Skip toolbar for hidden panels
         if (!showInToolbar) return;
         
-        // Add to toolbar
-        const toolbar = document.getElementById('sl-toolbar');
-        if (toolbar) {
-            const spacer = toolbar.querySelector('.sl-toolbar-spacer');
+        // Add to toolbar items container
+        const itemsContainer = document.getElementById('sl-toolbar-items');
+        if (itemsContainer) {
+            const spacer = itemsContainer.querySelector('.sl-toolbar-spacer');
             const btn = createToolbarItem(icon, id, t(`panels.${id}.title`) || title);
             
             btn.addEventListener('click', () => {
@@ -1230,7 +1367,10 @@ const SLUI = (function() {
                 }
             });
             
-            toolbar.insertBefore(btn, spacer);
+            itemsContainer.insertBefore(btn, spacer);
+            
+            // Check for overflow after adding item
+            setTimeout(checkToolbarOverflow, 0);
         }
     }
     
