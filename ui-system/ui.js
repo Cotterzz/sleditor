@@ -43,7 +43,9 @@ const SLUI = (function() {
     // ========================================
     
     function isMobileDevice() {
-        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const uaMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const touchNarrow = (navigator.maxTouchPoints || 0) > 0 && window.innerWidth < 900;
+        return uaMobile || touchNarrow;
     }
     
     function detectOrientation() {
@@ -74,6 +76,8 @@ const SLUI = (function() {
         // Rebuild mobile zones if needed
         if (state.deviceMode === 'mobile') {
             renderMobileZones();
+            // Sync toolbar state to mobile zones
+            updateAllToolbarItems();
         }
     }
     
@@ -494,6 +498,9 @@ const SLUI = (function() {
     // ========================================
     
     function createWindow(options) {
+        // In mobile mode we do not create desktop-style windows
+        if (state.deviceMode === 'mobile') return null;
+        
         const {
             id,
             title = 'Window',
