@@ -825,6 +825,9 @@ const SLUI = (function() {
         // Mount to body
         document.body.innerHTML = '';
         document.body.appendChild(app);
+        
+        // Ensure toolbar reflects current state (especially after rebuilds)
+        updateAllToolbarItems();
     }
     
     // ========================================
@@ -1211,6 +1214,7 @@ const SLUI = (function() {
         
         // Update all toolbar items to reflect current state
         updateAllToolbarItems();
+        updateToolbarItem(panelId, true, true, false);
         focusZone(targetZone);
         
         // Auto-focus empty zone for next addition

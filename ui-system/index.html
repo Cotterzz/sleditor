@@ -89,8 +89,9 @@
     
     <!-- Demo Application -->
     <script>
-        // Set timestamped title for the demo page
-        document.title = `SL Editor - UI System Prototype (${new Date().toLocaleString()})`;
+        // Set timestamped title based on file last modified time
+        const lastMod = new Date(document.lastModified).toLocaleString();
+        document.title = `SL Editor - UI System Prototype (${lastMod})`;
         
         // Initialize UI system
         SLUI.init().then(() => {

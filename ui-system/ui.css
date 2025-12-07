@@ -1125,6 +1125,11 @@ body {
     display: none !important;
 }
 
+/* Mobile: hide zone headers to save space */
+.sl-app[data-mode="mobile"] .sl-zone-header {
+    display: none;
+}
+
 /* ========================================
    THEME-SPECIFIC OVERRIDES
    ======================================== */
