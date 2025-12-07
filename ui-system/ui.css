@@ -1118,6 +1118,7 @@ body {
 /* Mobile: remove window headers to save space */
 .sl-app[data-mode="mobile"] .sl-window {
     padding-top: 0;
+    display: none !important; /* hide desktop-style windows on mobile */
 }
 
 .sl-app[data-mode="mobile"] .sl-window-header {

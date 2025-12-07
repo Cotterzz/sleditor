@@ -260,13 +260,15 @@
                 createContent: SLUI.createSettingsContent
             });
             
-            // Open a couple of demo panels by default
-            setTimeout(() => {
-                document.querySelector('[data-panel-id="editor"]')?.click();
+            // Open a couple of demo panels by default (desktop only)
+            if (SLUI.state.deviceMode !== 'mobile') {
                 setTimeout(() => {
-                    document.querySelector('[data-panel-id="preview"]')?.click();
-                }, 200);
-            }, 300);
+                    document.querySelector('[data-panel-id="editor"]')?.click();
+                    setTimeout(() => {
+                        document.querySelector('[data-panel-id="preview"]')?.click();
+                    }, 200);
+                }, 300);
+            }
             
             // Log device info
             console.log('Device mode:', SLUI.state.deviceMode);

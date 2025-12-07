@@ -1264,35 +1264,62 @@ const SLUI = (function() {
         let isDragging = false;
         let startPos, startSizes;
         
-        divider.addEventListener('touchstart', (e) => {
+        const beginDrag = (pos) => {
             isDragging = true;
-            const touch = e.touches[0];
             const isLandscape = state.mobileOrientation === 'landscape';
-            startPos = isLandscape ? touch.clientX : touch.clientY;
-            
+            startPos = isLandscape ? pos.x : pos.y;
             const zones = document.querySelectorAll('.sl-mobile-zone');
             startSizes = Array.from(zones).map(z => isLandscape ? z.offsetWidth : z.offsetHeight);
-        }, { passive: true });
+        };
         
-        document.addEventListener('touchmove', (e) => {
+        const moveDrag = (pos) => {
             if (!isDragging) return;
-            
-            const touch = e.touches[0];
             const isLandscape = state.mobileOrientation === 'landscape';
-            const currentPos = isLandscape ? touch.clientX : touch.clientY;
+            const currentPos = isLandscape ? pos.x : pos.y;
             const delta = currentPos - startPos;
             
             const zones = document.querySelectorAll('.sl-mobile-zone');
+            if (zones.length < 2) return;
+            
             const total = startSizes[0] + startSizes[1];
             const newSize1 = Math.max(100, Math.min(total - 100, startSizes[0] + delta));
             const newSize2 = total - newSize1;
             
             zones[0].style.flex = `0 0 ${newSize1}px`;
             zones[1].style.flex = `0 0 ${newSize2}px`;
+        };
+        
+        const endDrag = () => {
+            isDragging = false;
+        };
+        
+        divider.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            beginDrag({ x: touch.clientX, y: touch.clientY });
+        }, { passive: true });
+        
+        document.addEventListener('touchmove', (e) => {
+            const touch = e.touches[0];
+            moveDrag({ x: touch.clientX, y: touch.clientY });
         }, { passive: true });
         
         document.addEventListener('touchend', () => {
-            isDragging = false;
+            endDrag();
+        });
+        
+        divider.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            beginDrag({ x: e.clientX, y: e.clientY });
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            moveDrag({ x: e.clientX, y: e.clientY });
+        });
+        
+        document.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            endDrag();
         });
     }
     
