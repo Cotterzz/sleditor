@@ -584,7 +584,7 @@ export async function loadSotwEntries() {
  * Load user's own shaders
  * @returns {Object} { success, shaders, error }
  */
-export async function loadMyShaders() {
+export async function loadMyShaders(limit = 20, offset = 0) {
     if (!supabase) {
         return { success: false, error: 'Supabase not initialized' };
     }
@@ -598,7 +598,8 @@ export async function loadMyShaders() {
             .from('shaders')
             .select('*')
             .eq('user_id', state.currentUser.id)
-            .order('updated_at', { ascending: false });
+            .order('updated_at', { ascending: false })
+            .range(offset, offset + limit);
 
         if (result.error) throw result.error;
         
@@ -606,7 +607,7 @@ export async function loadMyShaders() {
         const estimatedBytes = JSON.stringify(result.data).length;
         trackBandwidth('api', estimatedBytes);
 
-        return { success: true, shaders: result.data };
+        return { success: true, shaders: result.data, hasMore: result.data.length >= limit };
 
     } catch (error) {
         console.error('Load my shaders error:', error);
@@ -615,10 +616,12 @@ export async function loadMyShaders() {
 }
 
 /**
- * Load public/community shaders (published by users)
- * @returns {Object} { success, shaders, error }
+ * Load public/community shaders (published by users) with pagination
+ * @param {number} limit - Number of shaders to fetch (default 20)
+ * @param {number} offset - Offset for pagination (default 0)
+ * @returns {Object} { success, shaders, hasMore, error }
  */
-export async function loadPublicShaders() {
+export async function loadPublicShaders(limit = 20, offset = 0) {
     if (!supabase) {
         return { success: false, error: 'Supabase not initialized' };
     }
@@ -629,7 +632,7 @@ export async function loadPublicShaders() {
             .select('*')
             .eq('visibility', 'published')
             .order('created_at', { ascending: false })
-            .limit(50); // Limit to 50 most recent
+            .range(offset, offset + limit);
 
         if (result.error) throw result.error;
         
@@ -637,8 +640,11 @@ export async function loadPublicShaders() {
         const estimatedBytes = JSON.stringify(result.data).length;
         trackBandwidth('api', estimatedBytes);
 
-        // JS shaders are now safe with sandboxed execution (AudioWorklet)
-        return { success: true, shaders: result.data };
+        // Check if there are more results (if we got full page, there might be more)
+        const hasMore = result.data.length === limit + 1;
+        const shaders = hasMore ? result.data.slice(0, limit) : result.data;
+
+        return { success: true, shaders, hasMore: result.data.length >= limit };
 
     } catch (error) {
         console.error('Load public shaders error:', error);
