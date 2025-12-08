@@ -7,6 +7,7 @@
     --text-secondary: #858585;
     --border-color: #111111;
     --shadow-color: #1e1e1e;
+    --accent-color: #0e639c;
 }
 
 body.light-mode {
@@ -18,6 +19,7 @@ body.light-mode {
     --text-secondary: #6e6e6e;
     --border-color: #8888cc;
     --shadow-color: #8888cc;
+    --accent-color: #0056b3;
 }
 
 /* ============================================================================
@@ -877,6 +879,17 @@ canvas.render-smooth {
 
 .comment-item:hover {
     background: var(--bg-primary) !important;
+}
+
+.comment-text {
+    color: var(--text-primary);
+}
+
+body.light-mode .comment-text,
+body.light-mode .comment-text p,
+body.light-mode .comment-text li,
+body.light-mode .comment-text span {
+    color: #1a1a2e !important;
 }
 
 .comment-text p {

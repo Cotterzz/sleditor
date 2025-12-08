@@ -1334,6 +1334,30 @@ export async function deleteComment(commentId) {
     }
 }
 
+export async function updateComment(commentId, newContent) {
+    if (!supabase || !commentId || !newContent || !state.currentUser) {
+        return { success: false, error: 'Missing parameters or not logged in' };
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('shader_comments')
+            .update({ content: newContent })
+            .eq('id', commentId)
+            .eq('user_id', state.currentUser.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        console.log('✓ Comment updated:', commentId);
+        return { success: true, comment: data };
+    } catch (error) {
+        console.error('Failed to update comment:', error);
+        return { success: false, error: error.message };
+    }
+}
+
 let commentsSubscription = null;
 
 export function subscribeToComments(shaderId, onCommentChange) {

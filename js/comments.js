@@ -168,8 +168,17 @@ function renderComment(comment, depth) {
         actions.appendChild(replyBtn);
     }
     
-    // Delete button (if owner)
+    // Edit and Delete buttons (if owner)
     if (state.currentUser && comment.user_id === state.currentUser.id) {
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '✏️';
+        editBtn.title = 'Edit';
+        editBtn.style.cssText = 'background: none; border: none; cursor: pointer; font-size: 14px; opacity: 0.6; transition: opacity 0.2s;';
+        editBtn.onmouseover = () => editBtn.style.opacity = '1';
+        editBtn.onmouseout = () => editBtn.style.opacity = '0.6';
+        editBtn.onclick = () => startEditComment(comment);
+        actions.appendChild(editBtn);
+        
         const deleteBtn = document.createElement('button');
         deleteBtn.textContent = '🗑️';
         deleteBtn.title = 'Delete';
@@ -337,8 +346,133 @@ async function deleteComment(commentId) {
     
     if (!result.success) {
         alert('Failed to delete comment: ' + result.error);
+        return;
     }
-    // Real-time subscription will auto-refresh the list
+    
+    // Remove the comment element from the DOM immediately
+    const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
+    if (commentElement) {
+        commentElement.remove();
+    }
+    
+    // Also remove from local cache
+    const index = currentShaderComments.findIndex(c => c.id === commentId);
+    if (index !== -1) {
+        currentShaderComments.splice(index, 1);
+    }
+}
+
+// Regex to match and remove the "(edited)" marker
+const EDITED_MARKER = /\n*<small>\(edited\)<\/small>$/;
+const EDITED_SUFFIX = '\n\n<small>(edited)</small>';
+
+/**
+ * Start editing a comment
+ */
+function startEditComment(comment) {
+    const commentElement = document.querySelector(`[data-comment-id="${comment.id}"]`);
+    if (!commentElement) return;
+    
+    const textDiv = commentElement.querySelector('.comment-text');
+    if (!textDiv) return;
+    
+    // Get raw content (strip "(edited)" marker if present)
+    let rawContent = comment.comment_text || '';
+    rawContent = rawContent.replace(EDITED_MARKER, '');
+    
+    // Store original content for cancel
+    textDiv.dataset.originalContent = comment.comment_text;
+    
+    // Replace with edit form
+    textDiv.innerHTML = `
+        <textarea style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid var(--border-color); 
+                         border-radius: 4px; background: var(--bg-secondary); color: var(--text-primary); 
+                         font-size: 13px; font-family: inherit; resize: vertical;">${escapeHtml(rawContent)}</textarea>
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <button class="save-edit-btn" style="padding: 6px 12px; background: var(--accent-color); color: white; 
+                    border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Save</button>
+            <button class="cancel-edit-btn" style="padding: 6px 12px; background: var(--bg-tertiary); 
+                    color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px; 
+                    cursor: pointer; font-size: 12px;">Cancel</button>
+        </div>
+    `;
+    
+    // Focus textarea
+    const textarea = textDiv.querySelector('textarea');
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    
+    // Event handlers
+    textDiv.querySelector('.save-edit-btn').onclick = () => saveCommentEdit(comment.id, textarea.value);
+    textDiv.querySelector('.cancel-edit-btn').onclick = () => cancelCommentEdit(comment.id, textDiv.dataset.originalContent);
+}
+
+/**
+ * Save edited comment
+ */
+async function saveCommentEdit(commentId, newContent) {
+    const trimmedContent = newContent.trim();
+    if (!trimmedContent) {
+        alert('Comment cannot be empty');
+        return;
+    }
+    
+    // Strip any existing "(edited)" marker and add fresh one
+    let contentToSave = trimmedContent.replace(EDITED_MARKER, '');
+    contentToSave += EDITED_SUFFIX;
+    
+    const result = await backend.updateComment(commentId, contentToSave);
+    
+    if (!result.success) {
+        alert('Failed to update comment: ' + result.error);
+        return;
+    }
+    
+    // Update local cache
+    const comment = currentShaderComments.find(c => c.id === commentId);
+    if (comment) {
+        comment.comment_text = contentToSave;
+        comment.content = contentToSave;
+    }
+    
+    // Update DOM
+    const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
+    if (commentElement) {
+        const textDiv = commentElement.querySelector('.comment-text');
+        if (textDiv) {
+            if (typeof marked !== 'undefined') {
+                textDiv.innerHTML = marked.parse(contentToSave);
+            } else {
+                textDiv.textContent = contentToSave;
+            }
+        }
+    }
+}
+
+/**
+ * Cancel comment edit
+ */
+function cancelCommentEdit(commentId, originalContent) {
+    const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`);
+    if (!commentElement) return;
+    
+    const textDiv = commentElement.querySelector('.comment-text');
+    if (textDiv) {
+        if (typeof marked !== 'undefined') {
+            textDiv.innerHTML = marked.parse(originalContent || '');
+        } else {
+            textDiv.textContent = originalContent || '';
+        }
+    }
+}
+
+/**
+ * Escape HTML for safe insertion into textarea
+ */
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 /**
