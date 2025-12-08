@@ -289,19 +289,198 @@ function setupUI() {
     const profileSaveBtn = document.getElementById('profileSaveBtn');
     const profileCancelBtn = document.getElementById('profileCancelBtn');
     const userProfileBtn = document.getElementById('userProfileBtn');
+    const notificationBadge = document.getElementById('notificationBadge');
+    const notificationsList = document.getElementById('notificationsList');
+    const profileTabNotifications = document.getElementById('profileTabNotifications');
+    const profileTabSettings = document.getElementById('profileTabSettings');
+    const notificationsContent = document.getElementById('notificationsContent');
+    const profileSettingsContent = document.getElementById('profileSettingsContent');
+    const clearNotificationsBtn = document.getElementById('clearNotificationsBtn');
+    const closeNotificationsBtn = document.getElementById('closeNotificationsBtn');
     
     let pendingAvatarFile = null; // Store file to upload on save
     let currentAvatarUrl = null;  // Track current avatar URL for deletion
     
+    // Tab switching
+    function switchProfileTab(tab) {
+        if (tab === 'notifications') {
+            profileTabNotifications.style.borderBottomColor = 'var(--accent-color)';
+            profileTabNotifications.style.color = 'var(--text-primary)';
+            profileTabSettings.style.borderBottomColor = 'transparent';
+            profileTabSettings.style.color = 'var(--text-secondary)';
+            notificationsContent.style.display = 'block';
+            profileSettingsContent.style.display = 'none';
+        } else {
+            profileTabSettings.style.borderBottomColor = 'var(--accent-color)';
+            profileTabSettings.style.color = 'var(--text-primary)';
+            profileTabNotifications.style.borderBottomColor = 'transparent';
+            profileTabNotifications.style.color = 'var(--text-secondary)';
+            notificationsContent.style.display = 'none';
+            profileSettingsContent.style.display = 'block';
+        }
+    }
+    
+    profileTabNotifications.addEventListener('click', () => switchProfileTab('notifications'));
+    profileTabSettings.addEventListener('click', () => switchProfileTab('settings'));
+    
+    // Load and render notifications
+    async function loadNotifications() {
+        notificationsList.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">Loading...</div>';
+        
+        const result = await backend.getNotifications(50);
+        
+        if (!result.success || result.notifications.length === 0) {
+            notificationsList.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">No notifications yet</div>';
+            return;
+        }
+        
+        notificationsList.innerHTML = '';
+        
+        for (const notif of result.notifications) {
+            const item = document.createElement('div');
+            item.style.cssText = `
+                padding: 12px;
+                border-bottom: 1px solid var(--border-color);
+                cursor: pointer;
+                transition: background 0.2s;
+                ${notif.read ? 'opacity: 0.6;' : ''}
+            `;
+            item.addEventListener('mouseenter', () => item.style.background = 'var(--bg-secondary)');
+            item.addEventListener('mouseleave', () => item.style.background = 'transparent');
+            
+            // Build notification text
+            let icon = '🔔';
+            let text = '';
+            switch (notif.type) {
+                case 'like':
+                    icon = '❤️';
+                    text = `<strong>${notif.source_user_name || 'Someone'}</strong> liked your shader <strong>${notif.shader_title || 'Untitled'}</strong>`;
+                    break;
+                case 'comment':
+                    icon = '💬';
+                    text = `<strong>${notif.source_user_name || 'Someone'}</strong> commented on <strong>${notif.shader_title || 'Untitled'}</strong>`;
+                    break;
+                case 'reply':
+                    icon = '↩️';
+                    text = `<strong>${notif.source_user_name || 'Someone'}</strong> replied to your comment on <strong>${notif.shader_title || 'Untitled'}</strong>`;
+                    break;
+                case 'achievement':
+                    icon = '🏆';
+                    text = notif.message || 'You earned an achievement!';
+                    break;
+                default:
+                    text = notif.message || 'New notification';
+            }
+            
+            // Time ago
+            const timeAgo = getTimeAgo(new Date(notif.created_at));
+            
+            item.innerHTML = `
+                <div style="display: flex; gap: 10px; align-items: flex-start;">
+                    <span style="font-size: 18px;">${icon}</span>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 13px; color: var(--text-primary); line-height: 1.4;">${text}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${timeAgo}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Click to open shader (and switch to comments for comment/reply notifications)
+            if (notif.shader_id) {
+                item.addEventListener('click', async () => {
+                    profileModal.style.display = 'none';
+                    
+                    // Navigate to shader
+                    window.location.hash = `#id=${notif.shader_id}`;
+                    
+                    // For comment/reply notifications, switch to comments tab after shader loads
+                    if (notif.type === 'comment' || notif.type === 'reply') {
+                        // Wait for shader to load, then switch to comments
+                        setTimeout(() => {
+                            const ui = window.ui;
+                            if (ui && ui.switchTopLevelPanel) {
+                                ui.switchTopLevelPanel('comments');
+                            }
+                        }, 500);
+                    }
+                });
+            }
+            
+            notificationsList.appendChild(item);
+        }
+    }
+    
+    // Helper: time ago
+    function getTimeAgo(date) {
+        const seconds = Math.floor((new Date() - date) / 1000);
+        if (seconds < 60) return 'just now';
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        if (days < 7) return `${days}d ago`;
+        return date.toLocaleDateString();
+    }
+    
+    // Update notification badge
+    async function updateNotificationBadge() {
+        if (!state.currentUser) {
+            notificationBadge.style.display = 'none';
+            return;
+        }
+        
+        const count = await backend.getUnreadNotificationCount();
+        
+        if (count > 0) {
+            notificationBadge.textContent = count > 99 ? '99+' : count;
+            notificationBadge.style.display = 'inline';
+        } else {
+            notificationBadge.style.display = 'none';
+        }
+    }
+    
+    // Expose for external use
+    window.updateNotificationBadge = updateNotificationBadge;
+    
     // Open profile popup when clicking user name/avatar
-    userProfileBtn.addEventListener('click', () => {
-        // Populate with current values
+    userProfileBtn.addEventListener('click', async () => {
+        // Reset to notifications tab
+        switchProfileTab('notifications');
+        
+        // Populate profile settings with current values
         profileDisplayName.value = state.userDisplayName || '';
         profileAvatarPreview.src = state.userAvatarUrl || 'https://ui-avatars.com/api/?name=User&background=random';
         currentAvatarUrl = state.userProfile?.avatar_url || null;
         pendingAvatarFile = null;
         profileMessage.style.display = 'none';
+        
+        // Show modal
         profileModal.style.display = 'flex';
+        
+        // Load notifications
+        await loadNotifications();
+        
+        // Mark all as read and update badge
+        await backend.markNotificationsRead();
+        notificationBadge.style.display = 'none';
+    });
+    
+    // Clear all notifications
+    clearNotificationsBtn.addEventListener('click', async () => {
+        clearNotificationsBtn.disabled = true;
+        clearNotificationsBtn.textContent = 'Clearing...';
+        
+        await backend.clearAllNotifications();
+        notificationsList.innerHTML = '<div style="text-align: center; padding: 40px; color: var(--text-secondary);">No notifications</div>';
+        
+        clearNotificationsBtn.disabled = false;
+        clearNotificationsBtn.textContent = 'Clear All';
+    });
+    
+    // Close notifications
+    closeNotificationsBtn.addEventListener('click', () => {
+        profileModal.style.display = 'none';
     });
     
     // Hover effect for profile button
