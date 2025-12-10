@@ -158,6 +158,15 @@ function setupUI() {
     document.addEventListener('mousemove', ui.doHelpDrag);
     document.addEventListener('mouseup', ui.stopHelpDrag);
     
+    // Global keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        // Cmd+S (Mac) or Ctrl+S (Windows/Linux) - Save shader
+        if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+            e.preventDefault();
+            document.getElementById('saveShaderBtn')?.click();
+        }
+    });
+    
     // Event listeners
     document.getElementById('playPauseBtn').addEventListener('click', ui.togglePlayPause);
     document.getElementById('restartBtn').addEventListener('click', () => ui.restart(true));
