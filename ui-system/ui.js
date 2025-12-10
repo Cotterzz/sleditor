@@ -53,6 +53,10 @@ const SLUI = (function() {
     }
     
     function updateDeviceMode() {
+        // Track previous mode/orientation for remapping
+        const prevMode = state.deviceMode;
+        const prevOrientation = state.mobileOrientation;
+        
         // Check for manual override
         if (state.forceMode) {
             state.deviceMode = state.forceMode;
@@ -75,7 +79,12 @@ const SLUI = (function() {
         
         // Rebuild mobile zones if needed
         if (state.deviceMode === 'mobile') {
+            // If orientation changed, remap existing zone assignments
+            if (prevMode === 'mobile' && prevOrientation && prevOrientation !== state.mobileOrientation) {
+                remapMobileZones(prevOrientation, state.mobileOrientation);
+            }
             renderMobileZones();
+            renderMobileZoneContentsFromState();
             // Sync toolbar state to mobile zones
             updateAllToolbarItems();
         }
@@ -1098,6 +1107,63 @@ const SLUI = (function() {
         
         const isLandscape = state.mobileOrientation === 'landscape';
         container.dataset.orientation = state.mobileOrientation;
+    }
+    
+    function renderMobileZoneContentsFromState() {
+        const isLandscape = state.mobileOrientation === 'landscape';
+        const zone1Key = isLandscape ? 'left' : 'top';
+        const zone2Key = isLandscape ? 'right' : 'bottom';
+        const zones = [
+            { key: zone1Key, num: 1 },
+            { key: zone2Key, num: 2 }
+        ];
+        
+        zones.forEach(({ key, num }) => {
+            const panelId = state.mobileZones[key];
+            const contentEl = document.getElementById(`sl-zone-${num}-content`);
+            if (!contentEl) return;
+            
+            contentEl.innerHTML = '';
+            
+            if (panelId) {
+                const panel = panels.get(panelId);
+                if (panel && panel.createContent) {
+                    const header = document.createElement('div');
+                    header.className = 'sl-zone-header';
+                    header.innerHTML = `
+                        <span class="sl-zone-icon">${panel.icon}</span>
+                        <span class="sl-zone-title">${t(`panels.${panelId}.title`) || panel.title}</span>
+                        <button class="sl-zone-close" data-panel="${panelId}">×</button>
+                    `;
+                    contentEl.appendChild(header);
+                    
+                    const contentWrapper = document.createElement('div');
+                    contentWrapper.className = 'sl-zone-body';
+                    contentWrapper.appendChild(panel.createContent());
+                    contentEl.appendChild(contentWrapper);
+                    
+                    header.querySelector('.sl-zone-close').addEventListener('click', () => {
+                        closePanelInZone(panelId);
+                    });
+                }
+            }
+        });
+    }
+    
+    function remapMobileZones(prevOrientation, newOrientation) {
+        const oldZones = { ...state.mobileZones };
+        const portraitKeys = { primary: 'top', secondary: 'bottom' };
+        const landscapeKeys = { primary: 'left', secondary: 'right' };
+        
+        const from = prevOrientation === 'portrait' ? portraitKeys : landscapeKeys;
+        const to = newOrientation === 'portrait' ? portraitKeys : landscapeKeys;
+        
+        const primaryPanel = oldZones[from.primary];
+        const secondaryPanel = oldZones[from.secondary];
+        
+        state.mobileZones[to.primary] = primaryPanel || null;
+        state.mobileZones[to.secondary] = secondaryPanel || null;
+        state.mobileZones.focused = to.primary;
     }
     
     function focusZone(zone) {

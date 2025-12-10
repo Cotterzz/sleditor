@@ -89,9 +89,8 @@
     
     <!-- Demo Application -->
     <script>
-        // Set timestamped title based on file last modified time
-        const lastMod = new Date(document.lastModified).toLocaleString();
-        document.title = `SL Editor - UI System Prototype (${lastMod})`;
+        // Keep title static (remove dynamic timestamps)
+        document.title = `SL Editor - UI System Prototype`;
         
         // Initialize UI system
         SLUI.init().then(() => {
