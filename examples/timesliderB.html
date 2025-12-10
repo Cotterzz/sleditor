@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeline Slider Component</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: #16213e;
+            border-radius: 16px;
+            padding: 30px;
+            width: 100%;
+            max-width: 800px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        h2 {
+            color: #e94560;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* Slider Section */
+        .slider-section {
+            background: #0f3460;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .slider-label {
+            color: #fff;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .slider-value {
+            background: #e94560;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .slider-wrapper {
+            position: relative;
+        }
+
+        #valueSlider {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: #1a1a2e;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        #valueSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #e94560;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(233, 69, 96, 0.5);
+            transition: transform 0.2s;
+        }
+
+        #valueSlider::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+
+        #valueSlider:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #valueSlider:disabled::-webkit-slider-thumb {
+            cursor: not-allowed;
+        }
+
+        /* Timeline Section */
+        .timeline-section {
+            background: #0f3460;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .timeline-header {
+            color: #fff;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .time-display {
+            background: #1a1a2e;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        .timeline-container {
+            position: relative;
+            height: 60px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            cursor: pointer;
+            overflow: visible;
+        }
+
+        .timeline-track {
+            position: absolute;
+            top: 50%;
+            left: 10px;
+            right: 10px;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            transform: translateY(-50%);
+        }
+
+        .timeline-progress {
+            position: absolute;
+            top: 50%;
+            left: 10px;
+            height: 4px;
+            background: linear-gradient(90deg, #e94560, #ff6b6b);
+            border-radius: 2px;
+            transform: translateY(-50%);
+            width: 0%;
+            pointer-events: none;
+        }
+
+        .playhead {
+            position: absolute;
+            top: 5px;
+            bottom: 5px;
+            width: 2px;
+            background: #fff;
+            transform: translateX(-50%);
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        .playhead::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 8px solid #fff;
+        }
+
+        .keyframe {
+            position: absolute;
+            top: 50%;
+            width: 16px;
+            height: 16px;
+            background: #4ecca3;
+            border: 2px solid #fff;
+            transform: translate(-50%, -50%) rotate(45deg);
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .keyframe:hover {
+            transform: translate(-50%, -50%) rotate(45deg) scale(1.2);
+            background: #7effc9;
+        }
+
+        .keyframe.selected {
+            background: #e94560;
+            box-shadow: 0 0 15px rgba(233, 69, 96, 0.7);
+        }
+
+        .keyframe.selected:hover {
+            background: #ff6b6b;
+        }
+
+        /* Time markers */
+        .time-markers {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 10px 0;
+            color: #666;
+            font-size: 11px;
+            font-family: monospace;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-play {
+            background: #4ecca3;
+            color: #1a1a2e;
+        }
+
+        .btn-play:hover {
+            background: #7effc9;
+            transform: translateY(-2px);
+        }
+
+        .btn-play.playing {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .btn-reset {
+            background: #333;
+            color: #fff;
+        }
+
+        .btn-reset:hover {
+            background: #444;
+            transform: translateY(-2px);
+        }
+
+        .btn-delete {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .btn-delete:hover {
+            background: #ff6b6b;
+            transform: translateY(-2px);
+        }
+
+        .btn-delete:disabled {
+            background: #333;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Info */
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            color: #888;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .info strong {
+            color: #4ecca3;
+        }
+
+        /* Editing indicator */
+        .editing-indicator {
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #e94560;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🎬 Timeline Keyframe Editor</h2>
+        
+        <div class="slider-section">
+            <div class="slider-label">
+                <span>Value</span>
+                <span class="slider-value" id="sliderValueDisplay">50</span>
+            </div>
+            <div class="slider-wrapper">
+                <input type="range" id="valueSlider" min="0" max="100" value="50">
+            </div>
+        </div>
+
+        <div class="timeline-section">
+            <div class="timeline-header">
+                <span>Timeline (60 seconds)</span>
+                <span class="time-display" id="timeDisplay">00:00.0</span>
+            </div>
+            <div class="timeline-container" id="timeline">
+                <div class="timeline-track"></div>
+                <div class="timeline-progress" id="timelineProgress"></div>
+                <div class="playhead" id="playhead" style="left: 10px;"></div>
+                <div id="keyframesContainer"></div>
+            </div>
+            <div class="time-markers">
+                <span>0:00</span>
+                <span>0:15</span>
+                <span>0:30</span>
+                <span>0:45</span>
+                <span>1:00</span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="btn-play" id="playBtn">
+                <span id="playIcon">▶</span>
+                <span id="playText">Play</span>
+            </button>
+            <button class="btn-reset" id="resetBtn">
+                ⏮ Reset
+            </button>
+            <button class="btn-delete" id="deleteBtn" disabled>
+                🗑 Delete Keyframe
+            </button>
+        </div>
+
+        <div class="info">
+            <strong>Instructions:</strong><br>
+            • Click on the timeline to add keyframes<br>
+            • Click a keyframe to select it, then adjust the slider<br>
+            • New keyframes auto-capture the interpolated value<br>
+            • Cannot edit while playing
+        </div>
+    </div>
+
+    <script>
+        // State
+        const DURATION = 60; // seconds
+        let keyframes = [{ time: 0, value: 50 }]; // Default keyframe at start
+        let selectedKeyframeIndex = 0;
+        let isPlaying = false;
+        let currentTime = 0;
+        let animationId = null;
+        let lastTimestamp = null;
+
+        // DOM Elements
+        const timeline = document.getElementById('timeline');
+        const playhead = document.getElementById('playhead');
+        const timelineProgress = document.getElementById('timelineProgress');
+        const keyframesContainer = document.getElementById('keyframesContainer');
+        const valueSlider = document.getElementById('valueSlider');
+        const sliderValueDisplay = document.getElementById('sliderValueDisplay');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const playBtn = document.getElementById('playBtn');
+        const playIcon = document.getElementById('playIcon');
+        const playText = document.getElementById('playText');
+        const resetBtn = document.getElementById('resetBtn');
+        const deleteBtn = document.getElementById('deleteBtn');
+
+        // Utility Functions
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max);
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            const ms = Math.floor((seconds % 1) * 10);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms}`;
+        }
+
+        function timeToPixels(time) {
+            const trackWidth = timeline.offsetWidth - 20; // Account for padding
+            return 10 + (time / DURATION) * trackWidth;
+        }
+
+        function pixelsToTime(pixels) {
+            const trackWidth = timeline.offsetWidth - 20;
+            return clamp(((pixels - 10) / trackWidth) * DURATION, 0, DURATION);
+        }
+
+        // Get interpolated value at a specific time
+        function getValueAtTime(time) {
+            // Sort keyframes by time
+            const sorted = [...keyframes].sort((a, b) => a.time - b.time);
+            
+            // Edge cases
+            if (sorted.length === 0) return 50;
+            if (sorted.length === 1) return sorted[0].value;
+            if (time <= sorted[0].time) return sorted[0].value;
+            if (time >= sorted[sorted.length - 1].time) return sorted[sorted.length - 1].value;
+            
+            // Find surrounding keyframes
+            let before = sorted[0];
+            let after = sorted[sorted.length - 1];
+            
+            for (let i = 0; i < sorted.length - 1; i++) {
+                if (sorted[i].time <= time && sorted[i + 1].time >= time) {
+                    before = sorted[i];
+                    after = sorted[i + 1];
+                    break;
+                }
+            }
+            
+            // Interpolate
+            const t = (time - before.time) / (after.time - before.time);
+            return lerp(before.value, after.value, t);
+        }
+
+        // Render keyframes on timeline
+        function renderKeyframes() {
+            keyframesContainer.innerHTML = '';
+            
+            keyframes.forEach((kf, index) => {
+                const keyframeEl = document.createElement('div');
+                keyframeEl.className = 'keyframe' + (index === selectedKeyframeIndex ? ' selected' : '');
+                keyframeEl.style.left = timeToPixels(kf.time) + 'px';
+                keyframeEl.dataset.index = index;
+                
+                keyframeEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (!isPlaying) {
+                        selectKeyframe(index);
+                    }
+                });
+                
+                keyframesContainer.appendChild(keyframeEl);
+            });
+            
+            updateDeleteButton();
+        }
+
+        // Select a keyframe
+        function selectKeyframe(index) {
+            selectedKeyframeIndex = index;
+            const kf = keyframes[index];
+            
+            // Update slider to show keyframe value
+            valueSlider.value = kf.value;
+            sliderValueDisplay.textContent = Math.round(kf.value);
+            
+            // Move to keyframe time
+            currentTime = kf.time;
+            updatePlayhead();
+            
+            renderKeyframes();
+        }
+
+        // Add a keyframe at specified time
+        function addKeyframe(time) {
+            // Check if keyframe already exists at this time (within small threshold)
+            const threshold = 0.5; // 0.5 seconds
+            const existingIndex = keyframes.findIndex(kf => Math.abs(kf.time - time) < threshold);
+            
+            if (existingIndex !== -1) {
+                // Select existing keyframe instead
+                selectKeyframe(existingIndex);
+                return;
+            }
+            
+            // Get interpolated value at this time
+            const value = getValueAtTime(time);
+            
+            // Add new keyframe
+            keyframes.push({ time, value });
+            
+            // Sort by time and find new index
+            keyframes.sort((a, b) => a.time - b.time);
+            const newIndex = keyframes.findIndex(kf => kf.time === time);
+            
+            // Select the new keyframe
+            selectKeyframe(newIndex);
+        }
+
+        // Delete selected keyframe
+        function deleteSelectedKeyframe() {
+            if (keyframes.length <= 1) return; // Keep at least one keyframe
+            if (selectedKeyframeIndex === null) return;
+            
+            keyframes.splice(selectedKeyframeIndex, 1);
+            
+            // Adjust selection
+            selectedKeyframeIndex = Math.min(selectedKeyframeIndex, keyframes.length - 1);
+            
+            selectKeyframe(selectedKeyframeIndex);
+        }
+
+        // Update playhead position
+        function updatePlayhead() {
+            const pixelPos = timeToPixels(currentTime);
+            playhead.style.left = pixelPos + 'px';
+            
+            const progressWidth = ((currentTime / DURATION) * 100);
+            timelineProgress.style.width = `calc(${progressWidth}% - ${progressWidth * 0.025}px)`;
+            
+            timeDisplay.textContent = formatTime(currentTime);
+        }
+
+        // Update slider display
+        function updateSliderDisplay(value) {
+            sliderValueDisplay.textContent = Math.round(value);
+            valueSlider.value = value;
+        }
+
+        // Update delete button state
+        function updateDeleteButton() {
+            deleteBtn.disabled = keyframes.length <= 1 || isPlaying;
+        }
+
+        // Animation loop
+        function animate(timestamp) {
+            if (!lastTimestamp) lastTimestamp = timestamp;
+            const deltaTime = (timestamp - lastTimestamp) / 1000; // Convert to seconds
+            lastTimestamp = timestamp;
+            
+            currentTime += deltaTime;
+            
+            if (currentTime >= DURATION) {
+                currentTime = DURATION;
+                stopPlayback();
+                return;
+            }
+            
+            updatePlayhead();
+            
+            // Update slider to show current interpolated value
+            const currentValue = getValueAtTime(currentTime);
+            updateSliderDisplay(currentValue);
+            
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // Start playback
+        function startPlayback() {
+            if (currentTime >= DURATION) {
+                currentTime = 0;
+            }
+            
+            isPlaying = true;
+            lastTimestamp = null;
+            selectedKeyframeIndex = null;
+            
+            playBtn.classList.add('playing');
+            playIcon.textContent = '⏸';
+            playText.textContent = 'Pause';
+            
+            valueSlider.disabled = true;
+            updateDeleteButton();
+            
+            renderKeyframes();
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // Stop playback
+        function stopPlayback() {
+            isPlaying = false;
+            
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            
+            playBtn.classList.remove('playing');
+            playIcon.textContent = '▶';
+            playText.textContent = 'Play';
+            
+            valueSlider.disabled = false;
+            updateDeleteButton();
+            
+            // Select nearest keyframe
+            let nearestIndex = 0;
+            let nearestDist = Infinity;
+            keyframes.forEach((kf, i) => {
+                const dist = Math.abs(kf.time - currentTime);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestIndex = i;
+                }
+            });
+            selectKeyframe(nearestIndex);
+        }
+
+        // Reset to beginning
+        function reset() {
+            if (isPlaying) {
+                stopPlayback();
+            }
+            currentTime = 0;
+            updatePlayhead();
+            selectKeyframe(0);
+        }
+
+        // Event Listeners
+        timeline.addEventListener('click', (e) => {
+            if (isPlaying) return;
+            
+            const rect = timeline.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const time = pixelsToTime(clickX);
+            
+            addKeyframe(time);
+        });
+
+        valueSlider.addEventListener('input', (e) => {
+            if (isPlaying) return;
+            if (selectedKeyframeIndex === null) return;
+            
+            const value = parseFloat(e.target.value);
+            keyframes[selectedKeyframeIndex].value = value;
+            sliderValueDisplay.textContent = Math.round(value);
+        });
+
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                stopPlayback();
+            } else {
+                startPlayback();
+            }
+        });
+
+        resetBtn.addEventListener('click', reset);
+
+        deleteBtn.addEventListener('click', () => {
+            if (!isPlaying) {
+                deleteSelectedKeyframe();
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            renderKeyframes();
+            updatePlayhead();
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (isPlaying) {
+                    stopPlayback();
+                } else {
+                    startPlayback();
+                }
+            } else if (e.code === 'Delete' || e.code === 'Backspace') {
+                if (!isPlaying && keyframes.length > 1) {
+                    e.preventDefault();
+                    deleteSelectedKeyframe();
+                }
+            }
+        });
+
+        // Initialize
+        renderKeyframes();
+        selectKeyframe(0);
+        updatePlayhead();
+    </script>
+</body>
+</html>

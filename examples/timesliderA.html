@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeline Slider Component</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+
+        .timeline-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            align-items: center;
+        }
+
+        .controls button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .play-btn {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .play-btn:hover {
+            background-color: #45a049;
+        }
+
+        .play-btn.playing {
+            background-color: #f44336;
+        }
+
+        .play-btn.playing:hover {
+            background-color: #da190b;
+        }
+
+        .reset-btn {
+            background-color: #2196F3;
+            color: white;
+        }
+
+        .reset-btn:hover {
+            background-color: #0b7dda;
+        }
+
+        .time-display {
+            margin-left: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .slider-section {
+            margin-bottom: 30px;
+        }
+
+        .slider-label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .slider {
+            width: 100%;
+            height: 40px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: #ddd;
+            outline: none;
+            border-radius: 20px;
+            transition: background 0.3s;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 40px;
+            background: #4CAF50;
+            cursor: pointer;
+            border-radius: 10px;
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 40px;
+            background: #4CAF50;
+            cursor: pointer;
+            border-radius: 10px;
+        }
+
+        .slider:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .value-display {
+            text-align: center;
+            font-size: 24px;
+            margin-top: 10px;
+            color: #333;
+        }
+
+        .timeline {
+            position: relative;
+            width: 100%;
+            height: 80px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .timeline-track {
+            position: absolute;
+            top: 35px;
+            left: 0;
+            right: 0;
+            height: 10px;
+            background-color: #bbb;
+        }
+
+        .keyframe {
+            position: absolute;
+            width: 12px;
+            height: 60px;
+            background-color: #2196F3;
+            top: 10px;
+            transform: translateX(-50%);
+            cursor: pointer;
+            border-radius: 6px;
+            transition: background-color 0.3s;
+        }
+
+        .keyframe:hover {
+            background-color: #1976D2;
+        }
+
+        .keyframe.selected {
+            background-color: #f44336;
+        }
+
+        .playhead {
+            position: absolute;
+            width: 2px;
+            height: 100%;
+            background-color: #FF5722;
+            top: 0;
+            transform: translateX(-50%);
+            pointer-events: none;
+        }
+
+        .timeline-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="timeline-container">
+        <h1>Timeline Slider Component</h1>
+        
+        <div class="controls">
+            <button class="play-btn" id="playBtn">Play</button>
+            <button class="reset-btn" id="resetBtn">Reset</button>
+            <span class="time-display" id="timeDisplay">0.0s / 60.0s</span>
+        </div>
+
+        <div class="slider-section">
+            <label class="slider-label">Value Slider:</label>
+            <input type="range" class="slider" id="valueSlider" min="0" max="100" value="50">
+            <div class="value-display" id="valueDisplay">50</div>
+        </div>
+
+        <div class="timeline-section">
+            <label class="slider-label">Timeline (click to add keyframes):</label>
+            <div class="timeline" id="timeline">
+                <div class="timeline-track"></div>
+                <div class="playhead" id="playhead"></div>
+            </div>
+            <div class="timeline-labels">
+                <span>0s</span>
+                <span>15s</span>
+                <span>30s</span>
+                <span>45s</span>
+                <span>60s</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class TimelineSlider {
+            constructor() {
+                this.duration = 60000; // 60 seconds in milliseconds
+                this.keyframes = [{ time: 0, value: 50 }]; // Default keyframe
+                this.currentTime = 0;
+                this.isPlaying = false;
+                this.selectedKeyframe = 0;
+                this.animationFrame = null;
+                this.lastTimestamp = null;
+
+                this.initElements();
+                this.initEventListeners();
+                this.render();
+            }
+
+            initElements() {
+                this.playBtn = document.getElementById('playBtn');
+                this.resetBtn = document.getElementById('resetBtn');
+                this.timeDisplay = document.getElementById('timeDisplay');
+                this.valueSlider = document.getElementById('valueSlider');
+                this.valueDisplay = document.getElementById('valueDisplay');
+                this.timeline = document.getElementById('timeline');
+                this.playhead = document.getElementById('playhead');
+            }
+
+            initEventListeners() {
+                this.playBtn.addEventListener('click', () => this.togglePlay());
+                this.resetBtn.addEventListener('click', () => this.reset());
+                this.valueSlider.addEventListener('input', (e) => this.onSliderChange(e));
+                this.timeline.addEventListener('click', (e) => this.onTimelineClick(e));
+            }
+
+            togglePlay() {
+                if (this.isPlaying) {
+                    this.pause();
+                } else {
+                    this.play();
+                }
+            }
+
+            play() {
+                this.isPlaying = true;
+                this.playBtn.textContent = 'Pause';
+                this.playBtn.classList.add('playing');
+                this.valueSlider.disabled = true;
+                this.lastTimestamp = null;
+                this.animate();
+            }
+
+            pause() {
+                this.isPlaying = false;
+                this.playBtn.textContent = 'Play';
+                this.playBtn.classList.remove('playing');
+                this.valueSlider.disabled = false;
+                if (this.animationFrame) {
+                    cancelAnimationFrame(this.animationFrame);
+                }
+            }
+
+            reset() {
+                this.pause();
+                this.currentTime = 0;
+                this.selectedKeyframe = 0;
+                this.updateSliderValue(this.keyframes[0].value);
+                this.render();
+            }
+
+            animate(timestamp) {
+                if (!this.isPlaying) return;
+
+                if (!this.lastTimestamp) {
+                    this.lastTimestamp = timestamp;
+                }
+
+                const deltaTime = timestamp - this.lastTimestamp;
+                this.lastTimestamp = timestamp;
+
+                this.currentTime += deltaTime;
+
+                if (this.currentTime >= this.duration) {
+                    this.currentTime = this.duration;
+                    this.pause();
+                }
+
+                const value = this.getInterpolatedValue(this.currentTime);
+                this.updateSliderValue(value);
+                this.render();
+
+                if (this.isPlaying) {
+                    this.animationFrame = requestAnimationFrame((ts) => this.animate(ts));
+                }
+            }
+
+            getInterpolatedValue(time) {
+                // Find surrounding keyframes
+                let prevKeyframe = this.keyframes[0];
+                let nextKeyframe = null;
+
+                for (let i = 0; i < this.keyframes.length; i++) {
+                    if (this.keyframes[i].time <= time) {
+                        prevKeyframe = this.keyframes[i];
+                    } else {
+                        nextKeyframe = this.keyframes[i];
+                        break;
+                    }
+                }
+
+                // If no next keyframe, return the last keyframe's value
+                if (!nextKeyframe) {
+                    return prevKeyframe.value;
+                }
+
+                // Linear interpolation
+                const t = (time - prevKeyframe.time) / (nextKeyframe.time - prevKeyframe.time);
+                return prevKeyframe.value + (nextKeyframe.value - prevKeyframe.value) * t;
+            }
+
+            onTimelineClick(e) {
+                if (this.isPlaying) return;
+
+                const rect = this.timeline.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const time = (x / rect.width) * this.duration;
+
+                // Check if clicking on existing keyframe
+                const clickedKeyframe = this.getKeyframeAtPosition(x, rect.width);
+                
+                if (clickedKeyframe !== -1) {
+                    this.selectedKeyframe = clickedKeyframe;
+                    this.currentTime = this.keyframes[clickedKeyframe].time;
+                    this.updateSliderValue(this.keyframes[clickedKeyframe].value);
+                } else {
+                    // Add new keyframe
+                    const value = this.getInterpolatedValue(time);
+                    const newKeyframe = { time, value };
+                    
+                    // Find insertion point
+                    let insertIndex = this.keyframes.length;
+                    for (let i = 0; i < this.keyframes.length; i++) {
+                        if (this.keyframes[i].time > time) {
+                            insertIndex = i;
+                            break;
+                        }
+                    }
+                    
+                    this.keyframes.splice(insertIndex, 0, newKeyframe);
+                    this.selectedKeyframe = insertIndex;
+                    this.currentTime = time;
+                    this.updateSliderValue(value);
+                }
+                
+                this.render();
+            }
+
+            getKeyframeAtPosition(x, timelineWidth) {
+                const tolerance = 10; // pixels
+                
+                for (let i = 0; i < this.keyframes.length; i++) {
+                    const keyframeX = (this.keyframes[i].time / this.duration) * timelineWidth;
+                    if (Math.abs(x - keyframeX) <= tolerance) {
+                        return i;
+                    }
+                }
+                
+                return -1;
+            }
+
+            onSliderChange(e) {
+                if (this.isPlaying) return;
+                
+                const value = parseFloat(e.target.value);
+                this.keyframes[this.selectedKeyframe].value = value;
+                this.updateSliderValue(value);
+                this.render();
+            }
+
+            updateSliderValue(value) {
+                this.valueSlider.value = value;
+                this.valueDisplay.textContent = Math.round(value);
+            }
+
+            render() {
+                // Update time display
+                const seconds = (this.currentTime / 1000).toFixed(1);
+                this.timeDisplay.textContent = `${seconds}s / 60.0s`;
+
+                // Update playhead position
+                const playheadPosition = (this.currentTime / this.duration) * 100;
+                this.playhead.style.left = `${playheadPosition}%`;
+
+                // Render keyframes
+                const existingKeyframes = this.timeline.querySelectorAll('.keyframe');
+                existingKeyframes.forEach(kf => kf.remove());
+
+                this.keyframes.forEach((keyframe, index) => {
+                    const keyframeElement = document.createElement('div');
+                    keyframeElement.className = 'keyframe';
+                    if (index === this.selectedKeyframe) {
+                        keyframeElement.classList.add('selected');
+                    }
+                    
+                    const position = (keyframe.time / this.duration) * 100;
+                    keyframeElement.style.left = `${position}%`;
+                    
+                    this.timeline.appendChild(keyframeElement);
+                });
+            }
+        }
+
+        // Initialize the component
+        const timelineSlider = new TimelineSlider();
+    </script>
+</body>
+</html>
