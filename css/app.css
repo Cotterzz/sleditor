@@ -546,6 +546,56 @@ body {
     flex-wrap: wrap;
 }
 
+/* Timeline Slider */
+#timelineContainer {
+    width: 100%;
+    flex-basis: 100%;
+}
+
+#timelineSlider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: var(--border-color);
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+    border: 1px solid var(--text-secondary);
+}
+
+#timelineSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent-color);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.1s;
+}
+
+#timelineSlider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    background: #1177bb;
+}
+
+#timelineSlider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--accent-color);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+#timelineSlider::-moz-range-track {
+    background: var(--border-color);
+    border: 1px solid var(--text-secondary);
+    border-radius: 3px;
+    height: 6px;
+}
+
 button {
     background: #0e639c;
     color: white;

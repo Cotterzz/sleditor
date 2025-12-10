@@ -152,6 +152,7 @@ function setupUI() {
     ui.setupPanelDividers();
     ui.setupHorizontalCanvasDivider();
     ui.setupCanvasResizeObserver();
+    ui.initTimeline();
     
     // Setup help drag listeners
     document.addEventListener('mousemove', ui.doHelpDrag);
