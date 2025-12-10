@@ -243,6 +243,11 @@ async function onUserSignedIn(user) {
         window.updateSaveButton();
     }
     
+    // Update notification badge
+    if (window.updateNotificationBadge) {
+        window.updateNotificationBadge();
+    }
+    
     // Refresh gallery to show user's database shaders
     // Cache will auto-invalidate due to user state change
     if (window.save && window.save.populateGallery) {
@@ -406,20 +411,34 @@ export async function loadShader(idOrSlug) {
     }
 
     try {
-        // Try loading by slug first (more common for URLs)
-        let result = await supabase
-            .from('shaders')
-            .select('*')
-            .eq('slug', idOrSlug)
-            .single();
-
-        // If not found, try by ID
-        if (result.error && result.error.code === 'PGRST116') {
+        // Check if it looks like a UUID (try by ID first if so)
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+        
+        let result;
+        
+        if (isUUID) {
+            // Load by ID directly for UUIDs
             result = await supabase
                 .from('shaders')
                 .select('*')
                 .eq('id', idOrSlug)
                 .single();
+        } else {
+            // Try loading by slug first (more common for URLs)
+            result = await supabase
+                .from('shaders')
+                .select('*')
+                .eq('slug', idOrSlug)
+                .single();
+
+            // If not found by slug, try by ID as fallback
+            if (result.error) {
+                result = await supabase
+                    .from('shaders')
+                    .select('*')
+                    .eq('id', idOrSlug)
+                    .single();
+            }
         }
 
         if (result.error) throw result.error;
@@ -565,7 +584,7 @@ export async function loadSotwEntries() {
  * Load user's own shaders
  * @returns {Object} { success, shaders, error }
  */
-export async function loadMyShaders() {
+export async function loadMyShaders(limit = 20, offset = 0) {
     if (!supabase) {
         return { success: false, error: 'Supabase not initialized' };
     }
@@ -579,7 +598,8 @@ export async function loadMyShaders() {
             .from('shaders')
             .select('*')
             .eq('user_id', state.currentUser.id)
-            .order('updated_at', { ascending: false });
+            .order('updated_at', { ascending: false })
+            .range(offset, offset + limit);
 
         if (result.error) throw result.error;
         
@@ -587,7 +607,7 @@ export async function loadMyShaders() {
         const estimatedBytes = JSON.stringify(result.data).length;
         trackBandwidth('api', estimatedBytes);
 
-        return { success: true, shaders: result.data };
+        return { success: true, shaders: result.data, hasMore: result.data.length >= limit };
 
     } catch (error) {
         console.error('Load my shaders error:', error);
@@ -596,10 +616,12 @@ export async function loadMyShaders() {
 }
 
 /**
- * Load public/community shaders (published by users)
- * @returns {Object} { success, shaders, error }
+ * Load public/community shaders (published by users) with pagination
+ * @param {number} limit - Number of shaders to fetch (default 20)
+ * @param {number} offset - Offset for pagination (default 0)
+ * @returns {Object} { success, shaders, hasMore, error }
  */
-export async function loadPublicShaders() {
+export async function loadPublicShaders(limit = 20, offset = 0) {
     if (!supabase) {
         return { success: false, error: 'Supabase not initialized' };
     }
@@ -610,7 +632,7 @@ export async function loadPublicShaders() {
             .select('*')
             .eq('visibility', 'published')
             .order('created_at', { ascending: false })
-            .limit(50); // Limit to 50 most recent
+            .range(offset, offset + limit);
 
         if (result.error) throw result.error;
         
@@ -618,8 +640,11 @@ export async function loadPublicShaders() {
         const estimatedBytes = JSON.stringify(result.data).length;
         trackBandwidth('api', estimatedBytes);
 
-        // JS shaders are now safe with sandboxed execution (AudioWorklet)
-        return { success: true, shaders: result.data };
+        // Check if there are more results (if we got full page, there might be more)
+        const hasMore = result.data.length === limit + 1;
+        const shaders = hasMore ? result.data.slice(0, limit) : result.data;
+
+        return { success: true, shaders, hasMore: result.data.length >= limit };
 
     } catch (error) {
         console.error('Load public shaders error:', error);
@@ -1022,6 +1047,17 @@ export async function likeShader(shaderId) {
     try {
         console.log('❤️ Attempting to like shader:', shaderId);
         
+        // First, get shader info for notification
+        const { data: shader, error: shaderError } = await supabase
+            .from('shaders')
+            .select('user_id, title')
+            .eq('id', shaderId)
+            .single();
+        
+        if (shaderError) {
+            console.error('Failed to fetch shader for like:', shaderError);
+        }
+        
         // Insert like (trigger will auto-update count)
         const { error } = await supabase
             .from('shader_likes')
@@ -1040,6 +1076,15 @@ export async function likeShader(shaderId) {
         }
 
         console.log('✅ Like inserted successfully');
+        
+        // Create notification for shader owner (fire-and-forget)
+        if (shader?.user_id) {
+            createNotification(shader.user_id, 'like', {
+                shaderId: shaderId,
+                shaderTitle: shader.title || 'Untitled'
+            }).catch(err => console.warn('Like notification failed:', err));
+        }
+        
         return { success: true };
     } catch (error) {
         console.error('Failed to like shader:', error);
@@ -1205,6 +1250,31 @@ export async function addComment(shaderId, commentText, parentCommentId = null) 
         // Get display name (prefer profile, fallback to auth)
         const displayName = state.userDisplayName || 'Anonymous';
 
+        // Fetch shader info for notification
+        const { data: shader, error: shaderError } = await supabase
+            .from('shaders')
+            .select('user_id, title')
+            .eq('id', shaderId)
+            .single();
+        
+        if (shaderError) {
+            console.warn('Failed to fetch shader for comment notification:', shaderError);
+        }
+
+        // If this is a reply, get the parent comment's author
+        let parentCommentAuthorId = null;
+        if (parentCommentId) {
+            const { data: parentComment, error: parentError } = await supabase
+                .from('shader_comments')
+                .select('user_id')
+                .eq('id', parentCommentId)
+                .single();
+            
+            if (!parentError && parentComment) {
+                parentCommentAuthorId = parentComment.user_id;
+            }
+        }
+
         const { data, error } = await supabase
             .from('shader_comments')
             .insert({
@@ -1220,6 +1290,26 @@ export async function addComment(shaderId, commentText, parentCommentId = null) 
         if (error) throw error;
 
         console.log('✓ Comment added:', data);
+        
+        // Create notifications (fire-and-forget)
+        if (shader?.user_id) {
+            // Notify shader owner about new comment
+            createNotification(shader.user_id, 'comment', {
+                shaderId: shaderId,
+                shaderTitle: shader.title || 'Untitled',
+                commentId: data.id
+            }).catch(err => console.warn('Comment notification failed:', err));
+        }
+        
+        // If this is a reply, also notify the parent commenter
+        if (parentCommentAuthorId && parentCommentAuthorId !== shader?.user_id) {
+            createNotification(parentCommentAuthorId, 'reply', {
+                shaderId: shaderId,
+                shaderTitle: shader?.title || 'Untitled',
+                commentId: data.id
+            }).catch(err => console.warn('Reply notification failed:', err));
+        }
+        
         return { success: true, comment: data };
     } catch (error) {
         console.error('Failed to add comment:', error);
@@ -1246,6 +1336,30 @@ export async function deleteComment(commentId) {
         return { success: true };
     } catch (error) {
         console.error('Failed to delete comment:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function updateComment(commentId, newContent) {
+    if (!supabase || !commentId || !newContent || !state.currentUser) {
+        return { success: false, error: 'Missing parameters or not logged in' };
+    }
+
+    try {
+        const { data, error } = await supabase
+            .from('shader_comments')
+            .update({ content: newContent })
+            .eq('id', commentId)
+            .eq('user_id', state.currentUser.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        console.log('✓ Comment updated:', commentId);
+        return { success: true, comment: data };
+    } catch (error) {
+        console.error('Failed to update comment:', error);
         return { success: false, error: error.message };
     }
 }
@@ -1291,5 +1405,193 @@ export function unsubscribeFromComments() {
     if (commentsSubscription) {
         supabase.removeChannel(commentsSubscription);
         commentsSubscription = null;
+    }
+}
+
+// ============================================================================
+// Notifications
+// ============================================================================
+
+/**
+ * Create a notification for a user
+ * @param {string} recipientId - User ID to notify
+ * @param {string} type - Notification type: 'like', 'comment', 'reply', 'achievement', 'system'
+ * @param {Object} options - Additional data
+ * @param {string} options.sourceUserId - Who triggered the notification
+ * @param {string} options.sourceUserName - Display name of source user
+ * @param {string} options.shaderId - Related shader ID
+ * @param {string} options.shaderTitle - Shader title
+ * @param {string} options.commentId - Related comment ID (for replies)
+ * @param {string} options.message - Custom message
+ * @returns {Object} { success, notification, error }
+ */
+export async function createNotification(recipientId, type, options = {}) {
+    if (!supabase || !recipientId || !type) {
+        return { success: false, error: 'Missing required parameters' };
+    }
+    
+    // Don't notify yourself
+    if (state.currentUser && recipientId === state.currentUser.id) {
+        console.log('Skipping self-notification');
+        return { success: true, skipped: true };
+    }
+    
+    try {
+        // Note: We don't use .select() here because the SELECT policy only allows
+        // users to read their OWN notifications, and we're creating one for someone else
+        const { error } = await supabase
+            .from('notifications')
+            .insert({
+                user_id: recipientId,
+                type: type,
+                source_user_id: options.sourceUserId || state.currentUser?.id || null,
+                source_user_name: options.sourceUserName || state.userDisplayName || 'Someone',
+                shader_id: options.shaderId || null,
+                shader_title: options.shaderTitle || null,
+                comment_id: options.commentId || null,
+                message: options.message || null
+            });
+        
+        if (error) throw error;
+        
+        console.log('🔔 Notification created:', type, 'for user', recipientId);
+        return { success: true };
+    } catch (error) {
+        // Don't fail the main action if notification fails
+        console.error('Failed to create notification:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Get count of unread notifications for current user
+ * @returns {number} Unread count
+ */
+export async function getUnreadNotificationCount() {
+    if (!supabase || !state.currentUser) {
+        return 0;
+    }
+    
+    try {
+        const { count, error } = await supabase
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', state.currentUser.id)
+            .eq('read', false);
+        
+        if (error) throw error;
+        
+        return count || 0;
+    } catch (error) {
+        console.error('Failed to get notification count:', error);
+        return 0;
+    }
+}
+
+/**
+ * Get notifications for current user
+ * @param {number} limit - Max notifications to fetch
+ * @returns {Object} { success, notifications, error }
+ */
+export async function getNotifications(limit = 50) {
+    if (!supabase || !state.currentUser) {
+        return { success: false, notifications: [], error: 'Not logged in' };
+    }
+    
+    try {
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', state.currentUser.id)
+            .order('created_at', { ascending: false })
+            .limit(limit);
+        
+        if (error) throw error;
+        
+        // Track bandwidth
+        const estimatedBytes = JSON.stringify(data).length;
+        trackBandwidth('api', estimatedBytes);
+        
+        return { success: true, notifications: data || [] };
+    } catch (error) {
+        console.error('Failed to get notifications:', error);
+        return { success: false, notifications: [], error: error.message };
+    }
+}
+
+/**
+ * Mark all notifications as read for current user
+ * @returns {Object} { success, error }
+ */
+export async function markNotificationsRead() {
+    if (!supabase || !state.currentUser) {
+        return { success: false, error: 'Not logged in' };
+    }
+    
+    try {
+        const { error } = await supabase
+            .from('notifications')
+            .update({ read: true })
+            .eq('user_id', state.currentUser.id)
+            .eq('read', false);
+        
+        if (error) throw error;
+        
+        console.log('✓ Notifications marked as read');
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to mark notifications read:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Delete a notification
+ * @param {string} notificationId - Notification ID to delete
+ * @returns {Object} { success, error }
+ */
+export async function deleteNotification(notificationId) {
+    if (!supabase || !notificationId || !state.currentUser) {
+        return { success: false, error: 'Missing parameters' };
+    }
+    
+    try {
+        const { error } = await supabase
+            .from('notifications')
+            .delete()
+            .eq('id', notificationId)
+            .eq('user_id', state.currentUser.id);
+        
+        if (error) throw error;
+        
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to delete notification:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * Clear all notifications for current user
+ * @returns {Object} { success, error }
+ */
+export async function clearAllNotifications() {
+    if (!supabase || !state.currentUser) {
+        return { success: false, error: 'Not logged in' };
+    }
+    
+    try {
+        const { error } = await supabase
+            .from('notifications')
+            .delete()
+            .eq('user_id', state.currentUser.id);
+        
+        if (error) throw error;
+        
+        console.log('✓ All notifications cleared');
+        return { success: true };
+    } catch (error) {
+        console.error('Failed to clear notifications:', error);
+        return { success: false, error: error.message };
     }
 }

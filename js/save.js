@@ -41,6 +41,13 @@ let galleryCache = {
     examples: null
 };
 
+// Pagination state for each tab
+const GALLERY_PAGE_SIZE = 20;
+let galleryPagination = {
+    my: { offset: 0, hasMore: false },
+    community: { offset: 0, hasMore: false }
+};
+
 // Track if user was logged in when cache was created
 let cacheUserState = null;
 
@@ -122,16 +129,26 @@ export async function populateGallery(tab = currentGalleryTab, forceRefresh = fa
         // ===== MY SHADERS TAB =====
         else if (tab === 'my') {
             if (isLoggedIn) {
+                // Reset pagination on fresh load
+                galleryPagination.my = { offset: 0, hasMore: false };
+                
                 // Load from database for logged-in users
-                const myResult = await backend.loadMyShaders();
+                const myResult = await backend.loadMyShaders(GALLERY_PAGE_SIZE, 0);
                 if (myResult.success && myResult.shaders.length > 0) {
                     // Cache the shaders
                     galleryCache.my = myResult.shaders;
+                    galleryPagination.my.offset = myResult.shaders.length;
+                    galleryPagination.my.hasMore = myResult.hasMore;
                     
                     myResult.shaders.forEach(shader => {
                         const item = createGalleryItem(shader, true);
                         if (item) galleryContent.appendChild(item);
                     });
+                    
+                    // Add "Load More" button if there are more
+                    if (myResult.hasMore) {
+                        appendLoadMoreButton(galleryContent, 'my');
+                    }
                 } else {
                     galleryCache.my = [];
                     const noShaders = document.createElement('div');
@@ -172,16 +189,26 @@ export async function populateGallery(tab = currentGalleryTab, forceRefresh = fa
                 return;
             }
             
-            const result = await backend.loadPublicShaders();
+            // Reset pagination on fresh load
+            galleryPagination.community = { offset: 0, hasMore: false };
+            
+            const result = await backend.loadPublicShaders(GALLERY_PAGE_SIZE, 0);
             
             if (result.success && result.shaders.length > 0) {
                 // Cache the shaders
                 galleryCache.community = result.shaders;
+                galleryPagination.community.offset = result.shaders.length;
+                galleryPagination.community.hasMore = result.hasMore;
                 
                 result.shaders.forEach(shader => {
                     const item = createGalleryItem(shader, false);
                     if (item) galleryContent.appendChild(item);
                 });
+                
+                // Add "Load More" button if there are more
+                if (result.hasMore) {
+                    appendLoadMoreButton(galleryContent, 'community');
+                }
             } else {
                 galleryCache.community = [];
                 const noShaders = document.createElement('div');
@@ -245,6 +272,112 @@ function renderGalleryFromCache(container, tab) {
         const item = createGalleryItem(shader, isMyTab && isLoggedIn);
         if (item) container.appendChild(item);
     });
+    
+    // Re-add Load More button if there are more items
+    const pagination = galleryPagination[tab];
+    if (pagination && pagination.hasMore) {
+        appendLoadMoreButton(container, tab);
+    }
+}
+
+/**
+ * Append "Load More" button to gallery
+ */
+function appendLoadMoreButton(container, tab) {
+    // Remove existing load more button if present
+    const existing = container.querySelector('.load-more-btn');
+    if (existing) existing.remove();
+    
+    const loadMoreDiv = document.createElement('div');
+    loadMoreDiv.className = 'load-more-btn';
+    loadMoreDiv.style.cssText = 'grid-column: 1 / -1; text-align: center; padding: 20px;';
+    
+    const button = document.createElement('button');
+    button.textContent = 'Load More';
+    button.style.cssText = `
+        padding: 10px 30px;
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: opacity 0.2s;
+    `;
+    button.onmouseenter = () => button.style.opacity = '0.8';
+    button.onmouseleave = () => button.style.opacity = '1';
+    button.onclick = () => loadMoreShaders(tab);
+    
+    loadMoreDiv.appendChild(button);
+    container.appendChild(loadMoreDiv);
+}
+
+/**
+ * Load more shaders for pagination
+ */
+async function loadMoreShaders(tab) {
+    const galleryContent = document.getElementById('galleryContent');
+    if (!galleryContent) return;
+    
+    const pagination = galleryPagination[tab];
+    if (!pagination || !pagination.hasMore) return;
+    
+    // Update button to show loading state
+    const loadMoreBtn = galleryContent.querySelector('.load-more-btn button');
+    if (loadMoreBtn) {
+        loadMoreBtn.textContent = 'Loading...';
+        loadMoreBtn.disabled = true;
+    }
+    
+    try {
+        let result;
+        const isMyTab = tab === 'my';
+        
+        if (tab === 'my') {
+            result = await backend.loadMyShaders(GALLERY_PAGE_SIZE, pagination.offset);
+        } else if (tab === 'community') {
+            result = await backend.loadPublicShaders(GALLERY_PAGE_SIZE, pagination.offset);
+        } else {
+            return; // No pagination for other tabs
+        }
+        
+        if (result.success && result.shaders.length > 0) {
+            // Add to cache
+            galleryCache[tab] = [...(galleryCache[tab] || []), ...result.shaders];
+            
+            // Update pagination state
+            pagination.offset += result.shaders.length;
+            pagination.hasMore = result.hasMore;
+            
+            // Remove load more button temporarily
+            const loadMoreDiv = galleryContent.querySelector('.load-more-btn');
+            if (loadMoreDiv) loadMoreDiv.remove();
+            
+            // Append new items
+            result.shaders.forEach(shader => {
+                const item = createGalleryItem(shader, isMyTab);
+                if (item) galleryContent.appendChild(item);
+            });
+            
+            // Re-add load more button if there are more
+            if (result.hasMore) {
+                appendLoadMoreButton(galleryContent, tab);
+            }
+        } else {
+            // No more results
+            pagination.hasMore = false;
+            const loadMoreDiv = galleryContent.querySelector('.load-more-btn');
+            if (loadMoreDiv) loadMoreDiv.remove();
+        }
+    } catch (error) {
+        console.error('Failed to load more shaders:', error);
+        // Restore button
+        if (loadMoreBtn) {
+            loadMoreBtn.textContent = 'Load More';
+            loadMoreBtn.disabled = false;
+        }
+    }
 }
 
 function renderSotwGallery(container, entries) {

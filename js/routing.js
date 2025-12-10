@@ -24,13 +24,11 @@ export function getShaderFromURL() {
         return params.get('shader');
     }
     
-    // Check for future backend shader: #id=abc123def
+    // Check for backend shader: #id=abc123def
+    // Note: This function is only used for OLD example URL format detection
+    // Database shaders are handled by handleHashChange() instead
     if (params.has('id')) {
-        // When backend is ready, this will fetch from database
-        // For now, return null (no backend yet)
-        const shaderId = params.get('id');
-        console.log('Backend shader ID detected:', shaderId, '(backend not implemented yet)');
-        return null;
+        return null; // Let handleHashChange() deal with database shaders
     }
     
     return null;

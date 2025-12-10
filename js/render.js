@@ -10,6 +10,7 @@ import * as jsRuntime from './js-runtime.js';
 import * as perfMonitor from './performance-monitor.js';
 import * as recording from './recording.js';
 import * as channels from './channels.js';
+import * as ui from './ui.js';
 
 const DEFAULT_RECORDING_FPS = 60;
 
@@ -120,6 +121,10 @@ function renderNonGPUMode(rawTime) {
         state.fpsLastTime = rawTime;
         updateFPSDisplay();
     }
+    
+    // Update timeline slider
+    ui.updateTimeline(elapsedSec);
+    
     updateCounterDisplays(state.visualFrame, effectiveTime);
     
     // Call user's enterframe (non-GPU mode - uniforms are no-op)
@@ -150,6 +155,9 @@ function renderWebGLMode(rawTime, gl, ctx) {
         state.fpsLastTime = rawTime;
         updateFPSDisplay();
     }
+    
+    // Update timeline slider
+    ui.updateTimeline(elapsedSec);
     
     updateCounterDisplays(state.visualFrame, effectiveTime);
 
@@ -201,6 +209,9 @@ function renderGPUMode(rawTime, device, ctx) {
         state.fpsLastTime = rawTime;
         updateFPSDisplay();
     }
+    
+    // Update timeline slider
+    ui.updateTimeline(elapsedSec);
     
     updateCounterDisplays(state.visualFrame, effectiveTime);
 

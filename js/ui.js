@@ -27,6 +27,13 @@ let compileOverlayText;
 let audioStartOverlay;
 let audioOverlayMessage;
 
+// Timeline slider state
+let timelineSlider = null;
+let timelineCurrent = null;
+let timelineDuration = null;
+let timelineMaxSeconds = 60;  // Starts at 1 minute
+let timelineDragging = false;
+
 // ============================================================================
 // Theme
 // ============================================================================
@@ -288,6 +295,138 @@ export async function restart(userInitiated = false) {
     if (userInitiated) {
         logStatus('✓ Restarted', 'success');
     }
+    
+    // Reset timeline to 1 minute on restart
+    resetTimeline();
+}
+
+// ============================================================================
+// Timeline Slider
+// ============================================================================
+
+/**
+ * Initialize timeline slider
+ */
+export function initTimeline() {
+    timelineSlider = document.getElementById('timelineSlider');
+    timelineCurrent = document.getElementById('timelineCurrent');
+    timelineDuration = document.getElementById('timelineDuration');
+    
+    if (!timelineSlider) return;
+    
+    // Mouse/touch events for dragging
+    timelineSlider.addEventListener('mousedown', () => {
+        timelineDragging = true;
+    });
+    
+    timelineSlider.addEventListener('touchstart', () => {
+        timelineDragging = true;
+    });
+    
+    // Input event - fires while dragging
+    timelineSlider.addEventListener('input', () => {
+        if (timelineDragging) {
+            seekToTime(parseFloat(timelineSlider.value));
+        }
+    });
+    
+    // Mouse up anywhere on document ends drag
+    document.addEventListener('mouseup', () => {
+        timelineDragging = false;
+    });
+    
+    document.addEventListener('touchend', () => {
+        timelineDragging = false;
+    });
+    
+    // Click on slider (non-drag) - seek to that position
+    timelineSlider.addEventListener('change', () => {
+        seekToTime(parseFloat(timelineSlider.value));
+    });
+}
+
+/**
+ * Reset timeline to initial state (1 minute)
+ */
+export function resetTimeline() {
+    timelineMaxSeconds = 60;
+    if (timelineSlider) {
+        timelineSlider.max = timelineMaxSeconds;
+        timelineSlider.value = 0;
+    }
+    if (timelineDuration) {
+        timelineDuration.textContent = formatTime(timelineMaxSeconds);
+    }
+    if (timelineCurrent) {
+        timelineCurrent.textContent = '0:00';
+    }
+}
+
+/**
+ * Update timeline slider from current shader time
+ * Called every frame from render loop
+ */
+export function updateTimeline(currentTimeSeconds) {
+    if (!timelineSlider || timelineDragging) return;
+    
+    // Check if we've reached the end of the timeline
+    if (currentTimeSeconds >= timelineMaxSeconds) {
+        // Double the duration
+        timelineMaxSeconds *= 2;
+        timelineSlider.max = timelineMaxSeconds;
+        
+        // Update duration label
+        if (timelineDuration) {
+            timelineDuration.textContent = formatTime(timelineMaxSeconds);
+        }
+    }
+    
+    // Update slider position
+    timelineSlider.value = Math.min(currentTimeSeconds, timelineMaxSeconds);
+    
+    // Update current time label
+    if (timelineCurrent) {
+        timelineCurrent.textContent = formatTime(currentTimeSeconds);
+    }
+}
+
+/**
+ * Seek to a specific time in seconds
+ */
+function seekToTime(targetSeconds) {
+    // Clamp to valid range
+    targetSeconds = Math.max(0, Math.min(targetSeconds, timelineMaxSeconds));
+    
+    // Adjust startTime to make elapsed time equal targetSeconds
+    const targetMs = targetSeconds * 1000;
+    state.startTime = performance.now() - state.pausedTime - targetMs;
+    
+    // Update current time label immediately
+    if (timelineCurrent) {
+        timelineCurrent.textContent = formatTime(targetSeconds);
+    }
+    
+    // If paused, render a frame to show the new position
+    if (!state.isPlaying && state.isRunning) {
+        render.renderOnce();
+    }
+}
+
+/**
+ * Format seconds as M:SS or H:MM:SS
+ */
+function formatTime(seconds) {
+    const s = Math.floor(seconds);
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    
+    if (mins >= 60) {
+        const hours = Math.floor(mins / 60);
+        const remainingMins = mins % 60;
+        return `${hours}:${remainingMins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 async function startPlayback() {

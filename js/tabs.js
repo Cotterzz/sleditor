@@ -4,7 +4,7 @@
 
 import { state, logStatus, saveSettings } from './core.js';
 import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET, MINIMAL_AUDIO_GLSL, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF } from './examples.js';
-import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, getChannelNumber, createImageChannelTabName, createVideoChannelTabName, createAudioChannelTabName, createBufferChannelTabName } from './tab-config.js';
+import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, isChannel, getChannelNumber, createImageChannelTabName, createVideoChannelTabName, createAudioChannelTabName, createBufferChannelTabName } from './tab-config.js';
 import * as mediaSelector from './ui/media-selector.js';
 import * as audioSelector from './ui/audio-selector.js';
 import * as videoSelector from './ui/video-selector.js';
@@ -507,7 +507,8 @@ export function removeTab(tabName) {
         delete state.tabCodeCache[tabName];
     }
     
-    if (isBufferChannel(tabName)) {
+    // Delete channel for any channel type (image, video, audio, buffer)
+    if (isChannel(tabName)) {
         const chNum = getChannelNumber(tabName);
         if (chNum >= 0) {
             channels.deleteChannel(chNum);
