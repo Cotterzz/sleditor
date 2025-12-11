@@ -4,9 +4,9 @@
       "name": "Hacker",
       "type": "dark",
       "fonts": {
-        "code": "'Fira Code', 'Consolas', monospace",
-        "ui": "'Share Tech Mono', 'Courier New', monospace",
-        "content": "'VT323', 'Courier New', monospace"
+        "code": "'Fira Code', 'Noto Sans Mono', 'Consolas', monospace",
+        "ui": "'Share Tech Mono', 'Noto Sans JP', 'Courier New', monospace",
+        "content": "'VT323', 'Noto Sans JP', 'Courier New', monospace"
       },
       "colors": {
         "bg-primary": "#0a0a0a",
@@ -52,9 +52,9 @@
       "name": "Architect",
       "type": "dark",
       "fonts": {
-        "code": "'JetBrains Mono', 'Fira Code', monospace",
-        "ui": "'Inter', 'Segoe UI', sans-serif",
-        "content": "'IBM Plex Sans', 'Helvetica Neue', sans-serif"
+        "code": "'JetBrains Mono', 'Noto Sans Mono', 'Fira Code', monospace",
+        "ui": "'Inter', 'Noto Sans JP', 'Segoe UI', sans-serif",
+        "content": "'IBM Plex Sans', 'Noto Sans JP', 'Helvetica Neue', sans-serif"
       },
       "colors": {
         "bg-primary": "#08090d",
@@ -100,9 +100,9 @@
       "name": "Designer",
       "type": "light",
       "fonts": {
-        "code": "'SF Mono', 'Monaco', monospace",
-        "ui": "'SF Pro Display', 'Helvetica Neue', sans-serif",
-        "content": "'SF Pro Text', 'Helvetica', sans-serif"
+        "code": "'SF Mono', 'Noto Sans Mono', 'Monaco', monospace",
+        "ui": "'SF Pro Display', 'Noto Sans JP', 'Helvetica Neue', sans-serif",
+        "content": "'SF Pro Text', 'Noto Sans JP', 'Helvetica', sans-serif"
       },
       "colors": {
         "bg-primary": "#c8cdd8",

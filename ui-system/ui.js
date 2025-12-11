@@ -1001,8 +1001,10 @@ const SLUI = (function() {
                     <label class="sl-settings-label" data-i18n="settings.appearance.language">${t('settings.appearance.language')}</label>
                     <select class="sl-select sl-settings-select" id="sl-lang-select-panel">
                         <option value="en" ${state.lang === 'en' ? 'selected' : ''}>English</option>
+                        <option value="es" ${state.lang === 'es' ? 'selected' : ''}>Español</option>
                         <option value="fr" ${state.lang === 'fr' ? 'selected' : ''}>Français</option>
                         <option value="it" ${state.lang === 'it' ? 'selected' : ''}>Italiano</option>
+                        <option value="ja" ${state.lang === 'ja' ? 'selected' : ''}>日本語</option>
                         <option value="vi" ${state.lang === 'vi' ? 'selected' : ''}>Tiếng Việt</option>
                     </select>
                 </div>
