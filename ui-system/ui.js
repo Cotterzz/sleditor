@@ -35,7 +35,12 @@ const SLUI = (function() {
             left: null,   // panel id (landscape)
             right: null,  // panel id (landscape)
             focused: 'top' // or 'bottom', 'left', 'right'
-        }
+        },
+        // Dock tree state - BSP tree for docked windows
+        // null = empty, or { type: 'leaf', panelId } or { type: 'split', direction, ratio, first, second }
+        dockTree: null,
+        // Track which windows are docked vs floating
+        dockedWindows: new Set()
     };
     
     // ========================================
@@ -272,17 +277,6 @@ const SLUI = (function() {
             el.placeholder = t(key);
         });
         
-        // Update window titles
-        document.querySelectorAll('.sl-window').forEach(win => {
-            const panelId = win.dataset.windowId;
-            if (panelId) {
-                const titleEl = win.querySelector('.sl-window-title');
-                if (titleEl) {
-                    titleEl.textContent = t(`panels.${panelId}.title`) || panels.get(panelId)?.title || panelId;
-                }
-            }
-        });
-        
         // Update zone headers
         document.querySelectorAll('.sl-zone-title').forEach(el => {
             const panelId = el.closest('.sl-zone-content')?.querySelector('[data-panel]')?.dataset.panel;
@@ -325,20 +319,16 @@ const SLUI = (function() {
     }
     
     function buildToolbar() {
-        // Wrapper (for layered float mode)
+        // Wrapper (for layered float mode with frame)
         const wrapper = document.createElement('div');
         wrapper.className = 'sl-toolbar-wrapper';
         wrapper.id = 'sl-toolbar-wrapper';
         
-        // Header (positioned above toolbar in float mode)
-        const header = document.createElement('div');
-        header.className = 'sl-toolbar-header';
-        header.id = 'sl-toolbar-header';
-        header.innerHTML = `
-            <span class="sl-toolbar-header-icon">🔧</span>
-            <span class="sl-toolbar-header-title" data-i18n="toolbar.title">${t('toolbar.title')}</span>
-        `;
-        wrapper.appendChild(header);
+        // Frame (surrounds toolbar in float mode, appears on hover)
+        const frame = document.createElement('div');
+        frame.className = 'sl-toolbar-frame';
+        frame.id = 'sl-toolbar-frame';
+        wrapper.appendChild(frame);
         
         // Toolbar body
         const toolbar = document.createElement('div');
@@ -373,29 +363,118 @@ const SLUI = (function() {
         userBtn.addEventListener('click', toggleUserMenu);
         items.appendChild(userBtn);
         
-        // Setup floating toolbar drag (drag header moves wrapper)
-        setupToolbarDrag(wrapper, header);
+        // Setup floating toolbar frame hover and drag
+        setupToolbarFrameHover(wrapper, toolbar, frame);
+        setupToolbarDrag(wrapper, frame);
         
         return wrapper;
     }
     
-    function setupToolbarDrag(wrapper, header) {
+    function setupToolbarFrameHover(wrapper, toolbar, frame) {
+        let isInsideToolbar = false;
+        
+        toolbar.addEventListener('mouseenter', () => {
+            isInsideToolbar = true;
+            wrapper.classList.remove('frame-visible');
+        });
+        
+        toolbar.addEventListener('mouseleave', () => {
+            isInsideToolbar = false;
+        });
+        
+        wrapper.addEventListener('mouseenter', () => {
+            if (!isInsideToolbar && state.toolbarPosition === 'float') {
+                wrapper.classList.add('frame-visible');
+            }
+        });
+        
+        wrapper.addEventListener('mouseleave', () => {
+            if (!wrapper.classList.contains('dragging')) {
+                wrapper.classList.remove('frame-visible');
+            }
+        });
+        
+        wrapper.addEventListener('mousemove', (e) => {
+            if (state.toolbarPosition !== 'float') return;
+            if (wrapper.classList.contains('dragging')) return;
+            
+            const toolbarRect = toolbar.getBoundingClientRect();
+            const inToolbar = e.clientX >= toolbarRect.left && e.clientX <= toolbarRect.right &&
+                             e.clientY >= toolbarRect.top && e.clientY <= toolbarRect.bottom;
+            
+            wrapper.classList.toggle('frame-visible', !inToolbar);
+        });
+    }
+    
+    function setupToolbarDrag(wrapper, frame) {
         let isDragging = false;
         let startX, startY, startLeft, startTop;
+        let pendingDockPosition = null;
+        const edgeThreshold = 50;
         
-        header.addEventListener('mousedown', (e) => {
+        // Detect which edge the cursor is near
+        function detectToolbarDockEdge(x, y) {
+            if (x < edgeThreshold) return 'left';
+            if (window.innerWidth - x < edgeThreshold) return 'right';
+            if (y < edgeThreshold) return 'top';
+            if (window.innerHeight - y < edgeThreshold) return 'bottom';
+            return null;
+        }
+        
+        // Show dock preview
+        function showToolbarDockPreview(position) {
+            let preview = document.getElementById('sl-toolbar-dock-preview');
+            if (!preview) {
+                preview = document.createElement('div');
+                preview.id = 'sl-toolbar-dock-preview';
+                preview.style.cssText = `
+                    position: fixed;
+                    background: var(--accent);
+                    opacity: 0.3;
+                    z-index: 999;
+                    pointer-events: none;
+                    transition: all 0.15s ease;
+                `;
+                document.body.appendChild(preview);
+            }
+            
+            // Size based on position
+            if (position === 'left' || position === 'right') {
+                preview.style.width = 'var(--toolbar-size)';
+                preview.style.height = '100%';
+                preview.style.top = '0';
+                preview.style.bottom = '0';
+                preview.style.left = position === 'left' ? '0' : 'auto';
+                preview.style.right = position === 'right' ? '0' : 'auto';
+            } else {
+                preview.style.width = '100%';
+                preview.style.height = 'var(--toolbar-size)';
+                preview.style.left = '0';
+                preview.style.right = '0';
+                preview.style.top = position === 'top' ? '0' : 'auto';
+                preview.style.bottom = position === 'bottom' ? '0' : 'auto';
+            }
+            
+            preview.style.display = 'block';
+        }
+        
+        function hideToolbarDockPreview() {
+            const preview = document.getElementById('sl-toolbar-dock-preview');
+            if (preview) preview.style.display = 'none';
+        }
+        
+        // Handle mousedown on frame (floating mode drag)
+        frame.addEventListener('mousedown', (e) => {
             if (state.toolbarPosition !== 'float') return;
             isDragging = true;
+            pendingDockPosition = null;
             
-            // Get wrapper's current position (includes header in padding)
             const wrapperRect = wrapper.getBoundingClientRect();
-            
             startX = e.clientX;
             startY = e.clientY;
             startLeft = wrapperRect.left;
             startTop = wrapperRect.top;
             
-            // Set exact position, remove transform
             wrapper.style.left = `${startLeft}px`;
             wrapper.style.top = `${startTop}px`;
             wrapper.style.transform = 'none';
@@ -404,28 +483,85 @@ const SLUI = (function() {
             e.preventDefault();
         });
         
+        // Handle mousedown on docked toolbar (for undocking)
+        const toolbar = wrapper.querySelector('.sl-toolbar');
+        toolbar.addEventListener('mousedown', (e) => {
+            if (state.toolbarPosition === 'float') return;
+            if (e.target.closest('.sl-toolbar-item, .sl-toolbar-user')) return; // Don't drag from buttons
+            
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            
+            // We'll undock once moved far enough
+            wrapper.classList.add('dragging');
+            e.preventDefault();
+        });
+        
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
             
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            
-            wrapper.style.left = `${startLeft + dx}px`;
-            wrapper.style.top = `${startTop + dy}px`;
-            wrapper.style.transform = 'none';
+            if (state.toolbarPosition === 'float') {
+                // Floating - move and check for dock
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                
+                wrapper.style.left = `${startLeft + dx}px`;
+                wrapper.style.top = `${startTop + dy}px`;
+                wrapper.style.transform = 'none';
+                
+                // Check for dock position
+                pendingDockPosition = detectToolbarDockEdge(e.clientX, e.clientY);
+                if (pendingDockPosition) {
+                    showToolbarDockPreview(pendingDockPosition);
+                } else {
+                    hideToolbarDockPreview();
+                }
+            } else {
+                // Docked - check if moved far enough to undock
+                const dx = Math.abs(e.clientX - startX);
+                const dy = Math.abs(e.clientY - startY);
+                
+                if (dx > 30 || dy > 30) {
+                    // Undock - switch to float mode at cursor position
+                    const newLeft = e.clientX - 30;
+                    const newTop = e.clientY - 30;
+                    
+                    setToolbarPosition('float');
+                    
+                    // Position wrapper at cursor
+                    wrapper.style.left = `${newLeft}px`;
+                    wrapper.style.top = `${newTop}px`;
+                    wrapper.style.transform = 'none';
+                    
+                    // Update drag state
+                    startLeft = newLeft;
+                    startTop = newTop;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                }
+            }
         });
         
-        document.addEventListener('mouseup', () => {
+        document.addEventListener('mouseup', (e) => {
             if (isDragging) {
                 isDragging = false;
                 wrapper.classList.remove('dragging');
+                hideToolbarDockPreview();
+                
+                // If we have a pending dock position, dock it
+                if (pendingDockPosition && state.toolbarPosition === 'float') {
+                    setToolbarPosition(pendingDockPosition);
+                }
+                pendingDockPosition = null;
             }
         });
         
         // Touch support
-        header.addEventListener('touchstart', (e) => {
+        frame.addEventListener('touchstart', (e) => {
             if (state.toolbarPosition !== 'float') return;
             isDragging = true;
+            pendingDockPosition = null;
             
             const touch = e.touches[0];
             const wrapperRect = wrapper.getBoundingClientRect();
@@ -434,7 +570,6 @@ const SLUI = (function() {
             startLeft = wrapperRect.left;
             startTop = wrapperRect.top;
             
-            // Set position and clear centering
             wrapper.style.left = `${startLeft}px`;
             wrapper.style.top = `${startTop}px`;
             wrapper.style.transform = 'none';
@@ -442,22 +577,68 @@ const SLUI = (function() {
             wrapper.classList.add('dragging');
         }, { passive: true });
         
+        toolbar.addEventListener('touchstart', (e) => {
+            if (state.toolbarPosition === 'float') return;
+            if (e.target.closest('.sl-toolbar-item, .sl-toolbar-user')) return;
+            
+            isDragging = true;
+            const touch = e.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
+            wrapper.classList.add('dragging');
+        }, { passive: true });
+        
         document.addEventListener('touchmove', (e) => {
             if (!isDragging) return;
             
             const touch = e.touches[0];
-            const dx = touch.clientX - startX;
-            const dy = touch.clientY - startY;
             
-            wrapper.style.left = `${startLeft + dx}px`;
-            wrapper.style.top = `${startTop + dy}px`;
-            wrapper.style.transform = 'none';
+            if (state.toolbarPosition === 'float') {
+                const dx = touch.clientX - startX;
+                const dy = touch.clientY - startY;
+                
+                wrapper.style.left = `${startLeft + dx}px`;
+                wrapper.style.top = `${startTop + dy}px`;
+                wrapper.style.transform = 'none';
+                
+                pendingDockPosition = detectToolbarDockEdge(touch.clientX, touch.clientY);
+                if (pendingDockPosition) {
+                    showToolbarDockPreview(pendingDockPosition);
+                } else {
+                    hideToolbarDockPreview();
+                }
+            } else {
+                const dx = Math.abs(touch.clientX - startX);
+                const dy = Math.abs(touch.clientY - startY);
+                
+                if (dx > 30 || dy > 30) {
+                    const newLeft = touch.clientX - 30;
+                    const newTop = touch.clientY - 30;
+                    
+                    setToolbarPosition('float');
+                    
+                    wrapper.style.left = `${newLeft}px`;
+                    wrapper.style.top = `${newTop}px`;
+                    wrapper.style.transform = 'none';
+                    
+                    startLeft = newLeft;
+                    startTop = newTop;
+                    startX = touch.clientX;
+                    startY = touch.clientY;
+                }
+            }
         }, { passive: true });
         
         document.addEventListener('touchend', () => {
             if (isDragging) {
                 isDragging = false;
                 wrapper.classList.remove('dragging');
+                hideToolbarDockPreview();
+                
+                if (pendingDockPosition && state.toolbarPosition === 'float') {
+                    setToolbarPosition(pendingDockPosition);
+                }
+                pendingDockPosition = null;
             }
         });
     }
@@ -521,69 +702,33 @@ const SLUI = (function() {
             minWidth = 200,
             minHeight = 150,
             content = null,
-            resizable = true,
-            closable = true,
-            minimizable = true
+            resizable = true
         } = options;
         
-        // Create window element
+        // Create container (hover zone extends beyond window)
+        const container = document.createElement('div');
+        container.className = 'sl-window-container';
+        container.id = `sl-window-container-${id}`;
+        container.dataset.windowId = id;
+        container.style.left = `${x}px`;
+        container.style.top = `${y}px`;
+        container.style.width = `${width}px`;
+        container.style.height = `${height}px`;
+        container.style.minWidth = `${minWidth}px`;
+        container.style.minHeight = `${minHeight}px`;
+        
+        // Frame (surrounding border, appears on hover from outside)
+        const frame = document.createElement('div');
+        frame.className = 'sl-window-frame';
+        container.appendChild(frame);
+        
+        // Window element
         const win = document.createElement('div');
         win.className = 'sl-window';
         win.id = `sl-window-${id}`;
         win.dataset.windowId = id;
-        win.style.left = `${x}px`;
-        win.style.top = `${y}px`;
-        win.style.width = `${width}px`;
-        win.style.height = `${height}px`;
-        win.style.minWidth = `${minWidth}px`;
-        win.style.minHeight = `${minHeight}px`;
         
-        // Header
-        const header = document.createElement('div');
-        header.className = 'sl-window-header';
-        
-        const iconEl = document.createElement('span');
-        iconEl.className = 'sl-window-icon';
-        iconEl.textContent = icon;
-        header.appendChild(iconEl);
-        
-        const titleEl = document.createElement('span');
-        titleEl.className = 'sl-window-title';
-        titleEl.textContent = title;
-        titleEl.dataset.i18n = `panels.${id}.title`;
-        header.appendChild(titleEl);
-        
-        const controls = document.createElement('div');
-        controls.className = 'sl-window-controls';
-        
-        if (minimizable) {
-            const minBtn = document.createElement('button');
-            minBtn.className = 'sl-window-btn minimize';
-            minBtn.innerHTML = '−';
-            minBtn.title = t('window.minimize');
-            minBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                toggleMinimize(id);
-            });
-            controls.appendChild(minBtn);
-        }
-        
-        if (closable) {
-            const closeBtn = document.createElement('button');
-            closeBtn.className = 'sl-window-btn close';
-            closeBtn.innerHTML = '×';
-            closeBtn.title = t('window.close');
-            closeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                closeWindow(id);
-            });
-            controls.appendChild(closeBtn);
-        }
-        
-        header.appendChild(controls);
-        win.appendChild(header);
-        
-        // Body wrapper (contains content, has margin for header space)
+        // Body (the visible window content area)
         const body = document.createElement('div');
         body.className = 'sl-window-body';
         
@@ -598,30 +743,36 @@ const SLUI = (function() {
             }
         }
         body.appendChild(contentEl);
-        win.appendChild(body);
         
-        // Resize handles
+        // Resize handles (inside body, at edges)
         if (resizable) {
             ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'].forEach(dir => {
                 const handle = document.createElement('div');
                 handle.className = `sl-resize-handle ${dir}`;
                 handle.dataset.direction = dir;
-                win.appendChild(handle);
+                body.appendChild(handle);
             });
         }
         
-        // Store window state
+        win.appendChild(body);
+        container.appendChild(win);
+        
+        // Store window state (store container as the main element)
         state.windows.set(id, {
-            element: win,
+            element: container,
+            window: win,
+            body: body,
+            frame: frame,
             options,
             minimized: false,
             visible: true
         });
         
         // Setup interactions
-        setupWindowDrag(win, header);
-        if (resizable) setupWindowResize(win);
-        setupWindowFocus(win);
+        setupFrameHover(container, body, frame);
+        setupWindowDrag(container, frame);
+        if (resizable) setupWindowResize(container, body);
+        setupWindowFocus(container);
         
         // Always bring new windows to front
         bringToFront(id);
@@ -629,49 +780,111 @@ const SLUI = (function() {
         // Reflect state in toolbar (mark as open/loaded)
         updateToolbarItem(id, true, true, false);
         
-        return win;
+        return container;
     }
     
-    function setupWindowDrag(win, header) {
+    // Frame hover - show frame when cursor is near window but not inside body
+    function setupFrameHover(container, body, frame) {
+        let isInsideBody = false;
+        
+        // Track when cursor enters/leaves the body
+        body.addEventListener('mouseenter', () => {
+            isInsideBody = true;
+            container.classList.remove('frame-visible');
+        });
+        
+        body.addEventListener('mouseleave', () => {
+            isInsideBody = false;
+            // Check if still in container
+            // Frame will show via container hover
+        });
+        
+        // Show frame when hovering container (but not if inside body)
+        container.addEventListener('mouseenter', () => {
+            if (!isInsideBody) {
+                container.classList.add('frame-visible');
+            }
+        });
+        
+        container.addEventListener('mouseleave', () => {
+            if (!container.classList.contains('dragging') && !container.classList.contains('resizing')) {
+                container.classList.remove('frame-visible');
+            }
+        });
+        
+        // Update on mouse move within container
+        container.addEventListener('mousemove', (e) => {
+            if (container.classList.contains('dragging') || container.classList.contains('resizing')) return;
+            
+            const bodyRect = body.getBoundingClientRect();
+            const inBody = e.clientX >= bodyRect.left && e.clientX <= bodyRect.right &&
+                          e.clientY >= bodyRect.top && e.clientY <= bodyRect.bottom;
+            
+            container.classList.toggle('frame-visible', !inBody);
+        });
+    }
+    
+    function setupWindowDrag(container, frame) {
         let isDragging = false;
         let startX, startY, startLeft, startTop;
+        let currentDropInfo = null; // { side, targetPanel }
         
-        header.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.sl-window-btn')) return;
+        frame.addEventListener('mousedown', (e) => {
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
-            startLeft = win.offsetLeft;
-            startTop = win.offsetTop;
-            win.style.transition = 'none';
-            bringToFront(win.dataset.windowId);
+            startLeft = container.offsetLeft;
+            startTop = container.offsetTop;
+            container.style.transition = 'none';
+            container.classList.add('dragging');
+            bringToFront(container.dataset.windowId);
+            e.preventDefault();
         });
         
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
-            win.style.left = `${startLeft + dx}px`;
-            win.style.top = `${startTop + dy}px`;
+            container.style.left = `${startLeft + dx}px`;
+            container.style.top = `${startTop + dy}px`;
+            
+            // Check for drop zones (only for floating windows on desktop)
+            if (state.deviceMode === 'desktop' && !state.dockedWindows.has(container.dataset.windowId)) {
+                currentDropInfo = detectDropZone(e.clientX, e.clientY, container.dataset.windowId);
+                if (currentDropInfo) {
+                    showDropPreview(currentDropInfo);
+                } else {
+                    hideDropPreview();
+                }
+            }
         });
         
-        document.addEventListener('mouseup', () => {
+        document.addEventListener('mouseup', (e) => {
             if (isDragging) {
                 isDragging = false;
-                win.style.transition = '';
+                container.style.transition = '';
+                container.classList.remove('dragging');
+                
+                // If dropped in a zone, dock it
+                if (currentDropInfo && state.deviceMode === 'desktop' && !state.dockedWindows.has(container.dataset.windowId)) {
+                    dockWindow(container.dataset.windowId, currentDropInfo.side, currentDropInfo.targetPanel);
+                }
+                
+                hideDropPreview();
+                currentDropInfo = null;
             }
         });
         
         // Touch support
-        header.addEventListener('touchstart', (e) => {
-            if (e.target.closest('.sl-window-btn')) return;
+        frame.addEventListener('touchstart', (e) => {
             const touch = e.touches[0];
             isDragging = true;
             startX = touch.clientX;
             startY = touch.clientY;
-            startLeft = win.offsetLeft;
-            startTop = win.offsetTop;
-            bringToFront(win.dataset.windowId);
+            startLeft = container.offsetLeft;
+            startTop = container.offsetTop;
+            container.classList.add('dragging');
+            bringToFront(container.dataset.windowId);
         });
         
         document.addEventListener('touchmove', (e) => {
@@ -679,31 +892,53 @@ const SLUI = (function() {
             const touch = e.touches[0];
             const dx = touch.clientX - startX;
             const dy = touch.clientY - startY;
-            win.style.left = `${startLeft + dx}px`;
-            win.style.top = `${startTop + dy}px`;
+            container.style.left = `${startLeft + dx}px`;
+            container.style.top = `${startTop + dy}px`;
+            
+            // Check for drop zones on touch too
+            if (state.deviceMode === 'desktop' && !state.dockedWindows.has(container.dataset.windowId)) {
+                currentDropInfo = detectDropZone(touch.clientX, touch.clientY, container.dataset.windowId);
+                if (currentDropInfo) {
+                    showDropPreview(currentDropInfo);
+                } else {
+                    hideDropPreview();
+                }
+            }
         });
         
         document.addEventListener('touchend', () => {
-            isDragging = false;
+            if (isDragging) {
+                isDragging = false;
+                container.classList.remove('dragging');
+                
+                if (currentDropInfo && state.deviceMode === 'desktop' && !state.dockedWindows.has(container.dataset.windowId)) {
+                    dockWindow(container.dataset.windowId, currentDropInfo.side, currentDropInfo.targetPanel);
+                }
+                
+                hideDropPreview();
+                currentDropInfo = null;
+            }
         });
     }
     
-    function setupWindowResize(win) {
+    function setupWindowResize(container, body) {
         let isResizing = false;
         let startX, startY, startW, startH, startL, startT, direction;
         
-        win.querySelectorAll('.sl-resize-handle').forEach(handle => {
+        body.querySelectorAll('.sl-resize-handle').forEach(handle => {
             handle.addEventListener('mousedown', (e) => {
                 isResizing = true;
                 direction = handle.dataset.direction;
                 startX = e.clientX;
                 startY = e.clientY;
-                startW = win.offsetWidth;
-                startH = win.offsetHeight;
-                startL = win.offsetLeft;
-                startT = win.offsetTop;
-                win.style.transition = 'none';
+                startW = container.offsetWidth;
+                startH = container.offsetHeight;
+                startL = container.offsetLeft;
+                startT = container.offsetTop;
+                container.style.transition = 'none';
+                container.classList.add('resizing');
                 e.preventDefault();
+                e.stopPropagation();
             });
         });
         
@@ -713,29 +948,30 @@ const SLUI = (function() {
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
             
-            if (direction.includes('e')) win.style.width = `${startW + dx}px`;
+            if (direction.includes('e')) container.style.width = `${startW + dx}px`;
             if (direction.includes('w')) {
-                win.style.width = `${startW - dx}px`;
-                win.style.left = `${startL + dx}px`;
+                container.style.width = `${startW - dx}px`;
+                container.style.left = `${startL + dx}px`;
             }
-            if (direction.includes('s')) win.style.height = `${startH + dy}px`;
+            if (direction.includes('s')) container.style.height = `${startH + dy}px`;
             if (direction.includes('n')) {
-                win.style.height = `${startH - dy}px`;
-                win.style.top = `${startT + dy}px`;
+                container.style.height = `${startH - dy}px`;
+                container.style.top = `${startT + dy}px`;
             }
         });
         
         document.addEventListener('mouseup', () => {
             if (isResizing) {
                 isResizing = false;
-                win.style.transition = '';
+                container.style.transition = '';
+                container.classList.remove('resizing');
             }
         });
     }
     
-    function setupWindowFocus(win) {
-        win.addEventListener('mousedown', () => {
-            bringToFront(win.dataset.windowId);
+    function setupWindowFocus(container) {
+        container.addEventListener('mousedown', () => {
+            bringToFront(container.dataset.windowId);
         });
     }
     
@@ -743,10 +979,10 @@ const SLUI = (function() {
         const winState = state.windows.get(windowId);
         if (!winState) return;
         
-        // Remove focus from all windows
-        document.querySelectorAll('.sl-window').forEach(w => w.classList.remove('focused'));
+        // Remove focus from all window containers
+        document.querySelectorAll('.sl-window-container').forEach(c => c.classList.remove('focused'));
         
-        // Set this window as focused and bring to front
+        // Set this container as focused and bring to front
         winState.element.classList.add('focused');
         winState.element.style.zIndex = ++state.zIndex;
         state.activeWindow = windowId;
@@ -800,6 +1036,338 @@ const SLUI = (function() {
     }
     
     // ========================================
+    // DOCKING SYSTEM
+    // ========================================
+    
+    // Dock a window to a specific edge, optionally splitting a specific panel
+    function dockWindow(windowId, side, targetPanelId = null) {
+        const winState = state.windows.get(windowId);
+        if (!winState) return;
+        
+        // Remove from float layer
+        const floatLayer = document.getElementById('sl-float-layer');
+        if (floatLayer && winState.element.parentNode === floatLayer) {
+            floatLayer.removeChild(winState.element);
+        }
+        
+        // Mark as docked
+        state.dockedWindows.add(windowId);
+        
+        // Create new leaf node
+        const newLeaf = { type: 'leaf', panelId: windowId };
+        
+        if (!state.dockTree) {
+            // First dock - fill entire layer
+            state.dockTree = newLeaf;
+        } else if (targetPanelId) {
+            // Split a specific panel
+            splitNodeByPanelId(state.dockTree, targetPanelId, newLeaf, side);
+        } else {
+            // Split at root level
+            const direction = (side === 'left' || side === 'right') ? 'horizontal' : 'vertical';
+            const newFirst = (side === 'left' || side === 'top');
+            
+            state.dockTree = {
+                type: 'split',
+                direction,
+                ratio: 0.5,
+                first: newFirst ? newLeaf : state.dockTree,
+                second: newFirst ? state.dockTree : newLeaf
+            };
+        }
+        
+        // Re-render dock layer
+        renderDockTree();
+        updateToolbarItem(windowId, true, true, false);
+    }
+    
+    // Find and split a specific node by panelId
+    function splitNodeByPanelId(tree, targetPanelId, newLeaf, side, parent = null, parentKey = null) {
+        if (!tree) return false;
+        
+        if (tree.type === 'leaf' && tree.panelId === targetPanelId) {
+            // Found it - replace with a split
+            const direction = (side === 'left' || side === 'right') ? 'horizontal' : 'vertical';
+            const newFirst = (side === 'left' || side === 'top');
+            
+            const newSplit = {
+                type: 'split',
+                direction,
+                ratio: 0.5,
+                first: newFirst ? newLeaf : { type: 'leaf', panelId: targetPanelId },
+                second: newFirst ? { type: 'leaf', panelId: targetPanelId } : newLeaf
+            };
+            
+            if (parent && parentKey) {
+                parent[parentKey] = newSplit;
+            } else {
+                // It's the root
+                state.dockTree = newSplit;
+            }
+            return true;
+        }
+        
+        if (tree.type === 'split') {
+            if (splitNodeByPanelId(tree.first, targetPanelId, newLeaf, side, tree, 'first')) return true;
+            if (splitNodeByPanelId(tree.second, targetPanelId, newLeaf, side, tree, 'second')) return true;
+        }
+        
+        return false;
+    }
+    
+    // Render the dock tree to the DOM
+    function renderDockTree() {
+        const dockLayer = document.getElementById('sl-dock-layer');
+        if (!dockLayer) return;
+        
+        // Clear existing
+        dockLayer.innerHTML = '';
+        
+        if (!state.dockTree) return;
+        
+        // Recursively build DOM
+        const element = buildDockNode(state.dockTree);
+        if (element) {
+            dockLayer.appendChild(element);
+        }
+    }
+    
+    // Recursively build dock node DOM
+    function buildDockNode(node) {
+        if (!node) return null;
+        
+        if (node.type === 'leaf') {
+            // Leaf - create panel container for the window
+            const panel = document.createElement('div');
+            panel.className = 'sl-dock-panel';
+            panel.dataset.panelId = node.panelId;
+            
+            // Add drop zones for subdivision docking
+            ['left', 'right', 'top', 'bottom'].forEach(side => {
+                const dropZone = document.createElement('div');
+                dropZone.className = `sl-panel-drop-zone ${side}`;
+                dropZone.dataset.side = side;
+                dropZone.dataset.targetPanel = node.panelId;
+                panel.appendChild(dropZone);
+            });
+            
+            // Get or create the window
+            const winState = state.windows.get(node.panelId);
+            if (winState && winState.element) {
+                panel.appendChild(winState.element);
+            }
+            
+            return panel;
+        }
+        
+        if (node.type === 'split') {
+            // Split - create container with two children and a divider
+            const container = document.createElement('div');
+            container.className = 'sl-dock-container';
+            container.dataset.direction = node.direction;
+            
+            const first = buildDockNode(node.first);
+            const second = buildDockNode(node.second);
+            
+            if (first) {
+                first.style.flex = node.ratio;
+                container.appendChild(first);
+            }
+            
+            // Divider
+            const divider = document.createElement('div');
+            divider.className = 'sl-dock-divider';
+            setupDockDivider(divider, node, container);
+            container.appendChild(divider);
+            
+            if (second) {
+                second.style.flex = 1 - node.ratio;
+                container.appendChild(second);
+            }
+            
+            return container;
+        }
+        
+        return null;
+    }
+    
+    // Setup divider drag to resize splits
+    function setupDockDivider(divider, node, container) {
+        let isDragging = false;
+        let startPos, startRatio;
+        
+        divider.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            divider.classList.add('dragging');
+            startPos = node.direction === 'horizontal' ? e.clientX : e.clientY;
+            startRatio = node.ratio;
+            e.preventDefault();
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            
+            const rect = container.getBoundingClientRect();
+            const size = node.direction === 'horizontal' ? rect.width : rect.height;
+            const currentPos = node.direction === 'horizontal' ? e.clientX : e.clientY;
+            const delta = (currentPos - startPos) / size;
+            
+            node.ratio = Math.max(0.1, Math.min(0.9, startRatio + delta));
+            
+            // Update flex values
+            const children = container.children;
+            if (children[0]) children[0].style.flex = node.ratio;
+            if (children[2]) children[2].style.flex = 1 - node.ratio;
+        });
+        
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                divider.classList.remove('dragging');
+            }
+        });
+    }
+    
+    // Detect drop zone during drag - returns { side, targetPanel } or null
+    function detectDropZone(x, y, draggedWindowId) {
+        const workspace = document.getElementById('sl-workspace');
+        if (!workspace) return null;
+        
+        const workspaceRect = workspace.getBoundingClientRect();
+        const screenEdge = 40; // pixels from screen edge for root-level dock
+        const panelEdge = 30; // pixels from panel edge for subdivision
+        
+        // First check dock panels for subdivision docking (takes priority)
+        const panels = document.querySelectorAll('.sl-dock-panel');
+        
+        for (const panel of panels) {
+            const panelId = panel.dataset.panelId;
+            
+            // Don't dock into the window being dragged
+            if (panelId === draggedWindowId) continue;
+            
+            const rect = panel.getBoundingClientRect();
+            
+            // Check if cursor is over this panel
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                const fromLeft = x - rect.left;
+                const fromRight = rect.right - x;
+                const fromTop = y - rect.top;
+                const fromBottom = rect.bottom - y;
+                
+                // Check panel edges for subdivision
+                // Each edge only triggers if we're near THAT edge specifically
+                if (fromLeft < panelEdge) return { side: 'left', targetPanel: panelId };
+                if (fromRight < panelEdge) return { side: 'right', targetPanel: panelId };
+                if (fromTop < panelEdge) return { side: 'top', targetPanel: panelId };
+                if (fromBottom < panelEdge) return { side: 'bottom', targetPanel: panelId };
+            }
+        }
+        
+        // Then check screen edges for root-level docking (only if not over any panel edge)
+        // Only dock at root level if there are no docked panels, or cursor is outside all panels
+        if (panels.length === 0 || !state.dockTree) {
+            // No panels yet - screen edge triggers root dock
+            if (x - workspaceRect.left < screenEdge) return { side: 'left', targetPanel: null };
+            if (workspaceRect.right - x < screenEdge) return { side: 'right', targetPanel: null };
+            if (y - workspaceRect.top < screenEdge) return { side: 'top', targetPanel: null };
+            if (workspaceRect.bottom - y < screenEdge) return { side: 'bottom', targetPanel: null };
+        } else {
+            // Panels exist - only trigger root dock at the very edges where no panel is
+            // Check if cursor is outside all panels but near screen edge
+            let overAnyPanel = false;
+            for (const panel of panels) {
+                const rect = panel.getBoundingClientRect();
+                if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                    overAnyPanel = true;
+                    break;
+                }
+            }
+            
+            if (!overAnyPanel) {
+                // Not over any panel - screen edges for root dock
+                if (x - workspaceRect.left < screenEdge) return { side: 'left', targetPanel: null };
+                if (workspaceRect.right - x < screenEdge) return { side: 'right', targetPanel: null };
+                if (y - workspaceRect.top < screenEdge) return { side: 'top', targetPanel: null };
+                if (workspaceRect.bottom - y < screenEdge) return { side: 'bottom', targetPanel: null };
+            }
+        }
+        
+        return null;
+    }
+    
+    // Show drop preview
+    function showDropPreview(dropInfo) {
+        const preview = document.getElementById('sl-drop-preview');
+        const workspace = document.getElementById('sl-workspace');
+        if (!preview || !workspace || !dropInfo) return;
+        
+        const { side, targetPanel } = dropInfo;
+        let targetRect;
+        
+        if (targetPanel) {
+            // Subdivision - preview relative to target panel
+            const panel = document.querySelector(`.sl-dock-panel[data-panel-id="${targetPanel}"]`);
+            if (panel) {
+                targetRect = panel.getBoundingClientRect();
+            } else {
+                return;
+            }
+        } else {
+            // Root level - preview relative to workspace
+            targetRect = workspace.getBoundingClientRect();
+        }
+        
+        // Calculate preview position
+        let previewRect = { left: 0, top: 0, width: 0, height: 0 };
+        
+        if (!state.dockTree && !targetPanel) {
+            // Will fill entire workspace
+            previewRect = { left: targetRect.left, top: targetRect.top, width: targetRect.width, height: targetRect.height };
+        } else {
+            // Will take half on that side
+            switch (side) {
+                case 'left':
+                    previewRect = { left: targetRect.left, top: targetRect.top, width: targetRect.width / 2, height: targetRect.height };
+                    break;
+                case 'right':
+                    previewRect = { left: targetRect.left + targetRect.width / 2, top: targetRect.top, width: targetRect.width / 2, height: targetRect.height };
+                    break;
+                case 'top':
+                    previewRect = { left: targetRect.left, top: targetRect.top, width: targetRect.width, height: targetRect.height / 2 };
+                    break;
+                case 'bottom':
+                    previewRect = { left: targetRect.left, top: targetRect.top + targetRect.height / 2, width: targetRect.width, height: targetRect.height / 2 };
+                    break;
+            }
+        }
+        
+        preview.style.left = previewRect.left + 'px';
+        preview.style.top = previewRect.top + 'px';
+        preview.style.width = previewRect.width + 'px';
+        preview.style.height = previewRect.height + 'px';
+        preview.classList.add('visible');
+        
+        // Highlight appropriate drop zones
+        document.querySelectorAll('.sl-drop-zone').forEach(z => {
+            z.classList.toggle('active', !targetPanel && z.dataset.side === side);
+        });
+        
+        document.querySelectorAll('.sl-panel-drop-zone').forEach(z => {
+            const isTarget = z.dataset.targetPanel === targetPanel && z.dataset.side === side;
+            z.classList.toggle('active', isTarget);
+        });
+    }
+    
+    // Hide drop preview
+    function hideDropPreview() {
+        const preview = document.getElementById('sl-drop-preview');
+        if (preview) preview.classList.remove('visible');
+        document.querySelectorAll('.sl-drop-zone').forEach(z => z.classList.remove('active'));
+        document.querySelectorAll('.sl-panel-drop-zone').forEach(z => z.classList.remove('active'));
+    }
+    
+    // ========================================
     // APP BUILDER
     // ========================================
     
@@ -827,6 +1395,34 @@ const SLUI = (function() {
         if (state.deviceMode === 'mobile') {
             // Mobile: add zone containers
             workspace.appendChild(buildMobileZones());
+        } else {
+            // Desktop: create dock and float layers
+            const dockLayer = document.createElement('div');
+            dockLayer.className = 'sl-dock-layer';
+            dockLayer.id = 'sl-dock-layer';
+            workspace.appendChild(dockLayer);
+            
+            const floatLayer = document.createElement('div');
+            floatLayer.className = 'sl-float-layer';
+            floatLayer.id = 'sl-float-layer';
+            workspace.appendChild(floatLayer);
+            
+            // Create drop zone indicators
+            ['left', 'right', 'top', 'bottom'].forEach(side => {
+                const zone = document.createElement('div');
+                zone.className = `sl-drop-zone ${side}`;
+                zone.dataset.side = side;
+                workspace.appendChild(zone);
+            });
+            
+            // Create drop preview
+            const preview = document.createElement('div');
+            preview.className = 'sl-drop-preview';
+            preview.id = 'sl-drop-preview';
+            workspace.appendChild(preview);
+            
+            // Render any existing dock tree
+            renderDockTree();
         }
         
         app.appendChild(workspace);
@@ -1203,8 +1799,14 @@ const SLUI = (function() {
                     resizable: true
                 });
                 
+                // Add to float layer if desktop, otherwise workspace
+                const floatLayer = document.getElementById('sl-float-layer');
                 const workspace = document.querySelector('.sl-workspace');
-                if (workspace) workspace.appendChild(win);
+                if (floatLayer) {
+                    floatLayer.appendChild(win);
+                } else if (workspace) {
+                    workspace.appendChild(win);
+                }
                 bringToFront(panelId);
             }
             updateToolbarItem(panelId, true, true, false);
@@ -1470,7 +2072,13 @@ const SLUI = (function() {
                             height: 400,
                             content
                         });
-                        document.getElementById('sl-workspace').appendChild(win);
+                        // Add to float layer if available
+                        const floatLayer = document.getElementById('sl-float-layer');
+                        if (floatLayer) {
+                            floatLayer.appendChild(win);
+                        } else {
+                            document.getElementById('sl-workspace').appendChild(win);
+                        }
                         updateToolbarItem(id, true, true, false);
                     }
                 }
@@ -1509,6 +2117,10 @@ const SLUI = (function() {
         closeWindow,
         toggleWindow,
         bringToFront,
+        
+        // Docking
+        dockWindow,
+        renderDockTree,
         
         // Panels
         registerPanel,
