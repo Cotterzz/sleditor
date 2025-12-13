@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeline Slider Component - Enhanced</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: #16213e;
+            border-radius: 16px;
+            padding: 30px;
+            width: 100%;
+            max-width: 1200px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        h2 {
+            color: #e94560;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        /* Slider Section */
+        .slider-section {
+            background: #0f3460;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .slider-label {
+            color: #fff;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .slider-value {
+            background: #e94560;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .slider-wrapper {
+            position: relative;
+        }
+
+        #valueSlider {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: #1a1a2e;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        #valueSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #e94560;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(233, 69, 96, 0.5);
+            transition: transform 0.2s;
+        }
+
+        #valueSlider::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+
+        #valueSlider:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #valueSlider:disabled::-webkit-slider-thumb {
+            cursor: not-allowed;
+        }
+
+        /* Timeline Section */
+        .timeline-section {
+            background: #0f3460;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .timeline-header {
+            color: #fff;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .timeline-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .time-display {
+            background: #1a1a2e;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #1a1a2e;
+            padding: 5px;
+            border-radius: 20px;
+        }
+
+        .zoom-controls button {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            font-size: 16px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .zoom-level {
+            color: #fff;
+            font-size: 12px;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .timeline-scroll-container {
+            overflow-x: auto;
+            overflow-y: hidden;
+            margin: 0 -10px;
+            padding: 0 10px;
+            scrollbar-width: thin;
+            scrollbar-color: #e94560 #1a1a2e;
+        }
+
+        .timeline-scroll-container::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .timeline-scroll-container::-webkit-scrollbar-track {
+            background: #1a1a2e;
+            border-radius: 4px;
+        }
+
+        .timeline-scroll-container::-webkit-scrollbar-thumb {
+            background: #e94560;
+            border-radius: 4px;
+        }
+
+        .timeline-scroll-container::-webkit-scrollbar-thumb:hover {
+            background: #ff6b6b;
+        }
+
+        .timeline-container {
+            position: relative;
+            height: 80px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            cursor: grab;
+            min-width: 100%;
+            margin-top: 10px;
+        }
+
+        .timeline-container.scrubbing {
+            cursor: grabbing;
+        }
+
+        .timeline-track {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: #333;
+            transform: translateY(-50%);
+        }
+
+        /* Frame lines */
+        .frame-lines {
+            position: absolute;
+            top: 45%;
+            bottom: 45%;
+            left: 0;
+            right: 0;
+            pointer-events: none;
+        }
+
+        .frame-line {
+            position: absolute;
+            width: 1px;
+            height: 100%;
+            background: #444;
+            opacity: 0.3;
+        }
+
+        .frame-line.second {
+            background: #666;
+            opacity: 0.5;
+            height: 150%;
+            top: -25%;
+        }
+
+        .time-label {
+            position: absolute;
+            bottom: -20px;
+            transform: translateX(-50%);
+            color: #888;
+            font-size: 11px;
+            font-family: monospace;
+            white-space: nowrap;
+        }
+
+        .playhead {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #fff;
+            transform: translateX(-50%);
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            z-index: 20;
+        }
+
+        .playhead::before {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 8px solid #fff;
+        }
+
+        .keyframe {
+            position: absolute;
+            top: 50%;
+            width: 16px;
+            height: 16px;
+            background: #4ecca3;
+            border: 2px solid #fff;
+            transform: translate(-50%, -50%) rotate(45deg);
+            cursor: pointer;
+            transition: all 0.2s;
+            z-index: 10;
+        }
+
+        .keyframe:hover {
+            transform: translate(-50%, -50%) rotate(45deg) scale(1.2);
+            background: #7effc9;
+        }
+
+        .keyframe.selected {
+            background: #e94560;
+            box-shadow: 0 0 15px rgba(233, 69, 96, 0.7);
+        }
+
+        .keyframe.selected:hover {
+            background: #ff6b6b;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-play {
+            background: #4ecca3;
+            color: #1a1a2e;
+        }
+
+        .btn-play:hover {
+            background: #7effc9;
+            transform: translateY(-2px);
+        }
+
+        .btn-play.playing {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .btn-add {
+            background: #3498db;
+            color: #fff;
+        }
+
+        .btn-add:hover {
+            background: #5dade2;
+            transform: translateY(-2px);
+        }
+
+        .btn-reset {
+            background: #333;
+            color: #fff;
+        }
+
+        .btn-reset:hover {
+            background: #444;
+            transform: translateY(-2px);
+        }
+
+        .btn-delete {
+            background: #e94560;
+            color: #fff;
+        }
+
+        .btn-delete:hover {
+            background: #ff6b6b;
+            transform: translateY(-2px);
+        }
+
+        .btn-delete:disabled {
+            background: #333;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Timeline Length Input */
+        .timeline-length {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #1a1a2e;
+            padding: 8px 15px;
+            border-radius: 20px;
+        }
+
+        .timeline-length label {
+            color: #fff;
+            font-size: 12px;
+        }
+
+        .timeline-length input {
+            width: 60px;
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            background: #0f3460;
+            color: #fff;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        /* Info */
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            color: #888;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .info strong {
+            color: #4ecca3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>🎬 Timeline Keyframe Editor</h2>
+        
+        <div class="slider-section">
+            <div class="slider-label">
+                <span>Value</span>
+                <span class="slider-value" id="sliderValueDisplay">50</span>
+            </div>
+            <div class="slider-wrapper">
+                <input type="range" id="valueSlider" min="0" max="100" value="50">
+            </div>
+        </div>
+
+        <div class="timeline-section">
+            <div class="timeline-header">
+                <div class="timeline-info">
+                    <div class="timeline-length">
+                        <label>Duration:</label>
+                        <input type="number" id="durationInput" min="1" max="600" value="60" step="1">
+                        <span style="color: #fff; font-size: 12px;">sec</span>
+                    </div>
+                    <span class="time-display" id="timeDisplay">00:00.000</span>
+                    <span class="time-display" id="frameDisplay">Frame: 0</span>
+                </div>
+                <div class="zoom-controls">
+                    <button class="btn-zoom" id="zoomOut">−</button>
+                    <span class="zoom-level" id="zoomLevel">1x</span>
+                    <button class="btn-zoom" id="zoomIn">+</button>
+                </div>
+            </div>
+            <div class="timeline-scroll-container" id="timelineScrollContainer">
+                <div class="timeline-container" id="timeline">
+                    <div class="frame-lines" id="frameLines"></div>
+                    <div class="timeline-track"></div>
+                    <div class="playhead" id="playhead"></div>
+                    <div id="keyframesContainer"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <button class="btn-play" id="playBtn">
+                    <span id="playIcon">▶</span>
+                    <span id="playText">Play</span>
+                </button>
+                <button class="btn-add" id="addKeyframeBtn">
+                    + Add Keyframe
+                </button>
+            </div>
+            <div class="control-group">
+                <button class="btn-reset" id="resetBtn">
+                    ⏮ Reset
+                </button>
+                <button class="btn-delete" id="deleteBtn" disabled>
+                    🗑 Delete Keyframe
+                </button>
+            </div>
+        </div>
+
+        <div class="info">
+            <strong>Instructions:</strong><br>
+            • Click "Add Keyframe" to add at current time (snaps to frames)<br>
+            • Click and drag timeline to scrub<br>
+            • Zoom in/out to see individual frames (1/60th second)<br>
+            • Select keyframes and adjust slider value<br>
+            • Cannot edit while playing
+        </div>
+    </div>
+
+    <script>
+        // Constants
+        const FPS = 60;
+        const FRAME_TIME = 1 / FPS;
+        const MIN_ZOOM = 0.1;
+        const MAX_ZOOM = 10;
+        const ZOOM_STEP = 1.5;
+        
+        // State
+        let duration = 60; // seconds
+        let keyframes = [{ time: 0, value: 50 }]; // Default keyframe at start
+        let selectedKeyframeIndex = 0;
+        let isPlaying = false;
+        let isScrubbing = false;
+        let currentTime = 0;
+        let animationId = null;
+        let lastTimestamp = null;
+        let zoomLevel = 1;
+
+        // DOM Elements
+        const timeline = document.getElementById('timeline');
+        const timelineScrollContainer = document.getElementById('timelineScrollContainer');
+        const playhead = document.getElementById('playhead');
+        const frameLines = document.getElementById('frameLines');
+        const keyframesContainer = document.getElementById('keyframesContainer');
+        const valueSlider = document.getElementById('valueSlider');
+        const sliderValueDisplay = document.getElementById('sliderValueDisplay');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const frameDisplay = document.getElementById('frameDisplay');
+        const playBtn = document.getElementById('playBtn');
+        const playIcon = document.getElementById('playIcon');
+        const playText = document.getElementById('playText');
+        const addKeyframeBtn = document.getElementById('addKeyframeBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const deleteBtn = document.getElementById('deleteBtn');
+        const zoomIn = document.getElementById('zoomIn');
+        const zoomOut = document.getElementById('zoomOut');
+        const zoomLevelDisplay = document.getElementById('zoomLevel');
+        const durationInput = document.getElementById('durationInput');
+
+        // Utility Functions
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max);
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            const ms = Math.floor((seconds % 1) * 1000);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+        }
+
+        function snapToFrame(time) {
+            return Math.round(time / FRAME_TIME) * FRAME_TIME;
+        }
+
+        function getTimelineWidth() {
+            return timelineScrollContainer.offsetWidth * zoomLevel;
+        }
+
+        function timeToPixels(time) {
+            const width = getTimelineWidth();
+            return (time / duration) * width;
+        }
+
+        function pixelsToTime(pixels) {
+            const width = getTimelineWidth();
+            return clamp((pixels / width) * duration, 0, duration);
+        }
+
+        // Get interpolated value at a specific time
+        function getValueAtTime(time) {
+            const sorted = [...keyframes].sort((a, b) => a.time - b.time);
+            
+            if (sorted.length === 0) return 50;
+            if (sorted.length === 1) return sorted[0].value;
+            if (time <= sorted[0].time) return sorted[0].value;
+            if (time >= sorted[sorted.length - 1].time) return sorted[sorted.length - 1].value;
+            
+            let before = sorted[0];
+            let after = sorted[sorted.length - 1];
+            
+            for (let i = 0; i < sorted.length - 1; i++) {
+                if (sorted[i].time <= time && sorted[i + 1].time >= time) {
+                    before = sorted[i];
+                    after = sorted[i + 1];
+                    break;
+                }
+            }
+            
+            const t = (time - before.time) / (after.time - before.time);
+            return lerp(before.value, after.value, t);
+        }
+
+        // Update timeline zoom
+        function updateZoom() {
+            const width = getTimelineWidth();
+            timeline.style.width = width + 'px';
+            zoomLevelDisplay.textContent = zoomLevel.toFixed(1) + 'x';
+            
+            renderFrameLines();
+            renderKeyframes();
+            updatePlayhead();
+            
+            // Center on playhead if zooming in
+            if (zoomLevel > 1) {
+                const playheadPos = timeToPixels(currentTime);
+                const containerWidth = timelineScrollContainer.offsetWidth;
+                timelineScrollContainer.scrollLeft = playheadPos - containerWidth / 2;
+            }
+        }
+
+        // Render frame lines based on zoom
+        function renderFrameLines() {
+            frameLines.innerHTML = '';
+            
+            const width = getTimelineWidth();
+            const pixelsPerFrame = timeToPixels(FRAME_TIME);
+            const pixelsPerSecond = timeToPixels(1);
+            
+            // Only show frame lines if zoomed in enough
+            if (pixelsPerFrame >= 2) {
+                const totalFrames = Math.ceil(duration * FPS);
+                for (let i = 0; i <= totalFrames; i++) {
+                    const time = i * FRAME_TIME;
+                    const x = timeToPixels(time);
+                    
+                    const line = document.createElement('div');
+                    line.className = 'frame-line';
+                    if (i % FPS === 0) {
+                        line.className += ' second';
+                        
+                        // Add time label for seconds
+                        const label = document.createElement('div');
+                        label.className = 'time-label';
+                        label.textContent = Math.floor(time) + 's';
+                        label.style.left = x + 'px';
+                        frameLines.appendChild(label);
+                    }
+                    line.style.left = x + 'px';
+                    frameLines.appendChild(line);
+                }
+            } else if (pixelsPerSecond >= 10) {
+                // Show second markers
+                for (let i = 0; i <= duration; i++) {
+                    const x = timeToPixels(i);
+                    const line = document.createElement('div');
+                    line.className = 'frame-line second';
+                    line.style.left = x + 'px';
+                    
+                    const label = document.createElement('div');
+                    label.className = 'time-label';
+                    label.textContent = i + 's';
+                    label.style.left = x + 'px';
+                    
+                    frameLines.appendChild(line);
+                    frameLines.appendChild(label);
+                }
+            }
+        }
+
+        // Render keyframes on timeline
+        function renderKeyframes() {
+            keyframesContainer.innerHTML = '';
+            
+            keyframes.forEach((kf, index) => {
+                const keyframeEl = document.createElement('div');
+                keyframeEl.className = 'keyframe' + (index === selectedKeyframeIndex ? ' selected' : '');
+                keyframeEl.style.left = timeToPixels(kf.time) + 'px';
+                keyframeEl.dataset.index = index;
+                
+                keyframeEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (!isPlaying) {
+                        selectKeyframe(index);
+                    }
+                });
+                
+                keyframesContainer.appendChild(keyframeEl);
+            });
+            
+            updateDeleteButton();
+        }
+
+        // Select a keyframe
+        function selectKeyframe(index) {
+            selectedKeyframeIndex = index;
+            const kf = keyframes[index];
+            
+            valueSlider.value = kf.value;
+            sliderValueDisplay.textContent = Math.round(kf.value);
+            
+            currentTime = kf.time;
+            updatePlayhead();
+            
+            renderKeyframes();
+        }
+
+        // Add a keyframe at current time
+        function addKeyframeAtCurrentTime() {
+            if (isPlaying) return;
+            
+            const snappedTime = snapToFrame(currentTime);
+            
+            // Check if keyframe already exists at this time
+            const existingIndex = keyframes.findIndex(kf => Math.abs(kf.time - snappedTime) < FRAME_TIME / 2);
+            
+            if (existingIndex !== -1) {
+                selectKeyframe(existingIndex);
+                return;
+            }
+            
+            const value = getValueAtTime(snappedTime);
+            keyframes.push({ time: snappedTime, value });
+            
+            keyframes.sort((a, b) => a.time - b.time);
+            const newIndex = keyframes.findIndex(kf => kf.time === snappedTime);
+            
+            selectKeyframe(newIndex);
+        }
+
+        // Delete selected keyframe
+        function deleteSelectedKeyframe() {
+            if (keyframes.length <= 1) return;
+            if (selectedKeyframeIndex === null) return;
+            
+            keyframes.splice(selectedKeyframeIndex, 1);
+            selectedKeyframeIndex = Math.min(selectedKeyframeIndex, keyframes.length - 1);
+            
+            selectKeyframe(selectedKeyframeIndex);
+        }
+
+        // Update playhead position
+        function updatePlayhead() {
+            const pixelPos = timeToPixels(currentTime);
+            playhead.style.left = pixelPos + 'px';
+            
+            timeDisplay.textContent = formatTime(currentTime);
+            frameDisplay.textContent = 'Frame: ' + Math.round(currentTime * FPS);
+        }
+
+        // Update slider display
+        function updateSliderDisplay(value) {
+            sliderValueDisplay.textContent = Math.round(value);
+            valueSlider.value = value;
+        }
+
+        // Update delete button state
+        function updateDeleteButton() {
+            deleteBtn.disabled = keyframes.length <= 1 || isPlaying;
+        }
+
+        // Animation loop
+        function animate(timestamp) {
+            if (!lastTimestamp) lastTimestamp = timestamp;
+            const deltaTime = (timestamp - lastTimestamp) / 1000;
+            lastTimestamp = timestamp;
+            
+            currentTime += deltaTime;
+            
+            if (currentTime >= duration) {
+                currentTime = duration;
+                stopPlayback();
+                return;
+            }
+            
+            updatePlayhead();
+            
+            const currentValue = getValueAtTime(currentTime);
+            updateSliderDisplay(currentValue);
+            
+            // Auto-scroll to follow playhead
+            const playheadPos = timeToPixels(currentTime);
+            const scrollLeft = timelineScrollContainer.scrollLeft;
+            const containerWidth = timelineScrollContainer.offsetWidth;
+            
+            if (playheadPos > scrollLeft + containerWidth - 50) {
+                timelineScrollContainer.scrollLeft = playheadPos - containerWidth + 100;
+            } else if (playheadPos < scrollLeft + 50) {
+                timelineScrollContainer.scrollLeft = Math.max(0, playheadPos - 50);
+            }
+            
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // Start playback
+        function startPlayback() {
+            if (currentTime >= duration) {
+                currentTime = 0;
+            }
+            
+            isPlaying = true;
+            lastTimestamp = null;
+            selectedKeyframeIndex = null;
+            
+            playBtn.classList.add('playing');
+            playIcon.textContent = '⏸';
+            playText.textContent = 'Pause';
+            
+            valueSlider.disabled = true;
+            updateDeleteButton();
+            
+            renderKeyframes();
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // Stop playback
+        function stopPlayback() {
+            isPlaying = false;
+            
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            
+            playBtn.classList.remove('playing');
+            playIcon.textContent = '▶';
+            playText.textContent = 'Play';
+            
+            valueSlider.disabled = false;
+            updateDeleteButton();
+            
+            // Select nearest keyframe
+            let nearestIndex = 0;
+            let nearestDist = Infinity;
+            keyframes.forEach((kf, i) => {
+                const dist = Math.abs(kf.time - currentTime);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestIndex = i;
+                }
+            });
+            selectKeyframe(nearestIndex);
+        }
+
+        // Reset to beginning
+        function reset() {
+            if (isPlaying) {
+                stopPlayback();
+            }
+            currentTime = 0;
+            updatePlayhead();
+            selectKeyframe(0);
+            timelineScrollContainer.scrollLeft = 0;
+        }
+
+        // Handle scrubbing
+        function startScrubbing(e) {
+            if (isPlaying) return;
+            
+            isScrubbing = true;
+            timeline.classList.add('scrubbing');
+            updateTimeFromMouse(e);
+        }
+
+        function updateTimeFromMouse(e) {
+            const rect = timeline.getBoundingClientRect();
+            const scrollLeft = timelineScrollContainer.scrollLeft;
+            const x = e.clientX - rect.left + scrollLeft;
+            const time = pixelsToTime(x);
+            
+            currentTime = snapToFrame(time);
+            updatePlayhead();
+            
+            const value = getValueAtTime(currentTime);
+            updateSliderDisplay(value);
+        }
+
+        function stopScrubbing() {
+            isScrubbing = false;
+            timeline.classList.remove('scrubbing');
+        }
+
+        // Event Listeners
+        timeline.addEventListener('mousedown', startScrubbing);
+
+        document.addEventListener('mousemove', (e) => {
+            if (isScrubbing) {
+                updateTimeFromMouse(e);
+            }
+        });
+
+        document.addEventListener('mouseup', stopScrubbing);
+
+        valueSlider.addEventListener('input', (e) => {
+            if (isPlaying) return;
+            if (selectedKeyframeIndex === null) return;
+            
+            const value = parseFloat(e.target.value);
+            keyframes[selectedKeyframeIndex].value = value;
+            sliderValueDisplay.textContent = Math.round(value);
+        });
+
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                stopPlayback();
+            } else {
+                startPlayback();
+            }
+        });
+
+        addKeyframeBtn.addEventListener('click', addKeyframeAtCurrentTime);
+        resetBtn.addEventListener('click', reset);
+        deleteBtn.addEventListener('click', deleteSelectedKeyframe);
+
+        zoomIn.addEventListener('click', () => {
+            zoomLevel = Math.min(zoomLevel * ZOOM_STEP, MAX_ZOOM);
+            updateZoom();
+        });
+
+        zoomOut.addEventListener('click', () => {
+            zoomLevel = Math.max(zoomLevel / ZOOM_STEP, MIN_ZOOM);
+            updateZoom();
+        });
+
+        durationInput.addEventListener('change', (e) => {
+            const newDuration = parseInt(e.target.value);
+            if (newDuration >= 1 && newDuration <= 600) {
+                duration = newDuration;
+                
+                // Remove keyframes beyond new duration
+                keyframes = keyframes.filter(kf => kf.time <= duration);
+                if (keyframes.length === 0) {
+                    keyframes = [{ time: 0, value: 50 }];
+                }
+                
+                // Adjust current time if needed
+                currentTime = Math.min(currentTime, duration);
+                
+                updateZoom();
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (isPlaying) {
+                    stopPlayback();
+                } else {
+                    startPlayback();
+                }
+            } else if (e.code === 'Delete' || e.code === 'Backspace') {
+                if (!isPlaying && keyframes.length > 1) {
+                    e.preventDefault();
+                    deleteSelectedKeyframe();
+                }
+            } else if (e.code === 'KeyA' && !isPlaying) {
+                e.preventDefault();
+                addKeyframeAtCurrentTime();
+            }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            updateZoom();
+        });
+
+        // Mouse wheel zoom
+        timelineScrollContainer.addEventListener('wheel', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                if (e.deltaY < 0) {
+                    zoomLevel = Math.min(zoomLevel * 1.1, MAX_ZOOM);
+                } else {
+                    zoomLevel = Math.max(zoomLevel / 1.1, MIN_ZOOM);
+                }
+                updateZoom();
+            }
+        }, { passive: false });
+
+        // Initialize
+        updateZoom();
+        renderKeyframes();
+        selectKeyframe(0);
+        updatePlayhead();
+    </script>
+</body>
+</html>

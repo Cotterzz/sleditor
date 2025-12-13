@@ -5,10 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SL Editor - UI System Prototype</title>
     
-    <!-- Google Fonts for themes -->
+    <!-- Google Fonts for themes (including CJK support) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Latin fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+    <!-- Japanese fonts (Noto Sans JP for UI/content, Noto Sans Mono for code) -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600&family=Noto+Sans+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <!-- UI Stylesheet -->
     <link rel="stylesheet" href="ui.css">
@@ -89,9 +92,8 @@
     
     <!-- Demo Application -->
     <script>
-        // Set timestamped title based on file last modified time
-        const lastMod = new Date(document.lastModified).toLocaleString();
-        document.title = `SL Editor - UI System Prototype (${lastMod})`;
+        // Keep title static (remove dynamic timestamps)
+        document.title = `SL Editor - UI System Prototype`;
         
         // Initialize UI system
         SLUI.init().then(() => {
