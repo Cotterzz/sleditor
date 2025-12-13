@@ -317,7 +317,8 @@ function getChannelTexture(channelNumber, pass, readTexture) {
     const channel = channels.getChannel(channelNumber);
     if (!channel) return null;
     
-    if (channel.type === 'image' || channel.type === 'video' || channel.type === 'audio') {
+    if (channel.type === 'image' || channel.type === 'video' || channel.type === 'audio' ||
+        channel.type === 'mic' || channel.type === 'webcam') {
         return channel.texture || null;
     }
     

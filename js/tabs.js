@@ -4,10 +4,12 @@
 
 import { state, logStatus, saveSettings } from './core.js';
 import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET, MINIMAL_AUDIO_GLSL, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF } from './examples.js';
-import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, isChannel, getChannelNumber, createImageChannelTabName, createVideoChannelTabName, createAudioChannelTabName, createBufferChannelTabName } from './tab-config.js';
+import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, isMicChannel, isWebcamChannel, isChannel, getChannelNumber, createImageChannelTabName, createVideoChannelTabName, createAudioChannelTabName, createBufferChannelTabName, createMicChannelTabName, createWebcamChannelTabName } from './tab-config.js';
 import * as mediaSelector from './ui/media-selector.js';
 import * as audioSelector from './ui/audio-selector.js';
 import * as videoSelector from './ui/video-selector.js';
+import * as micSelector from './ui/mic-selector.js';
+import * as webcamSelector from './ui/webcam-selector.js';
 import * as channels from './channels.js';
 import * as compiler from './compiler.js';
 
@@ -186,14 +188,15 @@ export function switchTab(tabName) {
     state.currentTab = tabName;
     
     // Handle channel tabs separately
-    if (isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName)) {
+    if (isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName) || 
+        isMicChannel(tabName) || isWebcamChannel(tabName)) {
         // Hide ALL editor containers first
         document.getElementById('graphicsContainer').style.display = 'none';
         document.getElementById('audioContainer').style.display = 'none';
         document.getElementById('jsEditorContainer').style.display = 'none';
         
         // Hide ALL channel containers
-        document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"], [id$="Container"][id^="audio_"]').forEach(c => {
+        document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"], [id$="Container"][id^="audio_"], [id$="Container"][id^="mic_"], [id$="Container"][id^="webcam_"]').forEach(c => {
             c.style.display = 'none';
         });
         
@@ -219,6 +222,16 @@ export function switchTab(tabName) {
                 });
             } else if (isVideoChannel(tabName)) {
                 videoSelector.createVideoSelector(tabName, channelNumber).then(selector => {
+                    channelContainer.innerHTML = '';
+                    channelContainer.appendChild(selector);
+                });
+            } else if (isMicChannel(tabName)) {
+                micSelector.createMicSelector(tabName, channelNumber).then(selector => {
+                    channelContainer.innerHTML = '';
+                    channelContainer.appendChild(selector);
+                });
+            } else if (isWebcamChannel(tabName)) {
+                webcamSelector.createWebcamSelector(tabName, channelNumber).then(selector => {
                     channelContainer.innerHTML = '';
                     channelContainer.appendChild(selector);
                 });
@@ -277,7 +290,7 @@ export function switchTab(tabName) {
     allContainers.forEach(c => c.style.display = 'none');
     
     // Hide channel containers
-    document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"], [id$="Container"][id^="audio_"]').forEach(c => {
+    document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"], [id$="Container"][id^="audio_"], [id$="Container"][id^="mic_"], [id$="Container"][id^="webcam_"]').forEach(c => {
         c.style.display = 'none';
     });
     
@@ -492,6 +505,66 @@ export async function addBufferChannelTab() {
     console.log(`✓ Buffer channel tab added: ${tabName} (ch${channelNumber})`);
 }
 
+export async function addMicChannel() {
+    // Create channel first, then get the actual channel number it was assigned
+    const channelNumber = await channels.createChannel('mic', {
+        tabName: null // Will be set below
+    });
+    
+    if (channelNumber === -1) {
+        console.error('Failed to create mic channel');
+        return;
+    }
+    
+    // Create tab name with the actual channel number
+    const tabName = createMicChannelTabName(channelNumber);
+    
+    // Update the channel's tab name
+    const channel = channels.getChannel(channelNumber);
+    if (channel) {
+        channel.tabName = tabName;
+    }
+    
+    // Add tab to active tabs
+    state.activeTabs.push(tabName);
+    
+    // Refresh UI
+    renderTabs();
+    switchTab(tabName);
+    
+    console.log(`✓ Mic channel tab added: ${tabName} (ch${channelNumber})`);
+}
+
+export async function addWebcamChannel() {
+    // Create channel first, then get the actual channel number it was assigned
+    const channelNumber = await channels.createChannel('webcam', {
+        tabName: null // Will be set below
+    });
+    
+    if (channelNumber === -1) {
+        console.error('Failed to create webcam channel');
+        return;
+    }
+    
+    // Create tab name with the actual channel number
+    const tabName = createWebcamChannelTabName(channelNumber);
+    
+    // Update the channel's tab name
+    const channel = channels.getChannel(channelNumber);
+    if (channel) {
+        channel.tabName = tabName;
+    }
+    
+    // Add tab to active tabs
+    state.activeTabs.push(tabName);
+    
+    // Refresh UI
+    renderTabs();
+    switchTab(tabName);
+    
+    console.log(`✓ Webcam channel tab added: ${tabName} (ch${channelNumber})`);
+}
+
 export function removeTab(tabName) {
     // Can't remove graphics (it's mandatory)
     if (tabName === 'graphics') {
@@ -570,6 +643,8 @@ export function showAddPassMenu() {
         { name: '_image_channel', label: '🖼️ Image Channel' }, // Special action
         { name: '_audio_channel', label: '🎵 Audio Channel' }, // Special action
         { name: '_video_channel', label: '🎬 Video Channel' }, // Special action
+        { name: '_mic_channel', label: '🎤 Mic Input' }, // Special action
+        { name: '_webcam_channel', label: '📹 Webcam Input' }, // Special action
         { name: '_buffer_channel', label: '🎚️ Buffer Pass' }
     ];
     
@@ -591,7 +666,9 @@ export function showAddPassMenu() {
         // - WGSL audio if GLSL graphics is active (incompatible backends)
         // - Channels not yet supported for WGSL
         // - Buffer pass only available with GLSL
-        const isChannelTab = tab.name === '_image_channel' || tab.name === '_audio_channel' || tab.name === '_video_channel';
+        const isChannelTab = tab.name === '_image_channel' || tab.name === '_audio_channel' || 
+                            tab.name === '_video_channel' || tab.name === '_mic_channel' || 
+                            tab.name === '_webcam_channel';
         const isAudioTab = tab.name === 'audio_gpu' || tab.name === 'audio_worklet' || tab.name === 'audio_glsl';
         const isDisabled = (isAudioTab && hasAnyAudio && !isActive) ||  // Only one audio tab at a time
                           (tab.name === 'audio_gpu' && hasGLSL) ||       // WGSL audio incompatible with GLSL graphics
@@ -631,6 +708,10 @@ export function showAddPassMenu() {
                 await addAudioChannel();
             } else if (tab.name === '_video_channel') {
                 await addVideoChannel();
+            } else if (tab.name === '_mic_channel') {
+                await addMicChannel();
+            } else if (tab.name === '_webcam_channel') {
+                await addWebcamChannel();
             } else if (tab.name === '_buffer_channel') {
                 await addBufferChannelTab();
             } else {

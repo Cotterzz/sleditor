@@ -6,6 +6,8 @@ import { state } from './core.js';
 import * as mediaLoader from './media-loader.js';
 import * as audioInput from './audio-input.js';
 import * as videoInput from './video-input.js';
+import * as micInput from './mic-input.js';
+import * as webcamInput from './webcam-input.js';
 
 // Channel state
 const channelState = {
@@ -340,6 +342,49 @@ export async function createChannel(type, data) {
         channel.textures = null; // Created lazily when rendering
         channel.framebuffer = null;
         console.log(`Buffer channel stub created: ch${channelNumber}`);
+    } else if (type === 'mic') {
+        // Microphone input channel - doesn't auto-start, requires user interaction
+        let gl = state.glContext;
+        if (!gl) {
+            console.warn('state.glContext not set, trying to get from canvas...');
+            gl = state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl');
+        }
+        
+        if (!gl) {
+            console.error('WebGL context not available for mic channel');
+            return -1;
+        }
+        
+        // Store audio mode preference (default to chromagram for mic)
+        channel.audioMode = data.audioMode || 'chromagram';
+        
+        // Create empty texture - mic will be started on user click
+        const textureResult = audioInput.createAudioTexture(gl, channel.audioMode);
+        channel.texture = textureResult.texture || textureResult;
+        const modeConfig = audioInput.AUDIO_TEXTURE_MODES[channel.audioMode];
+        channel.resolution = { width: modeConfig.width, height: modeConfig.height };
+        channel.micData = null; // Will be populated when mic starts
+        
+        console.log(`Mic channel stub created: ch${channelNumber} (awaiting user activation)`);
+    } else if (type === 'webcam') {
+        // Webcam input channel - doesn't auto-start, requires user interaction
+        let gl = state.glContext;
+        if (!gl) {
+            console.warn('state.glContext not set, trying to get from canvas...');
+            gl = state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl');
+        }
+        
+        if (!gl) {
+            console.error('WebGL context not available for webcam channel');
+            return -1;
+        }
+        
+        // Create fallback texture - webcam will be started on user click
+        channel.texture = mediaLoader.createFallbackTexture(gl);
+        channel.resolution = { width: 256, height: 256 };
+        channel.webcamData = null; // Will be populated when webcam starts
+        
+        console.log(`Webcam channel stub created: ch${channelNumber} (awaiting user activation)`);
     }
     
     channelState.channels.push(channel);
@@ -371,6 +416,16 @@ export function deleteChannel(channelNumber) {
     // Cleanup video resources
     if (channel.type === 'video' && channel.videoData) {
         videoInput.cleanupVideoChannel(channel);
+    }
+    
+    // Cleanup mic resources
+    if (channel.type === 'mic' && channel.micData) {
+        micInput.stopMicChannel(channel.micData);
+    }
+    
+    // Cleanup webcam resources
+    if (channel.type === 'webcam' && channel.webcamData) {
+        webcamInput.stopWebcamChannel(channel.webcamData);
     }
     
     // Cleanup WebGL resources
@@ -668,6 +723,16 @@ export function resetChannels() {
                 videoInput.cleanupVideoChannel(ch);
             }
             
+            // Cleanup mic resources
+            if (ch.type === 'mic' && ch.micData) {
+                micInput.stopMicChannel(ch.micData);
+            }
+            
+            // Cleanup webcam resources
+            if (ch.type === 'webcam' && ch.webcamData) {
+                webcamInput.stopWebcamChannel(ch.webcamData);
+            }
+            
             // Remove UI container if it exists
             if (ch.tabName) {
                 const container = document.getElementById(`${ch.tabName}Container`);
@@ -813,6 +878,16 @@ export async function loadChannelConfig(config) {
                 videoInput.cleanupVideoChannel(ch);
             }
             
+            // Cleanup mic resources
+            if (ch.type === 'mic' && ch.micData) {
+                micInput.stopMicChannel(ch.micData);
+            }
+            
+            // Cleanup webcam resources
+            if (ch.type === 'webcam' && ch.webcamData) {
+                webcamInput.stopWebcamChannel(ch.webcamData);
+            }
+            
             // Cleanup WebGL textures
             const gl = state.glContext;
             if (gl) {
@@ -836,8 +911,10 @@ export async function loadChannelConfig(config) {
     // Sort channels by number to recreate them in order
     const sortedChannels = [...config.channels].sort((a, b) => a.number - b.number);
     
-    // Ensure WebGL is initialized before creating ANY channels (images, videos, or audio need it!)
-    const needsWebGL = sortedChannels.some(ch => ch.number !== 0 && (ch.type === 'image' || ch.type === 'audio' || ch.type === 'video'));
+    // Ensure WebGL is initialized before creating ANY channels (images, videos, audio, mic, webcam need it!)
+    const needsWebGL = sortedChannels.some(ch => ch.number !== 0 && 
+        (ch.type === 'image' || ch.type === 'audio' || ch.type === 'video' || 
+         ch.type === 'mic' || ch.type === 'webcam'));
     if (needsWebGL) {
         // Always ensure WebGL is available and properly initialized
         if (!state.glContext || !state.hasWebGL) {
@@ -1024,6 +1101,41 @@ export async function loadChannelConfig(config) {
                     state.activeTabs.push(ch.tabName);
                 }
             }
+        } else if (ch.type === 'mic') {
+            // Mic channels just need to be recreated - they don't auto-start
+            const channelNumber = await createChannel('mic', {
+                tabName: ch.tabName,
+                audioMode: ch.audioMode || 'chromagram'
+            });
+            
+            if (channelNumber !== -1 && ch.tabName) {
+                if (!state.activeTabs.includes(ch.tabName)) {
+                    state.activeTabs.push(ch.tabName);
+                }
+                
+                // Remove old container to force recreation
+                const oldContainer = document.getElementById(`${ch.tabName}Container`);
+                if (oldContainer) {
+                    oldContainer.remove();
+                }
+            }
+        } else if (ch.type === 'webcam') {
+            // Webcam channels just need to be recreated - they don't auto-start
+            const channelNumber = await createChannel('webcam', {
+                tabName: ch.tabName
+            });
+            
+            if (channelNumber !== -1 && ch.tabName) {
+                if (!state.activeTabs.includes(ch.tabName)) {
+                    state.activeTabs.push(ch.tabName);
+                }
+                
+                // Remove old container to force recreation
+                const oldContainer = document.getElementById(`${ch.tabName}Container`);
+                if (oldContainer) {
+                    oldContainer.remove();
+                }
+            }
         } else if (ch.type === 'buffer') {
             channelState.channels.push({
                 number: ch.number,
@@ -1096,7 +1208,8 @@ export function getChannelTextureForDisplay(channelNumber) {
         return channel.textures ? channel.textures[channel.currentPing] : null;
     }
     
-    if (channel.type === 'image' || channel.type === 'video' || channel.type === 'audio') {
+    if (channel.type === 'image' || channel.type === 'video' || channel.type === 'audio' ||
+        channel.type === 'mic' || channel.type === 'webcam') {
         return channel.texture || null;
     }
     
@@ -1220,6 +1333,186 @@ export function restartVideoChannels(shouldPlay = state.isPlaying) {
 
 export function hasMediaChannels() {
     return hasAudioChannels() || hasVideoChannels();
+}
+
+// ============================================================================
+// Mic Channel Management
+// ============================================================================
+
+/**
+ * Get all mic channels
+ * @returns {Object[]} Mic channels
+ */
+export function getMicChannels() {
+    return channelState.channels.filter(ch => ch.type === 'mic');
+}
+
+/**
+ * Check if any mic channels exist
+ * @returns {boolean}
+ */
+export function hasMicChannels() {
+    return getMicChannels().length > 0;
+}
+
+/**
+ * Start mic capture for a channel
+ * @param {number} channelNumber - Channel number
+ * @returns {Promise<void>}
+ */
+export async function startMicChannel(channelNumber) {
+    const channel = getChannel(channelNumber);
+    if (!channel || channel.type !== 'mic') {
+        throw new Error(`Channel ${channelNumber} is not a mic channel`);
+    }
+    
+    const gl = state.glContext;
+    if (!gl) {
+        throw new Error('WebGL context not available');
+    }
+    
+    const mode = channel.audioMode || 'chromagram';
+    channel.micData = await micInput.createMicChannel(gl, mode);
+    channel.texture = channel.micData.texture;
+    channel.resolution = { 
+        width: channel.micData.width, 
+        height: channel.micData.height 
+    };
+    
+    console.log(`✓ Mic channel started: ch${channelNumber}`);
+}
+
+/**
+ * Stop mic capture for a channel
+ * @param {number} channelNumber - Channel number
+ */
+export function stopMicChannel(channelNumber) {
+    const channel = getChannel(channelNumber);
+    if (!channel || channel.type !== 'mic') return;
+    
+    if (channel.micData) {
+        micInput.stopMicChannel(channel.micData);
+        channel.micData = null;
+    }
+}
+
+/**
+ * Restart mic channel with new audio mode
+ * @param {number} channelNumber - Channel number
+ * @param {string} mode - New audio mode
+ */
+export async function restartMicChannel(channelNumber, mode) {
+    const channel = getChannel(channelNumber);
+    if (!channel || channel.type !== 'mic') return;
+    
+    // Stop current mic if active
+    if (channel.micData) {
+        micInput.stopMicChannel(channel.micData);
+    }
+    
+    // Update mode
+    channel.audioMode = mode;
+    
+    // Start with new mode
+    await startMicChannel(channelNumber);
+}
+
+/**
+ * Update all mic channel textures
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ */
+export function updateMicTextures(gl) {
+    const micChannels = getMicChannels();
+    micChannels.forEach(ch => {
+        if (ch.micData && ch.micData.active) {
+            micInput.updateMicTexture(
+                gl,
+                ch.micData,
+                ch.micData.previousFrame,
+                ch.micData.temporalAverage
+            );
+        }
+    });
+}
+
+// ============================================================================
+// Webcam Channel Management
+// ============================================================================
+
+/**
+ * Get all webcam channels
+ * @returns {Object[]} Webcam channels
+ */
+export function getWebcamChannels() {
+    return channelState.channels.filter(ch => ch.type === 'webcam');
+}
+
+/**
+ * Check if any webcam channels exist
+ * @returns {boolean}
+ */
+export function hasWebcamChannels() {
+    return getWebcamChannels().length > 0;
+}
+
+/**
+ * Start webcam capture for a channel
+ * @param {number} channelNumber - Channel number
+ * @returns {Promise<void>}
+ */
+export async function startWebcamChannel(channelNumber) {
+    const channel = getChannel(channelNumber);
+    if (!channel || channel.type !== 'webcam') {
+        throw new Error(`Channel ${channelNumber} is not a webcam channel`);
+    }
+    
+    const gl = state.glContext;
+    if (!gl) {
+        throw new Error('WebGL context not available');
+    }
+    
+    channel.webcamData = await webcamInput.createWebcamChannel(gl);
+    channel.texture = channel.webcamData.texture;
+    channel.resolution = { 
+        width: channel.webcamData.width, 
+        height: channel.webcamData.height 
+    };
+    
+    console.log(`✓ Webcam channel started: ch${channelNumber}`);
+}
+
+/**
+ * Stop webcam capture for a channel
+ * @param {number} channelNumber - Channel number
+ */
+export function stopWebcamChannel(channelNumber) {
+    const channel = getChannel(channelNumber);
+    if (!channel || channel.type !== 'webcam') return;
+    
+    if (channel.webcamData) {
+        webcamInput.stopWebcamChannel(channel.webcamData);
+        channel.webcamData = null;
+    }
+}
+
+/**
+ * Update all webcam channel textures
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ */
+export function updateWebcamTextures(gl) {
+    const webcamChannels = getWebcamChannels();
+    webcamChannels.forEach(ch => {
+        if (ch.webcamData && ch.webcamData.active) {
+            webcamInput.updateWebcamTexture(gl, ch.webcamData);
+            
+            // Sync resolution from webcamData (may change if video dimensions update)
+            if (ch.webcamData.width !== ch.resolution.width || 
+                ch.webcamData.height !== ch.resolution.height) {
+                ch.resolution.width = ch.webcamData.width;
+                ch.resolution.height = ch.webcamData.height;
+            }
+        }
+    });
 }
 
 // Expose limited debugging helpers

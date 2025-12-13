@@ -174,6 +174,24 @@ export function isAudioChannel(tabName) {
 }
 
 /**
+ * Check if tab name is a microphone channel
+ * @param {string} tabName - Tab name
+ * @returns {boolean}
+ */
+export function isMicChannel(tabName) {
+    return tabName.startsWith('mic_ch');
+}
+
+/**
+ * Check if tab name is a webcam channel
+ * @param {string} tabName - Tab name
+ * @returns {boolean}
+ */
+export function isWebcamChannel(tabName) {
+    return tabName.startsWith('webcam_ch');
+}
+
+/**
  * Check if tab name is a buffer channel
  * @param {string} tabName - Tab name
  * @returns {boolean}
@@ -188,7 +206,8 @@ export function isBufferChannel(tabName) {
  * @returns {boolean}
  */
 export function isChannel(tabName) {
-    return isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName) || isBufferChannel(tabName);
+    return isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName) || 
+           isBufferChannel(tabName) || isMicChannel(tabName) || isWebcamChannel(tabName);
 }
 
 /**
@@ -215,6 +234,8 @@ export function getTabIcon(tabName) {
     if (isVideoChannel(tabName)) return '🎥';
     if (isAudioChannel(tabName)) return '🎵';
     if (isBufferChannel(tabName)) return '🎚️';
+    if (isMicChannel(tabName)) return '🎤';
+    if (isWebcamChannel(tabName)) return '📹';
     
     const config = TAB_CONFIG[tabName];
     return config ? config.icon : '📝';
@@ -242,6 +263,14 @@ export function getTabLabel(tabName) {
     if (isBufferChannel(tabName)) {
         const chNum = getChannelNumber(tabName);
         return `Buffer(ch${chNum})`;
+    }
+    if (isMicChannel(tabName)) {
+        const chNum = getChannelNumber(tabName);
+        return `Mic(ch${chNum})`;
+    }
+    if (isWebcamChannel(tabName)) {
+        const chNum = getChannelNumber(tabName);
+        return `Webcam(ch${chNum})`;
     }
     
     const config = TAB_CONFIG[tabName];
@@ -336,7 +365,8 @@ export function tabsAreMutuallyExclusive(tab1, tab2) {
  */
 export function getEditorForTab(tabName, state) {
     // Channel tabs don't use Monaco editors
-    if (isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName)) {
+    if (isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName) ||
+        isMicChannel(tabName) || isWebcamChannel(tabName)) {
         return null;
     }
     
@@ -381,5 +411,23 @@ export function createAudioChannelTabName(channelNumber) {
  */
 export function createBufferChannelTabName(channelNumber) {
     return `buffer_ch${channelNumber}`;
+}
+
+/**
+ * Create mic channel tab name
+ * @param {number} channelNumber - Channel number
+ * @returns {string} Tab name
+ */
+export function createMicChannelTabName(channelNumber) {
+    return `mic_ch${channelNumber}`;
+}
+
+/**
+ * Create webcam channel tab name
+ * @param {number} channelNumber - Channel number
+ * @returns {string} Tab name
+ */
+export function createWebcamChannelTabName(channelNumber) {
+    return `webcam_ch${channelNumber}`;
 }
 
