@@ -321,9 +321,6 @@ body {
     border-radius: 50%;
 }
 
-.sl-toolbar-item.minimized::after {
-    background: var(--warning);
-}
 
 /* Toolbar spacer */
 .sl-toolbar-spacer {
@@ -663,6 +660,72 @@ body {
     flex: 1;
     overflow: auto;
     padding: 12px;
+}
+
+/* ========================================
+   WINDOW CONTROLS (undock/close buttons)
+   ======================================== */
+
+.sl-window-controls {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    gap: 4px;
+    z-index: 20;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.sl-window-controls.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.sl-window-ctrl-btn {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.15s ease;
+}
+
+.sl-window-ctrl-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+    border-color: var(--accent);
+}
+
+.sl-window-ctrl-btn.close:hover {
+    background: var(--error);
+    color: white;
+    border-color: var(--error);
+}
+
+/* Floating windows: show dock, hide undock */
+.sl-float-layer .sl-window-ctrl-btn.dock {
+    display: flex;
+}
+
+.sl-float-layer .sl-window-ctrl-btn.undock {
+    display: none;
+}
+
+/* Docked windows: show undock, hide dock */
+.sl-dock-panel .sl-window-ctrl-btn.dock {
+    display: none;
+}
+
+.sl-dock-panel .sl-window-ctrl-btn.undock {
+    display: flex;
 }
 
 /* ========================================

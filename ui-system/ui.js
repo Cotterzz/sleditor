@@ -680,7 +680,6 @@ const SLUI = (function() {
         
         btn.classList.toggle('loaded', isLoaded);
         btn.classList.toggle('active', isVisible && !isMinimized);
-        btn.classList.toggle('minimized', isMinimized);
     }
     
     // ========================================
@@ -732,6 +731,45 @@ const SLUI = (function() {
         const body = document.createElement('div');
         body.className = 'sl-window-body';
         
+        // Window controls (dock/undock/close) - appear on hover
+        const controls = document.createElement('div');
+        controls.className = 'sl-window-controls';
+        
+        // Dock button (only shown when floating)
+        const dockBtn = document.createElement('button');
+        dockBtn.className = 'sl-window-ctrl-btn dock';
+        dockBtn.innerHTML = '↘'; // Down-right arrow for dock
+        dockBtn.title = 'Dock';
+        dockBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dockWindow(id, 'right'); // Dock to right by default
+        });
+        controls.appendChild(dockBtn);
+        
+        // Undock button (only shown when docked)
+        const undockBtn = document.createElement('button');
+        undockBtn.className = 'sl-window-ctrl-btn undock';
+        undockBtn.innerHTML = '↗'; // Up-left arrow for undock
+        undockBtn.title = 'Undock';
+        undockBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            undockWindow(id);
+        });
+        controls.appendChild(undockBtn);
+        
+        // Close button
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'sl-window-ctrl-btn close';
+        closeBtn.innerHTML = '×';
+        closeBtn.title = t('window.close');
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeDockWindow(id);
+        });
+        controls.appendChild(closeBtn);
+        
+        body.appendChild(controls);
+        
         // Content
         const contentEl = document.createElement('div');
         contentEl.className = 'sl-window-content';
@@ -757,6 +795,9 @@ const SLUI = (function() {
         win.appendChild(body);
         container.appendChild(win);
         
+        // Setup window controls hover
+        setupWindowControlsHover(body, controls);
+        
         // Store window state (store container as the main element)
         state.windows.set(id, {
             element: container,
@@ -764,7 +805,6 @@ const SLUI = (function() {
             body: body,
             frame: frame,
             options,
-            minimized: false,
             visible: true
         });
         
@@ -773,6 +813,9 @@ const SLUI = (function() {
         setupWindowDrag(container, frame);
         if (resizable) setupWindowResize(container, body);
         setupWindowFocus(container);
+        
+        // Store controls reference for docked state updates
+        state.windows.get(id).controls = controls;
         
         // Always bring new windows to front
         bringToFront(id);
@@ -975,6 +1018,30 @@ const SLUI = (function() {
         });
     }
     
+    // Setup hover detection for window controls
+    function setupWindowControlsHover(body, controls) {
+        const hoverZone = 60; // pixels from corner
+        
+        body.addEventListener('mousemove', (e) => {
+            const rect = body.getBoundingClientRect();
+            const fromRight = rect.right - e.clientX;
+            const fromTop = e.clientY - rect.top;
+            
+            // Show controls when near top-right corner
+            const nearControls = fromRight < hoverZone && fromTop < hoverZone;
+            controls.classList.toggle('visible', nearControls);
+        });
+        
+        body.addEventListener('mouseleave', () => {
+            controls.classList.remove('visible');
+        });
+        
+        // Keep controls visible while hovering them
+        controls.addEventListener('mouseenter', () => {
+            controls.classList.add('visible');
+        });
+    }
+    
     function bringToFront(windowId) {
         const winState = state.windows.get(windowId);
         if (!winState) return;
@@ -986,16 +1053,6 @@ const SLUI = (function() {
         winState.element.classList.add('focused');
         winState.element.style.zIndex = ++state.zIndex;
         state.activeWindow = windowId;
-    }
-    
-    function toggleMinimize(windowId) {
-        const winState = state.windows.get(windowId);
-        if (!winState) return;
-        
-        winState.minimized = !winState.minimized;
-        winState.element.classList.toggle('minimized', winState.minimized);
-        
-        updateToolbarItem(windowId, true, winState.visible, winState.minimized);
     }
     
     function closeWindow(windowId) {
@@ -1013,9 +1070,24 @@ const SLUI = (function() {
         if (!winState) return;
         
         winState.visible = true;
-        winState.minimized = false;
         winState.element.style.display = '';
-        winState.element.classList.remove('minimized');
+        
+        // If element is not in document (orphaned or never added), add to float layer
+        if (!document.body.contains(winState.element)) {
+            const floatLayer = document.getElementById('sl-float-layer');
+            if (floatLayer) {
+                // Reset position to center
+                const width = winState.options.width || 400;
+                const height = winState.options.height || 300;
+                winState.element.style.left = `${(window.innerWidth - width) / 2}px`;
+                winState.element.style.top = `${(window.innerHeight - height) / 2}px`;
+                winState.element.style.width = `${width}px`;
+                winState.element.style.height = `${height}px`;
+                
+                floatLayer.appendChild(winState.element);
+            }
+        }
+        
         bringToFront(windowId);
         
         updateToolbarItem(windowId, true, true, false);
@@ -1028,8 +1100,9 @@ const SLUI = (function() {
             return;
         }
         
-        if (winState.visible && !winState.minimized) {
-            toggleMinimize(windowId);
+        if (winState.visible) {
+            // Use closeDockWindow to properly handle docked windows
+            closeDockWindow(windowId);
         } else {
             openWindow(windowId);
         }
@@ -1113,6 +1186,112 @@ const SLUI = (function() {
         }
         
         return false;
+    }
+    
+    // Remove a window from the dock tree, sibling takes parent's place
+    function removeFromDockTree(panelId) {
+        if (!state.dockTree) return;
+        
+        // Special case: only one window docked
+        if (state.dockTree.type === 'leaf' && state.dockTree.panelId === panelId) {
+            state.dockTree = null;
+            return;
+        }
+        
+        // Recursive search and removal
+        removeNodeByPanelId(state.dockTree, panelId, null, null);
+    }
+    
+    function removeNodeByPanelId(tree, panelId, parent, parentKey) {
+        if (!tree || tree.type !== 'split') return false;
+        
+        // Check if first child is the target
+        if (tree.first.type === 'leaf' && tree.first.panelId === panelId) {
+            // Replace parent split with second child
+            if (parent && parentKey) {
+                parent[parentKey] = tree.second;
+            } else {
+                state.dockTree = tree.second;
+            }
+            return true;
+        }
+        
+        // Check if second child is the target
+        if (tree.second.type === 'leaf' && tree.second.panelId === panelId) {
+            // Replace parent split with first child
+            if (parent && parentKey) {
+                parent[parentKey] = tree.first;
+            } else {
+                state.dockTree = tree.first;
+            }
+            return true;
+        }
+        
+        // Recurse into children
+        if (tree.first.type === 'split') {
+            if (removeNodeByPanelId(tree.first, panelId, tree, 'first')) return true;
+        }
+        if (tree.second.type === 'split') {
+            if (removeNodeByPanelId(tree.second, panelId, tree, 'second')) return true;
+        }
+        
+        return false;
+    }
+    
+    // Undock a window - remove from tree and float it
+    function undockWindow(windowId) {
+        const winState = state.windows.get(windowId);
+        if (!winState || !state.dockedWindows.has(windowId)) return;
+        
+        // Remove from dock tree
+        removeFromDockTree(windowId);
+        state.dockedWindows.delete(windowId);
+        
+        // Re-render dock layer
+        renderDockTree();
+        
+        // Move to float layer
+        const floatLayer = document.getElementById('sl-float-layer');
+        if (floatLayer) {
+            // Position in center of screen
+            const width = winState.options.width || 400;
+            const height = winState.options.height || 300;
+            winState.element.style.left = `${(window.innerWidth - width) / 2}px`;
+            winState.element.style.top = `${(window.innerHeight - height) / 2}px`;
+            winState.element.style.width = `${width}px`;
+            winState.element.style.height = `${height}px`;
+            
+            floatLayer.appendChild(winState.element);
+            bringToFront(windowId);
+        }
+        
+        updateToolbarItem(windowId, true, true, false);
+    }
+    
+    // Close a window - remove from dock tree if docked, then hide
+    function closeDockWindow(windowId) {
+        const winState = state.windows.get(windowId);
+        if (!winState) return;
+        
+        if (state.dockedWindows.has(windowId)) {
+            // Remove from dock tree first
+            removeFromDockTree(windowId);
+            state.dockedWindows.delete(windowId);
+            renderDockTree();
+        }
+        
+        // Remove from float layer if there
+        const floatLayer = document.getElementById('sl-float-layer');
+        if (floatLayer && winState.element.parentNode === floatLayer) {
+            floatLayer.removeChild(winState.element);
+        }
+        
+        // Hide the window
+        winState.visible = false;
+        winState.element.style.display = 'none';
+        
+        // Mark as not loaded/visible in toolbar
+        updateToolbarItem(windowId, false, false, false);
     }
     
     // Render the dock tree to the DOM
@@ -2120,6 +2299,8 @@ const SLUI = (function() {
         
         // Docking
         dockWindow,
+        undockWindow,
+        closeDockWindow,
         renderDockTree,
         
         // Panels
