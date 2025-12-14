@@ -356,7 +356,8 @@ export async function saveShader(shaderData) {
             code: shaderData.code || {},
             visibility: shaderData.visibility || 'private',
             creator_name: creatorName,
-            uniform_config: shaderData.uniform_config || null
+            uniform_config: shaderData.uniform_config || null,
+            license: shaderData.license || 'default'
         };
         
         // Only include thumbnail_url if provided (don't overwrite with null on updates)

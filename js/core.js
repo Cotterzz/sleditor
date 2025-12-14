@@ -9,6 +9,50 @@ export const AUDIO_MODES = {
     NONE: 'none'
 };
 
+// License types for shaders
+export const LICENSE_TYPES = {
+    default: {
+        name: 'Default',
+        tooltip: 'All rights reserved, but forking on-site with attribution is allowed.'
+    },
+    all_rights_reserved: {
+        name: 'All Rights Reserved',
+        tooltip: 'Others can view only. All use requires your permission.'
+    },
+    cc0: {
+        name: 'CC0 (Public Domain)',
+        tooltip: 'No restrictions. Anyone can use for any purpose.'
+    },
+    mit: {
+        name: 'MIT License',
+        tooltip: 'Free to use with attribution. Popular for code.'
+    },
+    gpl3: {
+        name: 'GPL-3.0',
+        tooltip: 'Copyleft, derivatives must be open source.'
+    },
+    cc_by: {
+        name: 'CC BY 4.0',
+        tooltip: 'Free to use and modify with attribution.'
+    },
+    cc_by_sa: {
+        name: 'CC BY-SA 4.0',
+        tooltip: 'Attribution required. Derivatives must use same license.'
+    },
+    cc_by_nc: {
+        name: 'CC BY-NC 4.0',
+        tooltip: 'Non-commercial use only, with attribution.'
+    },
+    cc_by_nc_sa: {
+        name: 'CC BY-NC-SA 4.0',
+        tooltip: 'Non-commercial, attribution, same license for derivatives.'
+    },
+    custom: {
+        name: 'Custom',
+        tooltip: 'See shader comments or description for license.'
+    }
+};
+
 // LocalStorage management
 const STORAGE_KEY = 'sleditor_settings';
 

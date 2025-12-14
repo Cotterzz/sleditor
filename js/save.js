@@ -2,7 +2,7 @@
 // Save - Gallery, Thumbnails (Database Only)
 // ============================================================================
 
-import { state, logStatus } from './core.js';
+import { state, logStatus, LICENSE_TYPES } from './core.js';
 import * as backend from './backend.js';
 import * as tabs from './tabs.js';
 import { getTabIcon, getTabLabel, dbKeyToTabName, getEditorForTab, isBufferChannel } from './tab-config.js';
@@ -752,6 +752,18 @@ export async function loadDatabaseShader(shader) {
         } else {
             descEl.textContent = descText;
         }
+    }
+    
+    // Update license display
+    const licenseDisplay = document.getElementById('shaderLicenseDisplay');
+    if (licenseDisplay) {
+        const licenseKey = shader.license || 'default';
+        const license = LICENSE_TYPES[licenseKey] || LICENSE_TYPES.default;
+        const nameSpan = licenseDisplay.querySelector('.license-name');
+        if (nameSpan) {
+            nameSpan.textContent = license.name;
+        }
+        licenseDisplay.title = license.tooltip;
     }
     
     // Update views and likes UI (call window function if available)

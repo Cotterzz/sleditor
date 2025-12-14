@@ -1,7 +1,7 @@
 'use strict';
 
 // Import all modules
-import { state, CONFIG, DERIVED, AUDIO_MODES, loadSettings, saveSettings, logStatus, updateDerived } from './core.js';
+import { state, CONFIG, DERIVED, AUDIO_MODES, LICENSE_TYPES, loadSettings, saveSettings, logStatus, updateDerived } from './core.js';
 import * as webgpu from './backends/webgpu.js';
 import * as webgl from './backends/webgl.js';
 import * as audioWorklet from './backends/audio-worklet.js';
@@ -112,6 +112,7 @@ function loadExample(exampleId) {
     document.getElementById('shaderTitleDisplay').textContent = example.name;
     document.getElementById('shaderCreator').textContent = example.creator ? `by ${example.creator}` : '';
     document.getElementById('shaderDescriptionDisplay').textContent = example.description || '';
+    updateLicenseDisplay('default');
     
     // Reload shader and restart (maintains play/pause state)
     if (state.isRunning) {
@@ -885,6 +886,7 @@ function setupSaveButton() {
         document.getElementById('shaderTitleDisplay').textContent = shader.title;
         document.getElementById('shaderCreator').textContent = shader.creator ? `by ${shader.creator}` : '';
         document.getElementById('shaderDescriptionDisplay').textContent = shader.description || '';
+        updateLicenseDisplay(shader.license || 'default');
         
         // Update UI
         tabs.renderTabs();
@@ -915,6 +917,37 @@ function setupSaveButton() {
 }
 
 // ============================================================================
+// License Display Helper
+// ============================================================================
+
+function initLicenseDropdown() {
+    const licenseSelect = document.getElementById('shaderLicenseSelect');
+    if (!licenseSelect) return;
+    
+    // Clear and populate dropdown with license options
+    licenseSelect.innerHTML = '';
+    for (const [key, info] of Object.entries(LICENSE_TYPES)) {
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = info.name;
+        option.title = info.tooltip;
+        licenseSelect.appendChild(option);
+    }
+}
+
+function updateLicenseDisplay(licenseKey) {
+    const licenseDisplay = document.getElementById('shaderLicenseDisplay');
+    if (!licenseDisplay) return;
+    
+    const license = LICENSE_TYPES[licenseKey] || LICENSE_TYPES.default;
+    const nameSpan = licenseDisplay.querySelector('.license-name');
+    if (nameSpan) {
+        nameSpan.textContent = license.name;
+    }
+    licenseDisplay.title = license.tooltip;
+}
+
+// ============================================================================
 // Initialization
 // ============================================================================
 
@@ -935,6 +968,7 @@ async function init() {
     
     setupUI();
     setupSaveButton();
+    initLicenseDropdown();
     
     // Initialize media and channels
     await mediaLoader.loadMediaCatalog();

@@ -9,7 +9,7 @@
 // - Save modals
 // ============================================================================
 
-import { state, logStatus } from './core.js';
+import { state, logStatus, LICENSE_TYPES } from './core.js';
 import * as tabs from './tabs.js';
 import * as backend from './backend.js';
 import * as uniformControls from './uniform-controls.js';
@@ -309,6 +309,8 @@ export function enterEditMode(isFork = false) {
     const descDisplay = document.getElementById('shaderDescriptionDisplay');
     const descInput = document.getElementById('shaderDescriptionInput');
     const visibilityControls = document.getElementById('visibilityControls');
+    const licenseDisplay = document.getElementById('shaderLicenseDisplay');
+    const licenseSelect = document.getElementById('shaderLicenseSelect');
     
     if (!titleDisplay || !titleInput) return;
     
@@ -375,6 +377,16 @@ export function enterEditMode(isFork = false) {
         }
     }
     
+    // Show license dropdown, hide display
+    if (licenseDisplay && licenseSelect) {
+        licenseDisplay.style.display = 'none';
+        licenseSelect.style.display = 'inline-block';
+        
+        // Set current license value - default when forking, keep current when editing
+        const currentLicense = isFork ? 'default' : (state.currentDatabaseShader?.license || 'default');
+        licenseSelect.value = currentLicense;
+    }
+    
     updateSaveButton();
 }
 
@@ -384,6 +396,8 @@ export function exitEditMode() {
     const descDisplay = document.getElementById('shaderDescriptionDisplay');
     const descInput = document.getElementById('shaderDescriptionInput');
     const visibilityControls = document.getElementById('visibilityControls');
+    const licenseDisplay = document.getElementById('shaderLicenseDisplay');
+    const licenseSelect = document.getElementById('shaderLicenseSelect');
     
     if (!titleDisplay || !titleInput) return;
     
@@ -405,6 +419,21 @@ export function exitEditMode() {
     // Hide visibility controls
     if (visibilityControls) {
         visibilityControls.style.display = 'none';
+    }
+    
+    // Hide license dropdown, show display with updated value
+    if (licenseDisplay && licenseSelect) {
+        // Update display from dropdown selection
+        const selectedLicense = licenseSelect.value || 'default';
+        const licenseInfo = LICENSE_TYPES[selectedLicense] || LICENSE_TYPES.default;
+        const nameSpan = licenseDisplay.querySelector('.license-name');
+        if (nameSpan) {
+            nameSpan.textContent = licenseInfo.name;
+        }
+        licenseDisplay.title = licenseInfo.tooltip;
+        
+        licenseSelect.style.display = 'none';
+        licenseDisplay.style.display = 'inline-block';
     }
     
     updateSaveButton();
@@ -531,6 +560,10 @@ export async function saveShaderInline() {
     // Get visibility
     const visibility = document.getElementById('visibilityPrivate').checked ? 'private' : 'published';
     
+    // Get license
+    const licenseSelect = document.getElementById('shaderLicenseSelect');
+    const license = licenseSelect?.value || 'default';
+    
     tabs.syncCurrentGraphicsTabCode();
     
     const shaderData = {
@@ -538,6 +571,7 @@ export async function saveShaderInline() {
         description,
         tags: [],
         visibility,
+        license,
         code: {},
         code_types: [...state.activeTabs.filter(t => t !== 'boilerplate')]
     };
