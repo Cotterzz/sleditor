@@ -156,7 +156,7 @@ export async function createWebcamSelector(tabName, channelNumber) {
         contentSection.appendChild(deviceSection);
         
     } else {
-        // Not active - show start button
+        // Not active - show retry option (webcam was already attempted when channel was added)
         const startSection = document.createElement('div');
         startSection.style.cssText = `
             text-align: center;
@@ -170,45 +170,38 @@ export async function createWebcamSelector(tabName, channelNumber) {
         
         const message = document.createElement('div');
         message.style.cssText = 'color: var(--text-secondary); margin-bottom: 16px; font-size: 12px;';
-        message.textContent = 'Click to enable webcam input';
+        message.textContent = 'Webcam access denied or unavailable';
         startSection.appendChild(message);
         
-        const startBtn = document.createElement('button');
-        startBtn.textContent = 'Enable Webcam';
-        startBtn.style.cssText = `
+        const retryBtn = document.createElement('button');
+        retryBtn.textContent = 'Try Again';
+        retryBtn.style.cssText = `
             background: var(--accent-color);
             color: white;
             border: none;
-            padding: 12px 24px;
+            padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            transition: opacity 0.2s;
+            font-size: 12px;
         `;
-        startBtn.onmouseenter = () => startBtn.style.opacity = '0.8';
-        startBtn.onmouseleave = () => startBtn.style.opacity = '1';
-        startBtn.onclick = async () => {
-            startBtn.disabled = true;
-            startBtn.textContent = 'Requesting permission...';
+        retryBtn.onclick = async () => {
+            message.textContent = 'Requesting webcam access...';
+            retryBtn.disabled = true;
             
             try {
                 await channels.startWebcamChannel(channelNumber);
-                
-                // Refresh UI
                 const containerEl = document.getElementById(`${tabName}Container`);
                 if (containerEl) {
                     containerEl.innerHTML = '';
                     const newSelector = await createWebcamSelector(tabName, channelNumber);
                     containerEl.appendChild(newSelector);
                 }
-            } catch (error) {
-                alert('Failed to enable webcam: ' + error.message);
-                startBtn.disabled = false;
-                startBtn.textContent = 'Enable Webcam';
+            } catch (e) {
+                message.textContent = 'Webcam access denied or unavailable';
+                retryBtn.disabled = false;
             }
         };
-        startSection.appendChild(startBtn);
+        startSection.appendChild(retryBtn);
         
         contentSection.appendChild(startSection);
     }

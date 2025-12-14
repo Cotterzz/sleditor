@@ -242,6 +242,110 @@ export async function createWebcamChannel(gl, deviceId = null) {
 }
 
 /**
+ * Create webcam channel with an already-obtained stream
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ * @param {MediaStream} stream - Already-obtained media stream
+ * @returns {Promise<Object>} Webcam channel data
+ */
+export async function createWebcamChannelWithStream(gl, stream) {
+    // Get the actual device ID used
+    const videoTrack = stream.getVideoTracks()[0];
+    const settings = videoTrack.getSettings();
+    const actualDeviceId = settings.deviceId;
+    
+    // Save device preference
+    if (actualDeviceId) {
+        saveWebcamDevice(actualDeviceId);
+    }
+    
+    console.log(`✓ Webcam access granted: ${videoTrack.label}`);
+    
+    // Create texture first (like video-input.js)
+    const texture = createWebcamTexture(gl);
+    
+    // Create video element for the stream
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.muted = true;
+    video.playsInline = true;
+    video.autoplay = true;
+    
+    // Wait for video to actually be playing with valid frame data
+    await new Promise((resolve, reject) => {
+        let isResolved = false;
+        
+        const onPlaying = () => {
+            if (isResolved) return;
+            isResolved = true;
+            video.removeEventListener('playing', onPlaying);
+            
+            const width = video.videoWidth;
+            const height = video.videoHeight;
+            
+            console.log(`✓ Webcam stream ready: ${width}×${height}`);
+            
+            // Small delay to ensure frame is fully rendered
+            requestAnimationFrame(() => {
+                resolve({ width, height });
+            });
+        };
+        
+        video.addEventListener('playing', onPlaying);
+        video.addEventListener('error', (e) => {
+            if (isResolved) return;
+            isResolved = true;
+            reject(e);
+        });
+        
+        // Start playback
+        video.play().catch(reject);
+    });
+    
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+    
+    // Create canvas buffer for consistent texture uploads
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const canvasCtx = canvas.getContext('2d');
+    
+    // Upload first frame via canvas (with optional flip)
+    const flipH = getSavedFlipHorizontal();
+    if (flipH) {
+        canvasCtx.save();
+        canvasCtx.scale(-1, 1);
+        canvasCtx.drawImage(video, -width, 0, width, height);
+        canvasCtx.restore();
+    } else {
+        canvasCtx.drawImage(video, 0, 0, width, height);
+    }
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    
+    const webcamData = {
+        stream,
+        video,
+        texture,
+        width,
+        height,
+        canvas,
+        canvasCtx,
+        deviceId: actualDeviceId,
+        deviceLabel: videoTrack.label,
+        flipHorizontal: getSavedFlipHorizontal(),
+        active: true
+    };
+    
+    console.log(`✓ Webcam channel created with stream (${width}×${height})`);
+    
+    return webcamData;
+}
+
+/**
  * Update webcam texture with current frame
  * Uses canvas as intermediate buffer to normalize webcam data from various formats
  * @param {WebGL2RenderingContext} gl - WebGL context

@@ -150,6 +150,83 @@ export async function createMicChannel(gl, mode = 'chromagram', deviceId = null)
 }
 
 /**
+ * Create mic channel with an already-obtained stream
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ * @param {string} mode - Audio texture mode
+ * @param {MediaStream} stream - Already-obtained media stream
+ * @returns {Promise<Object>} Mic channel data
+ */
+export async function createMicChannelWithStream(gl, mode = 'chromagram', stream) {
+    const modeConfig = AUDIO_TEXTURE_MODES[mode] || AUDIO_TEXTURE_MODES.chromagram;
+    
+    // Get the actual device ID used
+    const audioTrack = stream.getAudioTracks()[0];
+    const actualDeviceId = audioTrack.getSettings().deviceId;
+    
+    // Save device preference
+    if (actualDeviceId) {
+        saveMicDevice(actualDeviceId);
+    }
+    
+    console.log(`✓ Microphone access granted: ${audioTrack.label}`);
+    
+    // Create audio context if needed
+    if (!state.audioContext) {
+        state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    // Create source from stream
+    const source = state.audioContext.createMediaStreamSource(stream);
+    
+    // Create analyser
+    const analyser = state.audioContext.createAnalyser();
+    analyser.fftSize = modeConfig.fftSize;
+    analyser.smoothingTimeConstant = 0.8;
+    
+    // Connect source to analyser (no output needed - we just analyze)
+    source.connect(analyser);
+    
+    // Create texture
+    const texture = audioInput.createAudioTexture(gl, mode).texture || 
+                   audioInput.createAudioTexture(gl, mode);
+    
+    // Create data arrays
+    const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+    const waveformData = new Uint8Array(analyser.frequencyBinCount);
+    
+    // For chromagram modes, create grid and tracking arrays
+    const isChromagram = mode.startsWith('chromagram');
+    let previousFrame = null;
+    let temporalAverage = null;
+    
+    if (isChromagram) {
+        previousFrame = new Float32Array(144).fill(0);
+        temporalAverage = new Float32Array(144).fill(0);
+    }
+    
+    const micData = {
+        stream,
+        source,
+        analyser,
+        texture: texture.texture || texture,
+        mode,
+        width: modeConfig.width,
+        height: modeConfig.height,
+        frequencyData,
+        waveformData,
+        previousFrame,
+        temporalAverage,
+        deviceId: actualDeviceId,
+        deviceLabel: audioTrack.label,
+        active: true
+    };
+    
+    console.log(`✓ Microphone channel created with stream (${mode} mode, ${modeConfig.width}×${modeConfig.height})`);
+    
+    return micData;
+}
+
+/**
  * Update microphone texture with current audio data
  * @param {WebGL2RenderingContext} gl - WebGL context
  * @param {Object} micData - Mic channel data

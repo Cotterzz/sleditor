@@ -1102,7 +1102,7 @@ export async function loadChannelConfig(config) {
                 }
             }
         } else if (ch.type === 'mic') {
-            // Mic channels just need to be recreated - they don't auto-start
+            // Mic channels - recreate and try to auto-start
             const channelNumber = await createChannel('mic', {
                 tabName: ch.tabName,
                 audioMode: ch.audioMode || 'chromagram'
@@ -1113,6 +1113,13 @@ export async function loadChannelConfig(config) {
                     state.activeTabs.push(ch.tabName);
                 }
                 
+                // Try to auto-start mic (will fail silently if permission not granted)
+                try {
+                    await startMicChannel(channelNumber);
+                } catch (error) {
+                    console.log(`Mic channel ch${channelNumber} awaiting user activation`);
+                }
+                
                 // Remove old container to force recreation
                 const oldContainer = document.getElementById(`${ch.tabName}Container`);
                 if (oldContainer) {
@@ -1120,7 +1127,7 @@ export async function loadChannelConfig(config) {
                 }
             }
         } else if (ch.type === 'webcam') {
-            // Webcam channels just need to be recreated - they don't auto-start
+            // Webcam channels - recreate and try to auto-start
             const channelNumber = await createChannel('webcam', {
                 tabName: ch.tabName
             });
@@ -1128,6 +1135,13 @@ export async function loadChannelConfig(config) {
             if (channelNumber !== -1 && ch.tabName) {
                 if (!state.activeTabs.includes(ch.tabName)) {
                     state.activeTabs.push(ch.tabName);
+                }
+                
+                // Try to auto-start webcam (will fail silently if permission not granted)
+                try {
+                    await startWebcamChannel(channelNumber);
+                } catch (error) {
+                    console.log(`Webcam channel ch${channelNumber} awaiting user activation`);
                 }
                 
                 // Remove old container to force recreation
@@ -1383,6 +1397,34 @@ export async function startMicChannel(channelNumber) {
 }
 
 /**
+ * Start mic channel with an already-obtained stream
+ * @param {number} channelNumber - Channel number
+ * @param {MediaStream} stream - Already-obtained media stream
+ * @returns {Promise<void>}
+ */
+export async function startMicChannelWithStream(channelNumber, stream) {
+    const channel = getChannel(channelNumber);
+    if (!channel || channel.type !== 'mic') {
+        throw new Error(`Channel ${channelNumber} is not a mic channel`);
+    }
+    
+    const gl = state.glContext;
+    if (!gl) {
+        throw new Error('WebGL context not available');
+    }
+    
+    const mode = channel.audioMode || 'chromagram';
+    channel.micData = await micInput.createMicChannelWithStream(gl, mode, stream);
+    channel.texture = channel.micData.texture;
+    channel.resolution = { 
+        width: channel.micData.width, 
+        height: channel.micData.height 
+    };
+    
+    console.log(`✓ Mic channel started with stream: ch${channelNumber}`);
+}
+
+/**
  * Stop mic capture for a channel
  * @param {number} channelNumber - Channel number
  */
@@ -1479,6 +1521,33 @@ export async function startWebcamChannel(channelNumber) {
     };
     
     console.log(`✓ Webcam channel started: ch${channelNumber}`);
+}
+
+/**
+ * Start webcam channel with an already-obtained stream
+ * @param {number} channelNumber - Channel number
+ * @param {MediaStream} stream - Already-obtained media stream
+ * @returns {Promise<void>}
+ */
+export async function startWebcamChannelWithStream(channelNumber, stream) {
+    const channel = getChannel(channelNumber);
+    if (!channel || channel.type !== 'webcam') {
+        throw new Error(`Channel ${channelNumber} is not a webcam channel`);
+    }
+    
+    const gl = state.glContext;
+    if (!gl) {
+        throw new Error('WebGL context not available');
+    }
+    
+    channel.webcamData = await webcamInput.createWebcamChannelWithStream(gl, stream);
+    channel.texture = channel.webcamData.texture;
+    channel.resolution = { 
+        width: channel.webcamData.width, 
+        height: channel.webcamData.height 
+    };
+    
+    console.log(`✓ Webcam channel started with stream: ch${channelNumber}`);
 }
 
 /**
