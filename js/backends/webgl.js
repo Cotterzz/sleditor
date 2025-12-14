@@ -372,32 +372,44 @@ function displaySelectedChannel(gl) {
     const selected = channels.getSelectedOutputChannel();
     let channel = channels.getChannel(selected) || channels.getChannel(0);
     
-    // Volume (3D) textures can't be displayed directly - skip to main output
+    // Volume (3D) textures can't be displayed directly - always use main output (ch0)
     if (channel?.type === 'volume') {
         channel = channels.getChannel(0);
     }
     
-    let texture = channels.getChannelTextureForDisplay(channel?.number ?? selected);
+    // Skip if we somehow still have a volume or no valid channel
+    if (!channel || channel.type === 'volume') return;
     
-    if (!texture && selected !== 0) {
+    let texture = channels.getChannelTextureForDisplay(channel.number);
+    
+    if (!texture && channel.number !== 0) {
         channel = channels.getChannel(0);
         texture = channels.getChannelTextureForDisplay(0);
     }
     
     if (!texture || !channel) return;
     
+    // Don't try to blit 3D textures
+    if (channel.is3D) return;
+    
     const resolution = channel.resolution || { width: gl.canvas.width, height: gl.canvas.height };
     
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, state.glFramebuffer);
-    gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-    gl.blitFramebuffer(
-        0, 0, resolution.width, resolution.height,
-        0, 0, gl.canvas.width, gl.canvas.height,
-        gl.COLOR_BUFFER_BIT,
-        gl.NEAREST
-    );
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    // Use a try-catch to handle any WebGL errors gracefully
+    try {
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, state.glFramebuffer);
+        gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+        gl.blitFramebuffer(
+            0, 0, resolution.width, resolution.height,
+            0, 0, gl.canvas.width, gl.canvas.height,
+            gl.COLOR_BUFFER_BIT,
+            gl.NEAREST
+        );
+    } catch (e) {
+        // Ignore blit errors
+    } finally {
+        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    }
 }
 
 // ============================================================================

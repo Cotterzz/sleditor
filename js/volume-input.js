@@ -38,11 +38,20 @@ async function loadVolumeCatalog() {
 /**
  * Get volume info by ID
  * @param {string} volumeId - Volume ID
- * @returns {Promise<Object|null>} Volume info or null
+ * @returns {Promise<Object|null>} Volume info or null (normalized with width/height/depth)
  */
 async function getVolumeInfo(volumeId) {
     const catalog = await loadVolumeCatalog();
-    return catalog.find(v => v.id === volumeId) || null;
+    const vol = catalog.find(v => v.id === volumeId) || null;
+    if (!vol) return null;
+    
+    // Normalize: support both cubic (size) and non-cubic (width/height/depth)
+    return {
+        ...vol,
+        width: vol.width || vol.size,
+        height: vol.height || vol.size,
+        depth: vol.depth || vol.size
+    };
 }
 
 /**
@@ -68,12 +77,12 @@ export async function loadVolumeData(volumeId) {
     const arrayBuffer = await response.arrayBuffer();
     let data = new Uint8Array(arrayBuffer);
     
-    // Validate size
-    const expectedSize = volumeInfo.size * volumeInfo.size * volumeInfo.size * volumeInfo.channels;
+    // Validate size (supports both cubic and non-cubic volumes)
+    const expectedSize = volumeInfo.width * volumeInfo.height * volumeInfo.depth * volumeInfo.channels;
     if (data.length !== expectedSize) {
-        // Shadertoy .bin files have a 20-byte header - skip it if present
+        // Shadertoy .bin files may have a header - skip it if present
         const headerSize = data.length - expectedSize;
-        if (headerSize === 20) {
+        if (headerSize > 0 && headerSize <= 64) {
             console.log(`Volume file has ${headerSize}-byte header, skipping...`);
             data = data.slice(headerSize);
         } else {
@@ -98,7 +107,7 @@ export async function createVolumeTexture(gl, volumeId) {
     }
     
     const data = await loadVolumeData(volumeId);
-    const size = volumeInfo.size;
+    const { width, height, depth } = volumeInfo;
     
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_3D, texture);
@@ -110,7 +119,7 @@ export async function createVolumeTexture(gl, volumeId) {
             gl.TEXTURE_3D,
             0,
             gl.R8,
-            size, size, size,
+            width, height, depth,
             0,
             gl.RED,
             gl.UNSIGNED_BYTE,
@@ -122,7 +131,7 @@ export async function createVolumeTexture(gl, volumeId) {
             gl.TEXTURE_3D,
             0,
             gl.RGBA8,
-            size, size, size,
+            width, height, depth,
             0,
             gl.RGBA,
             gl.UNSIGNED_BYTE,
@@ -133,18 +142,23 @@ export async function createVolumeTexture(gl, volumeId) {
     // Set texture parameters
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.REPEAT);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
     
     gl.bindTexture(gl.TEXTURE_3D, null);
     
-    console.log(`✓ Volume texture created: ${volumeInfo.name} (${size}³, ${volumeInfo.channels} channels)`);
+    const sizeStr = width === height && height === depth 
+        ? `${width}³` 
+        : `${width}×${height}×${depth}`;
+    console.log(`✓ Volume texture created: ${volumeInfo.name} (${sizeStr}, ${volumeInfo.channels} ch)`);
     
     return {
         texture,
         info: volumeInfo,
-        size,
+        width,
+        height, 
+        depth,
         channels: volumeInfo.channels
     };
 }
@@ -162,7 +176,11 @@ export async function createVolumeChannel(gl, volumeId) {
         texture: result.texture,
         volumeId,
         info: result.info,
-        size: result.size,
+        width: result.width,
+        height: result.height,
+        depth: result.depth,
+        // For backwards compatibility, also provide size (use max dimension)
+        size: Math.max(result.width, result.height, result.depth),
         channels: result.channels,
         active: true
     };
@@ -190,7 +208,9 @@ export async function getAvailableVolumes() {
     return catalog.map(vol => ({
         id: vol.id,
         name: vol.name,
-        size: vol.size,
+        width: vol.width || vol.size,
+        height: vol.height || vol.size,
+        depth: vol.depth || vol.size,
         channels: vol.channels
     }));
 }

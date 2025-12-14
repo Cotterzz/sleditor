@@ -425,9 +425,9 @@ export async function createChannel(type, data) {
             channel.volumeData = await volumeInput.createVolumeChannel(gl, volumeId);
             channel.texture = channel.volumeData.texture;
             channel.resolution = { 
-                width: channel.volumeData.size, 
-                height: channel.volumeData.size,
-                depth: channel.volumeData.size 
+                width: channel.volumeData.width, 
+                height: channel.volumeData.height,
+                depth: channel.volumeData.depth 
             };
             channel.is3D = true; // Mark as 3D texture
             console.log(`✓ Volume channel created: ch${channelNumber} (${volumeId})`);
@@ -1322,6 +1322,8 @@ export function getSelectedOutputChannel() {
 
 export function getAvailableViewerChannels() {
     return [...channelState.channels]
+        // Filter out volume channels - they can't be displayed in 2D viewer
+        .filter(ch => ch.type !== 'volume')
         .sort((a, b) => a.number - b.number)
         .map(ch => ({
             number: ch.number,
@@ -1745,9 +1747,9 @@ export async function changeVolumeTexture(channelNumber, volumeId) {
         channel.volumeData = await volumeInput.createVolumeChannel(gl, volumeId);
         channel.texture = channel.volumeData.texture;
         channel.resolution = {
-            width: channel.volumeData.size,
-            height: channel.volumeData.size,
-            depth: channel.volumeData.size
+            width: channel.volumeData.width,
+            height: channel.volumeData.height,
+            depth: channel.volumeData.depth
         };
         console.log(`✓ Volume texture changed: ch${channelNumber} → ${volumeId}`);
         emitChannelChangeEvent({ action: 'update', channel });

@@ -100,7 +100,11 @@ export async function createVolumeSelector(tabName, channelNumber) {
     availableVolumes.forEach(vol => {
         const option = document.createElement('option');
         option.value = vol.id;
-        option.textContent = `${vol.name} (${vol.size}³, ${vol.channels}ch)`;
+        // Format size: cubic shows as N³, non-cubic shows as W×H×D
+        const sizeStr = (vol.width === vol.height && vol.height === vol.depth)
+            ? `${vol.width}³`
+            : `${vol.width}×${vol.height}×${vol.depth}`;
+        option.textContent = `${vol.name} (${sizeStr}, ${vol.channels}ch)`;
         if (channel?.volumeData?.volumeId === vol.id) {
             option.selected = true;
         }
@@ -130,11 +134,15 @@ export async function createVolumeSelector(tabName, channelNumber) {
     function updateInfo() {
         const ch = channels.getChannel(channelNumber);
         if (ch?.volumeData) {
+            const vd = ch.volumeData;
+            const sizeStr = (vd.width === vd.height && vd.height === vd.depth)
+                ? `${vd.width}×${vd.width}×${vd.width}`
+                : `${vd.width}×${vd.height}×${vd.depth}`;
             infoSection.innerHTML = `
                 <div style="font-weight: bold; color: var(--text-primary); margin-bottom: 8px;">Current Volume</div>
-                <div>Name: ${ch.volumeData.info?.name || 'Unknown'}</div>
-                <div>Size: ${ch.volumeData.size}×${ch.volumeData.size}×${ch.volumeData.size}</div>
-                <div>Channels: ${ch.volumeData.channels}</div>
+                <div>Name: ${vd.info?.name || 'Unknown'}</div>
+                <div>Size: ${sizeStr}</div>
+                <div>Channels: ${vd.channels}</div>
             `;
         } else {
             infoSection.innerHTML = `

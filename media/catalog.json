@@ -223,6 +223,16 @@
         "size": 32,
         "channels": 4,
         "format": "RGBA8"
+    },
+    {
+        "id": "head_256",
+        "name": "Head CT 256×256×109",
+        "path": "media/head256x256x109.bin",
+        "width": 256,
+        "height": 256,
+        "depth": 109,
+        "channels": 1,
+        "format": "R8"
     }
   ]
 }
