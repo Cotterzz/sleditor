@@ -84,6 +84,7 @@ export function render(rawTime) {
         channels.updateVideoTextures(gl);
         channels.updateMicTextures(gl);
         channels.updateWebcamTextures(gl);
+        channels.updateKeyboardTextures(gl);
     }
     
     // Determine rendering mode based on available backend
@@ -99,6 +100,9 @@ export function render(rawTime) {
     // Performance monitor disabled
     // perfMonitor.markJSEnd();
     // perfMonitor.markFrameEnd();
+    
+    // Clear keyboard hit states at end of frame (after shader has read them)
+    channels.clearKeyboardHitStates();
     
     requestAnimationFrame(render);
 }

@@ -4,6 +4,7 @@
 
 import { state } from './core.js';
 import { sanitize } from './sanitizer.js';
+import * as keyboardInput from './keyboard-input.js';
 
 // Default JS that runs when JS tab is not visible
 const INVISIBLE_DEFAULT_JS = `
@@ -308,10 +309,28 @@ class SandboxProcessor extends AudioWorkletProcessor {
             const audioMessages = []; // Collect audio.send() calls
             const audioParams = {}; // Collect audio.setParam() calls
             
+            // Helper to convert key identifier to keyCode
+            const toKeyCode = (key) => {
+                if (typeof key === 'number') return key;
+                if (typeof key === 'string') {
+                    if (key.length === 1) return key.toUpperCase().charCodeAt(0);
+                    const named = { space: 32, enter: 13, escape: 27, left: 37, up: 38, right: 39, down: 40 };
+                    return named[key.toLowerCase()] || key.toUpperCase().charCodeAt(0);
+                }
+                return 0;
+            };
+            
             const api = {
                 time: data.time,
                 deltaTime: data.deltaTime,
                 mouse: data.mouse,
+                keys: {
+                    isDown: (key) => data.keysDown && data.keysDown[toKeyCode(key)] === true,
+                    isHit: (key) => data.keysHit && data.keysHit[toKeyCode(key)] === true,
+                    isToggled: (key) => data.keysToggle && data.keysToggle[toKeyCode(key)] === true,
+                    isPressed: (key) => data.keysHit && data.keysHit[toKeyCode(key)] === true,
+                    isAsciiDown: (key) => data.keysDown && data.keysDown[toKeyCode(key)] === true
+                },
                 uniforms: {
                     setCustomFloat: (slot, value) => {
                         if (slot >= 0 && slot < 15) {
@@ -483,6 +502,7 @@ export function callEnterframe(elapsedSec, uniformF32 = null, uniformI32 = null,
             time: elapsedSec,
             deltaTime: 0.016, // Could calculate real delta
             mouse: { x: state.mouseX, y: state.mouseY },
+            keys: (keyboardInput.ensureListening(), keyboardInput.getKeyboardAPI()),
             sampleRate: audioContext ? audioContext.sampleRate : 48000,
             samplesPerBlock: 0, // Will be set by caller
             audioFrame: state.audioFrame,
@@ -562,12 +582,37 @@ function callEnterframeSandboxed(elapsedSec, uniformF32) {
             }
         };
         
+        // Helper to get key states (returns sparse object of pressed keys)
+        function getKeyStatesArray(type) {
+            const result = {};
+            for (let i = 0; i < 256; i++) {
+                let isSet = false;
+                if (type === 'down') isSet = keyboardInput.isDown(i);
+                else if (type === 'hit') isSet = keyboardInput.isHit(i);
+                else if (type === 'toggle') isSet = keyboardInput.isToggled(i);
+                if (isSet) result[i] = true;
+            }
+            return result;
+        }
+        
+        // Ensure keyboard listening is active for JS API
+        keyboardInput.ensureListening();
+        
+        // Get keyboard states (always available for JS API)
+        const keysDownData = getKeyStatesArray('down');
+        const keysHitData = getKeyStatesArray('hit');
+        const keysToggleData = getKeyStatesArray('toggle');
+        
         // Send enterframe request to worklet
         sandboxWorklet.port.postMessage({
             type: 'enterframe',
             time: elapsedSec,
             deltaTime: 0.016, // Could calculate real delta
-            mouse: { x: state.mouseX, y: state.mouseY }
+            mouse: { x: state.mouseX, y: state.mouseY },
+            // Pass keyboard state for api.keys (functions can't cross to worklet)
+            keysDown: keysDownData,
+            keysHit: keysHitData,
+            keysToggle: keysToggleData
         });
         
         return { success: true };

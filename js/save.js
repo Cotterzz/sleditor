@@ -828,6 +828,8 @@ export async function loadDatabaseShader(shader) {
             await channels.loadChannelConfig(channelConfig);
             // Re-render tabs after channels are loaded
             tabs.renderTabs();
+            // Auto-focus canvas if shader has keyboard input
+            channels.focusCanvasForKeyboard();
         } catch (error) {
             console.error('Failed to load channel config:', error);
         }

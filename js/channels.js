@@ -8,6 +8,7 @@ import * as audioInput from './audio-input.js';
 import * as videoInput from './video-input.js';
 import * as micInput from './mic-input.js';
 import * as webcamInput from './webcam-input.js';
+import * as keyboardInput from './keyboard-input.js';
 
 // Channel state
 const channelState = {
@@ -385,6 +386,25 @@ export async function createChannel(type, data) {
         channel.webcamData = null; // Will be populated when webcam starts
         
         console.log(`Webcam channel stub created: ch${channelNumber} (awaiting user activation)`);
+    } else if (type === 'keyboard') {
+        // Keyboard input channel - initializes immediately (no permissions needed)
+        let gl = state.glContext;
+        if (!gl) {
+            console.warn('state.glContext not set, trying to get from canvas...');
+            gl = state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl');
+        }
+        
+        if (!gl) {
+            console.error('WebGL context not available for keyboard channel');
+            return -1;
+        }
+        
+        // Create keyboard channel (starts immediately)
+        channel.keyboardData = keyboardInput.createKeyboardChannel(gl);
+        channel.texture = channel.keyboardData.texture;
+        channel.resolution = { width: 256, height: 3 };
+        
+        console.log(`✓ Keyboard channel created: ch${channelNumber}`);
     }
     
     channelState.channels.push(channel);
@@ -426,6 +446,11 @@ export function deleteChannel(channelNumber) {
     // Cleanup webcam resources
     if (channel.type === 'webcam' && channel.webcamData) {
         webcamInput.stopWebcamChannel(channel.webcamData);
+    }
+    
+    // Cleanup keyboard resources
+    if (channel.type === 'keyboard' && channel.keyboardData) {
+        keyboardInput.stopKeyboardChannel(channel.keyboardData);
     }
     
     // Cleanup WebGL resources
@@ -733,6 +758,11 @@ export function resetChannels() {
                 webcamInput.stopWebcamChannel(ch.webcamData);
             }
             
+            // Cleanup keyboard resources
+            if (ch.type === 'keyboard' && ch.keyboardData) {
+                keyboardInput.stopKeyboardChannel(ch.keyboardData);
+            }
+            
             // Remove UI container if it exists
             if (ch.tabName) {
                 const container = document.getElementById(`${ch.tabName}Container`);
@@ -886,6 +916,11 @@ export async function loadChannelConfig(config) {
             // Cleanup webcam resources
             if (ch.type === 'webcam' && ch.webcamData) {
                 webcamInput.stopWebcamChannel(ch.webcamData);
+            }
+            
+            // Cleanup keyboard resources
+            if (ch.type === 'keyboard' && ch.keyboardData) {
+                keyboardInput.stopKeyboardChannel(ch.keyboardData);
             }
             
             // Cleanup WebGL textures
@@ -1150,6 +1185,23 @@ export async function loadChannelConfig(config) {
                     oldContainer.remove();
                 }
             }
+        } else if (ch.type === 'keyboard') {
+            // Keyboard channels - recreate (starts immediately, no permissions)
+            const channelNumber = await createChannel('keyboard', {
+                tabName: ch.tabName
+            });
+            
+            if (channelNumber !== -1 && ch.tabName) {
+                if (!state.activeTabs.includes(ch.tabName)) {
+                    state.activeTabs.push(ch.tabName);
+                }
+                
+                // Remove old container to force recreation
+                const oldContainer = document.getElementById(`${ch.tabName}Container`);
+                if (oldContainer) {
+                    oldContainer.remove();
+                }
+            }
         } else if (ch.type === 'buffer') {
             channelState.channels.push({
                 number: ch.number,
@@ -1223,7 +1275,7 @@ export function getChannelTextureForDisplay(channelNumber) {
     }
     
     if (channel.type === 'image' || channel.type === 'video' || channel.type === 'audio' ||
-        channel.type === 'mic' || channel.type === 'webcam') {
+        channel.type === 'mic' || channel.type === 'webcam' || channel.type === 'keyboard') {
         return channel.texture || null;
     }
     
@@ -1527,6 +1579,57 @@ export function updateWebcamTextures(gl) {
             }
         }
     });
+}
+
+// ============================================================================
+// Keyboard Channel Functions
+// ============================================================================
+
+/**
+ * Get all keyboard channels
+ * @returns {Object[]} Keyboard channels
+ */
+export function getKeyboardChannels() {
+    return channelState.channels.filter(ch => ch.type === 'keyboard');
+}
+
+/**
+ * Check if any keyboard channels exist
+ * @returns {boolean}
+ */
+export function hasKeyboardChannels() {
+    return getKeyboardChannels().length > 0;
+}
+
+/**
+ * Update all keyboard channel textures (called each frame)
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ */
+export function updateKeyboardTextures(gl) {
+    const keyboardChannels = getKeyboardChannels();
+    keyboardChannels.forEach(ch => {
+        if (ch.keyboardData && ch.keyboardData.active) {
+            keyboardInput.updateKeyboardTexture(gl);
+        }
+    });
+}
+
+/**
+ * Clear keyboard hit states (called at end of each frame)
+ */
+export function clearKeyboardHitStates() {
+    if (hasKeyboardChannels()) {
+        keyboardInput.clearHitStates();
+    }
+}
+
+/**
+ * Focus canvas for keyboard input (call when shader with keyboard is loaded)
+ */
+export function focusCanvasForKeyboard() {
+    if (hasKeyboardChannels()) {
+        keyboardInput.focusCanvas();
+    }
 }
 
 // Expose limited debugging helpers

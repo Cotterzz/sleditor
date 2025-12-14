@@ -147,6 +147,12 @@ function setupUI() {
     canvasContainer.classList.add('explicit-height');
     canvasContainer.style.height = state.canvasHeight + 'px';
     
+    // Click on canvas container focuses the active canvas (for keyboard input)
+    canvasContainer.addEventListener('click', () => {
+        const activeCanvas = state.canvasWebGL.style.display !== 'none' ? state.canvasWebGL : state.canvasWebGPU;
+        activeCanvas.focus();
+    });
+    
     // Set initial canvas size
     ui.updateCanvasSize(state.canvasWidth, state.canvasHeight, false);
     
