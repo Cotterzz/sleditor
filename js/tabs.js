@@ -506,16 +506,6 @@ export async function addBufferChannelTab() {
 }
 
 export async function addMicChannel() {
-    // Request mic access FIRST while we still have user gesture
-    let stream = null;
-    try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        console.log('✓ Mic permission granted');
-    } catch (error) {
-        console.warn('Mic permission denied or failed:', error.message);
-        // Continue - channel will be created but not active
-    }
-    
     // Create channel
     const channelNumber = await channels.createChannel('mic', {
         tabName: null // Will be set below
@@ -523,7 +513,6 @@ export async function addMicChannel() {
     
     if (channelNumber === -1) {
         console.error('Failed to create mic channel');
-        if (stream) stream.getTracks().forEach(t => t.stop());
         return;
     }
     
@@ -536,14 +525,11 @@ export async function addMicChannel() {
         channel.tabName = tabName;
     }
     
-    // Start mic with the already-obtained stream
-    if (stream) {
-        try {
-            await channels.startMicChannelWithStream(channelNumber, stream);
-        } catch (error) {
-            console.warn('Failed to initialize mic channel:', error.message);
-            stream.getTracks().forEach(t => t.stop());
-        }
+    // Try to start mic (will prompt for permission if needed)
+    try {
+        await channels.startMicChannel(channelNumber);
+    } catch (error) {
+        console.log('Mic awaiting user activation:', error.message);
     }
     
     // Add tab to active tabs
@@ -557,16 +543,6 @@ export async function addMicChannel() {
 }
 
 export async function addWebcamChannel() {
-    // Request webcam access FIRST while we still have user gesture
-    let stream = null;
-    try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
-        console.log('✓ Webcam permission granted');
-    } catch (error) {
-        console.warn('Webcam permission denied or failed:', error.message);
-        // Continue - channel will be created but not active
-    }
-    
     // Create channel
     const channelNumber = await channels.createChannel('webcam', {
         tabName: null // Will be set below
@@ -574,7 +550,6 @@ export async function addWebcamChannel() {
     
     if (channelNumber === -1) {
         console.error('Failed to create webcam channel');
-        if (stream) stream.getTracks().forEach(t => t.stop());
         return;
     }
     
@@ -587,14 +562,11 @@ export async function addWebcamChannel() {
         channel.tabName = tabName;
     }
     
-    // Start webcam with the already-obtained stream
-    if (stream) {
-        try {
-            await channels.startWebcamChannelWithStream(channelNumber, stream);
-        } catch (error) {
-            console.warn('Failed to initialize webcam channel:', error.message);
-            stream.getTracks().forEach(t => t.stop());
-        }
+    // Try to start webcam (will prompt for permission if needed)
+    try {
+        await channels.startWebcamChannel(channelNumber);
+    } catch (error) {
+        console.log('Webcam awaiting user activation:', error.message);
     }
     
     // Add tab to active tabs

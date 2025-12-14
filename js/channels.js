@@ -1397,34 +1397,6 @@ export async function startMicChannel(channelNumber) {
 }
 
 /**
- * Start mic channel with an already-obtained stream
- * @param {number} channelNumber - Channel number
- * @param {MediaStream} stream - Already-obtained media stream
- * @returns {Promise<void>}
- */
-export async function startMicChannelWithStream(channelNumber, stream) {
-    const channel = getChannel(channelNumber);
-    if (!channel || channel.type !== 'mic') {
-        throw new Error(`Channel ${channelNumber} is not a mic channel`);
-    }
-    
-    const gl = state.glContext;
-    if (!gl) {
-        throw new Error('WebGL context not available');
-    }
-    
-    const mode = channel.audioMode || 'chromagram';
-    channel.micData = await micInput.createMicChannelWithStream(gl, mode, stream);
-    channel.texture = channel.micData.texture;
-    channel.resolution = { 
-        width: channel.micData.width, 
-        height: channel.micData.height 
-    };
-    
-    console.log(`✓ Mic channel started with stream: ch${channelNumber}`);
-}
-
-/**
  * Stop mic capture for a channel
  * @param {number} channelNumber - Channel number
  */
@@ -1521,33 +1493,6 @@ export async function startWebcamChannel(channelNumber) {
     };
     
     console.log(`✓ Webcam channel started: ch${channelNumber}`);
-}
-
-/**
- * Start webcam channel with an already-obtained stream
- * @param {number} channelNumber - Channel number
- * @param {MediaStream} stream - Already-obtained media stream
- * @returns {Promise<void>}
- */
-export async function startWebcamChannelWithStream(channelNumber, stream) {
-    const channel = getChannel(channelNumber);
-    if (!channel || channel.type !== 'webcam') {
-        throw new Error(`Channel ${channelNumber} is not a webcam channel`);
-    }
-    
-    const gl = state.glContext;
-    if (!gl) {
-        throw new Error('WebGL context not available');
-    }
-    
-    channel.webcamData = await webcamInput.createWebcamChannelWithStream(gl, stream);
-    channel.texture = channel.webcamData.texture;
-    channel.resolution = { 
-        width: channel.webcamData.width, 
-        height: channel.webcamData.height 
-    };
-    
-    console.log(`✓ Webcam channel started with stream: ch${channelNumber}`);
 }
 
 /**
