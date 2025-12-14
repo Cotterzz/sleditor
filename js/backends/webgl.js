@@ -298,20 +298,24 @@ function renderBufferPass(gl, uniformBuilder, pass) {
 
 function bindChannelTextures(gl, pass, readTexture) {
     pass.requiredChannels.forEach(chNum => {
-        const texture = getChannelTexture(chNum, pass, readTexture);
+        const textureInfo = getChannelTexture(chNum, pass, readTexture);
         const loc = pass.channelUniformLocations?.[chNum];
-        if (!texture || loc == null) {
+        if (!textureInfo?.texture || loc == null) {
             return;
         }
         gl.activeTexture(gl.TEXTURE0 + chNum);
-        gl.bindTexture(gl.TEXTURE_2D, texture);
+        if (textureInfo.is3D) {
+            gl.bindTexture(gl.TEXTURE_3D, textureInfo.texture);
+        } else {
+            gl.bindTexture(gl.TEXTURE_2D, textureInfo.texture);
+        }
         gl.uniform1i(loc, chNum);
     });
 }
 
 function getChannelTexture(channelNumber, pass, readTexture) {
     if (channelNumber === pass.channelNumber && readTexture) {
-        return readTexture;
+        return { texture: readTexture, is3D: false };
     }
     
     const channel = channels.getChannel(channelNumber);
@@ -319,7 +323,11 @@ function getChannelTexture(channelNumber, pass, readTexture) {
     
     if (channel.type === 'image' || channel.type === 'video' || channel.type === 'audio' ||
         channel.type === 'mic' || channel.type === 'webcam' || channel.type === 'keyboard') {
-        return channel.texture || null;
+        return { texture: channel.texture || null, is3D: false };
+    }
+    
+    if (channel.type === 'volume') {
+        return { texture: channel.texture || null, is3D: true };
     }
     
     if (channel.type === 'buffer') {
@@ -327,7 +335,7 @@ function getChannelTexture(channelNumber, pass, readTexture) {
         if (!channel.textures) {
             return null;
         }
-        return channel.textures[channel.currentPing];
+        return { texture: channel.textures[channel.currentPing], is3D: false };
     }
     
     return null;
@@ -363,7 +371,13 @@ function drawFullscreenQuad(gl, program) {
 function displaySelectedChannel(gl) {
     const selected = channels.getSelectedOutputChannel();
     let channel = channels.getChannel(selected) || channels.getChannel(0);
-    let texture = channels.getChannelTextureForDisplay(selected);
+    
+    // Volume (3D) textures can't be displayed directly - skip to main output
+    if (channel?.type === 'volume') {
+        channel = channels.getChannel(0);
+    }
+    
+    let texture = channels.getChannelTextureForDisplay(channel?.number ?? selected);
     
     if (!texture && selected !== 0) {
         channel = channels.getChannel(0);

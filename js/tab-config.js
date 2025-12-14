@@ -210,6 +210,24 @@ export function createKeyboardChannelTabName(channelNumber) {
 }
 
 /**
+ * Check if tab name is a volume (3D texture) channel
+ * @param {string} tabName - Tab name
+ * @returns {boolean}
+ */
+export function isVolumeChannel(tabName) {
+    return tabName.startsWith('volume_ch');
+}
+
+/**
+ * Create volume channel tab name
+ * @param {number} channelNumber - Channel number
+ * @returns {string}
+ */
+export function createVolumeChannelTabName(channelNumber) {
+    return `volume_ch${channelNumber}`;
+}
+
+/**
  * Check if tab name is a buffer channel
  * @param {string} tabName - Tab name
  * @returns {boolean}
@@ -226,7 +244,7 @@ export function isBufferChannel(tabName) {
 export function isChannel(tabName) {
     return isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName) || 
            isBufferChannel(tabName) || isMicChannel(tabName) || isWebcamChannel(tabName) ||
-           isKeyboardChannel(tabName);
+           isKeyboardChannel(tabName) || isVolumeChannel(tabName);
 }
 
 /**
@@ -256,6 +274,7 @@ export function getTabIcon(tabName) {
     if (isMicChannel(tabName)) return '🎤';
     if (isWebcamChannel(tabName)) return '📹';
     if (isKeyboardChannel(tabName)) return '⌨️';
+    if (isVolumeChannel(tabName)) return '🧊';
     
     const config = TAB_CONFIG[tabName];
     return config ? config.icon : '📝';
@@ -296,7 +315,11 @@ export function getTabLabel(tabName) {
         const chNum = getChannelNumber(tabName);
         return `Keyboard(ch${chNum})`;
     }
-    
+    if (isVolumeChannel(tabName)) {
+        const chNum = getChannelNumber(tabName);
+        return `Volume(ch${chNum})`;
+    }
+
     const config = TAB_CONFIG[tabName];
     return config ? config.label : tabName;
 }
@@ -390,7 +413,8 @@ export function tabsAreMutuallyExclusive(tab1, tab2) {
 export function getEditorForTab(tabName, state) {
     // Channel tabs don't use Monaco editors
     if (isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName) ||
-        isMicChannel(tabName) || isWebcamChannel(tabName) || isKeyboardChannel(tabName)) {
+        isMicChannel(tabName) || isWebcamChannel(tabName) || isKeyboardChannel(tabName) ||
+        isVolumeChannel(tabName)) {
         return null;
     }
     
