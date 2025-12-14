@@ -7,7 +7,8 @@ import { UniformBuilder } from './uniforms.js';
 import * as webgpu from './backends/webgpu.js';
 import * as webgl from './backends/webgl.js';
 import * as jsRuntime from './js-runtime.js';
-import * as perfMonitor from './performance-monitor.js';
+// Performance monitor disabled - kept for future use
+// import * as perfMonitor from './performance-monitor.js';
 import * as recording from './recording.js';
 import * as channels from './channels.js';
 import * as ui from './ui.js';
@@ -62,8 +63,8 @@ export function render(rawTime) {
         return;
     }
 
-    // Mark frame start for performance monitoring
-    perfMonitor.markFrameStart();
+    // Performance monitor disabled
+    // perfMonitor.markFrameStart();
 
     const device = state.gpuDevice;
     const gl = state.glContext;
@@ -74,8 +75,8 @@ export function render(rawTime) {
         console.log('First render frame - backend:', state.graphicsBackend, 'device:', !!device, 'gl:', !!gl);
     }
     
-    // Mark JS start (before user code)
-    perfMonitor.markJSStart();
+    // Performance monitor disabled
+    // perfMonitor.markJSStart();
     
     // Update audio, video, mic, and webcam textures (if any media channels are active)
     if (gl) {
@@ -83,6 +84,7 @@ export function render(rawTime) {
         channels.updateVideoTextures(gl);
         channels.updateMicTextures(gl);
         channels.updateWebcamTextures(gl);
+        channels.updateKeyboardTextures(gl);
     }
     
     // Determine rendering mode based on available backend
@@ -95,11 +97,12 @@ export function render(rawTime) {
         renderNonGPUMode(rawTime);
     }
     
-    // Mark JS end (after user code)
-    perfMonitor.markJSEnd();
+    // Performance monitor disabled
+    // perfMonitor.markJSEnd();
+    // perfMonitor.markFrameEnd();
     
-    // Mark frame end for performance monitoring
-    perfMonitor.markFrameEnd();
+    // Clear keyboard hit states at end of frame (after shader has read them)
+    channels.clearKeyboardHitStates();
     
     requestAnimationFrame(render);
 }

@@ -168,7 +168,12 @@ export async function compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioReload
                 // Regular/Stoy/Golf mode: add channel uniforms automatically
                 let channelUniforms = '';
                 requiredChannels.forEach(chNum => {
-                    channelUniforms += `uniform sampler2D iChannel${chNum};\n`;
+                    const channel = channels.getChannel(chNum);
+                    if (channel?.type === 'volume') {
+                        channelUniforms += `uniform highp sampler3D iChannel${chNum};\n`;
+                    } else {
+                        channelUniforms += `uniform sampler2D iChannel${chNum};\n`;
+                    }
                 });
                 fullSource = boilerplate + channelUniforms + source;
             }

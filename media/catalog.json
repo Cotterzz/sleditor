@@ -206,6 +206,24 @@
         "path": "media/audio/chromatic.mp3",
         "duration": 10
     }
+  ],
+  "volumes": [
+    {
+        "id": "grey_noise_32",
+        "name": "Grey Noise 32³",
+        "path": "media/27012b4eadd0c3ce12498b867058e4f717ce79e10a99568cca461682d84a4b04.bin",
+        "size": 32,
+        "channels": 1,
+        "format": "R8"
+    },
+    {
+        "id": "rgba_noise_32",
+        "name": "RGBA Noise 32³",
+        "path": "media/aea6b99da1d53055107966b59ac5444fc8bc7b3ce2d0bbb6a4a3cbae1d97f3aa.bin",
+        "size": 32,
+        "channels": 4,
+        "format": "RGBA8"
+    }
   ]
 }
 

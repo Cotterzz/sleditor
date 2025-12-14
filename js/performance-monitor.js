@@ -2,6 +2,13 @@
 // Performance Monitor
 // Real-time performance statistics with visual timeline
 // ============================================================================
+//
+// NOTE: This module is currently NOT LOADED to reduce UI clutter.
+// It is retained for future use and debugging purposes.
+// To re-enable: uncomment the imports and calls in index.js, render.js, backend.js
+// and restore the perfMonitorBtn button in index.html.
+//
+// ============================================================================
 
 import { state } from './core.js';
 

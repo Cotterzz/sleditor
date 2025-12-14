@@ -12,7 +12,8 @@ import * as jsRuntime from './js-runtime.js';
 import * as tabs from './tabs.js';
 import * as save from './save.js';
 import * as comments from './comments.js';
-import * as perfMonitor from './performance-monitor.js';
+// Performance monitor disabled - kept for future use
+// import * as perfMonitor from './performance-monitor.js';
 import * as uniformControls from './uniform-controls.js';
 import * as fullscreen from './fullscreen.js';
 import * as vim from './vim.js';
@@ -146,6 +147,12 @@ function setupUI() {
     canvasContainer.classList.add('explicit-height');
     canvasContainer.style.height = state.canvasHeight + 'px';
     
+    // Click on canvas container focuses the active canvas (for keyboard input)
+    canvasContainer.addEventListener('click', () => {
+        const activeCanvas = state.canvasWebGL.style.display !== 'none' ? state.canvasWebGL : state.canvasWebGPU;
+        activeCanvas.focus();
+    });
+    
     // Set initial canvas size
     ui.updateCanvasSize(state.canvasWidth, state.canvasHeight, false);
     
@@ -175,7 +182,8 @@ function setupUI() {
     document.getElementById('newShaderBtn').addEventListener('click', shaderManagement.showNewShaderMenu);
     document.getElementById('addPassBtn').addEventListener('click', tabs.showAddPassMenu);
     document.getElementById('optionsBtn').addEventListener('click', tabs.showOptionsMenu);
-    document.getElementById('perfMonitorBtn').addEventListener('click', () => perfMonitor.togglePanel());
+    // Performance monitor button removed
+    // document.getElementById('perfMonitorBtn').addEventListener('click', () => perfMonitor.togglePanel());
     document.getElementById('uniformControlsBtn').addEventListener('click', () => uniformControls.toggle());
     // Help button - draggable divider
     const helpToggleBtn = document.getElementById('helpToggleBtn');
@@ -980,8 +988,8 @@ async function init() {
     // Populate default gallery tab (after backend init so Supabase is ready)
     save.populateGallery('sotw');
     
-    // Initialize performance monitor
-    perfMonitor.init();
+    // Performance monitor disabled - kept for future use
+    // perfMonitor.init();
     
     // Initialize uniform controls
     uniformControls.init();
@@ -990,10 +998,10 @@ async function init() {
     fullscreen.init();
     aiAssistSettings.init();
     
-    // Add mini visualization to stats button
-    const perfBtn = document.getElementById('perfMonitorBtn');
-    const miniCanvas = perfMonitor.createMiniVisualization();
-    perfBtn.appendChild(miniCanvas);
+    // Performance monitor mini visualization disabled
+    // const perfBtn = document.getElementById('perfMonitorBtn');
+    // const miniCanvas = perfMonitor.createMiniVisualization();
+    // perfBtn.appendChild(miniCanvas);
     
     // Initialize audio FIRST
     audio.initWebAudio();

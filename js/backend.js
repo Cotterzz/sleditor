@@ -3,7 +3,8 @@
 // ============================================================================
 
 import { state, logStatus } from './core.js';
-import * as perfMonitor from './performance-monitor.js';
+// Performance monitor disabled - kept for future use
+// import * as perfMonitor from './performance-monitor.js';
 import * as render from './render.js';
 
 // Supabase credentials (set at module level so they're available immediately)
@@ -35,10 +36,10 @@ function trackBandwidth(type, bytes) {
     const thisKB = (bytes / 1024).toFixed(1);
     console.log(`[Supabase ${type}] +${thisKB} KB | Total: ${totalKB} KB (${bandwidthStats.totalRequests} requests)`);
     
-    // Update performance monitor if available
-    if (window.perfMonitor?.trackSupabaseBandwidth) {
-        window.perfMonitor.trackSupabaseBandwidth(bytes);
-    }
+    // Performance monitor disabled
+    // if (window.perfMonitor?.trackSupabaseBandwidth) {
+    //     window.perfMonitor.trackSupabaseBandwidth(bytes);
+    // }
 }
 
 // Expose stats for external access
@@ -1144,8 +1145,8 @@ export function subscribeToLikes(shaderId, onLikeChange) {
                 filter: `shader_id=eq.${shaderId}`
             },
             async (payload) => {
-                // Count websocket message for performance monitoring
-                perfMonitor.countWebSocketMessage();
+                // Performance monitor disabled
+                // perfMonitor.countWebSocketMessage();
                 
                 console.log('🔔 Real-time like change detected:', payload.eventType, 'for shader:', shaderId);
                 
@@ -1388,8 +1389,8 @@ export function subscribeToComments(shaderId, onCommentChange) {
                 filter: `shader_id=eq.${shaderId}`
             },
             (payload) => {
-                // Count websocket message for performance monitoring
-                perfMonitor.countWebSocketMessage();
+                // Performance monitor disabled
+                // perfMonitor.countWebSocketMessage();
                 
                 console.log('🔔 Comment change detected:', payload.eventType);
                 if (onCommentChange) {

@@ -1276,25 +1276,36 @@ body.light-mode .comment-text span {
 .gallery-tabs-container {
     display: flex;
     gap: 2px;
-    padding: 0 10px;
+    padding: 0 4px;
     margin: 10px 0;
     border-bottom: 1px solid var(--border-color);
+    flex-wrap: nowrap;
+    overflow: hidden;
 }
 
 .gallery-tab {
-    flex: 1;
-    padding: 8px 12px;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 6px 4px;
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
     color: var(--text-secondary);
-    font-size: 12px;
+    font-size: 10px;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 2px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.gallery-tab span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .gallery-refresh-btn {

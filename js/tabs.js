@@ -4,12 +4,14 @@
 
 import { state, logStatus, saveSettings } from './core.js';
 import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET, MINIMAL_AUDIO_GLSL, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF } from './examples.js';
-import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, isMicChannel, isWebcamChannel, isChannel, getChannelNumber, createImageChannelTabName, createVideoChannelTabName, createAudioChannelTabName, createBufferChannelTabName, createMicChannelTabName, createWebcamChannelTabName } from './tab-config.js';
+import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, isMicChannel, isWebcamChannel, isKeyboardChannel, isVolumeChannel, isChannel, getChannelNumber, createImageChannelTabName, createVideoChannelTabName, createAudioChannelTabName, createBufferChannelTabName, createMicChannelTabName, createWebcamChannelTabName, createKeyboardChannelTabName, createVolumeChannelTabName } from './tab-config.js';
 import * as mediaSelector from './ui/media-selector.js';
 import * as audioSelector from './ui/audio-selector.js';
 import * as videoSelector from './ui/video-selector.js';
 import * as micSelector from './ui/mic-selector.js';
 import * as webcamSelector from './ui/webcam-selector.js';
+import * as keyboardSelector from './ui/keyboard-selector.js';
+import * as volumeSelector from './ui/volume-selector.js';
 import * as channels from './channels.js';
 import * as compiler from './compiler.js';
 
@@ -189,14 +191,15 @@ export function switchTab(tabName) {
     
     // Handle channel tabs separately
     if (isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName) || 
-        isMicChannel(tabName) || isWebcamChannel(tabName)) {
+        isMicChannel(tabName) || isWebcamChannel(tabName) || isKeyboardChannel(tabName) ||
+        isVolumeChannel(tabName)) {
         // Hide ALL editor containers first
         document.getElementById('graphicsContainer').style.display = 'none';
         document.getElementById('audioContainer').style.display = 'none';
         document.getElementById('jsEditorContainer').style.display = 'none';
         
         // Hide ALL channel containers
-        document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"], [id$="Container"][id^="audio_"], [id$="Container"][id^="mic_"], [id$="Container"][id^="webcam_"]').forEach(c => {
+        document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"], [id$="Container"][id^="audio_"], [id$="Container"][id^="mic_"], [id$="Container"][id^="webcam_"], [id$="Container"][id^="keyboard_"], [id$="Container"][id^="volume_"]').forEach(c => {
             c.style.display = 'none';
         });
         
@@ -232,6 +235,16 @@ export function switchTab(tabName) {
                 });
             } else if (isWebcamChannel(tabName)) {
                 webcamSelector.createWebcamSelector(tabName, channelNumber).then(selector => {
+                    channelContainer.innerHTML = '';
+                    channelContainer.appendChild(selector);
+                });
+            } else if (isKeyboardChannel(tabName)) {
+                keyboardSelector.createKeyboardSelector(tabName, channelNumber).then(selector => {
+                    channelContainer.innerHTML = '';
+                    channelContainer.appendChild(selector);
+                });
+            } else if (isVolumeChannel(tabName)) {
+                volumeSelector.createVolumeSelector(tabName, channelNumber).then(selector => {
                     channelContainer.innerHTML = '';
                     channelContainer.appendChild(selector);
                 });
@@ -290,7 +303,7 @@ export function switchTab(tabName) {
     allContainers.forEach(c => c.style.display = 'none');
     
     // Hide channel containers
-    document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"], [id$="Container"][id^="audio_"], [id$="Container"][id^="mic_"], [id$="Container"][id^="webcam_"]').forEach(c => {
+    document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"], [id$="Container"][id^="audio_"], [id$="Container"][id^="mic_"], [id$="Container"][id^="webcam_"], [id$="Container"][id^="keyboard_"], [id$="Container"][id^="volume_"]').forEach(c => {
         c.style.display = 'none';
     });
     
@@ -506,16 +519,6 @@ export async function addBufferChannelTab() {
 }
 
 export async function addMicChannel() {
-    // Request mic access FIRST while we still have user gesture
-    let stream = null;
-    try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        console.log('✓ Mic permission granted');
-    } catch (error) {
-        console.warn('Mic permission denied or failed:', error.message);
-        // Continue - channel will be created but not active
-    }
-    
     // Create channel
     const channelNumber = await channels.createChannel('mic', {
         tabName: null // Will be set below
@@ -523,7 +526,6 @@ export async function addMicChannel() {
     
     if (channelNumber === -1) {
         console.error('Failed to create mic channel');
-        if (stream) stream.getTracks().forEach(t => t.stop());
         return;
     }
     
@@ -536,14 +538,11 @@ export async function addMicChannel() {
         channel.tabName = tabName;
     }
     
-    // Start mic with the already-obtained stream
-    if (stream) {
-        try {
-            await channels.startMicChannelWithStream(channelNumber, stream);
-        } catch (error) {
-            console.warn('Failed to initialize mic channel:', error.message);
-            stream.getTracks().forEach(t => t.stop());
-        }
+    // Try to start mic (will prompt for permission if needed)
+    try {
+        await channels.startMicChannel(channelNumber);
+    } catch (error) {
+        console.log('Mic awaiting user activation:', error.message);
     }
     
     // Add tab to active tabs
@@ -557,16 +556,6 @@ export async function addMicChannel() {
 }
 
 export async function addWebcamChannel() {
-    // Request webcam access FIRST while we still have user gesture
-    let stream = null;
-    try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
-        console.log('✓ Webcam permission granted');
-    } catch (error) {
-        console.warn('Webcam permission denied or failed:', error.message);
-        // Continue - channel will be created but not active
-    }
-    
     // Create channel
     const channelNumber = await channels.createChannel('webcam', {
         tabName: null // Will be set below
@@ -574,7 +563,6 @@ export async function addWebcamChannel() {
     
     if (channelNumber === -1) {
         console.error('Failed to create webcam channel');
-        if (stream) stream.getTracks().forEach(t => t.stop());
         return;
     }
     
@@ -587,14 +575,11 @@ export async function addWebcamChannel() {
         channel.tabName = tabName;
     }
     
-    // Start webcam with the already-obtained stream
-    if (stream) {
-        try {
-            await channels.startWebcamChannelWithStream(channelNumber, stream);
-        } catch (error) {
-            console.warn('Failed to initialize webcam channel:', error.message);
-            stream.getTracks().forEach(t => t.stop());
-        }
+    // Try to start webcam (will prompt for permission if needed)
+    try {
+        await channels.startWebcamChannel(channelNumber);
+    } catch (error) {
+        console.log('Webcam awaiting user activation:', error.message);
     }
     
     // Add tab to active tabs
@@ -605,6 +590,70 @@ export async function addWebcamChannel() {
     switchTab(tabName);
     
     console.log(`✓ Webcam channel tab added: ${tabName} (ch${channelNumber})`);
+}
+
+export async function addKeyboardChannel() {
+    // Create channel (starts immediately - no permissions needed)
+    const channelNumber = await channels.createChannel('keyboard', {
+        tabName: null // Will be set below
+    });
+    
+    if (channelNumber === -1) {
+        console.error('Failed to create keyboard channel');
+        return;
+    }
+    
+    // Create tab name with the actual channel number
+    const tabName = createKeyboardChannelTabName(channelNumber);
+    
+    // Update the channel's tab name
+    const channel = channels.getChannel(channelNumber);
+    if (channel) {
+        channel.tabName = tabName;
+    }
+    
+    // Add tab to active tabs
+    state.activeTabs.push(tabName);
+    
+    // Refresh UI
+    renderTabs();
+    switchTab(tabName);
+    
+    // Focus canvas for keyboard input
+    channels.focusCanvasForKeyboard();
+    
+    console.log(`✓ Keyboard channel tab added: ${tabName} (ch${channelNumber})`);
+}
+
+export async function addVolumeChannel() {
+    // Create channel with default volume texture
+    const channelNumber = await channels.createChannel('volume', {
+        tabName: null,
+        volumeId: 'grey_noise_32' // Default volume
+    });
+    
+    if (channelNumber === -1) {
+        console.error('Failed to create volume channel');
+        return;
+    }
+    
+    // Create tab name with the actual channel number
+    const tabName = createVolumeChannelTabName(channelNumber);
+    
+    // Update the channel's tab name
+    const channel = channels.getChannel(channelNumber);
+    if (channel) {
+        channel.tabName = tabName;
+    }
+    
+    // Add tab to active tabs
+    state.activeTabs.push(tabName);
+    
+    // Refresh UI
+    renderTabs();
+    switchTab(tabName);
+    
+    console.log(`✓ Volume channel tab added: ${tabName} (ch${channelNumber})`);
 }
 
 export function removeTab(tabName) {
@@ -687,6 +736,8 @@ export function showAddPassMenu() {
         { name: '_video_channel', label: '🎬 Video Channel' }, // Special action
         { name: '_mic_channel', label: '🎤 Mic Input' }, // Special action
         { name: '_webcam_channel', label: '📹 Webcam Input' }, // Special action
+        { name: '_keyboard_channel', label: '⌨️ Keyboard Input' }, // Special action
+        { name: '_volume_channel', label: '🧊 Volume (3D)' }, // Special action
         { name: '_buffer_channel', label: '🎚️ Buffer Pass' }
     ];
     
@@ -710,7 +761,8 @@ export function showAddPassMenu() {
         // - Buffer pass only available with GLSL
         const isChannelTab = tab.name === '_image_channel' || tab.name === '_audio_channel' || 
                             tab.name === '_video_channel' || tab.name === '_mic_channel' || 
-                            tab.name === '_webcam_channel';
+                            tab.name === '_webcam_channel' || tab.name === '_keyboard_channel' ||
+                            tab.name === '_volume_channel';
         const isAudioTab = tab.name === 'audio_gpu' || tab.name === 'audio_worklet' || tab.name === 'audio_glsl';
         const isDisabled = (isAudioTab && hasAnyAudio && !isActive) ||  // Only one audio tab at a time
                           (tab.name === 'audio_gpu' && hasGLSL) ||       // WGSL audio incompatible with GLSL graphics
@@ -754,6 +806,10 @@ export function showAddPassMenu() {
                 await addMicChannel();
             } else if (tab.name === '_webcam_channel') {
                 await addWebcamChannel();
+            } else if (tab.name === '_keyboard_channel') {
+                await addKeyboardChannel();
+            } else if (tab.name === '_volume_channel') {
+                await addVolumeChannel();
             } else if (tab.name === '_buffer_channel') {
                 await addBufferChannelTab();
             } else {

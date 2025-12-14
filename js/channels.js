@@ -8,6 +8,8 @@ import * as audioInput from './audio-input.js';
 import * as videoInput from './video-input.js';
 import * as micInput from './mic-input.js';
 import * as webcamInput from './webcam-input.js';
+import * as keyboardInput from './keyboard-input.js';
+import * as volumeInput from './volume-input.js';
 
 // Channel state
 const channelState = {
@@ -385,6 +387,54 @@ export async function createChannel(type, data) {
         channel.webcamData = null; // Will be populated when webcam starts
         
         console.log(`Webcam channel stub created: ch${channelNumber} (awaiting user activation)`);
+    } else if (type === 'keyboard') {
+        // Keyboard input channel - initializes immediately (no permissions needed)
+        let gl = state.glContext;
+        if (!gl) {
+            console.warn('state.glContext not set, trying to get from canvas...');
+            gl = state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl');
+        }
+        
+        if (!gl) {
+            console.error('WebGL context not available for keyboard channel');
+            return -1;
+        }
+        
+        // Create keyboard channel (starts immediately)
+        channel.keyboardData = keyboardInput.createKeyboardChannel(gl);
+        channel.texture = channel.keyboardData.texture;
+        channel.resolution = { width: 256, height: 3 };
+        
+        console.log(`✓ Keyboard channel created: ch${channelNumber}`);
+    } else if (type === 'volume') {
+        // Volume (3D texture) channel
+        let gl = state.glContext;
+        if (!gl) {
+            console.warn('state.glContext not set, trying to get from canvas...');
+            gl = state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl');
+        }
+        
+        if (!gl) {
+            console.error('WebGL context not available for volume channel');
+            return -1;
+        }
+        
+        // Create volume channel with default texture
+        const volumeId = data?.volumeId || 'grey_noise_32';
+        try {
+            channel.volumeData = await volumeInput.createVolumeChannel(gl, volumeId);
+            channel.texture = channel.volumeData.texture;
+            channel.resolution = { 
+                width: channel.volumeData.size, 
+                height: channel.volumeData.size,
+                depth: channel.volumeData.size 
+            };
+            channel.is3D = true; // Mark as 3D texture
+            console.log(`✓ Volume channel created: ch${channelNumber} (${volumeId})`);
+        } catch (error) {
+            console.error('Failed to create volume channel:', error);
+            return -1;
+        }
     }
     
     channelState.channels.push(channel);
@@ -426,6 +476,16 @@ export function deleteChannel(channelNumber) {
     // Cleanup webcam resources
     if (channel.type === 'webcam' && channel.webcamData) {
         webcamInput.stopWebcamChannel(channel.webcamData);
+    }
+    
+    // Cleanup keyboard resources
+    if (channel.type === 'keyboard' && channel.keyboardData) {
+        keyboardInput.stopKeyboardChannel(channel.keyboardData);
+    }
+    
+    // Cleanup volume resources
+    if (channel.type === 'volume' && channel.volumeData) {
+        volumeInput.cleanupVolumeChannel(channel.volumeData);
     }
     
     // Cleanup WebGL resources
@@ -701,7 +761,9 @@ export function getChannelConfig() {
             // Include audio options
             audioMode: ch.audioMode,
             // Include video options
-            loop: ch.videoData?.loop || false
+            loop: ch.videoData?.loop || false,
+            // Include volume options
+            volumeId: ch.volumeData?.volumeId
         }))
     };
 }
@@ -731,6 +793,16 @@ export function resetChannels() {
             // Cleanup webcam resources
             if (ch.type === 'webcam' && ch.webcamData) {
                 webcamInput.stopWebcamChannel(ch.webcamData);
+            }
+            
+            // Cleanup keyboard resources
+            if (ch.type === 'keyboard' && ch.keyboardData) {
+                keyboardInput.stopKeyboardChannel(ch.keyboardData);
+            }
+            
+            // Cleanup volume resources
+            if (ch.type === 'volume' && ch.volumeData) {
+                volumeInput.cleanupVolumeChannel(ch.volumeData);
             }
             
             // Remove UI container if it exists
@@ -886,6 +958,16 @@ export async function loadChannelConfig(config) {
             // Cleanup webcam resources
             if (ch.type === 'webcam' && ch.webcamData) {
                 webcamInput.stopWebcamChannel(ch.webcamData);
+            }
+            
+            // Cleanup keyboard resources
+            if (ch.type === 'keyboard' && ch.keyboardData) {
+                keyboardInput.stopKeyboardChannel(ch.keyboardData);
+            }
+            
+            // Cleanup volume resources
+            if (ch.type === 'volume' && ch.volumeData) {
+                volumeInput.cleanupVolumeChannel(ch.volumeData);
             }
             
             // Cleanup WebGL textures
@@ -1150,6 +1232,23 @@ export async function loadChannelConfig(config) {
                     oldContainer.remove();
                 }
             }
+        } else if (ch.type === 'keyboard') {
+            // Keyboard channels - recreate (starts immediately, no permissions)
+            const channelNumber = await createChannel('keyboard', {
+                tabName: ch.tabName
+            });
+            
+            if (channelNumber !== -1 && ch.tabName) {
+                if (!state.activeTabs.includes(ch.tabName)) {
+                    state.activeTabs.push(ch.tabName);
+                }
+                
+                // Remove old container to force recreation
+                const oldContainer = document.getElementById(`${ch.tabName}Container`);
+                if (oldContainer) {
+                    oldContainer.remove();
+                }
+            }
         } else if (ch.type === 'buffer') {
             channelState.channels.push({
                 number: ch.number,
@@ -1163,6 +1262,24 @@ export async function loadChannelConfig(config) {
             });
             if (ch.tabName && !state.activeTabs.includes(ch.tabName)) {
                 state.activeTabs.push(ch.tabName);
+            }
+        } else if (ch.type === 'volume') {
+            // Volume (3D texture) channels - recreate
+            const channelNumber = await createChannel('volume', {
+                tabName: ch.tabName,
+                volumeId: ch.volumeId || 'grey_noise_32'
+            });
+            
+            if (channelNumber !== -1 && ch.tabName) {
+                if (!state.activeTabs.includes(ch.tabName)) {
+                    state.activeTabs.push(ch.tabName);
+                }
+                
+                // Remove old container to force recreation
+                const oldContainer = document.getElementById(`${ch.tabName}Container`);
+                if (oldContainer) {
+                    oldContainer.remove();
+                }
             }
         }
     }
@@ -1223,7 +1340,7 @@ export function getChannelTextureForDisplay(channelNumber) {
     }
     
     if (channel.type === 'image' || channel.type === 'video' || channel.type === 'audio' ||
-        channel.type === 'mic' || channel.type === 'webcam') {
+        channel.type === 'mic' || channel.type === 'webcam' || channel.type === 'keyboard') {
         return channel.texture || null;
     }
     
@@ -1397,34 +1514,6 @@ export async function startMicChannel(channelNumber) {
 }
 
 /**
- * Start mic channel with an already-obtained stream
- * @param {number} channelNumber - Channel number
- * @param {MediaStream} stream - Already-obtained media stream
- * @returns {Promise<void>}
- */
-export async function startMicChannelWithStream(channelNumber, stream) {
-    const channel = getChannel(channelNumber);
-    if (!channel || channel.type !== 'mic') {
-        throw new Error(`Channel ${channelNumber} is not a mic channel`);
-    }
-    
-    const gl = state.glContext;
-    if (!gl) {
-        throw new Error('WebGL context not available');
-    }
-    
-    const mode = channel.audioMode || 'chromagram';
-    channel.micData = await micInput.createMicChannelWithStream(gl, mode, stream);
-    channel.texture = channel.micData.texture;
-    channel.resolution = { 
-        width: channel.micData.width, 
-        height: channel.micData.height 
-    };
-    
-    console.log(`✓ Mic channel started with stream: ch${channelNumber}`);
-}
-
-/**
  * Stop mic capture for a channel
  * @param {number} channelNumber - Channel number
  */
@@ -1524,33 +1613,6 @@ export async function startWebcamChannel(channelNumber) {
 }
 
 /**
- * Start webcam channel with an already-obtained stream
- * @param {number} channelNumber - Channel number
- * @param {MediaStream} stream - Already-obtained media stream
- * @returns {Promise<void>}
- */
-export async function startWebcamChannelWithStream(channelNumber, stream) {
-    const channel = getChannel(channelNumber);
-    if (!channel || channel.type !== 'webcam') {
-        throw new Error(`Channel ${channelNumber} is not a webcam channel`);
-    }
-    
-    const gl = state.glContext;
-    if (!gl) {
-        throw new Error('WebGL context not available');
-    }
-    
-    channel.webcamData = await webcamInput.createWebcamChannelWithStream(gl, stream);
-    channel.texture = channel.webcamData.texture;
-    channel.resolution = { 
-        width: channel.webcamData.width, 
-        height: channel.webcamData.height 
-    };
-    
-    console.log(`✓ Webcam channel started with stream: ch${channelNumber}`);
-}
-
-/**
  * Stop webcam capture for a channel
  * @param {number} channelNumber - Channel number
  */
@@ -1582,6 +1644,116 @@ export function updateWebcamTextures(gl) {
             }
         }
     });
+}
+
+// ============================================================================
+// Keyboard Channel Functions
+// ============================================================================
+
+/**
+ * Get all keyboard channels
+ * @returns {Object[]} Keyboard channels
+ */
+export function getKeyboardChannels() {
+    return channelState.channels.filter(ch => ch.type === 'keyboard');
+}
+
+/**
+ * Check if any keyboard channels exist
+ * @returns {boolean}
+ */
+export function hasKeyboardChannels() {
+    return getKeyboardChannels().length > 0;
+}
+
+/**
+ * Update all keyboard channel textures (called each frame)
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ */
+export function updateKeyboardTextures(gl) {
+    const keyboardChannels = getKeyboardChannels();
+    keyboardChannels.forEach(ch => {
+        if (ch.keyboardData && ch.keyboardData.active) {
+            keyboardInput.updateKeyboardTexture(gl);
+        }
+    });
+}
+
+/**
+ * Clear keyboard hit states (called at end of each frame)
+ */
+export function clearKeyboardHitStates() {
+    if (hasKeyboardChannels()) {
+        keyboardInput.clearHitStates();
+    }
+}
+
+/**
+ * Focus canvas for keyboard input (call when shader with keyboard is loaded)
+ */
+export function focusCanvasForKeyboard() {
+    if (hasKeyboardChannels()) {
+        keyboardInput.focusCanvas();
+    }
+}
+
+// ============================================================================
+// Volume Channel Functions
+// ============================================================================
+
+/**
+ * Get all volume channels
+ * @returns {Object[]} Volume channels
+ */
+export function getVolumeChannels() {
+    return channelState.channels.filter(ch => ch.type === 'volume');
+}
+
+/**
+ * Check if any volume channels exist
+ * @returns {boolean}
+ */
+export function hasVolumeChannels() {
+    return getVolumeChannels().length > 0;
+}
+
+/**
+ * Change volume texture for a channel
+ * @param {number} channelNumber - Channel number
+ * @param {string} volumeId - New volume texture ID
+ */
+export async function changeVolumeTexture(channelNumber, volumeId) {
+    const channel = getChannel(channelNumber);
+    if (!channel || channel.type !== 'volume') {
+        console.error(`Channel ${channelNumber} is not a volume channel`);
+        return;
+    }
+    
+    const gl = state.glContext;
+    if (!gl) {
+        console.error('WebGL context not available');
+        return;
+    }
+    
+    // Cleanup old texture
+    if (channel.volumeData) {
+        volumeInput.cleanupVolumeChannel(channel.volumeData);
+    }
+    
+    // Create new volume texture
+    try {
+        channel.volumeData = await volumeInput.createVolumeChannel(gl, volumeId);
+        channel.texture = channel.volumeData.texture;
+        channel.resolution = {
+            width: channel.volumeData.size,
+            height: channel.volumeData.size,
+            depth: channel.volumeData.size
+        };
+        console.log(`✓ Volume texture changed: ch${channelNumber} → ${volumeId}`);
+        emitChannelChangeEvent({ action: 'update', channel });
+    } catch (error) {
+        console.error('Failed to change volume texture:', error);
+    }
 }
 
 // Expose limited debugging helpers
