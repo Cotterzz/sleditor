@@ -1032,18 +1032,6 @@ export function initChannelViewer() {
     window.addEventListener('channels-changed', refreshChannelViewerOptions);
     refreshChannelViewerOptions();
     recording.initUI();
-    
-    // Alpha checkbox
-    const allowAlphaCheckbox = document.getElementById('allowAlphaCheckbox');
-    if (allowAlphaCheckbox) {
-        allowAlphaCheckbox.checked = state.allowAlpha;
-        allowAlphaCheckbox.addEventListener('change', () => {
-            state.allowAlpha = allowAlphaCheckbox.checked;
-            if (!state.isPlaying) {
-                render.renderOnce();
-            }
-        });
-    }
 }
 
 function refreshChannelViewerOptions() {

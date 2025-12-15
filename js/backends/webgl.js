@@ -114,11 +114,9 @@ function createDisplayProgram(gl) {
         in vec2 v_uv;
         out vec4 fragColor;
         uniform sampler2D u_texture;
-        uniform float u_forceOpaque;
         void main() {
             vec4 col = texture(u_texture, v_uv);
-            float alpha = mix(col.a, 1.0, u_forceOpaque);
-            fragColor = vec4(col.rgb, alpha);
+            fragColor = vec4(col.rgb, 1.0);
         }
     `;
     
@@ -140,8 +138,7 @@ function createDisplayProgram(gl) {
     
     displayProgramLocs = {
         a_position: gl.getAttribLocation(displayProgram, 'a_position'),
-        u_texture: gl.getUniformLocation(displayProgram, 'u_texture'),
-        u_forceOpaque: gl.getUniformLocation(displayProgram, 'u_forceOpaque')
+        u_texture: gl.getUniformLocation(displayProgram, 'u_texture')
     };
 }
 
@@ -457,7 +454,6 @@ function displaySelectedChannel(gl) {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.uniform1i(displayProgramLocs.u_texture, 0);
-    gl.uniform1f(displayProgramLocs.u_forceOpaque, state.allowAlpha ? 0.0 : 1.0);
     
     gl.bindBuffer(gl.ARRAY_BUFFER, state.glQuadBuffer);
     gl.enableVertexAttribArray(displayProgramLocs.a_position);
