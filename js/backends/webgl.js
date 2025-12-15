@@ -88,8 +88,57 @@ export function initBufferResources() {
     // Create framebuffer for offscreen rendering
     state.glFramebuffer = gl.createFramebuffer();
     
+    // Create passthrough shader for displaying textures
+    createDisplayProgram(gl);
+    
     console.log('✓ WebGL framebuffer initialized');
     return true;
+}
+
+// Simple passthrough shader for displaying channel textures
+let displayProgram = null;
+let displayProgramLocs = null;
+
+function createDisplayProgram(gl) {
+    const vsSource = `#version 300 es
+        in vec2 a_position;
+        out vec2 v_uv;
+        void main() {
+            v_uv = a_position * 0.5 + 0.5;
+            gl_Position = vec4(a_position, 0.0, 1.0);
+        }
+    `;
+    
+    const fsSource = `#version 300 es
+        precision highp float;
+        in vec2 v_uv;
+        out vec4 fragColor;
+        uniform sampler2D u_texture;
+        void main() {
+            fragColor = texture(u_texture, v_uv);
+        }
+    `;
+    
+    const vs = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vs, vsSource);
+    gl.compileShader(vs);
+    
+    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fs, fsSource);
+    gl.compileShader(fs);
+    
+    displayProgram = gl.createProgram();
+    gl.attachShader(displayProgram, vs);
+    gl.attachShader(displayProgram, fs);
+    gl.linkProgram(displayProgram);
+    
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    
+    displayProgramLocs = {
+        a_position: gl.getAttribLocation(displayProgram, 'a_position'),
+        u_texture: gl.getUniformLocation(displayProgram, 'u_texture')
+    };
 }
 
 // ============================================================================
@@ -389,27 +438,26 @@ function displaySelectedChannel(gl) {
     
     if (!texture || !channel) return;
     
-    // Don't try to blit 3D textures
+    // Don't try to display 3D textures
     if (channel.is3D) return;
     
-    const resolution = channel.resolution || { width: gl.canvas.width, height: gl.canvas.height };
+    // Use passthrough shader instead of blitFramebuffer (more compatible)
+    if (!displayProgram) return;
     
-    // Use a try-catch to handle any WebGL errors gracefully
-    try {
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, state.glFramebuffer);
-        gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-        gl.blitFramebuffer(
-            0, 0, resolution.width, resolution.height,
-            0, 0, gl.canvas.width, gl.canvas.height,
-            gl.COLOR_BUFFER_BIT,
-            gl.NEAREST
-        );
-    } catch (e) {
-        // Ignore blit errors
-    } finally {
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    
+    gl.useProgram(displayProgram);
+    
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(displayProgramLocs.u_texture, 0);
+    
+    gl.bindBuffer(gl.ARRAY_BUFFER, state.glQuadBuffer);
+    gl.enableVertexAttribArray(displayProgramLocs.a_position);
+    gl.vertexAttribPointer(displayProgramLocs.a_position, 2, gl.FLOAT, false, 0, 0);
+    
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
 // ============================================================================
