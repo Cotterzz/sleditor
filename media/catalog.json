@@ -233,6 +233,26 @@
         "depth": 109,
         "channels": 1,
         "format": "R8"
+    },
+    {
+        "id": "christmas_tree",
+        "name": "Christmas Tree 256×249×256",
+        "path": "media/christmastree256x249x256.bin",
+        "width": 256,
+        "height": 249,
+        "depth": 256,
+        "channels": 2,
+        "format": "RG8"
+    },
+    {
+        "id": "stag_beetle",
+        "name": "Stag Beetle 208×208×123",
+        "path": "media/stagbeetle208x208x123.bin",
+        "width": 208,
+        "height": 208,
+        "depth": 123,
+        "channels": 2,
+        "format": "RG8"
     }
   ]
 }

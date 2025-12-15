@@ -112,7 +112,7 @@ export async function createVolumeTexture(gl, volumeId) {
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_3D, texture);
     
-    // Upload 3D texture data
+    // Upload 3D texture data based on channel count
     if (volumeInfo.channels === 1) {
         // Single channel (R8)
         gl.texImage3D(
@@ -125,8 +125,20 @@ export async function createVolumeTexture(gl, volumeId) {
             gl.UNSIGNED_BYTE,
             data
         );
+    } else if (volumeInfo.channels === 2) {
+        // Two channels (RG8)
+        gl.texImage3D(
+            gl.TEXTURE_3D,
+            0,
+            gl.RG8,
+            width, height, depth,
+            0,
+            gl.RG,
+            gl.UNSIGNED_BYTE,
+            data
+        );
     } else {
-        // RGBA
+        // RGBA (4 channels)
         gl.texImage3D(
             gl.TEXTURE_3D,
             0,
