@@ -175,6 +175,9 @@ export const state = {
     // Theme
     isDarkMode: false,
     
+    // Alpha transparency
+    allowAlpha: false,
+    
     // Editor settings
     isVimMode: false,
     vimStatusNodes: [],  // Store vim mode handlers for each editor
