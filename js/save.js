@@ -848,7 +848,15 @@ export async function loadDatabaseShader(shader) {
     }
     
     // Load render settings (colorspace, etc) - defaults to sRGB for older shaders
-    const linearColorspace = shader.settings?.linearColorspace || false;
+    let linearColorspace = false;
+    if (shader.code && shader.code['_settings']) {
+        try {
+            const settings = JSON.parse(shader.code['_settings']);
+            linearColorspace = settings.linearColorspace || false;
+        } catch (e) {
+            console.warn('Failed to parse settings:', e);
+        }
+    }
     state.linearColorspace = linearColorspace;
     ui.updateColorspaceIcon();
     

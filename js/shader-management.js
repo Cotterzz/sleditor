@@ -508,10 +508,10 @@ export async function saveOwnedShader() {
     // Collect uniform controls configuration
     shaderData.uniform_config = uniformControls.getUniformConfig();
     
-    // Collect render settings (colorspace, etc)
-    shaderData.settings = {
+    // Collect render settings (colorspace, etc) - stored in code object like _channel_meta
+    shaderData.code['_settings'] = JSON.stringify({
         linearColorspace: state.linearColorspace || false
-    };
+    });
     
     // Capture and upload thumbnail
     try {
@@ -608,10 +608,10 @@ export async function saveShaderInline() {
     // Collect uniform controls configuration
     shaderData.uniform_config = uniformControls.getUniformConfig();
     
-    // Collect render settings (colorspace, etc)
-    shaderData.settings = {
+    // Collect render settings (colorspace, etc) - stored in code object like _channel_meta
+    shaderData.code['_settings'] = JSON.stringify({
         linearColorspace: state.linearColorspace || false
-    };
+    });
     
     // Capture and upload thumbnail
     try {
