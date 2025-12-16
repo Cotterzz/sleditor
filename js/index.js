@@ -665,6 +665,23 @@ function setupUI() {
         ui.updateRenderMode();
     });
     
+    // Colorspace toggle (sRGB vs linear)
+    document.getElementById('colorspaceIcon').addEventListener('click', () => {
+        const newLinear = !state.linearColorspace;
+        
+        // Update backend based on current graphics mode
+        if (state.graphicsBackend === 'webgpu') {
+            webgpu.setColorspace(newLinear);
+        } else if (state.graphicsBackend === 'webgl') {
+            webgl.setColorspace(newLinear);
+        } else {
+            state.linearColorspace = newLinear;
+        }
+        
+        // Update UI
+        ui.updateColorspaceIcon();
+    });
+    
     setupPointerEvents();
     
     // Handle visibility change - resync audio timing when tab becomes visible

@@ -96,6 +96,7 @@ export function initBufferResources() {
 }
 
 // Simple passthrough shader for displaying channel textures
+// Supports linear colorspace mode (gamma correction) for compute.toys compatibility
 let displayProgram = null;
 let displayProgramLocs = null;
 
@@ -109,14 +110,29 @@ function createDisplayProgram(gl) {
         }
     `;
     
+    // Fragment shader with optional gamma correction for linear colorspace mode
     const fsSource = `#version 300 es
         precision highp float;
         in vec2 v_uv;
         out vec4 fragColor;
         uniform sampler2D u_texture;
+        uniform int u_linearMode;  // 0 = sRGB (default), 1 = linear (apply gamma)
+        
+        // sRGB to linear conversion (what compute.toys expects as input)
+        vec3 applyGamma(vec3 c) {
+            return pow(c, vec3(1.0 / 2.2));
+        }
+        
         void main() {
             vec4 col = texture(u_texture, v_uv);
-            fragColor = vec4(col.rgb, 1.0);
+            vec3 rgb = col.rgb;
+            
+            // In linear mode, apply gamma correction to simulate compute.toys behavior
+            if (u_linearMode == 1) {
+                rgb = applyGamma(rgb);
+            }
+            
+            fragColor = vec4(rgb, 1.0);
         }
     `;
     
@@ -138,7 +154,8 @@ function createDisplayProgram(gl) {
     
     displayProgramLocs = {
         a_position: gl.getAttribLocation(displayProgram, 'a_position'),
-        u_texture: gl.getUniformLocation(displayProgram, 'u_texture')
+        u_texture: gl.getUniformLocation(displayProgram, 'u_texture'),
+        u_linearMode: gl.getUniformLocation(displayProgram, 'u_linearMode')
     };
 }
 
@@ -454,6 +471,7 @@ function displaySelectedChannel(gl) {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.uniform1i(displayProgramLocs.u_texture, 0);
+    gl.uniform1i(displayProgramLocs.u_linearMode, state.linearColorspace ? 1 : 0);
     
     gl.bindBuffer(gl.ARRAY_BUFFER, state.glQuadBuffer);
     gl.enableVertexAttribArray(displayProgramLocs.a_position);
@@ -498,5 +516,20 @@ export function cleanup() {
     state.glContext = null;
     state.graphicsBackend = null;
     state.hasWebGL = false;
+}
+
+// ============================================================================
+// Colorspace Configuration
+// ============================================================================
+
+/**
+ * Update the colorspace mode (can be called during rendering)
+ * For WebGL, this is applied via gamma correction in the display shader
+ * @param {boolean} linear - true for linear (compute.toys), false for sRGB (Shadertoy)
+ */
+export function setColorspace(linear) {
+    state.linearColorspace = linear;
+    // The actual gamma correction is applied in displaySelectedChannel via u_linearMode uniform
+    console.log(`✓ WebGL colorspace set to ${linear ? 'linear (gamma corrected)' : 'sRGB'}`);
 }
 

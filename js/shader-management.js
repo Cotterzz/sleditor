@@ -508,6 +508,11 @@ export async function saveOwnedShader() {
     // Collect uniform controls configuration
     shaderData.uniform_config = uniformControls.getUniformConfig();
     
+    // Collect render settings (colorspace, etc)
+    shaderData.settings = {
+        linearColorspace: state.linearColorspace || false
+    };
+    
     // Capture and upload thumbnail
     try {
         const blob = await backend.captureThumbnailBlob();
@@ -602,6 +607,11 @@ export async function saveShaderInline() {
     
     // Collect uniform controls configuration
     shaderData.uniform_config = uniformControls.getUniformConfig();
+    
+    // Collect render settings (colorspace, etc)
+    shaderData.settings = {
+        linearColorspace: state.linearColorspace || false
+    };
     
     // Capture and upload thumbnail
     try {

@@ -175,6 +175,9 @@ export const state = {
     // Theme
     isDarkMode: false,
     
+    // Colorspace (for compute.toys compatibility)
+    linearColorspace: false,  // false=sRGB (Shadertoy), true=linear (compute.toys)
+    
     // Editor settings
     isVimMode: false,
     vimStatusNodes: [],  // Store vim mode handlers for each editor

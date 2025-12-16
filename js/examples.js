@@ -60,7 +60,7 @@ struct Uniforms {
 @binding(0) @group(0) var<uniform> uniforms: Uniforms;
 @binding(1) @group(0) var<storage, read_write> computeBuffer: array<f32>;
 @binding(2) @group(0) var<storage, read_write> audioBuffer: array<f32>;
-@binding(3) @group(0) var screenTexture: texture_storage_2d<bgra8unorm, write>;
+@binding(3) @group(0) var screenTexture: texture_storage_2d<rgba16float, write>;
 @binding(4) @group(0) var<storage, read_write> phaseState: array<f32>;
 `;
 }

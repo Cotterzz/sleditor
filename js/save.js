@@ -847,6 +847,11 @@ export async function loadDatabaseShader(shader) {
         uniformControls.loadUniformConfig(null);
     }
     
+    // Load render settings (colorspace, etc) - defaults to sRGB for older shaders
+    const linearColorspace = shader.settings?.linearColorspace || false;
+    state.linearColorspace = linearColorspace;
+    ui.updateColorspaceIcon();
+    
     const hasMedia = channels.hasMediaChannels();
     if (hasMedia && !state.mediaStartUnlocked) {
         ui.showAudioStartOverlay();
