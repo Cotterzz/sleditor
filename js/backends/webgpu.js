@@ -54,8 +54,10 @@ export async function init(canvas) {
 }
 
 function createGPUResources(device) {
+    // IMPORTANT: Size must match UniformBuilder.buffer in js/uniforms.js
+    // If uniform layout changes there, update this size to match!
     state.uniformBuffer = device.createBuffer({
-        size: 256,
+        size: 512,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
