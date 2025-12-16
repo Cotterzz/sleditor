@@ -81,6 +81,11 @@ export async function init(canvas) {
             usage: GPUTextureUsage.RENDER_ATTACHMENT,  // Changed: now used as render target for blit
         });
 
+        // Clear old resources from previous device (if any)
+        state.intermediateTexture = null;
+        state.intermediateTextureView = null;
+        state.blitBindGroup = null;
+
         // Store in state
         state.gpuDevice = device;
         state.gpuContext = context;
@@ -451,6 +456,14 @@ export function cleanup() {
     // Destroy pipelines
     state.graphicsPipeline = null;
     state.audioPipeline = null;
+    
+    // Destroy intermediate texture (must be recreated with new device)
+    if (state.intermediateTexture) {
+        state.intermediateTexture.destroy();
+        state.intermediateTexture = null;
+        state.intermediateTextureView = null;
+    }
+    state.blitBindGroup = null;
     
     // Note: WebGPU buffers and resources are garbage collected
     // We just need to null out references

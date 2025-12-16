@@ -97,6 +97,7 @@ export async function compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioReload
             // Clear WebGPU state (switching from WebGPU to WebGL)
             if (state.gpuContext) {
                 console.log('Releasing WebGPU context to switch to WebGL...');
+                webgpu.cleanup();  // Clean up intermediate textures etc
                 state.gpuContext.unconfigure();
                 state.gpuContext = null;
                 state.graphicsBackend = null;
