@@ -735,6 +735,7 @@ export async function loadDatabaseShader(shader) {
     // Clear current references
     state.currentExample = null;
     state.isDirty = false;
+    state.isForkMode = false;  // Clear fork mode when loading shader
     
     // Store current shader for potential editing
     state.currentDatabaseShader = shader;

@@ -118,6 +118,40 @@ export async function createVolumeSelector(tabName, channelNumber) {
     });
     
     selectSection.appendChild(volumeSelect);
+    
+    // Wrap mode selector
+    const wrapLabel = document.createElement('div');
+    wrapLabel.style.cssText = 'font-size: 11px; color: var(--text-secondary); margin-top: 12px; margin-bottom: 8px;';
+    wrapLabel.textContent = 'Wrap Mode:';
+    selectSection.appendChild(wrapLabel);
+    
+    const wrapSelect = document.createElement('select');
+    wrapSelect.style.cssText = `
+        width: 100%;
+        padding: 8px;
+        border-radius: 4px;
+        border: 1px solid var(--border-color);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 12px;
+    `;
+    
+    ['clamp', 'repeat', 'mirror'].forEach(mode => {
+        const option = document.createElement('option');
+        option.value = mode;
+        option.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+        if ((channel?.volumeData?.wrap || 'clamp') === mode) {
+            option.selected = true;
+        }
+        wrapSelect.appendChild(option);
+    });
+    
+    wrapSelect.addEventListener('change', async () => {
+        const wrap = wrapSelect.value;
+        await channels.changeVolumeWrapMode(channelNumber, wrap);
+    });
+    
+    selectSection.appendChild(wrapSelect);
     contentSection.appendChild(selectSection);
     
     // Current volume info

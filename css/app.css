@@ -659,7 +659,24 @@ button.paused:hover {
     padding: 5px;
     min-width: 60px;
     min-height: 20px;
-
+}
+/* Consistent styling for toolbar buttons */
+#reloadBtn,
+#saveShaderBtn,
+#forkShaderBtn,
+#newShaderBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 54px;
+    height: 28px;
+    padding: 0;
+    min-width: unset;
+    line-height: 1;
+    font-size: 16px;
+}
+#forkShaderBtn svg {
+    display: block;
 }
 #vim-status {
     display: none;  /* Hidden by default, shown when vim mode is active */

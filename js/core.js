@@ -206,6 +206,7 @@ export const state = {
     
     // Save/Load tracking
     isDirty: false,  // Track unsaved changes
+    isForkMode: false,  // Track if we're creating a fork (new shader, not update)
     isInitializing: true,  // Prevent dirty marking during initial load
     currentDatabaseShader: null,  // Currently loaded database shader (Supabase)
     isAnonymousGolfURL: false,  // Flag for read-only golf URLs (from #g:)

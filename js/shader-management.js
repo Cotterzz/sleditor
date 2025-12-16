@@ -17,21 +17,7 @@ import * as channels from './channels.js';
 import { getTabConfig, getEditorForTab, isBufferChannel } from './tab-config.js';
 import * as webgl from './backends/webgl.js';
 
-// Expose for index.html to use
-window.shaderManagement = {
-    createNewShader,
-    showNewShaderMenu,
-    enterEditMode,
-    exitEditMode,
-    isInEditMode,
-    isShaderOwnedByUser,
-    handleSaveForkClick,
-    saveOwnedShader,
-    saveShaderInline,
-    markDirty,
-    setupDirtyTracking,
-    updateSaveButton
-};
+// Window object will be set at end of file after all functions are defined
 
 // ============================================================================
 // Create New Shader
@@ -48,6 +34,7 @@ export function createNewShader(type, MINIMAL_GLSL, MINIMAL_WGSL, reloadShader) 
     state.currentExample = null;
     state.currentDatabaseShader = null;
     state.isDirty = false;
+    state.isForkMode = false;  // Clear fork mode for new shaders
     state.isAnonymousGolfURL = false;  // Clear read-only flag for new shaders
     resetEditorState();
     
@@ -314,6 +301,9 @@ export function enterEditMode(isFork = false) {
     
     if (!titleDisplay || !titleInput) return;
     
+    // Track fork mode - if true, save will create new shader instead of update
+    state.isForkMode = isFork;
+    
     // Get current values
     let currentTitle = titleDisplay.textContent || 'Untitled';
     // For description, get the raw markdown from the database shader if available
@@ -399,6 +389,9 @@ export function exitEditMode() {
     const licenseDisplay = document.getElementById('shaderLicenseDisplay');
     const licenseSelect = document.getElementById('shaderLicenseSelect');
     
+    // Clear fork mode
+    state.isForkMode = false;
+    
     if (!titleDisplay || !titleInput) return;
     
     // Hide inputs, show displays
@@ -443,30 +436,48 @@ export function exitEditMode() {
 // Save Operations  
 // ============================================================================
 
-export async function handleSaveForkClick() {
+export async function handleSaveClick() {
     // Check if user is signed in
     if (!state.currentUser) {
         logStatus('⚠ Sign in to save shaders to the cloud', 'error');
         return;
     }
     
-    const isOwned = isShaderOwnedByUser();
-    
-    // Already in edit mode - save
+    // Already in edit mode - save (creates new if forking, updates if owned)
     if (isInEditMode()) {
         await saveShaderInline();
         return;
     }
     
-    // Viewing owned shader - save directly
-    if (isOwned) {
+    // Not in edit mode - only save if owned
+    if (isShaderOwnedByUser()) {
         await saveOwnedShader();
         return;
     }
     
-    // Viewing someone else's shader - enter fork mode
+    // Not owned and not in edit mode - should not happen (button should be disabled)
+    logStatus('⚠ Cannot save - shader not owned by you', 'error');
+}
+
+export async function handleForkClick() {
+    // Check if user is signed in
+    if (!state.currentUser) {
+        logStatus('⚠ Sign in to fork shaders', 'error');
+        return;
+    }
+    
+    // Already in fork mode - save as new shader
+    if (state.isForkMode) {
+        await saveShaderInline();
+        return;
+    }
+    
+    // Enter fork mode - this will create a NEW shader when saved
     enterEditMode(true);
 }
+
+// Legacy alias for backwards compatibility
+export const handleSaveForkClick = handleSaveClick;
 
 export async function saveOwnedShader() {
     if (!state.currentDatabaseShader) {
@@ -581,8 +592,9 @@ export async function saveShaderInline() {
         code_types: [...state.activeTabs.filter(t => t !== 'boilerplate')]
     };
     
-    // If updating owned shader, include ID
-    if (isShaderOwnedByUser() && state.currentDatabaseShader) {
+    // If updating owned shader (and not in fork mode), include ID
+    // Fork mode always creates a new shader
+    if (!state.isForkMode && isShaderOwnedByUser() && state.currentDatabaseShader) {
         shaderData.id = state.currentDatabaseShader.id;
     }
     
@@ -697,44 +709,93 @@ export function setupDirtyTracking(editor) {
 // Save Button
 // ============================================================================
 
-export function updateSaveButton() {
-    const btn = document.getElementById('saveShaderBtn');
+export function updateSaveButtons() {
+    const saveBtn = document.getElementById('saveShaderBtn');
+    const forkBtn = document.getElementById('forkShaderBtn');
     const editBtn = document.getElementById('editShaderButton');
-    if (!btn) return;
     
     const isOwned = isShaderOwnedByUser();
     const inEditMode = isInEditMode();
     const isLoggedIn = !!state.currentUser;
+    const inForkMode = state.isForkMode;
     
-    // Not logged in - show save icon (will use modal), hide edit button
-    if (!isLoggedIn) {
-        btn.textContent = state.isDirty ? '💾*' : '💾';
-        btn.title = 'Save shader (requires sign in)';
-        if (editBtn) editBtn.style.display = 'none';
-        return;
+    const forkIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><circle cx="6" cy="6" r="2" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="6" r="2" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="18" r="2" stroke="currentColor" stroke-width="2"/><path d="M6 8v3c0 2 1 3 3 3h7M18 8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    
+    // Update save button
+    if (saveBtn) {
+        saveBtn.textContent = state.isDirty ? '💾*' : '💾';
+        
+        if (!isLoggedIn) {
+            saveBtn.disabled = false;
+            saveBtn.title = 'Save shader (requires sign in)';
+            saveBtn.style.opacity = '1';
+        } else if (inForkMode) {
+            // Fork mode - save creates new shader
+            saveBtn.disabled = false;
+            saveBtn.title = 'Save as new shader';
+            saveBtn.style.opacity = '1';
+        } else if (inEditMode && isOwned) {
+            // Editing owned shader - save updates
+            saveBtn.disabled = false;
+            saveBtn.title = 'Save changes';
+            saveBtn.style.opacity = '1';
+        } else if (isOwned) {
+            // Owned shader (not in edit mode) - save is enabled
+            saveBtn.disabled = false;
+            saveBtn.title = state.isDirty ? 'Save changes' : 'Saved';
+            saveBtn.style.opacity = '1';
+        } else {
+            // Not owned and not in fork mode - save is disabled
+            saveBtn.disabled = true;
+            saveBtn.title = 'Cannot save - not your shader (use Fork)';
+            saveBtn.style.opacity = '0.4';
+        }
     }
     
-    // In edit mode (forking or editing owned) - show save button, hide edit button
-    if (inEditMode) {
-        btn.textContent = state.isDirty ? '💾*' : '💾';
-        btn.title = isOwned ? 'Save changes' : 'Save as new shader';
-        if (editBtn) editBtn.style.display = 'none';
-        return;
+    // Update fork button
+    if (forkBtn) {
+        forkBtn.innerHTML = state.isDirty ? forkIcon + '*' : forkIcon;
+        
+        if (!isLoggedIn) {
+            forkBtn.disabled = false;
+            forkBtn.title = 'Fork shader (requires sign in)';
+            forkBtn.style.opacity = '1';
+        } else if (inForkMode) {
+            // Already in fork mode - fork button acts as save new
+            forkBtn.disabled = false;
+            forkBtn.title = 'Save as new shader';
+            forkBtn.style.opacity = '1';
+        } else {
+            // Can always fork (creates a copy)
+            forkBtn.disabled = false;
+            forkBtn.title = isOwned ? 'Fork (create a copy of your shader)' : 'Fork (create a copy)';
+            forkBtn.style.opacity = '1';
+        }
     }
     
-    // Viewing owned shader - show save button and edit button
-    if (isOwned) {
-        btn.textContent = state.isDirty ? '💾*' : '💾';
-        btn.title = state.isDirty ? 'Save changes' : 'Saved';
-        if (editBtn) editBtn.style.display = 'inline-block';
-        return;
+    // Update edit button (only show for owned shaders not in edit/fork mode)
+    if (editBtn) {
+        editBtn.style.display = (isOwned && !inEditMode && !inForkMode && isLoggedIn) ? 'inline-block' : 'none';
     }
-    
-    // Viewing someone else's shader - show fork button, hide edit button
-    const forkIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="display: inline-block; vertical-align: middle;"><circle cx="6" cy="6" r="2" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="6" r="2" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="18" r="2" stroke="currentColor" stroke-width="2"/><path d="M6 8v3c0 2 1 3 3 3h7M18 8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-    btn.innerHTML = state.isDirty ? forkIcon + '*' : forkIcon;
-    btn.title = state.isDirty ? 'Fork this shader (unsaved changes)' : 'Fork this shader';
-    if (editBtn) editBtn.style.display = 'none';
 }
 
+// Legacy alias
+export const updateSaveButton = updateSaveButtons;
 
+// Expose for index.html to use (must be at end after all functions are defined)
+window.shaderManagement = {
+    createNewShader,
+    showNewShaderMenu,
+    enterEditMode,
+    exitEditMode,
+    isInEditMode,
+    isShaderOwnedByUser,
+    handleSaveClick,
+    handleForkClick,
+    handleSaveForkClick,  // Legacy alias
+    saveOwnedShader,
+    saveShaderInline,
+    markDirty,
+    setupDirtyTracking,
+    updateSaveButtons
+};

@@ -71,6 +71,7 @@ function loadExample(exampleId) {
     state.currentExample = exampleId;
     state.currentDatabaseShader = null;
     state.isDirty = false;
+    state.isForkMode = false;  // Clear fork mode when loading example
     shaderManagement.updateSaveButton();
     
     // Convert old 'audio' tab to new format
@@ -873,8 +874,11 @@ async function updateViewsAndLikes(shader) {
 // ============================================================================
 
 function setupSaveButton() {
-    // Main save/fork button handler
-    document.getElementById('saveShaderBtn').addEventListener('click', shaderManagement.handleSaveForkClick);
+    // Save button handler - saves owned shaders
+    document.getElementById('saveShaderBtn').addEventListener('click', shaderManagement.handleSaveClick);
+    
+    // Fork button handler - creates a copy
+    document.getElementById('forkShaderBtn').addEventListener('click', shaderManagement.handleForkClick);
     
     // Custom events
     window.addEventListener('shader-saved', (e) => {

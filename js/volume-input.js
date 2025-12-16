@@ -95,12 +95,28 @@ export async function loadVolumeData(volumeId) {
 }
 
 /**
+ * Get GL wrap mode constant from wrap mode string
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ * @param {string} wrap - Wrap mode string ('repeat', 'mirror', 'clamp')
+ * @returns {number} GL wrap mode constant
+ */
+function getGLWrapMode(gl, wrap) {
+    switch (wrap) {
+        case 'repeat': return gl.REPEAT;
+        case 'mirror': return gl.MIRRORED_REPEAT;
+        case 'clamp':
+        default: return gl.CLAMP_TO_EDGE;
+    }
+}
+
+/**
  * Create a 3D texture from volume data
  * @param {WebGL2RenderingContext} gl - WebGL2 context
  * @param {string} volumeId - Volume texture ID
+ * @param {string} wrap - Wrap mode ('repeat', 'mirror', 'clamp')
  * @returns {Promise<{texture: WebGLTexture, info: Object}>}
  */
-export async function createVolumeTexture(gl, volumeId) {
+export async function createVolumeTexture(gl, volumeId, wrap = 'clamp') {
     const volumeInfo = await getVolumeInfo(volumeId);
     if (!volumeInfo) {
         throw new Error(`Unknown volume texture: ${volumeId}`);
@@ -154,16 +170,18 @@ export async function createVolumeTexture(gl, volumeId) {
     // Set texture parameters
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+    
+    const wrapMode = getGLWrapMode(gl, wrap);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, wrapMode);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, wrapMode);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, wrapMode);
     
     gl.bindTexture(gl.TEXTURE_3D, null);
     
     const sizeStr = width === height && height === depth 
         ? `${width}³` 
         : `${width}×${height}×${depth}`;
-    console.log(`✓ Volume texture created: ${volumeInfo.name} (${sizeStr}, ${volumeInfo.channels} ch)`);
+    console.log(`✓ Volume texture created: ${volumeInfo.name} (${sizeStr}, ${volumeInfo.channels} ch, wrap: ${wrap})`);
     
     return {
         texture,
@@ -171,8 +189,25 @@ export async function createVolumeTexture(gl, volumeId) {
         width,
         height, 
         depth,
-        channels: volumeInfo.channels
+        channels: volumeInfo.channels,
+        wrap
     };
+}
+
+/**
+ * Update wrap mode on existing volume texture
+ * @param {WebGL2RenderingContext} gl - WebGL context
+ * @param {WebGLTexture} texture - The texture to update
+ * @param {string} wrap - Wrap mode ('repeat', 'mirror', 'clamp')
+ */
+export function setVolumeWrapMode(gl, texture, wrap) {
+    gl.bindTexture(gl.TEXTURE_3D, texture);
+    const wrapMode = getGLWrapMode(gl, wrap);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, wrapMode);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, wrapMode);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, wrapMode);
+    gl.bindTexture(gl.TEXTURE_3D, null);
+    console.log(`✓ Volume wrap mode updated to: ${wrap}`);
 }
 
 /**
