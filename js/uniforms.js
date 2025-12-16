@@ -27,8 +27,9 @@ export class UniformBuilder {
             date: [0, 0, 0, 0],
         };
         
-        // Raw buffer for WebGPU
-        this.buffer = new ArrayBuffer(256);
+        // Raw buffer for WebGPU (expanded for 85 floats + 10 ints + 5 bools)
+        // Layout: [0-6]=built-in, [7-91]=floats(85), [92-101]=ints(10), [102-106]=bools(5)
+        this.buffer = new ArrayBuffer(512);
         this.f32 = new Float32Array(this.buffer);
         this.i32 = new Int32Array(this.buffer);
     }
@@ -133,27 +134,27 @@ export class UniformBuilder {
             gl.uniform4f(locations.u_date, d[0], d[1], d[2], d[3]);
         }
         
-        // Custom uniforms (u_custom0 to u_custom14 map to buffer indices 7-21)
-        for (let i = 0; i < 15; i++) {
+        // Custom uniforms (u_custom0 to u_custom84 map to buffer indices 7-91)
+        for (let i = 0; i < 85; i++) {
             const loc = locations[`u_custom${i}`];
             if (loc) {
                 gl.uniform1f(loc, this.f32[7 + i]);
             }
         }
         
-        // Custom int uniforms (u_customInt0 to u_customInt2 map to buffer indices 22-24)
-        for (let i = 0; i < 3; i++) {
+        // Custom int uniforms (u_customInt0 to u_customInt9 map to buffer indices 92-101)
+        for (let i = 0; i < 10; i++) {
             const loc = locations[`u_customInt${i}`];
             if (loc) {
-                gl.uniform1i(loc, this.i32[22 + i]);
+                gl.uniform1i(loc, this.i32[92 + i]);
             }
         }
         
-        // Custom bool uniforms (u_customBool0 to u_customBool1 map to buffer indices 25-26)
-        for (let i = 0; i < 2; i++) {
+        // Custom bool uniforms (u_customBool0 to u_customBool4 map to buffer indices 102-106)
+        for (let i = 0; i < 5; i++) {
             const loc = locations[`u_customBool${i}`];
             if (loc) {
-                gl.uniform1i(loc, this.i32[25 + i]);
+                gl.uniform1i(loc, this.i32[102 + i]);
             }
         }
     }

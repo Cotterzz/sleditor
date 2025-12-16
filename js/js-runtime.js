@@ -14,8 +14,10 @@ function init() {
 
 function enterframe(state, api) {
     // Mouse is automatically available via built-in uniforms
-    // Use custom uniforms for your own data:
-    // api.uniforms.setCustomFloat(0, someValue);
+    // Custom uniforms (use with Uniform Panel or set from JS):
+    // api.uniforms.setCustomFloat(0-84, value);
+    // api.uniforms.setCustomInt(0-9, value);
+    // api.uniforms.setCustomBool(0-4, true/false);
 }
 `;
 
@@ -333,13 +335,15 @@ class SandboxProcessor extends AudioWorkletProcessor {
                 },
                 uniforms: {
                     setCustomFloat: (slot, value) => {
-                        if (slot >= 0 && slot < 15) {
+                        if (slot >= 0 && slot < 85) {
                             uniforms[slot] = value;
                         }
                     },
                     setCustomInt: (slot, value) => {
-                        // Int uniforms not supported in sandboxed mode yet
-                        // Could add if needed
+                        // Int uniforms - slots 0-9
+                        if (slot >= 0 && slot < 10) {
+                            // Would need int array passed to worklet
+                        }
                     }
                 },
                 audio: {
@@ -509,15 +513,23 @@ export function callEnterframe(elapsedSec, uniformF32 = null, uniformI32 = null,
             audioMode: state.audioMode,
             audioBlockGenerated: false,
             uniforms: {
-                // Custom uniforms API - slot 0-14 maps to buffer indices 7-21
+                // Custom uniforms API
+                // Floats: slot 0-84 maps to buffer indices 7-91
+                // Ints: slot 0-9 maps to buffer indices 92-101
+                // Bools: slot 0-4 maps to buffer indices 102-106
                 setCustomFloat: (slot, value) => {
-                    if (uniformF32 && slot >= 0 && slot < 15) {
+                    if (uniformF32 && slot >= 0 && slot < 85) {
                         uniformF32[7 + slot] = value;
                     }
                 },
                 setCustomInt: (slot, value) => {
-                    if (uniformI32 && slot >= 0 && slot < 15) {
-                        uniformI32[7 + slot] = value;
+                    if (uniformI32 && slot >= 0 && slot < 10) {
+                        uniformI32[92 + slot] = value;
+                    }
+                },
+                setCustomBool: (slot, value) => {
+                    if (uniformI32 && slot >= 0 && slot < 5) {
+                        uniformI32[102 + slot] = value ? 1 : 0;
                     }
                 },
                 // Legacy API (deprecated but kept for backwards compatibility)
@@ -576,7 +588,7 @@ function callEnterframeSandboxed(elapsedSec, uniformF32) {
             console.log(`Sandboxed latency: ${(performance.now() - t0).toFixed(2)}ms`);
             
             if (uniformF32) {
-                for (let i = 0; i < Math.min(uniforms.length, 15); i++) {
+                for (let i = 0; i < Math.min(uniforms.length, 85); i++) {
                     uniformF32[7 + i] = uniforms[i];
                 }
             }

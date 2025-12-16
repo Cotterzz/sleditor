@@ -9,6 +9,39 @@
 import { TAB_CONFIG } from './tab-config.js';
 
 // ============================================================================
+// Uniform Counts
+// ============================================================================
+const CUSTOM_FLOAT_COUNT = 85;
+const CUSTOM_INT_COUNT = 10;
+const CUSTOM_BOOL_COUNT = 5;
+
+// ============================================================================
+// Generate Custom Uniform Declarations
+// ============================================================================
+function generateCustomUniforms() {
+    let uniforms = '';
+    
+    // Float uniforms
+    for (let i = 0; i < CUSTOM_FLOAT_COUNT; i++) {
+        uniforms += `uniform float u_custom${i};\n`;
+    }
+    
+    // Int uniforms
+    for (let i = 0; i < CUSTOM_INT_COUNT; i++) {
+        uniforms += `uniform int u_customInt${i};\n`;
+    }
+    
+    // Bool uniforms (stored as int, 0/1)
+    for (let i = 0; i < CUSTOM_BOOL_COUNT; i++) {
+        uniforms += `uniform int u_customBool${i};\n`;
+    }
+    
+    return uniforms;
+}
+
+const CUSTOM_UNIFORMS = generateCustomUniforms();
+
+// ============================================================================
 // Boilerplate Templates
 // ============================================================================
 
@@ -25,33 +58,11 @@ uniform int u_frame;         // Frame counter
 uniform float u_pixel;       // Pixel scale (1.0 = native)
 uniform vec4 u_date;         // year-1, month-1, day, seconds since midnight
 
-// === Custom Uniforms (set from JavaScript) ===
-// Use api.uniforms.setCustomFloat(slot, value) in JS tab
-uniform float u_custom0;
-uniform float u_custom1;
-uniform float u_custom2;
-uniform float u_custom3;
-uniform float u_custom4;
-uniform float u_custom5;
-uniform float u_custom6;
-uniform float u_custom7;
-uniform float u_custom8;
-uniform float u_custom9;
-uniform float u_custom10;
-uniform float u_custom11;
-uniform float u_custom12;
-uniform float u_custom13;
-uniform float u_custom14;
-
-// Integer custom uniforms
-uniform int u_customInt0;
-uniform int u_customInt1;
-uniform int u_customInt2;
-
-// Boolean custom uniforms (0 = false, 1 = true in GLSL)
-uniform int u_customBool0;
-uniform int u_customBool1;
-
+// === Custom Uniforms (set from JavaScript or Uniform Panel) ===
+// Float: api.uniforms.setCustomFloat(0-${CUSTOM_FLOAT_COUNT - 1}, value)
+// Int: api.uniforms.setCustomInt(0-${CUSTOM_INT_COUNT - 1}, value)
+// Bool: u_customBool0-${CUSTOM_BOOL_COUNT - 1} (0 or 1)
+${CUSTOM_UNIFORMS}
 // === Math Constants ===
 #define PI 3.1415926535897932
 #define TAU 6.283185307179586
@@ -74,27 +85,7 @@ uniform vec2 u_hover;
 uniform int u_frame;
 uniform float u_pixel;
 uniform vec4 u_date;
-uniform float u_custom0;
-uniform float u_custom1;
-uniform float u_custom2;
-uniform float u_custom3;
-uniform float u_custom4;
-uniform float u_custom5;
-uniform float u_custom6;
-uniform float u_custom7;
-uniform float u_custom8;
-uniform float u_custom9;
-uniform float u_custom10;
-uniform float u_custom11;
-uniform float u_custom12;
-uniform float u_custom13;
-uniform float u_custom14;
-uniform int u_customInt0;
-uniform int u_customInt1;
-uniform int u_customInt2;
-uniform int u_customBool0;
-uniform int u_customBool1;
-
+${CUSTOM_UNIFORMS}
 // === Shadertoy Compatibility Layer ===
 #define iTime u_time
 #define iTimeDelta (1.0 / 60.0)
@@ -129,27 +120,7 @@ uniform vec2 u_hover;
 uniform int u_frame;
 uniform float u_pixel;
 uniform vec4 u_date;
-uniform float u_custom0;
-uniform float u_custom1;
-uniform float u_custom2;
-uniform float u_custom3;
-uniform float u_custom4;
-uniform float u_custom5;
-uniform float u_custom6;
-uniform float u_custom7;
-uniform float u_custom8;
-uniform float u_custom9;
-uniform float u_custom10;
-uniform float u_custom11;
-uniform float u_custom12;
-uniform float u_custom13;
-uniform float u_custom14;
-uniform int u_customInt0;
-uniform int u_customInt1;
-uniform int u_customInt2;
-uniform int u_customBool0;
-uniform int u_customBool1;
-
+${CUSTOM_UNIFORMS}
 // === Ultra-Compact Macros for Code Golf ===
 #define M void main()
 #define T u_time
@@ -232,3 +203,5 @@ export function tabUsesBoilerplate(tabName) {
     return !!config?.boilerplate;
 }
 
+// Export counts for other modules
+export { CUSTOM_FLOAT_COUNT, CUSTOM_INT_COUNT, CUSTOM_BOOL_COUNT };

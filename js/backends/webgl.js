@@ -217,18 +217,18 @@ export async function compileProgram(fragmentSource) {
             u_date: gl.getUniformLocation(program, 'u_date'),
         };
 
-        // Get custom uniform locations (u_custom0 through u_custom14)
-        for (let i = 0; i < 15; i++) {
+        // Get custom uniform locations (u_custom0 through u_custom84)
+        for (let i = 0; i < 85; i++) {
             uniforms[`u_custom${i}`] = gl.getUniformLocation(program, `u_custom${i}`);
         }
         
-        // Get custom int uniform locations (u_customInt0 through u_customInt2)
-        for (let i = 0; i < 3; i++) {
+        // Get custom int uniform locations (u_customInt0 through u_customInt9)
+        for (let i = 0; i < 10; i++) {
             uniforms[`u_customInt${i}`] = gl.getUniformLocation(program, `u_customInt${i}`);
         }
         
-        // Get custom bool uniform locations (u_customBool0 through u_customBool1)
-        for (let i = 0; i < 2; i++) {
+        // Get custom bool uniform locations (u_customBool0 through u_customBool4)
+        for (let i = 0; i < 5; i++) {
             uniforms[`u_customBool${i}`] = gl.getUniformLocation(program, `u_customBool${i}`);
         }
 

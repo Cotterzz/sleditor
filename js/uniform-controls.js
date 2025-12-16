@@ -148,8 +148,8 @@ function createPanel() {
     panel.style.cssText = `
         position: fixed;
         top: 10%;
-        left: 80%;
-        width: 400px;
+        left: 60%;
+        width: 520px;
         max-height: 80vh;
         background: var(--bg-primary);
         border: 1px solid var(--border-color);
@@ -215,19 +215,19 @@ function rebuildPanel() {
         content.appendChild(sliderEl);
     });
     
-    // Add buttons section - all on one line
-    const addSection = document.createElement('div');
-    addSection.style.cssText = 'margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border-color); display: flex; gap: 3px; justify-content: space-between;';
-    
     // Count how many of each type we have
     const floatCount = activeSliders.filter(s => s.type === 'float').length;
     const intCount = activeSliders.filter(s => s.type === 'int').length;
     const boolCount = activeSliders.filter(s => s.type === 'bool').length;
     
+    // Add buttons section - row 1: add uniform buttons
+    const addSection = document.createElement('div');
+    addSection.style.cssText = 'margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border-color); display: flex; gap: 3px;';
+    
     // Add Float button
-    if (floatCount < 15) {
+    if (floatCount < MAX_FLOATS) {
         const addFloatBtn = document.createElement('button');
-        addFloatBtn.textContent = `+Float(${floatCount}/15)`;
+        addFloatBtn.textContent = `+Float(${floatCount}/${MAX_FLOATS})`;
         addFloatBtn.className = 'uiBtn';
         addFloatBtn.style.cssText = 'flex: 1; padding: 2px 3px; font-size: 9px;';
         addFloatBtn.onclick = () => addSlider('float');
@@ -235,9 +235,9 @@ function rebuildPanel() {
     }
     
     // Add Int button
-    if (intCount < 3) {
+    if (intCount < MAX_INTS) {
         const addIntBtn = document.createElement('button');
-        addIntBtn.textContent = `+Int(${intCount}/3)`;
+        addIntBtn.textContent = `+Int(${intCount}/${MAX_INTS})`;
         addIntBtn.className = 'uiBtn';
         addIntBtn.style.cssText = 'flex: 1; padding: 2px 3px; font-size: 9px;';
         addIntBtn.onclick = () => addSlider('int');
@@ -245,9 +245,9 @@ function rebuildPanel() {
     }
     
     // Add Bool button
-    if (boolCount < 2) {
+    if (boolCount < MAX_BOOLS) {
         const addBoolBtn = document.createElement('button');
-        addBoolBtn.textContent = `+Bool(${boolCount}/2)`;
+        addBoolBtn.textContent = `+Bool(${boolCount}/${MAX_BOOLS})`;
         addBoolBtn.className = 'uiBtn';
         addBoolBtn.style.cssText = 'flex: 1; padding: 2px 3px; font-size: 9px;';
         addBoolBtn.onclick = () => addSlider('bool');
@@ -257,7 +257,32 @@ function rebuildPanel() {
     if (addSection.children.length > 0) {
         content.appendChild(addSection);
     }
+    
+    // Action buttons row: Randomize, Halfway
+    const actionSection = document.createElement('div');
+    actionSection.style.cssText = 'margin-top: 4px; display: flex; gap: 3px;';
+    
+    const randomBtn = document.createElement('button');
+    randomBtn.textContent = '🎲 Randomize';
+    randomBtn.className = 'uiBtn';
+    randomBtn.style.cssText = 'flex: 1; padding: 2px 3px; font-size: 9px;';
+    randomBtn.onclick = randomizeAllValues;
+    actionSection.appendChild(randomBtn);
+    
+    const halfwayBtn = document.createElement('button');
+    halfwayBtn.textContent = '↔ Halfway';
+    halfwayBtn.className = 'uiBtn';
+    halfwayBtn.style.cssText = 'flex: 1; padding: 2px 3px; font-size: 9px;';
+    halfwayBtn.onclick = setAllToHalfway;
+    actionSection.appendChild(halfwayBtn);
+    
+    content.appendChild(actionSection);
 }
+
+// Uniform limits
+const MAX_FLOATS = 85;
+const MAX_INTS = 10;
+const MAX_BOOLS = 5;
 
 /**
  * Add a new slider of the specified type
@@ -269,7 +294,7 @@ function addSlider(type) {
         .map(s => s.index);
     
     let nextIndex = 0;
-    const maxIndex = type === 'float' ? 15 : type === 'int' ? 3 : 2;
+    const maxIndex = type === 'float' ? MAX_FLOATS : type === 'int' ? MAX_INTS : MAX_BOOLS;
     
     for (let i = 0; i < maxIndex; i++) {
         if (!existingIndices.includes(i)) {
@@ -322,61 +347,69 @@ function createSlider(sliderConfig, listIndex) {
 }
 
 /**
- * Create a float slider
+ * Create a float slider - single line layout:
+ * SliderName | min | -------slider------ | max | value | u_name | X
  */
 function createFloatSlider(sliderConfig, listIndex, container) {
-    // Line 1: Title, Value, Uniform Name, Remove
-    const topRow = document.createElement('div');
-    topRow.style.cssText = 'display: flex; gap: 3px; margin-bottom: 2px; align-items: center;';
+    const row = document.createElement('div');
+    row.style.cssText = 'display: flex; gap: 4px; align-items: center;';
     
+    // Title input (narrow)
     const titleInput = document.createElement('input');
     titleInput.type = 'text';
     titleInput.value = sliderConfig.title;
-    titleInput.placeholder = 'Title';
-    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px 3px; font-size: 9px; border-radius: 2px; min-width: 0;';
-    titleInput.oninput = () => {
-        sliderConfig.title = titleInput.value;
-    };
+    titleInput.placeholder = 'Name';
+    titleInput.style.cssText = 'width: 70px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px 4px; font-size: 10px; border-radius: 2px;';
+    titleInput.oninput = () => { sliderConfig.title = titleInput.value; };
+    row.appendChild(titleInput);
     
-    const valueSpan = document.createElement('span');
-    valueSpan.id = `uniformValue_${listIndex}`;
-    valueSpan.style.cssText = 'color: var(--accent-color); font-size: 9px; font-weight: bold; min-width: 35px; text-align: right;';
-    valueSpan.textContent = sliderConfig.value.toFixed(3);
-    
-    const uniformSpan = document.createElement('span');
-    uniformSpan.style.cssText = 'color: var(--text-secondary); font-size: 8px; min-width: 45px;';
-    uniformSpan.textContent = `u_custom${sliderConfig.index}`;
-    
-    const removeBtn = document.createElement('button');
-    removeBtn.textContent = '✕';
-    removeBtn.title = 'Remove';
-    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 1px 4px; border-radius: 2px; font-size: 10px;';
-    removeBtn.onclick = () => removeSlider(listIndex);
-    
-    topRow.appendChild(titleInput);
-    topRow.appendChild(valueSpan);
-    topRow.appendChild(uniformSpan);
-    topRow.appendChild(removeBtn);
-    container.appendChild(topRow);
-    
-    // Line 2: Min, Slider, Max
-    const sliderRow = document.createElement('div');
-    sliderRow.style.cssText = 'display: flex; gap: 3px; align-items: center;';
-    
+    // Min input
     const minInput = document.createElement('input');
     minInput.type = 'number';
-    minInput.id = `uniformMin_${listIndex}`;
     minInput.value = sliderConfig.min;
     minInput.step = '0.1';
-    minInput.style.cssText = 'width: 38px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 1px 2px; font-size: 9px; border-radius: 2px;';
+    minInput.style.cssText = 'width: 40px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px; font-size: 9px; border-radius: 2px; text-align: center;';
+    row.appendChild(minInput);
     
+    // Slider (flexible width)
     const slider = document.createElement('input');
     slider.type = 'range';
     slider.min = '0';
     slider.max = '1000';
     const t = (sliderConfig.value - sliderConfig.min) / (sliderConfig.max - sliderConfig.min);
     slider.value = Math.round(t * 1000).toString();
-    slider.style.cssText = 'flex: 1;';
+    slider.style.cssText = 'flex: 1; min-width: 80px;';
+    row.appendChild(slider);
+    
+    // Max input
+    const maxInput = document.createElement('input');
+    maxInput.type = 'number';
+    maxInput.value = sliderConfig.max;
+    maxInput.step = '0.1';
+    maxInput.style.cssText = 'width: 40px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px; font-size: 9px; border-radius: 2px; text-align: center;';
+    row.appendChild(maxInput);
+    
+    // Value display
+    const valueSpan = document.createElement('span');
+    valueSpan.style.cssText = 'color: var(--accent-color); font-size: 10px; font-weight: bold; width: 45px; text-align: right;';
+    valueSpan.textContent = sliderConfig.value.toFixed(3);
+    row.appendChild(valueSpan);
+    
+    // Uniform name
+    const uniformSpan = document.createElement('span');
+    uniformSpan.style.cssText = 'color: var(--text-secondary); font-size: 8px; width: 50px;';
+    uniformSpan.textContent = `u_custom${sliderConfig.index}`;
+    row.appendChild(uniformSpan);
+    
+    // Remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove';
+    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 1px 5px; border-radius: 2px; font-size: 10px;';
+    removeBtn.onclick = () => removeSlider(listIndex);
+    row.appendChild(removeBtn);
+    
+    // Event handlers
     slider.oninput = () => {
         const t = parseFloat(slider.value) / 1000;
         const value = sliderConfig.min + t * (sliderConfig.max - sliderConfig.min);
@@ -385,79 +418,44 @@ function createFloatSlider(sliderConfig, listIndex, container) {
         applyFloatUniform(sliderConfig.index, value);
     };
     
-    const maxInput = document.createElement('input');
-    maxInput.type = 'number';
-    maxInput.id = `uniformMax_${listIndex}`;
-    maxInput.value = sliderConfig.max;
-    maxInput.step = '0.1';
-    maxInput.style.cssText = 'width: 38px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 1px 2px; font-size: 9px; border-radius: 2px;';
-    
     minInput.onchange = () => {
         sliderConfig.min = parseFloat(minInput.value);
-        slider.oninput(); // Recalculate value
+        slider.oninput();
     };
     maxInput.onchange = () => {
         sliderConfig.max = parseFloat(maxInput.value);
-        slider.oninput(); // Recalculate value
+        slider.oninput();
     };
     
-    sliderRow.appendChild(minInput);
-    sliderRow.appendChild(slider);
-    sliderRow.appendChild(maxInput);
-    container.appendChild(sliderRow);
-    
+    container.appendChild(row);
     return container;
 }
 
 /**
- * Create an int slider
+ * Create an int slider - single line layout
  */
 function createIntSlider(sliderConfig, listIndex, container) {
-    // Line 1: Title, Value, Uniform Name, Remove
-    const topRow = document.createElement('div');
-    topRow.style.cssText = 'display: flex; gap: 3px; margin-bottom: 2px; align-items: center;';
+    const row = document.createElement('div');
+    row.style.cssText = 'display: flex; gap: 4px; align-items: center;';
     
+    // Title input
     const titleInput = document.createElement('input');
     titleInput.type = 'text';
     titleInput.value = sliderConfig.title;
-    titleInput.placeholder = 'Title';
-    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px 3px; font-size: 9px; border-radius: 2px; min-width: 0;';
-    titleInput.oninput = () => {
-        sliderConfig.title = titleInput.value;
-    };
+    titleInput.placeholder = 'Name';
+    titleInput.style.cssText = 'width: 70px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px 4px; font-size: 10px; border-radius: 2px;';
+    titleInput.oninput = () => { sliderConfig.title = titleInput.value; };
+    row.appendChild(titleInput);
     
-    const valueSpan = document.createElement('span');
-    valueSpan.id = `uniformValue_${listIndex}`;
-    valueSpan.style.cssText = 'color: var(--accent-color); font-size: 9px; font-weight: bold; min-width: 35px; text-align: right;';
-    valueSpan.textContent = sliderConfig.value.toString();
-    
-    const uniformSpan = document.createElement('span');
-    uniformSpan.style.cssText = 'color: var(--text-secondary); font-size: 8px; min-width: 45px;';
-    uniformSpan.textContent = `u_customInt${sliderConfig.index}`;
-    
-    const removeBtn = document.createElement('button');
-    removeBtn.textContent = '✕';
-    removeBtn.title = 'Remove';
-    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 1px 4px; border-radius: 2px; font-size: 10px;';
-    removeBtn.onclick = () => removeSlider(listIndex);
-    
-    topRow.appendChild(titleInput);
-    topRow.appendChild(valueSpan);
-    topRow.appendChild(uniformSpan);
-    topRow.appendChild(removeBtn);
-    container.appendChild(topRow);
-    
-    // Line 2: Min, Slider, Max
-    const sliderRow = document.createElement('div');
-    sliderRow.style.cssText = 'display: flex; gap: 3px; align-items: center;';
-    
+    // Min input
     const minInput = document.createElement('input');
     minInput.type = 'number';
-    minInput.id = `uniformMin_${listIndex}`;
     minInput.value = sliderConfig.min;
     minInput.step = '1';
-    minInput.style.cssText = 'width: 38px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 1px 2px; font-size: 9px; border-radius: 2px;';
+    minInput.style.cssText = 'width: 40px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px; font-size: 9px; border-radius: 2px; text-align: center;';
+    row.appendChild(minInput);
     
+    // Slider
     const slider = document.createElement('input');
     slider.type = 'range';
     slider.min = '0';
@@ -465,7 +463,38 @@ function createIntSlider(sliderConfig, listIndex, container) {
     const t = (sliderConfig.value - sliderConfig.min) / (sliderConfig.max - sliderConfig.min);
     slider.value = Math.round(t * 100).toString();
     slider.step = '1';
-    slider.style.cssText = 'flex: 1;';
+    slider.style.cssText = 'flex: 1; min-width: 80px;';
+    row.appendChild(slider);
+    
+    // Max input
+    const maxInput = document.createElement('input');
+    maxInput.type = 'number';
+    maxInput.value = sliderConfig.max;
+    maxInput.step = '1';
+    maxInput.style.cssText = 'width: 40px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px; font-size: 9px; border-radius: 2px; text-align: center;';
+    row.appendChild(maxInput);
+    
+    // Value display
+    const valueSpan = document.createElement('span');
+    valueSpan.style.cssText = 'color: var(--accent-color); font-size: 10px; font-weight: bold; width: 45px; text-align: right;';
+    valueSpan.textContent = sliderConfig.value.toString();
+    row.appendChild(valueSpan);
+    
+    // Uniform name
+    const uniformSpan = document.createElement('span');
+    uniformSpan.style.cssText = 'color: var(--text-secondary); font-size: 8px; width: 50px;';
+    uniformSpan.textContent = `u_customInt${sliderConfig.index}`;
+    row.appendChild(uniformSpan);
+    
+    // Remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Remove';
+    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 1px 5px; border-radius: 2px; font-size: 10px;';
+    removeBtn.onclick = () => removeSlider(listIndex);
+    row.appendChild(removeBtn);
+    
+    // Event handlers
     slider.oninput = () => {
         const t = parseFloat(slider.value) / 100;
         const value = Math.round(sliderConfig.min + t * (sliderConfig.max - sliderConfig.min));
@@ -474,77 +503,78 @@ function createIntSlider(sliderConfig, listIndex, container) {
         applyIntUniform(sliderConfig.index, value);
     };
     
-    const maxInput = document.createElement('input');
-    maxInput.type = 'number';
-    maxInput.id = `uniformMax_${listIndex}`;
-    maxInput.value = sliderConfig.max;
-    maxInput.step = '1';
-    maxInput.style.cssText = 'width: 38px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 1px 2px; font-size: 9px; border-radius: 2px;';
-    
     minInput.onchange = () => {
         sliderConfig.min = parseInt(minInput.value);
-        slider.oninput(); // Recalculate value
+        slider.oninput();
     };
     maxInput.onchange = () => {
         sliderConfig.max = parseInt(maxInput.value);
-        slider.oninput(); // Recalculate value
+        slider.oninput();
     };
     
-    sliderRow.appendChild(minInput);
-    sliderRow.appendChild(slider);
-    sliderRow.appendChild(maxInput);
-    container.appendChild(sliderRow);
-    
+    container.appendChild(row);
     return container;
 }
 
 /**
- * Create a bool checkbox
+ * Create a bool checkbox - single line layout
  */
 function createBoolSlider(sliderConfig, listIndex, container) {
-    // Line 1: Title, Checkbox, Uniform Name, Remove
     const row = document.createElement('div');
-    row.style.cssText = 'display: flex; gap: 3px; align-items: center;';
+    row.style.cssText = 'display: flex; gap: 4px; align-items: center;';
     
+    // Title input
     const titleInput = document.createElement('input');
     titleInput.type = 'text';
     titleInput.value = sliderConfig.title;
-    titleInput.placeholder = 'Title';
-    titleInput.style.cssText = 'flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px 3px; font-size: 9px; border-radius: 2px; min-width: 0;';
-    titleInput.oninput = () => {
-        sliderConfig.title = titleInput.value;
-    };
+    titleInput.placeholder = 'Name';
+    titleInput.style.cssText = 'width: 70px; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); padding: 2px 4px; font-size: 10px; border-radius: 2px;';
+    titleInput.oninput = () => { sliderConfig.title = titleInput.value; };
+    row.appendChild(titleInput);
+    
+    // Checkbox (wider area for easier clicking)
+    const checkboxContainer = document.createElement('div');
+    checkboxContainer.style.cssText = 'flex: 1; display: flex; align-items: center; justify-content: center; min-width: 80px;';
     
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
     checkbox.checked = sliderConfig.value;
-    checkbox.style.cssText = 'margin: 0;';
+    checkbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer;';
     checkbox.onchange = () => {
         sliderConfig.value = checkbox.checked;
+        valueSpan.textContent = checkbox.checked ? 'true' : 'false';
         applyBoolUniform(sliderConfig.index, checkbox.checked);
     };
+    checkboxContainer.appendChild(checkbox);
+    row.appendChild(checkboxContainer);
     
+    // Value display
+    const valueSpan = document.createElement('span');
+    valueSpan.style.cssText = 'color: var(--accent-color); font-size: 10px; font-weight: bold; width: 45px; text-align: right;';
+    valueSpan.textContent = sliderConfig.value ? 'true' : 'false';
+    row.appendChild(valueSpan);
+    
+    // Uniform name
     const uniformSpan = document.createElement('span');
-    uniformSpan.style.cssText = 'color: var(--text-secondary); font-size: 8px; min-width: 55px;';
+    uniformSpan.style.cssText = 'color: var(--text-secondary); font-size: 8px; width: 60px;';
     uniformSpan.textContent = `u_customBool${sliderConfig.index}`;
+    row.appendChild(uniformSpan);
     
+    // Remove button
     const removeBtn = document.createElement('button');
     removeBtn.textContent = '✕';
     removeBtn.title = 'Remove';
-    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 1px 4px; border-radius: 2px; font-size: 10px;';
+    removeBtn.style.cssText = 'background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; padding: 1px 5px; border-radius: 2px; font-size: 10px;';
     removeBtn.onclick = () => removeSlider(listIndex);
-    
-    row.appendChild(titleInput);
-    row.appendChild(checkbox);
-    row.appendChild(uniformSpan);
     row.appendChild(removeBtn);
-    container.appendChild(row);
     
+    container.appendChild(row);
     return container;
 }
 
 /**
  * Apply float uniform value to buffer
+ * Buffer layout: [7-91] = floats (85 slots)
  */
 function applyFloatUniform(index, value) {
     if (!state.uniformBuilder) return; // Not initialized yet
@@ -554,20 +584,22 @@ function applyFloatUniform(index, value) {
 
 /**
  * Apply int uniform value to buffer
+ * Buffer layout: [92-101] = ints (10 slots)
  */
 function applyIntUniform(index, value) {
     if (!state.uniformBuilder) return; // Not initialized yet
     const { i32 } = state.uniformBuilder.getArrays();
-    i32[22 + index] = value;
+    i32[92 + index] = value;
 }
 
 /**
  * Apply bool uniform value to buffer
+ * Buffer layout: [102-106] = bools (5 slots)
  */
 function applyBoolUniform(index, value) {
     if (!state.uniformBuilder) return; // Not initialized yet
     const { i32 } = state.uniformBuilder.getArrays();
-    i32[25 + index] = value ? 1 : 0;
+    i32[102 + index] = value ? 1 : 0;
 }
 
 /**
@@ -599,6 +631,47 @@ function resetAllValues() {
         } else if (slider.type === 'bool') {
             slider.value = false;
             applyBoolUniform(slider.index, false);
+        }
+    });
+    
+    rebuildPanel();
+}
+
+/**
+ * Set all sliders to random values within their min/max limits
+ */
+function randomizeAllValues() {
+    activeSliders.forEach((slider) => {
+        if (slider.type === 'float') {
+            slider.value = slider.min + Math.random() * (slider.max - slider.min);
+            applyFloatUniform(slider.index, slider.value);
+        } else if (slider.type === 'int') {
+            slider.value = Math.floor(slider.min + Math.random() * (slider.max - slider.min + 1));
+            applyIntUniform(slider.index, slider.value);
+        } else if (slider.type === 'bool') {
+            slider.value = Math.random() > 0.5;
+            applyBoolUniform(slider.index, slider.value);
+        }
+    });
+    
+    rebuildPanel();
+}
+
+/**
+ * Set all sliders to halfway between min and max
+ */
+function setAllToHalfway() {
+    activeSliders.forEach((slider) => {
+        if (slider.type === 'float') {
+            slider.value = (slider.min + slider.max) / 2;
+            applyFloatUniform(slider.index, slider.value);
+        } else if (slider.type === 'int') {
+            slider.value = Math.round((slider.min + slider.max) / 2);
+            applyIntUniform(slider.index, slider.value);
+        } else if (slider.type === 'bool') {
+            // For bools, halfway means false (or could toggle)
+            slider.value = false;
+            applyBoolUniform(slider.index, slider.value);
         }
     });
     
