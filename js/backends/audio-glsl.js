@@ -183,20 +183,30 @@ function createWorkerCode() {
     return `
 let gl = null;
 let program = null;
-let sampleRateLocation = null;
-let sampleOffsetLocation = null;
 let framebuffer = null;
 let texture = null;
 let maxTextureSize = 4096;
 let currentWidth = 0;
+
+// Uniform locations
+let uniformLocs = {
+    iSampleRate: null,
+    iSampleOffset: null,
+    iTime: null,
+    iFrame: null,
+    iMouse: null,
+    customFloats: [],  // u_custom0-84
+    customInts: [],    // u_customInt0-9
+    customBools: []    // u_customBool0-4
+};
 
 self.onmessage = async (e) => {
     if (e.data.type === 'init') {
         const { canvas, shaderCode } = e.data;
         setupWebGL(canvas, shaderCode);
     } else if (e.data.type === 'render') {
-        const { numSamples, sampleRate, sampleOffset } = e.data;
-        const audioData = generateAudio(numSamples, sampleRate, sampleOffset);
+        const { numSamples, sampleRate, sampleOffset, uniforms } = e.data;
+        const audioData = generateAudio(numSamples, sampleRate, sampleOffset, uniforms);
         if (audioData) {
             self.postMessage({ type: 'audioData', audioData, numSamples }, [audioData.buffer]);
         } else {
@@ -250,6 +260,20 @@ function updateShader(shaderCode) {
         }
     \`;
     
+    // Generate individual custom uniform declarations
+    let customFloatDecls = '';
+    for (let i = 0; i < 85; i++) {
+        customFloatDecls += 'uniform float u_custom' + i + ';\\n        ';
+    }
+    let customIntDecls = '';
+    for (let i = 0; i < 10; i++) {
+        customIntDecls += 'uniform int u_customInt' + i + ';\\n        ';
+    }
+    let customBoolDecls = '';
+    for (let i = 0; i < 5; i++) {
+        customBoolDecls += 'uniform bool u_customBool' + i + ';\\n        ';
+    }
+    
     // Wrap user's mainSound function with boilerplate
     // Shadertoy-compatible: mainSound(int samp, float time)
     // For precision, users should use samp with fract() instead of time for oscillators
@@ -257,8 +281,24 @@ function updateShader(shaderCode) {
         precision highp float;
         precision highp int;
         
+        // Audio-specific uniforms
         uniform float iSampleRate;
         uniform int iSampleOffset;
+        
+        // Graphics state uniforms (synced from main thread)
+        uniform float iTime;      // Graphics playback time
+        uniform float u_time;     // Alias for iTime
+        uniform int iFrame;       // Graphics frame number
+        uniform int u_frame;      // Alias for iFrame
+        uniform vec4 iMouse;      // Mouse: xy=current drag, zw=click position
+        uniform vec2 u_mouse;     // Alias for iMouse.xy
+        uniform vec2 u_click;     // Click position
+        uniform vec2 u_hover;     // Hover position
+        
+        // Custom uniforms (85 floats, 10 ints, 5 bools) - same as graphics shaders
+        \${customFloatDecls}
+        \${customIntDecls}
+        \${customBoolDecls}
         
         out vec4 fragColor;
         
@@ -302,8 +342,31 @@ function updateShader(shaderCode) {
     
     gl.useProgram(program);
     
-    sampleRateLocation = gl.getUniformLocation(program, 'iSampleRate');
-    sampleOffsetLocation = gl.getUniformLocation(program, 'iSampleOffset');
+    // Get uniform locations
+    uniformLocs.iSampleRate = gl.getUniformLocation(program, 'iSampleRate');
+    uniformLocs.iSampleOffset = gl.getUniformLocation(program, 'iSampleOffset');
+    uniformLocs.iTime = gl.getUniformLocation(program, 'iTime');
+    uniformLocs.u_time = gl.getUniformLocation(program, 'u_time');
+    uniformLocs.iFrame = gl.getUniformLocation(program, 'iFrame');
+    uniformLocs.u_frame = gl.getUniformLocation(program, 'u_frame');
+    uniformLocs.iMouse = gl.getUniformLocation(program, 'iMouse');
+    uniformLocs.u_mouse = gl.getUniformLocation(program, 'u_mouse');
+    uniformLocs.u_click = gl.getUniformLocation(program, 'u_click');
+    uniformLocs.u_hover = gl.getUniformLocation(program, 'u_hover');
+    
+    // Custom uniform locations (individual, matching graphics shaders)
+    uniformLocs.customFloats = [];
+    for (let i = 0; i < 85; i++) {
+        uniformLocs.customFloats[i] = gl.getUniformLocation(program, 'u_custom' + i);
+    }
+    uniformLocs.customInts = [];
+    for (let i = 0; i < 10; i++) {
+        uniformLocs.customInts[i] = gl.getUniformLocation(program, 'u_customInt' + i);
+    }
+    uniformLocs.customBools = [];
+    for (let i = 0; i < 5; i++) {
+        uniformLocs.customBools[i] = gl.getUniformLocation(program, 'u_customBool' + i);
+    }
     
     self.postMessage({ type: 'ready' });
 }
@@ -321,7 +384,7 @@ function compileShader(type, source) {
     return shader;
 }
 
-function generateAudio(numSamples, sampleRate, sampleOffset) {
+function generateAudio(numSamples, sampleRate, sampleOffset, uniforms) {
     const clampedSamples = Math.min(numSamples, maxTextureSize);
     
     if (currentWidth !== clampedSamples) {
@@ -351,8 +414,56 @@ function generateAudio(numSamples, sampleRate, sampleOffset) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
     }
     
-    gl.uniform1f(sampleRateLocation, sampleRate);
-    gl.uniform1i(sampleOffsetLocation, sampleOffset);
+    // Core audio uniforms
+    gl.uniform1f(uniformLocs.iSampleRate, sampleRate);
+    gl.uniform1i(uniformLocs.iSampleOffset, sampleOffset);
+    
+    // Apply graphics state uniforms if provided
+    if (uniforms) {
+        // Time
+        if (uniformLocs.iTime) gl.uniform1f(uniformLocs.iTime, uniforms.time || 0);
+        if (uniformLocs.u_time) gl.uniform1f(uniformLocs.u_time, uniforms.time || 0);
+        
+        // Frame
+        if (uniformLocs.iFrame) gl.uniform1i(uniformLocs.iFrame, uniforms.frame || 0);
+        if (uniformLocs.u_frame) gl.uniform1i(uniformLocs.u_frame, uniforms.frame || 0);
+        
+        // Mouse
+        const md = uniforms.mouseDrag || [0, 0];
+        const mc = uniforms.mouseClick || [0, 0];
+        const mh = uniforms.mouseHover || [0, 0];
+        if (uniformLocs.iMouse) gl.uniform4f(uniformLocs.iMouse, md[0], md[1], mc[0], mc[1]);
+        if (uniformLocs.u_mouse) gl.uniform2f(uniformLocs.u_mouse, md[0], md[1]);
+        if (uniformLocs.u_click) gl.uniform2f(uniformLocs.u_click, mc[0], mc[1]);
+        if (uniformLocs.u_hover) gl.uniform2f(uniformLocs.u_hover, mh[0], mh[1]);
+        
+        // Custom floats (individual uniforms, matching graphics shaders)
+        if (uniforms.customFloats) {
+            for (let i = 0; i < 85; i++) {
+                if (uniformLocs.customFloats[i]) {
+                    gl.uniform1f(uniformLocs.customFloats[i], uniforms.customFloats[i]);
+                }
+            }
+        }
+        
+        // Custom ints (individual uniforms)
+        if (uniforms.customInts) {
+            for (let i = 0; i < 10; i++) {
+                if (uniformLocs.customInts[i]) {
+                    gl.uniform1i(uniformLocs.customInts[i], uniforms.customInts[i]);
+                }
+            }
+        }
+        
+        // Custom bools (individual uniforms, as ints)
+        if (uniforms.customBools) {
+            for (let i = 0; i < 5; i++) {
+                if (uniformLocs.customBools[i]) {
+                    gl.uniform1i(uniformLocs.customBools[i], uniforms.customBools[i]);
+                }
+            }
+        }
+    }
     
     gl.viewport(0, 0, clampedSamples, 1);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -396,11 +507,15 @@ function generationLoop() {
         // Generate ~100ms of audio per batch
         const samplesToGenerate = Math.min(Math.floor(sampleRate * 0.1), maxTextureSize);
         
+        // Get current uniform values from the shared uniform builder
+        const uniforms = state.uniformBuilder ? state.uniformBuilder.getAudioUniforms() : null;
+        
         renderWorker.postMessage({
             type: 'render',
             numSamples: samplesToGenerate,
             sampleRate,
-            sampleOffset
+            sampleOffset,
+            uniforms
         });
     }
     

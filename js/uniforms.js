@@ -174,5 +174,40 @@ export class UniformBuilder {
     getArrays() {
         return { f32: this.f32, i32: this.i32 };
     }
+    
+    /**
+     * Get uniform values for audio shader (passed to worker)
+     * Returns a plain object that can be sent via postMessage
+     */
+    getAudioUniforms() {
+        // Extract custom floats (indices 7-91 = 85 floats)
+        const customFloats = new Float32Array(85);
+        for (let i = 0; i < 85; i++) {
+            customFloats[i] = this.f32[7 + i];
+        }
+        
+        // Extract custom ints (indices 92-101 = 10 ints)
+        const customInts = new Int32Array(10);
+        for (let i = 0; i < 10; i++) {
+            customInts[i] = this.i32[92 + i];
+        }
+        
+        // Extract custom bools (indices 102-106 = 5 bools as ints)
+        const customBools = new Int32Array(5);
+        for (let i = 0; i < 5; i++) {
+            customBools[i] = this.i32[102 + i];
+        }
+        
+        return {
+            time: this.data.time,
+            frame: this.data.frame || 0,
+            mouseDrag: [...this.data.mouseDrag],
+            mouseClick: [...this.data.mouseClick],
+            mouseHover: [...this.data.mouseHover],
+            customFloats: customFloats,
+            customInts: customInts,
+            customBools: customBools
+        };
+    }
 }
 
