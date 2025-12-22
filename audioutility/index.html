@@ -81,25 +81,25 @@
 		
 		<textarea id="shaderText" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">
 // Shadertoy-compatible GLSL Audio
-// samp = absolute sample index (use for precision!)
-// time = time in seconds (has precision issues after ~40s)
+// samp = absolute sample index (combine with sampleRate for precision!)
+// time = time in seconds
 // iSampleRate = sample rate uniform (e.g. 48000.0)
 //
-// IMPORTANT: For oscillators, use samp to avoid float precision issues:
-// float phase = fract(float(samp) * freq / iSampleRate);
-// return vec2(sin(6.2831 * phase));
+// IMPORTANT: For oscillators, use samp period to avoid float precision issues:
 
 vec2 mainSound(int samp, float time) {
+
 	float freq = 440.0;
 
-	// Use samp for phase (works forever, no precision loss)
-	float phase = fract(float(samp) * freq / iSampleRate);
-	float wave = sin(6.2831 * phase);
+	int period = int(iSampleRate);  // Use sample rate as period
+	int sampMod = samp % period;
+	float phase = fract(float(sampMod) * freq / iSampleRate);
 
-	// Envelope uses time (OK for slow changes)
 	float envelope = exp(-0.5 * time)*0.5;
 
-	return vec2(wave * envelope * 0.5);
+	float wave = sin(6.2831 * phase);
+
+	return vec2(wave)*envelope;
 }
 </textarea>
 
