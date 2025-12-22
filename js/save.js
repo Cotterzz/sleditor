@@ -735,6 +735,7 @@ export async function loadDatabaseShader(shader) {
     // Clear current references
     state.currentExample = null;
     state.isDirty = false;
+    state.isForkMode = false;  // Clear fork mode when loading shader
     
     // Store current shader for potential editing
     state.currentDatabaseShader = shader;
@@ -846,6 +847,19 @@ export async function loadDatabaseShader(shader) {
         // No uniform config - load default (1 float slider, hidden)
         uniformControls.loadUniformConfig(null);
     }
+    
+    // Load render settings (colorspace, etc) - defaults to sRGB for older shaders
+    let linearColorspace = false;
+    if (shader.code && shader.code['_settings']) {
+        try {
+            const settings = JSON.parse(shader.code['_settings']);
+            linearColorspace = settings.linearColorspace || false;
+        } catch (e) {
+            console.warn('Failed to parse settings:', e);
+        }
+    }
+    state.linearColorspace = linearColorspace;
+    ui.updateColorspaceIcon();
     
     const hasMedia = channels.hasMediaChannels();
     if (hasMedia && !state.mediaStartUnlocked) {

@@ -1018,6 +1018,21 @@ export function updateRenderMode() {
     }
 }
 
+export function updateColorspaceIcon() {
+    const icon = document.getElementById('colorspaceIcon');
+    if (!icon) return;
+    
+    if (state.linearColorspace) {
+        icon.textContent = 'LIN';
+        icon.title = 'Color space: Linear (compute.toys) - click to toggle sRGB (Shadertoy)';
+        icon.style.color = '#4af';
+    } else {
+        icon.textContent = 'sRGB';
+        icon.title = 'Color space: sRGB (Shadertoy) - click to toggle linear (compute.toys)';
+        icon.style.color = '';
+    }
+}
+
 // ============================================================================
 // Channel Viewer
 // ============================================================================

@@ -263,6 +263,7 @@ function onUserSignedOut() {
     console.log('User signed out');
     state.currentUser = null;
     state.currentDatabaseShader = null;
+    state.isForkMode = false;  // Clear fork mode on sign out
     state.userDisplayName = null;
     state.userAvatarUrl = null;
     state.userProfile = null;

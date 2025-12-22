@@ -116,6 +116,7 @@ export async function handleHashChange() {
         state.currentExample = null;
         state.currentDatabaseShader = null;
         state.isDirty = false;
+        state.isForkMode = false;  // Clear fork mode for golf URLs
         state.isInitializing = true;
         
         // Reset channels

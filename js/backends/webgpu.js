@@ -4,6 +4,49 @@
 
 import { state, CONFIG, DERIVED, AUDIO_MODES } from '../core.js';
 
+// Blit shader for copying intermediate texture to canvas with optional gamma correction
+const BLIT_SHADER = `
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) uv: vec2<f32>
+}
+
+@vertex
+fn vs_main(@builtin(vertex_index) idx: u32) -> VertexOutput {
+    var out: VertexOutput;
+    // Fullscreen triangle (covers screen with single oversized triangle)
+    let x = i32(idx) / 2;
+    let y = i32(idx) & 1;
+    let tc = vec2<f32>(f32(x) * 2.0, f32(y) * 2.0);
+    out.position = vec4<f32>(tc.x * 2.0 - 1.0, 1.0 - tc.y * 2.0, 0.0, 1.0);
+    out.uv = tc;
+    return out;
+}
+
+@group(0) @binding(0) var srcTexture: texture_2d<f32>;
+@group(0) @binding(1) var srcSampler: sampler;
+
+// Linear to sRGB conversion (matches compute.toys)
+fn linear_to_srgb(rgb: vec3<f32>) -> vec3<f32> {
+    return select(
+        1.055 * pow(rgb, vec3<f32>(1.0 / 2.4)) - 0.055,
+        rgb * 12.92,
+        rgb <= vec3<f32>(0.0031308)
+    );
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    return textureSample(srcTexture, srcSampler, in.uv);
+}
+
+@fragment
+fn fs_main_linear(in: VertexOutput) -> @location(0) vec4<f32> {
+    let color = textureSample(srcTexture, srcSampler, in.uv);
+    return vec4<f32>(linear_to_srgb(color.rgb), color.a);
+}
+`;
+
 // ============================================================================
 // Initialization
 // ============================================================================
@@ -30,19 +73,29 @@ export async function init(canvas) {
             }
         });
 
+        const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         const context = canvas.getContext('webgpu');
         context.configure({
             device: device,
-            format: navigator.gpu.getPreferredCanvasFormat(),
-            usage: GPUTextureUsage.STORAGE_BINDING,
+            format: presentationFormat,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT,  // Changed: now used as render target for blit
         });
+
+        // Clear old resources from previous device (if any)
+        state.intermediateTexture = null;
+        state.intermediateTextureView = null;
+        state.blitBindGroup = null;
 
         // Store in state
         state.gpuDevice = device;
         state.gpuContext = context;
+        state.presentationFormat = presentationFormat;
 
         // Create GPU resources
         createGPUResources(device);
+        
+        // Create blit pipeline for final output
+        createBlitPipeline(device, presentationFormat);
         
         state.hasWebGPU = true;
         console.log('✓ WebGPU initialized successfully');
@@ -54,8 +107,10 @@ export async function init(canvas) {
 }
 
 function createGPUResources(device) {
+    // IMPORTANT: Size must match UniformBuilder.buffer in js/uniforms.js
+    // If uniform layout changes there, update this size to match!
     state.uniformBuffer = device.createBuffer({
-        size: 256,
+        size: 512,
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -91,10 +146,86 @@ function createGPUResources(device) {
             { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
             { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
             { binding: 3, visibility: GPUShaderStage.COMPUTE, storageTexture: { 
-                format: 'bgra8unorm', access: 'write-only', viewDimension: '2d' 
+                format: 'rgba16float', access: 'write-only', viewDimension: '2d'  // High precision
             }},
             { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         ],
+    });
+}
+
+// Create intermediate texture for compute shader output
+// Uses rgba16float for high precision (avoids banding during gamma correction)
+function createIntermediateTexture(device, width, height) {
+    // Destroy old texture if it exists
+    if (state.intermediateTexture) {
+        state.intermediateTexture.destroy();
+    }
+    
+    state.intermediateTexture = device.createTexture({
+        size: { width, height, depthOrArrayLayers: 1 },
+        format: 'rgba16float',  // High precision to avoid banding
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    
+    state.intermediateTextureView = state.intermediateTexture.createView();
+    
+    // Recreate blit bind group with new texture
+    if (state.blitBindGroupLayout) {
+        state.blitBindGroup = device.createBindGroup({
+            layout: state.blitBindGroupLayout,
+            entries: [
+                { binding: 0, resource: state.intermediateTextureView },
+                { binding: 1, resource: state.blitSampler },
+            ],
+        });
+    }
+}
+
+// Create the blit pipeline for final output with optional gamma correction
+function createBlitPipeline(device, presentationFormat) {
+    const blitModule = device.createShaderModule({
+        label: 'Blit Shader',
+        code: BLIT_SHADER,
+    });
+    
+    state.blitBindGroupLayout = device.createBindGroupLayout({
+        entries: [
+            { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+            { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+        ],
+    });
+    
+    const blitPipelineLayout = device.createPipelineLayout({
+        bindGroupLayouts: [state.blitBindGroupLayout],
+    });
+    
+    state.blitSampler = device.createSampler({
+        minFilter: 'linear',
+        magFilter: 'linear',
+    });
+    
+    // Pipeline for sRGB mode (no conversion - passthrough)
+    state.blitPipelineSRGB = device.createRenderPipeline({
+        layout: blitPipelineLayout,
+        vertex: { module: blitModule, entryPoint: 'vs_main' },
+        fragment: {
+            module: blitModule,
+            entryPoint: 'fs_main',
+            targets: [{ format: presentationFormat }],
+        },
+        primitive: { topology: 'triangle-list' },
+    });
+    
+    // Pipeline for linear mode (applies linear→sRGB conversion)
+    state.blitPipelineLinear = device.createRenderPipeline({
+        layout: blitPipelineLayout,
+        vertex: { module: blitModule, entryPoint: 'vs_main' },
+        fragment: {
+            module: blitModule,
+            entryPoint: 'fs_main_linear',
+            targets: [{ format: presentationFormat }],
+        },
+        primitive: { topology: 'triangle-list' },
     });
 }
 
@@ -184,76 +315,105 @@ export function renderFrame(uniformData, audioContext) {
         // Write uniforms
         device.queue.writeBuffer(state.uniformBuffer, 0, uniformData);
 
-    const textureView = state.gpuContext.getCurrentTexture().createView();
-    const bindGroup = device.createBindGroup({
-        layout: state.bindGroupLayout,
-        entries: [
-            { binding: 0, resource: { buffer: state.uniformBuffer } },
-            { binding: 1, resource: { buffer: state.computeBuffer } },
-            { binding: 2, resource: { buffer: state.audioBufferGPU } },
-            { binding: 3, resource: textureView },
-            { binding: 4, resource: { buffer: state.phaseStateBuffer } },
-        ],
-    });
-
-    // Check if we need to generate GPU audio THIS frame (only for GPU audio mode)
-    const needsGPUAudio = state.isPlaying && 
-                          state.audioMode === AUDIO_MODES.GPU &&
-                          state.audioPipeline &&
-                          ctx.currentTime >= state.nextAudioTime - CONFIG.audioBlockDuration && 
-                          !state.pendingAudio;
-
-    const encoder = device.createCommandEncoder();
-    const pass = encoder.beginComputePass();
-    
-    // AUDIO PASS FIRST - Only for GPU audio mode!
-    if (needsGPUAudio) {
-        pass.setPipeline(state.audioPipeline);
-        pass.setBindGroup(0, bindGroup);
-        pass.dispatchWorkgroups(
-            Math.ceil(DERIVED.samplesPerBlock / 128),  // e.g., ceil(4800/128) = 38 workgroups
-            1,
-            1
-        );
-    }
-    
-    // GRAPHICS PASS SECOND - Reads audio data from buffer
-    // 8×8 workgroups for optimal 2D texture access
-    if (state.graphicsPipeline) {
-        pass.setPipeline(state.graphicsPipeline);
-        pass.setBindGroup(0, bindGroup);
-        pass.dispatchWorkgroups(
-            Math.ceil(state.canvasWidth / state.pixelScale / 8),   // Scaled workgroups X
-            Math.ceil(state.canvasHeight / state.pixelScale / 8),  // Scaled workgroups Y
-            1
-        );
-    }
-    
-    pass.end();
-
-    if (needsGPUAudio) {
-        state.pendingAudio = true;
+        // Ensure intermediate texture exists and is correct size
+        const width = Math.ceil(state.canvasWidth / state.pixelScale);
+        const height = Math.ceil(state.canvasHeight / state.pixelScale);
         
-        const readbackBuffer = state.audioBuffersReadback[state.readbackIndex];
-        encoder.copyBufferToBuffer(
-            state.audioBufferGPU, 0,
-            readbackBuffer, 0,
-            DERIVED.audioBufferSize
-        );
-        
-        device.queue.submit([encoder.finish()]);
-        
-        readbackBuffer.mapAsync(GPUMapMode.READ).then(() => {
-            playAudioBlock(readbackBuffer, ctx);
-            state.readbackIndex = 1 - state.readbackIndex;
-            state.pendingAudio = false;
-        }).catch(err => {
-            console.error('Audio readback failed:', err);
-            state.pendingAudio = false;
+        if (!state.intermediateTexture || 
+            state.intermediateTexture.width !== width || 
+            state.intermediateTexture.height !== height) {
+            createIntermediateTexture(device, width, height);
+        }
+
+        // Create bind group for compute pass (writes to intermediate texture)
+        const computeBindGroup = device.createBindGroup({
+            layout: state.bindGroupLayout,
+            entries: [
+                { binding: 0, resource: { buffer: state.uniformBuffer } },
+                { binding: 1, resource: { buffer: state.computeBuffer } },
+                { binding: 2, resource: { buffer: state.audioBufferGPU } },
+                { binding: 3, resource: state.intermediateTextureView },
+                { binding: 4, resource: { buffer: state.phaseStateBuffer } },
+            ],
         });
-    } else {
-        device.queue.submit([encoder.finish()]);
-    }
+
+        // Check if we need to generate GPU audio THIS frame (only for GPU audio mode)
+        const needsGPUAudio = state.isPlaying && 
+                              state.audioMode === AUDIO_MODES.GPU &&
+                              state.audioPipeline &&
+                              ctx.currentTime >= state.nextAudioTime - CONFIG.audioBlockDuration && 
+                              !state.pendingAudio;
+
+        const encoder = device.createCommandEncoder();
+        
+        // COMPUTE PASS - render to intermediate texture
+        const computePass = encoder.beginComputePass();
+        
+        // AUDIO PASS FIRST - Only for GPU audio mode!
+        if (needsGPUAudio) {
+            computePass.setPipeline(state.audioPipeline);
+            computePass.setBindGroup(0, computeBindGroup);
+            computePass.dispatchWorkgroups(
+                Math.ceil(DERIVED.samplesPerBlock / 128),
+                1,
+                1
+            );
+        }
+        
+        // GRAPHICS PASS - Reads audio data from buffer
+        if (state.graphicsPipeline) {
+            computePass.setPipeline(state.graphicsPipeline);
+            computePass.setBindGroup(0, computeBindGroup);
+            computePass.dispatchWorkgroups(
+                Math.ceil(width / 8),
+                Math.ceil(height / 8),
+                1
+            );
+        }
+        
+        computePass.end();
+        
+        // BLIT PASS - copy intermediate texture to canvas with optional gamma correction
+        const canvasTexture = state.gpuContext.getCurrentTexture();
+        const blitPass = encoder.beginRenderPass({
+            colorAttachments: [{
+                view: canvasTexture.createView(),
+                clearValue: { r: 0, g: 0, b: 0, a: 1 },
+                loadOp: 'clear',
+                storeOp: 'store',
+            }],
+        });
+        
+        // Choose pipeline based on colorspace mode
+        const blitPipeline = state.linearColorspace ? state.blitPipelineLinear : state.blitPipelineSRGB;
+        blitPass.setPipeline(blitPipeline);
+        blitPass.setBindGroup(0, state.blitBindGroup);
+        blitPass.draw(3, 1, 0, 0);  // Fullscreen triangle
+        blitPass.end();
+
+        if (needsGPUAudio) {
+            state.pendingAudio = true;
+            
+            const readbackBuffer = state.audioBuffersReadback[state.readbackIndex];
+            encoder.copyBufferToBuffer(
+                state.audioBufferGPU, 0,
+                readbackBuffer, 0,
+                DERIVED.audioBufferSize
+            );
+            
+            device.queue.submit([encoder.finish()]);
+            
+            readbackBuffer.mapAsync(GPUMapMode.READ).then(() => {
+                playAudioBlock(readbackBuffer, ctx);
+                state.readbackIndex = 1 - state.readbackIndex;
+                state.pendingAudio = false;
+            }).catch(err => {
+                console.error('Audio readback failed:', err);
+                state.pendingAudio = false;
+            });
+        } else {
+            device.queue.submit([encoder.finish()]);
+        }
     } catch (err) {
         console.error('WebGPU render error:', err);
         console.error('Stack:', err.stack);
@@ -297,7 +457,31 @@ export function cleanup() {
     state.graphicsPipeline = null;
     state.audioPipeline = null;
     
+    // Destroy intermediate texture (must be recreated with new device)
+    if (state.intermediateTexture) {
+        state.intermediateTexture.destroy();
+        state.intermediateTexture = null;
+        state.intermediateTextureView = null;
+    }
+    state.blitBindGroup = null;
+    
     // Note: WebGPU buffers and resources are garbage collected
     // We just need to null out references
+}
+
+// ============================================================================
+// Colorspace Configuration
+// ============================================================================
+
+/**
+ * Update the colorspace mode
+ * @param {boolean} linear - true for linear (compute.toys), false for sRGB (Shadertoy)
+ * 
+ * When linear=true, the blit pass applies linear→sRGB conversion (like compute.toys)
+ * When linear=false, no conversion is applied (like Shadertoy)
+ */
+export function setColorspace(linear) {
+    state.linearColorspace = linear;
+    console.log(`✓ WebGPU colorspace set to ${linear ? 'linear (with sRGB conversion)' : 'sRGB (no conversion)'}`);
 }
 

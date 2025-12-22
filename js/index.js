@@ -71,6 +71,7 @@ function loadExample(exampleId) {
     state.currentExample = exampleId;
     state.currentDatabaseShader = null;
     state.isDirty = false;
+    state.isForkMode = false;  // Clear fork mode when loading example
     shaderManagement.updateSaveButton();
     
     // Convert old 'audio' tab to new format
@@ -665,6 +666,23 @@ function setupUI() {
         ui.updateRenderMode();
     });
     
+    // Colorspace toggle (sRGB vs linear)
+    document.getElementById('colorspaceIcon').addEventListener('click', () => {
+        const newLinear = !state.linearColorspace;
+        
+        // Update backend based on current graphics mode
+        if (state.graphicsBackend === 'webgpu') {
+            webgpu.setColorspace(newLinear);
+        } else if (state.graphicsBackend === 'webgl') {
+            webgl.setColorspace(newLinear);
+        } else {
+            state.linearColorspace = newLinear;
+        }
+        
+        // Update UI
+        ui.updateColorspaceIcon();
+    });
+    
     setupPointerEvents();
     
     // Handle visibility change - resync audio timing when tab becomes visible
@@ -856,8 +874,11 @@ async function updateViewsAndLikes(shader) {
 // ============================================================================
 
 function setupSaveButton() {
-    // Main save/fork button handler
-    document.getElementById('saveShaderBtn').addEventListener('click', shaderManagement.handleSaveForkClick);
+    // Save button handler - saves owned shaders
+    document.getElementById('saveShaderBtn').addEventListener('click', shaderManagement.handleSaveClick);
+    
+    // Fork button handler - creates a copy
+    document.getElementById('forkShaderBtn').addEventListener('click', shaderManagement.handleForkClick);
     
     // Custom events
     window.addEventListener('shader-saved', (e) => {

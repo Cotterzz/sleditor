@@ -1270,8 +1270,13 @@ export async function loadChannelConfig(config) {
                 volumeId: ch.volumeId || 'grey_noise_32'
             });
             
-            if (channelNumber !== -1 && ch.tabName) {
-                if (!state.activeTabs.includes(ch.tabName)) {
+            if (channelNumber !== -1) {
+                // Apply wrap mode if saved
+                if (ch.wrap && ch.wrap !== 'clamp') {
+                    await changeVolumeWrapMode(channelNumber, ch.wrap);
+                }
+                
+                if (ch.tabName && !state.activeTabs.includes(ch.tabName)) {
                     state.activeTabs.push(ch.tabName);
                 }
                 
@@ -1756,6 +1761,41 @@ export async function changeVolumeTexture(channelNumber, volumeId) {
     } catch (error) {
         console.error('Failed to change volume texture:', error);
     }
+}
+
+/**
+ * Change wrap mode for a volume channel
+ * @param {number} channelNumber - Channel number
+ * @param {string} wrap - Wrap mode ('repeat', 'mirror', 'clamp')
+ */
+export async function changeVolumeWrapMode(channelNumber, wrap) {
+    const channel = getChannel(channelNumber);
+    if (!channel || channel.type !== 'volume') {
+        console.error(`Channel ${channelNumber} is not a volume channel`);
+        return;
+    }
+    
+    const gl = state.glContext;
+    if (!gl) {
+        console.error('WebGL context not available');
+        return;
+    }
+    
+    if (!channel.texture) {
+        console.error('Volume texture not loaded');
+        return;
+    }
+    
+    // Update wrap mode
+    volumeInput.setVolumeWrapMode(gl, channel.texture, wrap);
+    
+    // Store wrap mode in channel data
+    if (channel.volumeData) {
+        channel.volumeData.wrap = wrap;
+    }
+    channel.wrap = wrap;
+    
+    emitChannelChangeEvent({ action: 'update', channel });
 }
 
 // Expose limited debugging helpers

@@ -29,6 +29,8 @@ export class UniformBuilder {
         
         // Raw buffer for WebGPU (expanded for 85 floats + 10 ints + 5 bools)
         // Layout: [0-6]=built-in, [7-91]=floats(85), [92-101]=ints(10), [102-106]=bools(5)
+        // IMPORTANT: If you change this size, also update the GPU buffer size in
+        // js/backends/webgpu.js (createGPUResources -> state.uniformBuffer)
         this.buffer = new ArrayBuffer(512);
         this.f32 = new Float32Array(this.buffer);
         this.i32 = new Int32Array(this.buffer);
