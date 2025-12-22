@@ -14,6 +14,7 @@ import * as keyboardSelector from './ui/keyboard-selector.js';
 import * as volumeSelector from './ui/volume-selector.js';
 import * as channels from './channels.js';
 import * as compiler from './compiler.js';
+import * as waveformPanel from './ui/audio-waveform-panel.js';
 
 // ============================================================================
 // Tab Rendering
@@ -309,7 +310,12 @@ export function switchTab(tabName) {
     
     // Show selected container
     if (containers[tabName]) {
-        containers[tabName].style.display = 'block';
+        // audioContainer needs flex display for the waveform panel layout
+        if (containers[tabName].id === 'audioContainer') {
+            containers[tabName].style.display = 'flex';
+        } else {
+            containers[tabName].style.display = 'block';
+        }
     }
     
     // Update editor language mode based on tab
@@ -382,6 +388,13 @@ export function addTab(tabName) {
             state.audioEditor.setValue(MINIMAL_AUDIO_WORKLET);
         } else if (tabName === 'audio_glsl') {
             state.audioEditor.setValue(MINIMAL_AUDIO_GLSL);
+            
+            // Show waveform panel with initial starter code
+            const container = document.getElementById('audioWaveformContainer');
+            if (container) {
+                waveformPanel.mountPanel(container);
+                waveformPanel.onAudioShaderLoaded(MINIMAL_AUDIO_GLSL);
+            }
         }
     }
     
@@ -684,6 +697,11 @@ export function removeTab(tabName) {
         state.currentAudioType = null;
         // Dispatch event for audio cleanup
         window.dispatchEvent(new CustomEvent('stop-audio'));
+        
+        // Hide waveform panel when GLSL audio tab is removed
+        if (tabName === 'audio_glsl') {
+            waveformPanel.hide();
+        }
     }
     
     // If removing JS tab, trigger recompilation to reset JS runtime

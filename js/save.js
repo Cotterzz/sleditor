@@ -10,6 +10,7 @@ import * as uniformControls from './uniform-controls.js';
 import * as channels from './channels.js';
 import { resetEditorState } from './shader-management.js';
 import * as ui from './ui.js';
+import * as waveformPanel from './ui/audio-waveform-panel.js';
 
 // ============================================================================
 // Thumbnail Capture
@@ -819,6 +820,18 @@ export async function loadDatabaseShader(shader) {
     const firstTab = state.activeTabs[0];
     if (firstTab) {
         tabs.switchTab(firstTab);
+    }
+    
+    // Show waveform panel if audio_glsl tab is present
+    if (state.activeTabs.includes('audio_glsl') && shader.code?.audio_glsl) {
+        const container = document.getElementById('audioWaveformContainer');
+        if (container) {
+            waveformPanel.mountPanel(container);
+            waveformPanel.onAudioShaderLoaded(shader.code.audio_glsl);
+        }
+    } else {
+        // Hide waveform panel if no GLSL audio tab
+        waveformPanel.hide();
     }
     
     // Load channel configuration if present

@@ -7,6 +7,7 @@
 //   time = absolute time in seconds
 
 import { state, AUDIO_MODES, logStatus } from '../core.js';
+import * as waveformPanel from '../ui/audio-waveform-panel.js';
 
 // ============================================================================
 // State
@@ -83,6 +84,14 @@ export async function load(shaderCode) {
                     if (!resolved) {
                         resolved = true;
                         state.audioMode = AUDIO_MODES.GLSL;
+                        
+                        // Initialize waveform panel
+                        const container = document.getElementById('audioWaveformContainer');
+                        if (container) {
+                            waveformPanel.mountPanel(container);
+                            waveformPanel.onAudioShaderLoaded(shaderCode);
+                        }
+                        
                         resolve({ success: true });
                     }
                 } else if (e.data.type === 'maxTextureSize') {
@@ -576,9 +585,13 @@ export function start() {
     const now = audioContext?.currentTime || 0;
     scheduledUntil = now;
     sampleOffset = 0;
+    state.audioStartTime = now;  // Track start time for waveform playhead
     
     // Start generation loop
     generationLoop();
+    
+    // Start waveform animation
+    waveformPanel.onAudioStarted();
 }
 
 export function stop() {
@@ -595,6 +608,9 @@ export function stop() {
     
     sampleOffset = 0;
     scheduledUntil = 0;
+    
+    // Stop waveform animation
+    waveformPanel.onAudioStopped();
 }
 
 export function restart() {
@@ -633,5 +649,8 @@ export function cleanup() {
     
     workerReady = false;
     state.audioMode = AUDIO_MODES.NONE;
+    
+    // Cleanup waveform panel
+    waveformPanel.cleanup();
 }
 

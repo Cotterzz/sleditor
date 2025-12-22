@@ -525,9 +525,9 @@ export async function initMonaco(callback, initialCode, helpContent) {
                 language: 'wgsl',
             });
             
-            // Create Audio editor
-            const audioContainer = document.getElementById('audioContainer');
-            state.audioEditor = monaco.editor.create(audioContainer, {
+            // Create Audio editor (in wrapper to allow waveform panel below)
+            const audioEditorWrapper = document.getElementById('audioEditorWrapper') || document.getElementById('audioContainer');
+            state.audioEditor = monaco.editor.create(audioEditorWrapper, {
                 ...editorOptions,
                 value: initialCode.audio || '',
                 language: initialCode.audioLanguage || 'wgsl',

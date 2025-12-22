@@ -28,6 +28,7 @@ import * as audio from './audio.js';
 import * as routing from './routing.js';
 import { UniformBuilder } from './uniforms.js';
 import * as community from './community.js';
+import * as waveformPanel from './ui/audio-waveform-panel.js';
 import * as channels from './channels.js';
 import * as mediaLoader from './media-loader.js';
 
@@ -109,6 +110,17 @@ function loadExample(exampleId) {
     // Update UI
     tabs.renderTabs();
     tabs.switchTab(updatedTabs[0] || 'graphics');
+    
+    // Show/hide waveform panel based on audio type
+    if (state.activeTabs.includes('audio_glsl') && example.audio) {
+        const container = document.getElementById('audioWaveformContainer');
+        if (container) {
+            waveformPanel.mountPanel(container);
+            waveformPanel.onAudioShaderLoaded(example.audio);
+        }
+    } else {
+        waveformPanel.hide();
+    }
     
     // Update shader info
     document.getElementById('shaderTitleDisplay').textContent = example.name;

@@ -85,35 +85,27 @@ function enterframe(state, api) {
     //api.uniforms.setCustomFloat(0, state.parameter);
 }`;
 
-export const MINIMAL_AUDIO_GLSL = `
-// This should work the same as exising shadertoy audio shaders.
-//   samp = absolute sample index
-//   time = time in seconds
-//   iSampleRate = sample rate uniform (e.g. 48000.0)
+export const MINIMAL_AUDIO_GLSL = `// Shadertoy-compatible GLSL Audio
+// samp = absolute sample index (combine with sampleRate for precision!)
+// time = time in seconds
+// iSampleRate = sample rate uniform (e.g. 48000.0)
+//
+// IMPORTANT: For oscillators, use samp period to avoid float precision issues:
 
 vec2 mainSound(int samp, float time) {
-    float freq = 440.0;
-    
-    // Use samp for phase (works forever, no precision loss)
-    float phase = fract(float(samp) * freq / iSampleRate);
-    float wave = sin(6.2831 * phase);
-    
-    // Envelope uses time (OK for slow changes)
-    float envelope = exp(-0.5 * time);
-    
-    return vec2(wave * envelope * 0.5);
-}
 
-// IMPORTANT: For oscillators, use samp to avoid float precision issues:
-//   float phase = fract(float(samp) * freq / iSampleRate);
-//   float wave = sin(6.2831 * phase);
-//   return vec2(wave);
-// DO NOT USE:
-//   float wave = sin(6.2831 * freq * time)
-// This will degrade very quickly
-// ~40 seconds on intel GPU, maybe a few minutes on Nvidia
-// To test: add an offset to time, eg 600.0
-`;
+	float freq = 440.0;
+
+	int period = int(iSampleRate);  // Use sample rate as period
+	int sampMod = samp % period;
+	float phase = fract(float(sampMod) * freq / iSampleRate);
+
+	float envelope = exp(-0.5 * time)*0.5;
+
+	float wave = sin(6.2831 * phase);
+
+	return vec2(wave)*envelope;
+}`;
 
 export const MINIMAL_AUDIO_GPU = `// Simple sine wave (GPU)
 @compute @workgroup_size(128, 1, 1)
