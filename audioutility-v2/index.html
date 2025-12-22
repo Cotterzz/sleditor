@@ -138,22 +138,26 @@
 // samp = absolute sample index (use for precision!)
 // time = time in seconds (has precision issues after ~40s)
 // iSampleRate = sample rate uniform (e.g. 48000.0)
-//
 // IMPORTANT: For oscillators, use samp to avoid float precision issues:
 // float phase = fract(float(samp) * freq / iSampleRate);
 // return vec2(sin(6.2831 * phase));
 
 vec2 mainSound(int samp, float time) {
-	float freq = 440.0;
+    float freq = 440.0;
+    /* commented out for test
+    // Use samp for phase (works forever, no precision loss)
+    float phase = fract(float(samp) * freq / iSampleRate);
+    float wave = sin(6.2831 * phase);
+    // Envelope uses time (OK for slow changes)
+    float envelope = exp(-0.5 * time)*0.5;
+    return vec2(wave * envelope * 0.5);
+    */
 
-	// Use samp for phase (works forever, no precision loss)
-	float phase = fract(float(samp) * freq / iSampleRate);
-	float wave = sin(6.2831 * phase);
+    float offset = 35.; // seconds offset to find specific time.
 
-	// Envelope uses time (OK for slow changes)
-	float envelope = exp(-0.5 * time)*0.5;
+    float wave = sin(6.2831 * freq * (time+35.));
 
-	return vec2(wave * envelope * 0.5);
+    return vec2(wave * 0.5);
 }
 </textarea>
 
