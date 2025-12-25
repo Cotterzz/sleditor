@@ -10,6 +10,7 @@ import * as micInput from './mic-input.js';
 import * as webcamInput from './webcam-input.js';
 import * as keyboardInput from './keyboard-input.js';
 import * as volumeInput from './volume-input.js';
+import * as cubemapInput from './cubemap-input.js';
 
 // Channel state
 const channelState = {
@@ -435,6 +436,42 @@ export async function createChannel(type, data) {
             console.error('Failed to create volume channel:', error);
             return -1;
         }
+    } else if (type === 'cubemap') {
+        // Cubemap (6-face skybox) channel
+        let gl = state.glContext;
+        if (!gl) {
+            console.warn('state.glContext not set, trying to get from canvas...');
+            gl = state.canvasWebGL.getContext('webgl2') || state.canvasWebGL.getContext('webgl');
+        }
+        
+        if (!gl) {
+            console.error('WebGL context not available for cubemap channel');
+            return -1;
+        }
+        
+        try {
+            if (data.mediaId) {
+                const result = await cubemapInput.loadCubemapTexture(gl, data.mediaId, {
+                    filter: data.filter || 'mipmap'
+                });
+                channel.texture = result.texture;
+                channel.resolution = { width: result.size, height: result.size };
+                channel.mediaId = data.mediaId;
+                channel.isCubemap = true; // Mark as cubemap texture
+                console.log(`✓ Cubemap channel created: ch${channelNumber} (${data.mediaId})`);
+            } else {
+                // No cubemap selected - use fallback
+                const result = cubemapInput.createFallbackCubemap(gl);
+                channel.texture = result.texture;
+                channel.resolution = { width: result.size, height: result.size };
+                channel.mediaId = null;
+                channel.isCubemap = true;
+                console.log(`✓ Cubemap channel created: ch${channelNumber} (fallback)`);
+            }
+        } catch (error) {
+            console.error('Failed to create cubemap channel:', error);
+            return -1;
+        }
     }
     
     channelState.channels.push(channel);
@@ -486,6 +523,12 @@ export function deleteChannel(channelNumber) {
     // Cleanup volume resources
     if (channel.type === 'volume' && channel.volumeData) {
         volumeInput.cleanupVolumeChannel(channel.volumeData);
+    }
+    
+    // Cleanup cubemap resources
+    if (channel.type === 'cubemap' && channel.texture) {
+        const gl = state.glContext;
+        if (gl) cubemapInput.cleanupCubemap(gl, channel.texture);
     }
     
     // Cleanup WebGL resources
@@ -745,26 +788,56 @@ export function getChannelConfig() {
     return {
         selectedOutputChannel: channelState.selectedOutputChannel,
         nextChannelNumber: channelState.nextChannelNumber,
-        channels: channelState.channels.map(ch => ({
-            number: ch.number,
-            type: ch.type,
-            name: ch.name,
-            tabName: ch.tabName,
-            mediaId: ch.mediaId,
-            mediaPath: ch.mediaPath,
-            resolution: ch.resolution,
-            // Include texture options (for images)
-            vflip: ch.vflip,
-            wrap: ch.wrap,
-            filter: ch.filter,
-            anisotropic: ch.anisotropic,
-            // Include audio options
-            audioMode: ch.audioMode,
-            // Include video options
-            loop: ch.videoData?.loop || false,
-            // Include volume options
-            volumeId: ch.volumeData?.volumeId
-        }))
+        channels: channelState.channels.map(ch => {
+            // Base config for all channels
+            const config = {
+                number: ch.number,
+                type: ch.type,
+                tabName: ch.tabName
+            };
+            
+            // Buffer channels need name and resolution (not derived from catalog)
+            if (ch.type === 'buffer') {
+                config.name = ch.name;
+                config.resolution = ch.resolution;
+            }
+            
+            // Media channels only need mediaId (name/path derived from catalog)
+            if (ch.type === 'image' || ch.type === 'audio' || ch.type === 'video') {
+                config.mediaId = ch.mediaId;
+            }
+            
+            // Image texture options
+            if (ch.type === 'image') {
+                config.vflip = ch.vflip;
+                config.wrap = ch.wrap;
+                config.filter = ch.filter;
+                config.anisotropic = ch.anisotropic;
+            }
+            
+            // Audio options
+            if (ch.type === 'audio' || ch.type === 'mic') {
+                config.audioMode = ch.audioMode;
+            }
+            
+            // Video options
+            if (ch.type === 'video') {
+                config.loop = ch.videoData?.loop || false;
+            }
+            
+            // Volume (3D texture) options
+            if (ch.type === 'volume') {
+                config.volumeId = ch.volumeData?.volumeId;
+                config.wrap = ch.volumeData?.wrap;
+            }
+            
+            // Cubemap options
+            if (ch.type === 'cubemap') {
+                config.mediaId = ch.mediaId;
+            }
+            
+            return config;
+        })
     };
 }
 
@@ -803,6 +876,12 @@ export function resetChannels() {
             // Cleanup volume resources
             if (ch.type === 'volume' && ch.volumeData) {
                 volumeInput.cleanupVolumeChannel(ch.volumeData);
+            }
+            
+            // Cleanup cubemap resources
+            if (ch.type === 'cubemap' && ch.texture) {
+                const gl = state.glContext;
+                if (gl) cubemapInput.cleanupCubemap(gl, ch.texture);
             }
             
             // Remove UI container if it exists
@@ -970,6 +1049,12 @@ export async function loadChannelConfig(config) {
                 volumeInput.cleanupVolumeChannel(ch.volumeData);
             }
             
+            // Cleanup cubemap resources
+            if (ch.type === 'cubemap' && ch.texture) {
+                const glCtx = state.glContext;
+                if (glCtx) cubemapInput.cleanupCubemap(glCtx, ch.texture);
+            }
+            
             // Cleanup WebGL textures
             const gl = state.glContext;
             if (gl) {
@@ -993,10 +1078,10 @@ export async function loadChannelConfig(config) {
     // Sort channels by number to recreate them in order
     const sortedChannels = [...config.channels].sort((a, b) => a.number - b.number);
     
-    // Ensure WebGL is initialized before creating ANY channels (images, videos, audio, mic, webcam need it!)
+    // Ensure WebGL is initialized before creating ANY channels (images, videos, audio, mic, webcam, cubemap need it!)
     const needsWebGL = sortedChannels.some(ch => ch.number !== 0 && 
         (ch.type === 'image' || ch.type === 'audio' || ch.type === 'video' || 
-         ch.type === 'mic' || ch.type === 'webcam'));
+         ch.type === 'mic' || ch.type === 'webcam' || ch.type === 'cubemap'));
     if (needsWebGL) {
         // Always ensure WebGL is available and properly initialized
         if (!state.glContext || !state.hasWebGL) {
@@ -1286,6 +1371,24 @@ export async function loadChannelConfig(config) {
                     oldContainer.remove();
                 }
             }
+        } else if (ch.type === 'cubemap') {
+            // Cubemap channels - recreate
+            const channelNumber = await createChannel('cubemap', {
+                tabName: ch.tabName,
+                mediaId: ch.mediaId
+            });
+            
+            if (channelNumber !== -1 && ch.tabName) {
+                if (!state.activeTabs.includes(ch.tabName)) {
+                    state.activeTabs.push(ch.tabName);
+                }
+                
+                // Remove old container to force recreation
+                const oldContainer = document.getElementById(`${ch.tabName}Container`);
+                if (oldContainer) {
+                    oldContainer.remove();
+                }
+            }
         }
     }
     
@@ -1327,8 +1430,8 @@ export function getSelectedOutputChannel() {
 
 export function getAvailableViewerChannels() {
     return [...channelState.channels]
-        // Filter out volume channels - they can't be displayed in 2D viewer
-        .filter(ch => ch.type !== 'volume')
+        // Filter out volume and cubemap channels - they can't be displayed in 2D viewer
+        .filter(ch => ch.type !== 'volume' && ch.type !== 'cubemap')
         .sort((a, b) => a.number - b.number)
         .map(ch => ({
             number: ch.number,

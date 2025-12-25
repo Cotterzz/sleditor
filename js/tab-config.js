@@ -228,6 +228,24 @@ export function createVolumeChannelTabName(channelNumber) {
 }
 
 /**
+ * Check if tab name is a cubemap channel
+ * @param {string} tabName - Tab name
+ * @returns {boolean}
+ */
+export function isCubemapChannel(tabName) {
+    return tabName.startsWith('cubemap_ch');
+}
+
+/**
+ * Create cubemap channel tab name
+ * @param {number} channelNumber - Channel number
+ * @returns {string}
+ */
+export function createCubemapChannelTabName(channelNumber) {
+    return `cubemap_ch${channelNumber}`;
+}
+
+/**
  * Check if tab name is a buffer channel
  * @param {string} tabName - Tab name
  * @returns {boolean}
@@ -244,7 +262,7 @@ export function isBufferChannel(tabName) {
 export function isChannel(tabName) {
     return isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName) || 
            isBufferChannel(tabName) || isMicChannel(tabName) || isWebcamChannel(tabName) ||
-           isKeyboardChannel(tabName) || isVolumeChannel(tabName);
+           isKeyboardChannel(tabName) || isVolumeChannel(tabName) || isCubemapChannel(tabName);
 }
 
 /**
@@ -275,6 +293,7 @@ export function getTabIcon(tabName) {
     if (isWebcamChannel(tabName)) return '📹';
     if (isKeyboardChannel(tabName)) return '⌨️';
     if (isVolumeChannel(tabName)) return '🧊';
+    if (isCubemapChannel(tabName)) return '🌐';
     
     const config = TAB_CONFIG[tabName];
     return config ? config.icon : '📝';
@@ -318,6 +337,10 @@ export function getTabLabel(tabName) {
     if (isVolumeChannel(tabName)) {
         const chNum = getChannelNumber(tabName);
         return `Volume(ch${chNum})`;
+    }
+    if (isCubemapChannel(tabName)) {
+        const chNum = getChannelNumber(tabName);
+        return `Cubemap(ch${chNum})`;
     }
 
     const config = TAB_CONFIG[tabName];
@@ -414,7 +437,7 @@ export function getEditorForTab(tabName, state) {
     // Channel tabs don't use Monaco editors
     if (isImageChannel(tabName) || isVideoChannel(tabName) || isAudioChannel(tabName) ||
         isMicChannel(tabName) || isWebcamChannel(tabName) || isKeyboardChannel(tabName) ||
-        isVolumeChannel(tabName)) {
+        isVolumeChannel(tabName) || isCubemapChannel(tabName)) {
         return null;
     }
     

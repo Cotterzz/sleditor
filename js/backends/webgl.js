@@ -373,6 +373,8 @@ function bindChannelTextures(gl, pass, readTexture) {
         gl.activeTexture(gl.TEXTURE0 + chNum);
         if (textureInfo.is3D) {
             gl.bindTexture(gl.TEXTURE_3D, textureInfo.texture);
+        } else if (textureInfo.isCubemap) {
+            gl.bindTexture(gl.TEXTURE_CUBE_MAP, textureInfo.texture);
         } else {
             gl.bindTexture(gl.TEXTURE_2D, textureInfo.texture);
         }
@@ -390,11 +392,15 @@ function getChannelTexture(channelNumber, pass, readTexture) {
     
     if (channel.type === 'image' || channel.type === 'video' || channel.type === 'audio' ||
         channel.type === 'mic' || channel.type === 'webcam' || channel.type === 'keyboard') {
-        return { texture: channel.texture || null, is3D: false };
+        return { texture: channel.texture || null, is3D: false, isCubemap: false };
     }
     
     if (channel.type === 'volume') {
-        return { texture: channel.texture || null, is3D: true };
+        return { texture: channel.texture || null, is3D: true, isCubemap: false };
+    }
+    
+    if (channel.type === 'cubemap' || channel.isCubemap) {
+        return { texture: channel.texture || null, is3D: false, isCubemap: true };
     }
     
     if (channel.type === 'buffer') {

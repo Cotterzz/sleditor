@@ -172,6 +172,8 @@ export async function compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioReload
                     const channel = channels.getChannel(chNum);
                     if (channel?.type === 'volume') {
                         channelUniforms += `uniform highp sampler3D iChannel${chNum};\n`;
+                    } else if (channel?.type === 'cubemap' || channel?.isCubemap) {
+                        channelUniforms += `uniform samplerCube iChannel${chNum};\n`;
                     } else {
                         channelUniforms += `uniform sampler2D iChannel${chNum};\n`;
                     }

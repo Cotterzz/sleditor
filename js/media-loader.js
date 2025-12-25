@@ -24,6 +24,14 @@ export async function loadMediaCatalog() {
 }
 
 /**
+ * Get the loaded catalog
+ * @returns {Object|null} The catalog or null if not loaded
+ */
+export function getCatalog() {
+    return catalog;
+}
+
+/**
  * Register external media (e.g., from URL import)
  * @param {Object} mediaInfo - Media info object
  */
@@ -60,6 +68,10 @@ export function getMediaInfo(mediaId) {
     // Check audio
     const audio = catalog.audio ? catalog.audio.find(aud => aud.id === mediaId) : null;
     if (audio) return audio;
+    
+    // Check cubemaps
+    const cubemap = catalog.cubemaps ? catalog.cubemaps.find(cm => cm.id === mediaId) : null;
+    if (cubemap) return { ...cubemap, type: 'cubemap' };
     
     return null;
 }
