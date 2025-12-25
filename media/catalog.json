@@ -3,136 +3,136 @@
     {
       "id": "organic1",
       "name": "Lichen",
-      "path": "media/fb918796edc3d2221218db0811e240e72e340350008338b0c07a52bd353666a6.jpg",
-      "thumb": "media/fb918796edc3d2221218db0811e240e72e340350008338b0c07a52bd353666a6.jpg",
+      "path": "media/textures/fb918796edc3d2221218db0811e240e72e340350008338b0c07a52bd353666a6.jpg",
+      "thumb": "media/textures/fb918796edc3d2221218db0811e240e72e340350008338b0c07a52bd353666a6.jpg",
       "width": 1024,
       "height": 1024
     },
     {
         "id": "noise1",
         "name": "RGB Noise",
-        "path": "media/f735bee5b64ef98879dc618b016ecf7939a5756040c2cde21ccb15e69a6e1cfb.png",
-        "thumb": "media/f735bee5b64ef98879dc618b016ecf7939a5756040c2cde21ccb15e69a6e1cfb.png",
+        "path": "media/textures/f735bee5b64ef98879dc618b016ecf7939a5756040c2cde21ccb15e69a6e1cfb.png",
+        "thumb": "media/textures/f735bee5b64ef98879dc618b016ecf7939a5756040c2cde21ccb15e69a6e1cfb.png",
         "width": 256,
         "height": 256
     },
     {
         "id": "sky1",
         "name": "Stars",
-        "path": "media/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46c.jpg",
-        "thumb": "media/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46c.jpg",
+        "path": "media/textures/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46c.jpg",
+        "thumb": "media/textures/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46c.jpg",
         "width": 512,
         "height": 512
     },
     {
         "id": "sky2",
         "name": "Stars - ST",
-        "path": "media/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46cST.jpg",
-        "thumb": "media/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46cST.jpg",
+        "path": "media/textures/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46cST.jpg",
+        "thumb": "media/textures/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46cST.jpg",
         "width": 512,
         "height": 512
     },
     {
         "id": "sky3",
         "name": "Stars 2",
-        "path": "media/Blue Nebula 7 - 512x512.png",
-        "thumb": "media/Blue Nebula 7 - 512x512.png",
+        "path": "media/textures/Blue Nebula 7 - 512x512.png",
+        "thumb": "media/textures/Blue Nebula 7 - 512x512.png",
         "width": 512,
         "height": 512
     },
     {
         "id": "sky4",
         "name": "Stars purple",
-        "path": "media/Purple Nebula 1 - 512x512.png",
-        "thumb": "media/Purple Nebula 1 - 512x512.png",
+        "path": "media/textures/Purple Nebula 1 - 512x512.png",
+        "thumb": "media/textures/Purple Nebula 1 - 512x512.png",
         "width": 512,
         "height": 512
     },
     {
         "id": "sky5",
         "name": "Stars blue",
-        "path": "media/Blue Nebula 8 - 512x512.png",
-        "thumb": "media/Blue Nebula 8 - 512x512.png",
+        "path": "media/textures/Blue Nebula 8 - 512x512.png",
+        "thumb": "media/textures/Blue Nebula 8 - 512x512.png",
         "width": 512,
         "height": 512
     },
     {
         "id": "noise2",
         "name": "Blue Noise - 256",
-        "path": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec256.png",
-        "thumb": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec256.png",
+        "path": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec256.png",
+        "thumb": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec256.png",
         "width": 256,
         "height": 256
     },
     {
         "id": "noise3",
         "name": "Blue Noise - 1024a",
-        "path": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecB.png",
-        "thumb": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecB.png",
+        "path": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecB.png",
+        "thumb": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecB.png",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "noise4",
         "name": "Blue Noise - 1024b",
-        "path": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecTIL.png",
-        "thumb": "media/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecB.png",
+        "path": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecTIL.png",
+        "thumb": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecB.png",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "organic2",
         "name": "Oak Tree",
-        "path": "media/79520a3d3a0f4d3caa440802ef4362e99d54e12b1392973e4ea321840970a88a.jpg",
-        "thumb": "media/79520a3d3a0f4d3caa440802ef4362e99d54e12b1392973e4ea321840970a88a.jpg",
+        "path": "media/textures/79520a3d3a0f4d3caa440802ef4362e99d54e12b1392973e4ea321840970a88a.jpg",
+        "thumb": "media/textures/79520a3d3a0f4d3caa440802ef4362e99d54e12b1392973e4ea321840970a88a.jpg",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "stones1",
         "name": "Hand Painted Stones",
-        "path": "media/52d2a8f514c4fd2d9866587f4d7b2a5bfa1a11a0e772077d7682deb8b3b517e5.jpg",
-        "thumb": "media/52d2a8f514c4fd2d9866587f4d7b2a5bfa1a11a0e772077d7682deb8b3b517e5.jpg",
+        "path": "media/textures/52d2a8f514c4fd2d9866587f4d7b2a5bfa1a11a0e772077d7682deb8b3b517e5.jpg",
+        "thumb": "media/textures/52d2a8f514c4fd2d9866587f4d7b2a5bfa1a11a0e772077d7682deb8b3b517e5.jpg",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "city1",
         "name": "Regent Street",
-        "path": "media/8de3a3924cb95bd0e95a443fff0326c869f9d4979cd1d5b6e94e2a01f5be53e9.jpg",
-        "thumb": "media/8de3a3924cb95bd0e95a443fff0326c869f9d4979cd1d5b6e94e2a01f5be53e9.jpg",
+        "path": "media/textures/8de3a3924cb95bd0e95a443fff0326c869f9d4979cd1d5b6e94e2a01f5be53e9.jpg",
+        "thumb": "media/textures/8de3a3924cb95bd0e95a443fff0326c869f9d4979cd1d5b6e94e2a01f5be53e9.jpg",
         "width": 512,
         "height": 512
     },
     {
         "id": "font1",
         "name": "Font Ubuntu Mono",
-        "path": "media/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31560.png",
-        "thumb": "media/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31560.png",
+        "path": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31560.png",
+        "thumb": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31560.png",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "font2",
         "name": "Font Helvetica",
-        "path": "media/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31561.png",
-        "thumb": "media/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31561.png",
+        "path": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31561.png",
+        "thumb": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31561.png",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "font3",
         "name": "Font JetBrains",
-        "path": "media/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31562.png",
-        "thumb": "media/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31562.png",
+        "path": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31562.png",
+        "thumb": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31562.png",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "font4",
         "name": "Font QuickSand",
-        "path": "media/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31563.png",
-        "thumb": "media/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31563.png",
+        "path": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31563.png",
+        "thumb": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31563.png",
         "width": 1024,
         "height": 1024
     }
@@ -211,7 +211,7 @@
     {
         "id": "grey_noise_32",
         "name": "Grey Noise 32³",
-        "path": "media/27012b4eadd0c3ce12498b867058e4f717ce79e10a99568cca461682d84a4b04.bin",
+        "path": "media/volumes/27012b4eadd0c3ce12498b867058e4f717ce79e10a99568cca461682d84a4b04.bin",
         "size": 32,
         "channels": 1,
         "format": "R8"
@@ -219,7 +219,7 @@
     {
         "id": "rgba_noise_32",
         "name": "RGBA Noise 32³",
-        "path": "media/aea6b99da1d53055107966b59ac5444fc8bc7b3ce2d0bbb6a4a3cbae1d97f3aa.bin",
+        "path": "media/volumes/aea6b99da1d53055107966b59ac5444fc8bc7b3ce2d0bbb6a4a3cbae1d97f3aa.bin",
         "size": 32,
         "channels": 4,
         "format": "RGBA8"
@@ -227,32 +227,22 @@
     {
         "id": "head_256",
         "name": "Head CT 256×256×109",
-        "path": "media/head256x256x109.bin",
+        "path": "media/volumes/head256x256x109.bin",
         "width": 256,
         "height": 256,
         "depth": 109,
         "channels": 1,
         "format": "R8"
-    },
+    }
+  ],
+  "cubemaps": [
     {
-        "id": "christmas_tree",
-        "name": "Christmas Tree 256×249×256",
-        "path": "media/christmastree256x249x256.bin",
-        "width": 256,
-        "height": 249,
-        "depth": 256,
-        "channels": 2,
-        "format": "RG8"
-    },
-    {
-        "id": "stag_beetle",
-        "name": "Stag Beetle 208×208×123",
-        "path": "media/stagbeetle208x208x123.bin",
-        "width": 208,
-        "height": 208,
-        "depth": 123,
-        "channels": 2,
-        "format": "RG8"
+        "id": "venice",
+        "name": "Venice Piazza",
+        "path": "media/cubemaps/venice/",
+        "ext": ".jpg",
+        "thumb": "media/cubemaps/venice/pz.jpg",
+        "size": 512
     }
   ]
 }
