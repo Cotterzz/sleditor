@@ -627,6 +627,7 @@ function setupEditorActions() {
     };
 
     editors.forEach((editor) => {
+        // Toggle word wrap action
         editor.addAction({
             id: 'toggle-word-wrap',
             label: 'Toggle Word Wrap',
@@ -635,6 +636,19 @@ function setupEditorActions() {
             contextMenuGroupId: 'navigation',
             contextMenuOrder: 1.6,
             run: toggleWordWrap
+        });
+        
+        // Select All action (adds to context menu, uses built-in command)
+        editor.addAction({
+            id: 'select-all-context',
+            label: 'Select All',
+            keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyA],
+            precondition: null,
+            contextMenuGroupId: '9_cutcopypaste', // Same group as cut/copy/paste
+            contextMenuOrder: 4, // After paste
+            run: (ed) => {
+                ed.trigger('keyboard', 'editor.action.selectAll', null);
+            }
         });
     });
 }
