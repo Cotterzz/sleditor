@@ -1,34 +1,74 @@
 {
   "images": [
     {
-      "id": "organic1",
-      "name": "Lichen",
-      "path": "media/textures/fb918796edc3d2221218db0811e240e72e340350008338b0c07a52bd353666a6.jpg",
-      "thumb": "media/textures/fb918796edc3d2221218db0811e240e72e340350008338b0c07a52bd353666a6.jpg",
+      "id": "organic0",
+      "name": "Sandx100",
+      "path": "media/textures/sandx100.jpg",
+      "thumb": "media/textures/sandx100.jpg",
       "width": 1024,
       "height": 1024
     },
     {
+      "id": "organic1",
+      "name": "Lichen",
+      "path": "media/textures/lichen.jpg",
+      "thumb": "media/textures/lichen.jpg",
+      "width": 1024,
+      "height": 1024
+    },
+    {
+        "id": "noise0",
+        "name": "RGBA Noise Small",
+        "path": "media/textures/smallrgba.png",
+        "thumb": "media/textures/smallrgba.png",
+        "width": 64,
+        "height": 64
+    },
+    {
         "id": "noise1",
-        "name": "RGB Noise",
-        "path": "media/textures/f735bee5b64ef98879dc618b016ecf7939a5756040c2cde21ccb15e69a6e1cfb.png",
-        "thumb": "media/textures/f735bee5b64ef98879dc618b016ecf7939a5756040c2cde21ccb15e69a6e1cfb.png",
+        "name": "RGBA Noise",
+        "path": "media/textures/rgba.png",
+        "thumb": "media/textures/rgba.png",
         "width": 256,
         "height": 256
     },
     {
-        "id": "sky1",
-        "name": "Stars",
-        "path": "media/textures/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46c.jpg",
-        "thumb": "media/textures/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46c.jpg",
-        "width": 512,
-        "height": 512
+        "id": "noise2",
+        "name": "Grey Noise Small",
+        "path": "media/textures/smallgrey.png",
+        "thumb": "media/textures/smallgrey.png",
+        "width": 64,
+        "height": 64
     },
     {
-        "id": "sky2",
-        "name": "Stars - ST",
-        "path": "media/textures/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46cST.jpg",
-        "thumb": "media/textures/e6e5631ce1237ae4c05b3563eda686400a401df4548d0f9fad40ecac1659c46cST.jpg",
+        "id": "noise3",
+        "name": "Grey Noise",
+        "path": "media/textures/grey.png",
+        "thumb": "media/textures/grey.png",
+        "width": 256,
+        "height": 256
+    },
+    {
+        "id": "noise4",
+        "name": "Blue Noise",
+        "path": "media/textures/bluenoise.png",
+        "thumb": "media/textures/bluenoiseTN.jpg",
+        "width": 1024,
+        "height": 1024
+    },
+    {
+        "id": "noise5",
+        "name": "Bayer",
+        "path": "media/textures/bayer.png",
+        "thumb": "media/textures/bayer.png",
+        "width": 8,
+        "height": 8
+    },
+    {
+        "id": "sky1",
+        "name": "Stars",
+        "path": "media/textures/stars.jpg",
+        "thumb": "media/textures/stars.jpg",
         "width": 512,
         "height": 512
     },
@@ -57,82 +97,58 @@
         "height": 512
     },
     {
-        "id": "noise2",
-        "name": "Blue Noise - 256",
-        "path": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec256.png",
-        "thumb": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ec256.png",
-        "width": 256,
-        "height": 256
-    },
-    {
-        "id": "noise3",
-        "name": "Blue Noise - 1024a",
-        "path": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecB.png",
-        "thumb": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecB.png",
-        "width": 1024,
-        "height": 1024
-    },
-    {
-        "id": "noise4",
-        "name": "Blue Noise - 1024b",
-        "path": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecTIL.png",
-        "thumb": "media/textures/cb49c003b454385aa9975733aff4571c62182ccdda480aaba9a8d250014f00ecB.png",
-        "width": 1024,
-        "height": 1024
-    },
-    {
         "id": "organic2",
         "name": "Oak Tree",
-        "path": "media/textures/79520a3d3a0f4d3caa440802ef4362e99d54e12b1392973e4ea321840970a88a.jpg",
-        "thumb": "media/textures/79520a3d3a0f4d3caa440802ef4362e99d54e12b1392973e4ea321840970a88a.jpg",
+        "path": "media/textures/oaktree.jpg",
+        "thumb": "media/textures/oaktree.jpg",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "stones1",
         "name": "Hand Painted Stones",
-        "path": "media/textures/52d2a8f514c4fd2d9866587f4d7b2a5bfa1a11a0e772077d7682deb8b3b517e5.jpg",
-        "thumb": "media/textures/52d2a8f514c4fd2d9866587f4d7b2a5bfa1a11a0e772077d7682deb8b3b517e5.jpg",
+        "path": "media/textures/stones.jpg",
+        "thumb": "media/textures/stones.jpg",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "city1",
         "name": "Regent Street",
-        "path": "media/textures/8de3a3924cb95bd0e95a443fff0326c869f9d4979cd1d5b6e94e2a01f5be53e9.jpg",
-        "thumb": "media/textures/8de3a3924cb95bd0e95a443fff0326c869f9d4979cd1d5b6e94e2a01f5be53e9.jpg",
+        "path": "media/textures/regentstreet.jpg",
+        "thumb": "media/textures/regentstreet.jpg",
         "width": 512,
         "height": 512
     },
     {
         "id": "font1",
         "name": "Font Ubuntu Mono",
-        "path": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31560.png",
-        "thumb": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31560.png",
+        "path": "media/textures/font1.png",
+        "thumb": "media/textures/font1.png",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "font2",
         "name": "Font Helvetica",
-        "path": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31561.png",
-        "thumb": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31561.png",
+        "path": "media/textures/font2.png",
+        "thumb": "media/textures/font2.png",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "font3",
         "name": "Font JetBrains",
-        "path": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31562.png",
-        "thumb": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31562.png",
+        "path": "media/textures/font3.png",
+        "thumb": "media/textures/font3.png",
         "width": 1024,
         "height": 1024
     },
     {
         "id": "font4",
         "name": "Font QuickSand",
-        "path": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31563.png",
-        "thumb": "media/textures/08b42b43ae9d3c0605da11d0eac86618ea888e62cdd9518ee8b9097488b31563.png",
+        "path": "media/textures/font4.png",
+        "thumb": "media/textures/font4.png",
         "width": 1024,
         "height": 1024
     }
@@ -242,6 +258,14 @@
         "path": "media/cubemaps/venice/",
         "ext": ".jpg",
         "thumb": "media/cubemaps/venice/pz.jpg",
+        "size": 512
+    },
+    {
+        "id": "nebulae",
+        "name": "Stars with nebulae",
+        "path": "media/cubemaps/nebulae/",
+        "ext": ".jpg",
+        "thumb": "media/cubemaps/nebulae/nx.jpg",
         "size": 512
     }
   ]
