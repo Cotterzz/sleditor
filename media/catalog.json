@@ -389,7 +389,7 @@
         "path": "media/cubemaps/veniceblur/",
         "ext": ".jpg",
         "thumb": "media/cubemaps/veniceblur/pz.jpg",
-        "size": 512
+        "size": 64
     },
     {
         "id": "nebulae",
