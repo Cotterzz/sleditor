@@ -5,9 +5,7 @@
 const float  PI = 3.14159265;
 const float TAU = 6.28318530;
 
-//#define AA 2
-#define doppler
-//#define RK4
+#define AA 2
 
 const float Rs1 = 2.0;
 const float Rs2 = 1.0;
@@ -44,7 +42,7 @@ float noise(vec2 p) {
 // Disk color based on temperature and blend factor
 // blend: 0 = BH1 (orange/warm), 1 = BH2 (blue/cool)
 // Uses the original's trick: .zyx swizzle to swap warm ↔ cool
-#ifdef doppler
+
 vec3 diskColor(float temp, float angle, float dop, float blend) {
     float t_noise = temp * 0.6 + 0.5 * noise(vec2((temp - iTime * 0.1) * 40.0, ls(angle - iTime) * 6.0));
     float d_factor = -clamp(dop, -1.0, 1.0) * 0.15 + 1.1;
@@ -65,21 +63,7 @@ vec3 diskColor(float temp, float angle, float dop, float blend) {
     // blend=0 → near BH1 (warm/orange), blend=1 → near BH2 (cool/blue)
     return mix(warm, cool, blend) * 1.2;
 }
-#else
-vec3 diskColor(float temp, float angle, float blend) {
-    float t_noise = temp * 0.7 + 0.4 * noise(vec2((temp - iTime * 0.1) * 40.0, ls(angle - iTime) * 6.0));
-    float t_adjusted = t_noise * 1.5 / (t_noise + 0.5);
-    float t_factor = t_adjusted * 0.5 + 0.5;
-    float t_half = t_adjusted * 0.5 + 0.4;
-    float t_pow5 = exp(5.0 * log(max(t_adjusted, 0.001)));
-    float t_pow20 = exp(20.0 * log(max(t_adjusted, 0.001)));
-    
-    vec3 warm = vec3(t_half, t_pow5 * 0.6, t_pow20 * 0.3) * t_factor;
-    vec3 cool = warm.zyx;
-    
-    return mix(warm, cool, blend) * 1.2;
-}
-#endif
+
 
 vec3 bend(vec3 ro, vec3 rd, vec3 p, float rs) {
     vec3 r = ro - p;
@@ -89,30 +73,12 @@ vec3 bend(vec3 ro, vec3 rd, vec3 p, float rs) {
     return -1.5 * rs * (r * dot(L, L)) * (r1 / (r2 * r2));
 }
 
-#ifdef RK4
-void advance(inout vec3 ro, inout vec3 rd, float h) {
-    vec3 k1_v = bend(ro, rd, BH1_POS, Rs1) + bend(ro, rd, BH2_POS, Rs2);
-    vec3 k1_p = rd;
-    vec3 k2_v = bend(ro + k1_p * h * 0.5, normalize(rd + k1_v * h * 0.5), BH1_POS, Rs1) + 
-                bend(ro + k1_p * h * 0.5, normalize(rd + k1_v * h * 0.5), BH2_POS, Rs2);
-    vec3 k2_p = normalize(rd + k1_v * h * 0.5);
-    vec3 k3_v = bend(ro + k2_p * h * 0.5, normalize(rd + k2_v * h * 0.5), BH1_POS, Rs1) + 
-                bend(ro + k2_p * h * 0.5, normalize(rd + k2_v * h * 0.5), BH2_POS, Rs2);
-    vec3 k3_p = normalize(rd + k2_v * h * 0.5);
-    vec3 k4_v = bend(ro + k3_p * h, normalize(rd + k3_v * h), BH1_POS, Rs1) + 
-                bend(ro + k3_p * h, normalize(rd + k3_v * h), BH2_POS, Rs2);
-    vec3 k4_p = normalize(rd + k3_v * h);
-    vec3 v_new = rd + (k1_v + 2.0*k2_v + 2.0*k3_v + k4_v) * h / 6.0;
-    ro = ro + (k1_p + 2.0*k2_p + 2.0*k3_p + k4_p) * h / 6.0;
-    rd = normalize(v_new);
-}
-#else
+
 void advance(inout vec3 o, inout vec3 d, float h) {
     vec3 acc = bend(o, d, BH1_POS, Rs1) + bend(o, d, BH2_POS, Rs2);
     d = normalize(d + acc * h);
     o += d * h;
 }
-#endif
 
 // Check if ray crosses the unified Cassini oval disk
 bool hit_cassini_disk(vec3 oro, vec3 ro, vec3 rd, inout vec3 col) {
@@ -173,7 +139,7 @@ bool hit_cassini_disk(vec3 oro, vec3 ro, vec3 rd, inout vec3 col) {
     float cassiniPhase = log(cassini) * 0.5;
     float angle = globalAngle + cassiniPhase;
     
-    #ifdef doppler
+
     // Doppler shift based on orbital velocity direction
     // Gas orbits around nearer black hole (smooth blend of directions)
     vec3 toBH1 = normalize(vec3(p.x - BH1_POS.x, 0.0, p.z - BH1_POS.z));
@@ -188,9 +154,7 @@ bool hit_cassini_disk(vec3 oro, vec3 ro, vec3 rd, inout vec3 col) {
     
     float dop = dot(tangent, rd);
     col = diskColor(temp, angle, dop, blend);
-    #else
-    col = diskColor(temp, angle, blend);
-    #endif
+
     
     return true;
 }
@@ -247,7 +211,7 @@ vec3 render(vec2 fragCoord) {
     return trace(ro, rd);
 }
 
-void mainImage0(out vec4 fragColor, in vec2 fragCoord) {
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec3 col = vec3(0);
     #ifdef AA
     for (int x = 0; x < AA; x++) {
@@ -263,29 +227,3 @@ void mainImage0(out vec4 fragColor, in vec2 fragCoord) {
     fragColor = vec4(col, 1);
 }
 
-// Main shader entry point with anti-aliasing
-void mainImage(out vec4 fragColor, vec2 fragCoord) {
-    float sampleCount = 6.0;
-    
-    // Random offset for jittered sampling (pseudo-random)
-    vec2 jitter = vec2(0.5);
-    
-    // Initialize output color
-    fragColor = vec4(0.0);
-    
-    // Perform multiple samples for anti-aliasing
-    for (float k = sampleCount; k > 0.5; k--) {
-        vec4 sampleColor;
-        
-        // Calculate color at jittered position
-        mainImage0(sampleColor, fragCoord + jitter - 0.5);
-        fragColor += sampleColor;
-        
-        // Update jitter position (creates pseudo-random pattern)
-        jitter = fract(jitter + vec2(0.755, 0.57).yx);
-    }
-    
-    // Average all samples
-    fragColor /= sampleCount;
-    fragColor.a = 1.0;  // Set full opacity
-}

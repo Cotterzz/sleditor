@@ -57,271 +57,167 @@ float sdTrunk(vec3 p) {
     return sdCappedCylinderY(p, TRUNK_RADIUS, TRUNK_HEIGHT * 0.5);
 }
 
-// Get branch info for a position
-// Returns: vec4(branchLocalPos.xyz, branchLength)
-vec4 getBranchInfo(vec3 p, out vec3 branchID) {
-    // Which tier are we near?
+// Add these helper functions for domain repetition
+vec3 opRepeatAngular(vec3 p, float n, out float sectorID) {
+    float angle = atan(p.z, p.x);
+    float sector = 6.28318 / n;
+    sectorID = floor(angle / sector + 0.5);
+    float a = mod(angle + sector * 0.5, sector) - sector * 0.5;
+    return vec3(cos(a) * length(p.xz), p.y, sin(a) * length(p.xz));
+}
+
+vec3 opRepeatY(vec3 p, float spacing, out float tierID) {
+    tierID = floor((p.y + spacing * 0.5) / spacing);
+    return vec3(p.x, mod(p.y + spacing * 0.5, spacing) - spacing * 0.5, p.z);
+}
+
+// Optimized branch+needle distance function using domain repetition
+float sdBranchWithNeedlesRepeated(vec3 p, out float matID, out vec3 cellID) {
+    // Calculate tier info BEFORE repetition for tapering
     float tierSpacing = TRUNK_HEIGHT / BRANCH_TIERS;
-    float tierY = floor((p.y + TRUNK_HEIGHT * 0.4) / tierSpacing);
+    float absoluteTierY = floor((p.y + TRUNK_HEIGHT * 0.4) / tierSpacing);
+    absoluteTierY = clamp(absoluteTierY, 0.0, BRANCH_TIERS - 1.0);
+    float tierNorm = absoluteTierY / (BRANCH_TIERS - 1.0);
     
-    // Clamp to valid tiers
-    tierY = clamp(tierY, 0.0, BRANCH_TIERS - 1.0);
+    // Apply angular repetition
+    float sectorID;
+    vec3 pRep = opRepeatAngular(p, BRANCHES_PER_TIER, sectorID);
     
-    // Height of this tier on trunk
-    float tierHeight = tierY * tierSpacing - TRUNK_HEIGHT * 0.4 + tierSpacing * 0.5;
+    // Offset every other tier
+    float tierOffset = mod(absoluteTierY, 2.0);
+    if (tierOffset > 0.5) {
+        pRep = opRepeatAngular(p - vec3(0, 0, 0), BRANCHES_PER_TIER * 2.0, sectorID);
+        sectorID = sectorID * 2.0 + 1.0;
+    }
     
-    // Branch length decreases toward top (cone shape)
-    float tierNorm = tierY / (BRANCH_TIERS - 1.0);
+    // Store cell ID for variation
+    cellID = vec3(absoluteTierY, sectorID, 0.0);
+    
+    // Add variation per branch
+    vec2 var = hash2(cellID.xy) - 0.5;
+    
+    // Calculate branch parameters
+    float tierHeight = absoluteTierY * tierSpacing - TRUNK_HEIGHT * 0.4 + tierSpacing * 0.5;
+    tierHeight += var.y * tierSpacing * 0.2;
     float branchLen = mix(TREE_BASE_RADIUS, TREE_TOP_RADIUS, tierNorm);
     
-    // Which branch around the trunk?
-    float angle = atan(p.x, p.z);
-    float angleSpacing = 6.28318 / BRANCHES_PER_TIER;
+    // Transform to branch local space (branch extends in +X direction)
+    float droopAngle = 0.3 + tierNorm * 0.2;
+    vec3 branchStart = vec3(TRUNK_RADIUS, tierHeight, 0.0);
     
-    // Offset alternating tiers
-    float tierOffset = mod(tierY, 2.0) * angleSpacing * 0.5;
-    float branchAngle = floor((angle + tierOffset) / angleSpacing) * angleSpacing - tierOffset;
+    vec3 toP = pRep - branchStart;
     
-    branchID = vec3(tierY, floor((angle + tierOffset) / angleSpacing), 0.0);
-    
-    // Add variation
-    vec2 var = hash2(branchID.xy) - 0.5;
-    branchAngle += var.x * angleSpacing * 0.2;
-    float branchHeight = tierHeight + var.y * tierSpacing * 0.2;
-    
-    // Branch direction (outward and slightly down)
-    float droopAngle = 0.3 + tierNorm * 0.2; // More droop at top
-    vec3 branchDir = normalize(vec3(
-        sin(branchAngle) * cos(droopAngle),
-        -sin(droopAngle),
-        cos(branchAngle) * cos(droopAngle)
-    ));
-    
-    // Branch start point on trunk
-    vec3 branchStart = vec3(
-        sin(branchAngle) * TRUNK_RADIUS,
-        branchHeight,
-        cos(branchAngle) * TRUNK_RADIUS
-    );
-    
-    // Transform p to branch local space
-    // Branch local: X along branch, Y up, Z tangent
-    vec3 branchRight = branchDir;
-    vec3 branchUp = normalize(cross(branchDir, vec3(-branchDir.z, 0.0, branchDir.x)));
-    vec3 branchForward = cross(branchRight, branchUp);
-    
-    vec3 toP = p - branchStart;
+    // Rotate for droop
+    float ca = cos(droopAngle);
+    float sa = sin(droopAngle);
     vec3 localP = vec3(
-        dot(toP, branchRight),
-        dot(toP, branchUp),
-        dot(toP, branchForward)
+        toP.x * ca + toP.y * sa,
+        -toP.x * sa + toP.y * ca,
+        toP.z
     );
     
-    return vec4(localP, branchLen);
-}
-
-// Distance to branch cylinder (in local space)
-float sdBranchLocal(vec3 localP, float branchLen) {
-    // Cylinder along X axis
-    float d = length(localP.yz) - BRANCH_RADIUS;
-    d = max(d, -localP.x); // Cap at start
-    d = max(d, localP.x - branchLen); // Cap at end
-    return d;
-}
-
-// Distance to needles on a branch (in local space)
-float sdNeedlesLocal(vec3 localP, float branchLen, vec3 branchID) {
-    // Only near the branch
-    if (localP.x < -0.05 || localP.x > branchLen + NEEDLE_LEN) return 1e10;
+    // Early exit if far from branch
+    if (localP.x < -0.2 || localP.x > branchLen + NEEDLE_LEN + 0.2) {
+        matID = -1.0;
+        return 1e10;
+    }
+    if (abs(localP.y) > BRANCH_RADIUS + NEEDLE_LEN + 0.1 || 
+        abs(localP.z) > BRANCH_RADIUS + NEEDLE_LEN + 0.1) {
+        matID = -1.0;
+        return 1e10;
+    }
+    
+    // Branch cylinder distance
+    float branchDist = length(localP.yz) - BRANCH_RADIUS;
+    branchDist = max(branchDist, -localP.x);
+    branchDist = max(branchDist, localP.x - branchLen);
+    
+    // Needle distance using domain repetition
+    float needleDist = 1e10;
+    
     float distFromAxis = length(localP.yz);
-    if (distFromAxis > BRANCH_RADIUS + NEEDLE_LEN + 0.05) return 1e10;
-    if (distFromAxis < BRANCH_RADIUS * 0.3) return 1e10;
-    
-    // Grid in local space
-    float cellX = round(localP.x / NEEDLE_SPACING_Y);
-    float angle = atan(localP.y, localP.z);
-    float cellA = round(angle / NEEDLE_SPACING_A);
-    
-    float minDist = 1e10;
-    
-    // Check nearby cells
-    for (int dx = -1; dx <= 1; dx++) {
-        for (int da = -1; da <= 1; da++) {
-            float nx = (cellX + float(dx)) * NEEDLE_SPACING_Y;
-            float na = (cellA + float(da)) * NEEDLE_SPACING_A;
-            
-            if (nx < 0.02 || nx > branchLen - 0.02) continue;
-            
-            // Variation
-            vec2 id = vec2(cellX + float(dx), cellA + float(da));
-            vec3 fullID = vec3(branchID.xy, hash(id));
-            vec2 var = hash2(id + branchID.xy * 100.0) - 0.5;
-            
-            nx += var.x * NEEDLE_SPACING_Y * 0.4;
-            na += var.y * NEEDLE_SPACING_A * 0.3;
-            
-            // Needle start on branch surface
-            vec3 needleStart = vec3(
-                nx,
-                sin(na) * BRANCH_RADIUS,
-                cos(na) * BRANCH_RADIUS
-            );
-            
-            // Needle direction: outward from branch axis, slightly toward tip
-            vec3 outDir = normalize(vec3(0.0, sin(na), cos(na)));
-            vec3 needleDir = normalize(outDir + vec3(0.2, 0.0, 0.0)); // Slight forward angle
-            
-            // Add random angle variation
-            float av = (hash(id + 50.0) - 0.5) * 0.4;
-            needleDir = normalize(needleDir + vec3(0.0, av, av * 0.3));
-            
-            // Distance to needle
-            vec3 toP = localP - needleStart;
-            float t = clamp(dot(toP, needleDir), 0.0, NEEDLE_LEN);
-            vec3 closest = needleStart + needleDir * t;
-            
-            float taper = t / NEEDLE_LEN;
-            float thick = mix(NEEDLE_BASE_THICK, NEEDLE_TIP_THICK, taper);
-            
-            float d = length(localP - closest) - thick;
-            minDist = min(minDist, d);
+    if (distFromAxis > BRANCH_RADIUS * 0.3 && 
+        distFromAxis < BRANCH_RADIUS + NEEDLE_LEN + 0.05 &&
+        localP.x > -0.05 && localP.x < branchLen + NEEDLE_LEN) {
+        
+        // Grid in local space
+        float cellX = round(localP.x / NEEDLE_SPACING_Y);
+        float angle = atan(localP.y, localP.z);
+        float cellA = round(angle / NEEDLE_SPACING_A);
+        
+        // Check fewer nearby cells for performance
+        for (int dx = 0; dx <= 1; dx++) {
+            for (int da = -1; da <= 1; da++) {
+                float nx = (cellX + float(dx)) * NEEDLE_SPACING_Y;
+                float na = (cellA + float(da)) * NEEDLE_SPACING_A;
+                
+                if (nx < 0.02 || nx > branchLen - 0.02) continue;
+                
+                vec2 id = vec2(cellX + float(dx), cellA + float(da));
+                vec2 var2 = hash2(id + cellID.xy * 100.0) - 0.5;
+                
+                nx += var2.x * NEEDLE_SPACING_Y * 0.4;
+                na += var2.y * NEEDLE_SPACING_A * 0.3;
+                
+                vec3 needleStart = vec3(nx, sin(na) * BRANCH_RADIUS, cos(na) * BRANCH_RADIUS);
+                vec3 outDir = normalize(vec3(0.0, sin(na), cos(na)));
+                vec3 needleDir = normalize(outDir + vec3(0.2, 0.0, 0.0));
+                
+                float av = (hash(id + 50.0) - 0.5) * 0.4;
+                needleDir = normalize(needleDir + vec3(0.0, av, av * 0.3));
+                
+                vec3 toP2 = localP - needleStart;
+                float t = clamp(dot(toP2, needleDir), 0.0, NEEDLE_LEN);
+                vec3 closest = needleStart + needleDir * t;
+                
+                float taper = t / NEEDLE_LEN;
+                float thick = mix(NEEDLE_BASE_THICK, NEEDLE_TIP_THICK, taper);
+                
+                needleDist = min(needleDist, length(localP - closest) - thick);
+            }
         }
     }
     
-    return minDist;
+    // Determine material
+    if (needleDist < branchDist) {
+        matID = 2.0; // Needle
+        return needleDist;
+    } else {
+        matID = 1.0; // Branch
+        return branchDist;
+    }
 }
 
-// Full scene - check multiple nearby branches
+// Optimized map function
 float map(vec3 p) {
     float d = sdTrunk(p);
     
-    // Check several tiers
-    float tierSpacing = TRUNK_HEIGHT / BRANCH_TIERS;
-    float baseTier = floor((p.y + TRUNK_HEIGHT * 0.4) / tierSpacing);
-    
-    for (int dt = -1; dt <= 1; dt++) {
-        float tierY = baseTier + float(dt);
-        if (tierY < 0.0 || tierY >= BRANCH_TIERS) continue;
-        
-        // Check several branches in this tier
-        float angleSpacing = 6.28318 / BRANCHES_PER_TIER;
-        float angle = atan(p.x, p.z);
-        float tierOffset = mod(tierY, 2.0) * angleSpacing * 0.5;
-        float baseBranch = floor((angle + tierOffset) / angleSpacing);
-        
-        for (int da = -1; da <= 1; da++) {
-            // Reconstruct branch for this cell
-            float branchIdx = baseBranch + float(da);
-            float tierHeight = tierY * tierSpacing - TRUNK_HEIGHT * 0.4 + tierSpacing * 0.5;
-            float tierNorm = tierY / (BRANCH_TIERS - 1.0);
-            float branchLen = mix(TREE_BASE_RADIUS, TREE_TOP_RADIUS, tierNorm);
-            
-            float branchAngle = branchIdx * angleSpacing - tierOffset;
-            vec2 var = hash2(vec2(tierY, branchIdx)) - 0.5;
-            branchAngle += var.x * angleSpacing * 0.2;
-            float branchHeight = tierHeight + var.y * tierSpacing * 0.2;
-            
-            float droopAngle = 0.3 + tierNorm * 0.2;
-            vec3 branchDir = normalize(vec3(
-                sin(branchAngle) * cos(droopAngle),
-                -sin(droopAngle),
-                cos(branchAngle) * cos(droopAngle)
-            ));
-            
-            vec3 branchStart = vec3(
-                sin(branchAngle) * TRUNK_RADIUS,
-                branchHeight,
-                cos(branchAngle) * TRUNK_RADIUS
-            );
-            
-            vec3 branchRight = branchDir;
-            vec3 branchUp = normalize(cross(branchDir, vec3(-branchDir.z, 0.0, branchDir.x)));
-            vec3 branchForward = cross(branchRight, branchUp);
-            
-            vec3 toP = p - branchStart;
-            vec3 localP = vec3(
-                dot(toP, branchRight),
-                dot(toP, branchUp),
-                dot(toP, branchForward)
-            );
-            
-            vec3 branchID = vec3(tierY, branchIdx, 0.0);
-            
-            float branch = sdBranchLocal(localP, branchLen);
-            float needles = sdNeedlesLocal(localP, branchLen, branchID);
-            
-            d = min(d, min(branch, needles));
-        }
+    // Only process branches within valid height range
+    if (p.y > -TRUNK_HEIGHT * 0.5 && p.y < TRUNK_HEIGHT * 0.5) {
+        float branchMat;
+        vec3 cellID;
+        float branchDist = sdBranchWithNeedlesRepeated(p, branchMat, cellID);
+        d = min(d, branchDist);
     }
     
     return d;
 }
 
-// Material: 0 = trunk, 1 = branch, 2 = needle
+// Optimized getMaterial
 float getMaterial(vec3 p) {
     float trunk = sdTrunk(p);
     
-    float minBranch = 1e10;
-    float minNeedle = 1e10;
-    
-    float tierSpacing = TRUNK_HEIGHT / BRANCH_TIERS;
-    float baseTier = floor((p.y + TRUNK_HEIGHT * 0.4) / tierSpacing);
-    
-    for (int dt = -1; dt <= 1; dt++) {
-        float tierY = baseTier + float(dt);
-        if (tierY < 0.0 || tierY >= BRANCH_TIERS) continue;
+    if (p.y > -TRUNK_HEIGHT * 0.5 && p.y < TRUNK_HEIGHT * 0.5) {
+        float branchMat;
+        vec3 cellID;
+        float branchDist = sdBranchWithNeedlesRepeated(p, branchMat, cellID);
         
-        float angleSpacing = 6.28318 / BRANCHES_PER_TIER;
-        float angle = atan(p.x, p.z);
-        float tierOffset = mod(tierY, 2.0) * angleSpacing * 0.5;
-        float baseBranch = floor((angle + tierOffset) / angleSpacing);
-        
-        for (int da = -1; da <= 1; da++) {
-            float branchIdx = baseBranch + float(da);
-            float tierHeight = tierY * tierSpacing - TRUNK_HEIGHT * 0.4 + tierSpacing * 0.5;
-            float tierNorm = tierY / (BRANCH_TIERS - 1.0);
-            float branchLen = mix(TREE_BASE_RADIUS, TREE_TOP_RADIUS, tierNorm);
-            
-            float branchAngle = branchIdx * angleSpacing - tierOffset;
-            vec2 var = hash2(vec2(tierY, branchIdx)) - 0.5;
-            branchAngle += var.x * angleSpacing * 0.2;
-            float branchHeight = tierHeight + var.y * tierSpacing * 0.2;
-            
-            float droopAngle = 0.3 + tierNorm * 0.2;
-            vec3 branchDir = normalize(vec3(
-                sin(branchAngle) * cos(droopAngle),
-                -sin(droopAngle),
-                cos(branchAngle) * cos(droopAngle)
-            ));
-            
-            vec3 branchStart = vec3(
-                sin(branchAngle) * TRUNK_RADIUS,
-                branchHeight,
-                cos(branchAngle) * TRUNK_RADIUS
-            );
-            
-            vec3 branchRight = branchDir;
-            vec3 branchUp = normalize(cross(branchDir, vec3(-branchDir.z, 0.0, branchDir.x)));
-            vec3 branchForward = cross(branchRight, branchUp);
-            
-            vec3 toP = p - branchStart;
-            vec3 localP = vec3(
-                dot(toP, branchRight),
-                dot(toP, branchUp),
-                dot(toP, branchForward)
-            );
-            
-            vec3 branchID = vec3(tierY, branchIdx, 0.0);
-            
-            minBranch = min(minBranch, sdBranchLocal(localP, branchLen));
-            minNeedle = min(minNeedle, sdNeedlesLocal(localP, branchLen, branchID));
+        if (branchDist < trunk - 0.001) {
+            return branchMat;
         }
     }
     
-    float minD = min(trunk, min(minBranch, minNeedle));
-    if (abs(minNeedle - minD) < 0.001) return 2.0;
-    if (abs(minBranch - minD) < 0.001) return 1.0;
-    return 0.0;
+    return 0.0; // Trunk
 }
 
 vec3 calcNormal(vec3 p) {

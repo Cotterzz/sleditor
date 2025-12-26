@@ -1,16 +1,20 @@
 // Two Black Holes with Roche Potential Accretion Disk
 // Based on original by nxrix, modified for Roche potential disk shape
 // The disk shape follows gravitational equipotential surfaces
+//
+// iChannel0: Noise texture (for disk detail)
+// iChannel1: Cubemap skybox (gravitationally lensed background)
 
 const float  PI = 3.14159265;
 const float TAU = 6.28318530;
 
 //#define AA 2
-#define doppler
-//#define RK4
 
 const float Rs1 = 2.0;
 const float Rs2 = 1.0;
+
+// Lensing strength multiplier (1.0 = physically accurate, <1.0 = reduced lensing)
+const float LENSING_STRENGTH = 1.0;
 
 // Roche potential parameters
 // The disk exists where potential is between these values
@@ -24,7 +28,7 @@ const vec3 BH2_POS = vec3( 32.0, 0.0, 0.0);
 // Disk lies in XZ plane (Y = 0)
 const vec3 DISK_AXIS = vec3(0.0, 1.0, 0.0);
 
-const int MAX_STEPS = 128;
+const int MAX_STEPS = 100;
 
 const float INV_PI = 1.0 / PI;
 const float INV_SIX_RS1 = 1.0 / (6.0 * Rs1);
@@ -35,7 +39,7 @@ float ls(float x) {
 }
 
 float noise(vec2 p) {
-    return texture(iChannel0, p / 128.0).r;
+    return texture(iChannel2, p / 128.0).r;
 }
 
 // Calculate Roche-like gravitational potential
@@ -57,7 +61,7 @@ float rochePotential(vec3 p) {
 }
 
 // Disk color based on temperature and blend factor
-#ifdef doppler
+
 vec3 diskColor(float temp, float angle, float dop, float blend) {
     float t_noise = temp * 0.6 + 0.5 * noise(vec2((temp - iTime * 0.1) * 40.0, ls(angle - iTime) * 6.0));
     float d_factor = -clamp(dop, -1.0, 1.0) * 0.15 + 1.1;
@@ -76,57 +80,27 @@ vec3 diskColor(float temp, float angle, float dop, float blend) {
     
     return mix(warm, cool, blend) * 1.2;
 }
-#else
-vec3 diskColor(float temp, float angle, float blend) {
-    float t_noise = temp * 0.7 + 0.4 * noise(vec2((temp - iTime * 0.1) * 40.0, ls(angle - iTime) * 6.0));
-    float t_adjusted = t_noise * 1.5 / (t_noise + 0.5);
-    float t_factor = t_adjusted * 0.5 + 0.5;
-    float t_half = t_adjusted * 0.5 + 0.4;
-    float t_pow5 = exp(5.0 * log(max(t_adjusted, 0.001)));
-    float t_pow20 = exp(20.0 * log(max(t_adjusted, 0.001)));
-    
-    vec3 warm = vec3(t_half, t_pow5 * 0.6, t_pow20 * 0.3) * t_factor;
-    vec3 cool = warm.zyx;
-    
-    return mix(warm, cool, blend) * 1.2;
-}
-#endif
 
 vec3 bend(vec3 ro, vec3 rd, vec3 p, float rs) {
     vec3 r = ro - p;
     float r2 = dot(r, r);
     float r1 = inversesqrt(r2);
     vec3 L = cross(r, rd);
-    return -1.5 * rs * (r * dot(L, L)) * (r1 / (r2 * r2));
+    return -1.5 * rs * LENSING_STRENGTH * (r * dot(L, L)) * (r1 / (r2 * r2));
 }
 
-#ifdef RK4
-void advance(inout vec3 ro, inout vec3 rd, float h) {
-    vec3 k1_v = bend(ro, rd, BH1_POS, Rs1) + bend(ro, rd, BH2_POS, Rs2);
-    vec3 k1_p = rd;
-    vec3 k2_v = bend(ro + k1_p * h * 0.5, normalize(rd + k1_v * h * 0.5), BH1_POS, Rs1) + 
-                bend(ro + k1_p * h * 0.5, normalize(rd + k1_v * h * 0.5), BH2_POS, Rs2);
-    vec3 k2_p = normalize(rd + k1_v * h * 0.5);
-    vec3 k3_v = bend(ro + k2_p * h * 0.5, normalize(rd + k2_v * h * 0.5), BH1_POS, Rs1) + 
-                bend(ro + k2_p * h * 0.5, normalize(rd + k2_v * h * 0.5), BH2_POS, Rs2);
-    vec3 k3_p = normalize(rd + k2_v * h * 0.5);
-    vec3 k4_v = bend(ro + k3_p * h, normalize(rd + k3_v * h), BH1_POS, Rs1) + 
-                bend(ro + k3_p * h, normalize(rd + k3_v * h), BH2_POS, Rs2);
-    vec3 k4_p = normalize(rd + k3_v * h);
-    vec3 v_new = rd + (k1_v + 2.0*k2_v + 2.0*k3_v + k4_v) * h / 6.0;
-    ro = ro + (k1_p + 2.0*k2_p + 2.0*k3_p + k4_p) * h / 6.0;
-    rd = normalize(v_new);
-}
-#else
 void advance(inout vec3 o, inout vec3 d, float h) {
     vec3 acc = bend(o, d, BH1_POS, Rs1) + bend(o, d, BH2_POS, Rs2);
     d = normalize(d + acc * h);
     o += d * h;
 }
-#endif
+
+// Disk opacity (0 = fully transparent, 1 = fully opaque)
+const float DISK_OPACITY = 0.85;
 
 // Check if ray crosses the Roche potential disk
-bool hit_roche_disk(vec3 oro, vec3 ro, vec3 rd, inout vec3 col) {
+// Returns opacity in col.a (using vec4)
+bool hit_roche_disk(vec3 oro, vec3 ro, vec3 rd, inout vec4 colAlpha) {
     // Check if we crossed the disk plane (Y = 0)
     float s1 = oro.y;
     float s2 = ro.y;
@@ -175,7 +149,6 @@ bool hit_roche_disk(vec3 oro, vec3 ro, vec3 rd, inout vec3 col) {
     float potentialPhase = potential * 20.0;
     float angle = globalAngle + potentialPhase;
     
-    #ifdef doppler
     // Doppler shift - gas orbits around nearer black hole
     vec3 toBH1 = normalize(vec3(p.x - BH1_POS.x, 0.0, p.z - BH1_POS.z));
     vec3 toBH2 = normalize(vec3(p.x - BH2_POS.x, 0.0, p.z - BH2_POS.z));
@@ -188,67 +161,104 @@ bool hit_roche_disk(vec3 oro, vec3 ro, vec3 rd, inout vec3 col) {
     tangent = normalize(mix(tangent, toL1, streamFactor * 0.5));
     
     float dop = dot(tangent, rd);
-    col = diskColor(temp, angle, dop, blend);
-    #else
-    col = diskColor(temp, angle, blend);
-    #endif
+    vec3 diskCol = diskColor(temp, angle, dop, blend);
     
+    // Opacity based on temperature (hotter = more opaque) and base opacity
+    float opacity = DISK_OPACITY * (0.5 + 0.5 * temp);
+    
+    colAlpha = vec4(diskCol, opacity);
     return true;
 }
 
+// Escape distance - rays further than this from both black holes sample the skybox
+const float ESCAPE_DIST = 200.0;
+
+// Camera distance from scene center (adjust to frame the black holes nicely)
+const float CAM_DIST = 75.0;
+
 vec3 trace(vec3 ro, vec3 rd) {
+    // Accumulated disk color and opacity
+    vec3 accumulatedColor = vec3(0.0);
+    float accumulatedAlpha = 0.0;
+    
     for (int i = 0; i < MAX_STEPS; i++) {
         vec3 to_bh1 = ro - BH1_POS;
         vec3 to_bh2 = ro - BH2_POS;
         float r1 = length(to_bh1);
         float r2 = length(to_bh2);
         
+        // Ray fell into a black hole - return accumulated disk over black
         if (r1 < Rs1 || r2 < Rs2) {
-            return vec3(0);
+            return accumulatedColor;  // Black background, disk on top
         }
-        if (r1 > 80.0 && r2 > 80.0) {
-            break;
+        
+        // Ray escaped far enough - blend disk over lensed skybox
+        if (r1 > ESCAPE_DIST && r2 > ESCAPE_DIST) {
+            vec3 skybox = tanh(texture(iChannel1, rd).rgb * 2.0);
+            // Composite: disk over background
+            return accumulatedColor + (1.0 - accumulatedAlpha) * skybox;
         }
         
         vec3 oro = ro;
         float h = clamp(min(r1 * INV_SIX_RS1, r2 * INV_SIX_RS2), 1.0, 16.0);
         advance(ro, rd, h);
         
-        vec3 col = vec3(0);
-        if (hit_roche_disk(oro, ro, rd, col)) {
-            return col;
+        vec4 diskHit = vec4(0.0);
+        if (hit_roche_disk(oro, ro, rd, diskHit)) {
+            // Front-to-back alpha compositing
+            float alpha = diskHit.a * (1.0 - accumulatedAlpha);
+            accumulatedColor += diskHit.rgb * alpha;
+            accumulatedAlpha += alpha;
+            
+            // Early exit if nearly opaque
+            if (accumulatedAlpha > 0.99) {
+                return accumulatedColor;
+            }
         }
     }
-    return vec3(0);
+    
+    // Max steps reached - blend disk over skybox
+    vec3 skybox = tanh(texture(iChannel1, rd).rgb * 2.0);
+    return accumulatedColor + (1.0 - accumulatedAlpha) * skybox;
 }
 
 vec3 render(vec2 fragCoord) {
-    vec2 uv = (2.0 * fragCoord - iResolution.xy) / min(iResolution.x, iResolution.y);
-    vec2 mo = vec2(iTime * 0.1, 0.47);
+    // === EXACT SAME CAMERA AS YOUR SKYBOX SHADER ===
     
-    if (iMouse.z > 0.0) mo = iMouse.xy / iResolution.xy * 2.0 - 0.5;
-    mo.y = clamp(mo.y, 0.01, 0.99);
+    // Mouse rotation (matching your skybox)
+    float rotX = (iMouse.x / iResolution.x) * 2.0 * PI;
+    float rotY = (iMouse.y / iResolution.y) * PI;
     
-    float theta = TAU * (0.5 * -mo.y);
-    float sin_theta = sin(theta);
-    float cos_theta = cos(theta);
-    float cos_tau_neg_mo_x = cos(TAU * -mo.x);
-    float sin_tau_neg_mo_x = sin(TAU * -mo.x);
+    // Auto-rotate when mouse not pressed
+    if (iMouse.z <= 0.0) {
+        rotX = iTime * 0.2;
+        rotY = PI * 0.5;  // Look from side
+    }
     
-    vec3 ro = vec3(cos_tau_neg_mo_x * sin_theta,
-                   cos_theta,
-                   sin_tau_neg_mo_x * sin_theta) * 44.0;
+    // UV with exact same calculation as your skybox (2.5 factor, xx aspect)
+    vec2 uv = 2.5 * (fragCoord.xy - 0.5 * iResolution.xy) / iResolution.xx;
     
-    vec3 forward = normalize(-ro);
-    vec3 right = normalize(cross(vec3(0, 1, 0), forward));
-    vec3 up = cross(forward, right);
-    vec3 rd = forward;
-    ro += uv.x * right * 22.0 + uv.y * up * 22.0;
+    // Camera position (matching your skybox formula)
+    vec3 camO = vec3(cos(rotX), cos(rotY)+0.3, sin(rotX));
+    
+    // Camera basis vectors (matching your skybox)
+    vec3 camD = normalize(vec3(0.0) - camO);
+    vec3 camR = normalize(cross(camD, vec3(0.0, 1.0, 0.0)));
+    vec3 camU = cross(camR, camD);
+    
+    // PERSPECTIVE ray direction (matching your skybox exactly)
+    vec3 rd = normalize(uv.x * camR + uv.y * camU + camD);
+    
+    // Ray origin: camera position scaled to scene size
+    // The black holes are around x=-27 to x=32, so center is ~2.5
+    // We position camera at distance CAM_DIST looking at scene center
+    vec3 sceneCenter = vec3(2.5, 0.0, 0.0);
+    vec3 ro = sceneCenter + camO * CAM_DIST;
     
     return trace(ro, rd);
 }
 
-void mainImage0(out vec4 fragColor, in vec2 fragCoord) {
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec3 col = vec3(0);
     #ifdef AA
     for (int x = 0; x < AA; x++) {
@@ -264,20 +274,5 @@ void mainImage0(out vec4 fragColor, in vec2 fragCoord) {
     fragColor = vec4(col, 1);
 }
 
-// Main shader entry point with anti-aliasing (matching your setup)
-void mainImage(out vec4 fragColor, vec2 fragCoord) {
-    float sampleCount = 6.0;
-    vec2 jitter = vec2(0.5);
-    fragColor = vec4(0.0);
-    
-    for (float k = sampleCount; k > 0.5; k--) {
-        vec4 sampleColor;
-        mainImage0(sampleColor, fragCoord + jitter - 0.5);
-        fragColor += sampleColor;
-        jitter = fract(jitter + vec2(0.755, 0.57).yx);
-    }
-    
-    fragColor /= sampleCount;
-    fragColor.a = 1.0;
-}
+
 
