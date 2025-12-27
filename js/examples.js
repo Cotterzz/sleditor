@@ -206,6 +206,21 @@ export const MINIMAL_GLSL_GOLF = `// Macros: M=main T=time R=resolution U=fragCo
 // A=abs X=mix Y=min Z=max M2=mat2 M3=mat3 M4=mat4 W=for J=ceil K=round P=floor Q=fract
 M{V2 u=U.xy/R;O=V4(u,S(T),1.);}`;
 
+export const MINIMAL_COMMON = `// Common GLSL Code
+// Functions and definitions here are available in ALL GLSL passes:
+// - Main shader
+// - Buffer passes
+// - GLSL Audio
+
+// Example: shared utility function
+float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+// Example: shared constant
+#define EPSILON 0.001
+`;
+
 export const MINIMAL_WGSL = `// Simple WGSL graphics shader
 @compute @workgroup_size(8, 8, 1)
 fn graphics_main(@builtin(global_invocation_id) gid: vec3<u32>) {
