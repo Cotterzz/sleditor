@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { state, logStatus, saveSettings } from './core.js';
-import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET, MINIMAL_AUDIO_GLSL, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF } from './examples.js';
+import { MINIMAL_AUDIO_GPU, MINIMAL_AUDIO_WORKLET, MINIMAL_AUDIO_GLSL, MINIMAL_GLSL, MINIMAL_GLSL_REGULAR, MINIMAL_GLSL_STOY, MINIMAL_GLSL_GOLF, MINIMAL_COMMON } from './examples.js';
 import { getTabIcon, getTabLabel, tabRequiresWebGPU, tabsAreMutuallyExclusive, isImageChannel, isVideoChannel, isAudioChannel, isBufferChannel, isMicChannel, isWebcamChannel, isKeyboardChannel, isVolumeChannel, isCubemapChannel, isChannel, getChannelNumber, createImageChannelTabName, createVideoChannelTabName, createAudioChannelTabName, createBufferChannelTabName, createMicChannelTabName, createWebcamChannelTabName, createKeyboardChannelTabName, createVolumeChannelTabName, createCubemapChannelTabName } from './tab-config.js';
 import * as mediaSelector from './ui/media-selector.js';
 import * as audioSelector from './ui/audio-selector.js';
@@ -199,6 +199,7 @@ export function switchTab(tabName) {
         document.getElementById('graphicsContainer').style.display = 'none';
         document.getElementById('audioContainer').style.display = 'none';
         document.getElementById('jsEditorContainer').style.display = 'none';
+        document.getElementById('commonContainer').style.display = 'none';
         
         // Hide ALL channel containers
         document.querySelectorAll('[id$="Container"][id^="image_"], [id$="Container"][id^="video_"], [id$="Container"][id^="audio_"], [id$="Container"][id^="mic_"], [id$="Container"][id^="webcam_"], [id$="Container"][id^="keyboard_"], [id$="Container"][id^="volume_"], [id$="Container"][id^="cubemap_"]').forEach(c => {
@@ -282,7 +283,8 @@ export function switchTab(tabName) {
         audio_gpu: document.getElementById('audioContainer'),
         audio_worklet: document.getElementById('audioContainer'),  // All audio tabs use same container
         audio_glsl: document.getElementById('audioContainer'),     // GLSL audio also uses audio container
-        js: document.getElementById('jsEditorContainer')
+        js: document.getElementById('jsEditorContainer'),
+        common: document.getElementById('commonContainer')          // Common GLSL code
     };
     
     if (isBufferChannel(tabName)) {
@@ -298,7 +300,8 @@ export function switchTab(tabName) {
         audio_gpu: state.audioEditor,
         audio_worklet: state.audioEditor,  // All audio tabs use same editor
         audio_glsl: state.audioEditor,     // GLSL audio also uses audio editor
-        js: state.jsEditor
+        js: state.jsEditor,
+        common: state.commonEditor          // Common GLSL code
     };
     
     if (isBufferChannel(tabName)) {
@@ -402,6 +405,11 @@ export function addTab(tabName) {
                 waveformPanel.onAudioShaderLoaded(MINIMAL_AUDIO_GLSL);
             }
         }
+    }
+    
+    // Initialize common tab with starter code
+    if (tabName === 'common' && state.commonEditor) {
+        state.commonEditor.setValue(MINIMAL_COMMON);
     }
     
     switchTab(tabName);
@@ -783,6 +791,7 @@ export function showAddPassMenu() {
     // Note: Main pass types (glsl_regular, glsl_stoy, glsl_golf, glsl_fragment) 
     // are only available in the "New Shader" menu, not here
     const availableTabs = [
+        { name: 'common', label: '📦 Common (GLSL)' }, // Shared code for all GLSL passes
         { name: 'audio_glsl', label: '🔊 Audio (GLSL)' },
         { name: 'audio_gpu', label: '🔊 Audio (WGSL)' },
         { name: 'audio_worklet', label: '🎵 Audio (Worklet)' },
@@ -821,10 +830,12 @@ export function showAddPassMenu() {
                             tab.name === '_webcam_channel' || tab.name === '_keyboard_channel' ||
                             tab.name === '_volume_channel' || tab.name === '_cubemap_channel';
         const isAudioTab = tab.name === 'audio_gpu' || tab.name === 'audio_worklet' || tab.name === 'audio_glsl';
+        const isCommonTab = tab.name === 'common';
         const isDisabled = (isAudioTab && hasAnyAudio && !isActive) ||  // Only one audio tab at a time
                           (tab.name === 'audio_gpu' && hasGLSL) ||       // WGSL audio incompatible with GLSL graphics
                           (isChannelTab && hasWGSL) ||                   // Channels not supported for WGSL yet
-                          (tab.name === '_buffer_channel' && (!getActiveGlslTab() || hasWGSL));
+                          (tab.name === '_buffer_channel' && (!getActiveGlslTab() || hasWGSL)) ||
+                          (isCommonTab && (hasWGSL || !hasGLSL));        // Common only for GLSL shaders
         
         const option = document.createElement('div');
         
@@ -833,6 +844,8 @@ export function showAddPassMenu() {
         if (isDisabled && isChannelTab && hasWGSL) {
             labelText += ' (GLSL only)';
         } else if (isDisabled && tab.name === '_buffer_channel' && hasWGSL) {
+            labelText += ' (GLSL only)';
+        } else if (isDisabled && isCommonTab) {
             labelText += ' (GLSL only)';
         }
         

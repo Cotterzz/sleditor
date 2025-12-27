@@ -541,6 +541,14 @@ export async function initMonaco(callback, initialCode, helpContent) {
                 language: 'javascript',
             });
             
+            // Create Common editor (GLSL code shared across all GLSL passes)
+            const commonContainer = document.getElementById('commonContainer');
+            state.commonEditor = monaco.editor.create(commonContainer, {
+                ...editorOptions,
+                value: initialCode.common || '',
+                language: 'glsl',
+            });
+            
             // Create Help editor (read-only)
             const helpContainer = document.getElementById('helpContainer');
             state.helpEditor = monaco.editor.create(helpContainer, {
@@ -617,7 +625,8 @@ function setupEditorActions() {
     const editors = [
         state.graphicsEditor,
         state.audioEditor,
-        state.jsEditor
+        state.jsEditor,
+        state.commonEditor
     ].filter(Boolean);
 
     const toggleWordWrap = (editor) => {

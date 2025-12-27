@@ -160,11 +160,16 @@ export async function compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioReload
                 }
             }
             
+            // Get common code (shared across all GLSL passes)
+            const commonCode = state.commonEditor?.getValue()?.trim() || '';
+            const commonCodeLines = commonCode ? commonCode.split('\n').length : 0;
+            
             // Build full source
             let fullSource;
             if (boilerplate === '') {
                 // Raw GLSL mode: NO automatic additions, user must declare everything
-                fullSource = source;
+                // But still prepend common code if available
+                fullSource = commonCode ? commonCode + '\n\n' + source : source;
             } else {
                 // Regular/Stoy/Golf mode: add channel uniforms automatically
                 let channelUniforms = '';
@@ -178,12 +183,16 @@ export async function compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioReload
                         channelUniforms += `uniform sampler2D iChannel${chNum};\n`;
                     }
                 });
-                fullSource = boilerplate + channelUniforms + source;
+                // Common code goes after boilerplate+channels but before pass-specific code
+                const commonSection = commonCode ? '\n// === Common Code ===\n' + commonCode + '\n\n' : '';
+                fullSource = boilerplate + channelUniforms + commonSection + source;
             }
             
             const compileResult = await webgl.compileProgram(fullSource);
             if (!compileResult.success) {
-                const adjustedErrors = adjustGLSLErrors(compileResult.errors, boilerplateLines, requiredChannels.length);
+                // Adjust for boilerplate lines + channel uniform lines + common code lines
+                const totalPrefixLines = boilerplateLines + requiredChannels.length + (commonCode ? commonCodeLines + 3 : 0); // +3 for comment and newlines
+                const adjustedErrors = adjustGLSLErrors(compileResult.errors, totalPrefixLines, 0);
                 const shouldShowInEditor = pass.type === 'main' || state.currentTab === pass.tabName;
                 if (shouldShowInEditor) {
                     editor.setGLSLErrors(adjustedErrors);
@@ -226,8 +235,13 @@ export async function compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioReload
                 // Initialize GLSL audio backend
                 await audioGlsl.init(state.audioContext, state.gainNode);
                 
+                // Get audio code with common code prepended
                 const audioCode = state.audioEditor.getValue();
-                const result = await audioGlsl.load(audioCode);
+                const commonCode = state.commonEditor?.getValue()?.trim() || '';
+                const fullAudioCode = commonCode 
+                    ? '// === Common Code ===\n' + commonCode + '\n\n' + audioCode 
+                    : audioCode;
+                const result = await audioGlsl.load(fullAudioCode);
                 if (!result.success) {
                     editor.setAudioWorkletErrors(result.errors); // Reuse error display
                     const errMsg = result.errors[0] ? `Line ${result.errors[0].lineNum || '?'}: ${result.errors[0].message}` : 'Unknown error';
@@ -368,8 +382,13 @@ export async function reloadShader(isResizeOnly = false) {
             if (!skipAudioReload) {
                 if (hasAudioGlsl) {
                     await audioGlsl.init(state.audioContext, state.gainNode);
+                    // Get audio code with common code prepended
                     const audioCode = state.audioEditor.getValue();
-                    const result = await audioGlsl.load(audioCode);
+                    const commonCode = state.commonEditor?.getValue()?.trim() || '';
+                    const fullAudioCode = commonCode 
+                        ? '// === Common Code ===\n' + commonCode + '\n\n' + audioCode 
+                        : audioCode;
+                    const result = await audioGlsl.load(fullAudioCode);
                     if (!result.success) {
                         editor.setAudioWorkletErrors(result.errors);
                         logStatus(`✗ GLSL Audio error: ${result.errors[0].message}`, 'error');

@@ -74,6 +74,16 @@ export const TAB_CONFIG = {
         boilerplate: 'golf'  // Inject code golf macros
     },
     
+    common: {
+        label: 'Common (GLSL)',
+        icon: '📦',
+        dbKey: 'common',
+        editor: 'common',
+        type: 'webgl',
+        language: 'glsl',
+        isCommon: true  // Special flag: code is prepended to all GLSL passes
+    },
+    
     // ========================================================================
     // AUDIO TABS
     // ========================================================================

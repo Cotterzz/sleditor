@@ -100,11 +100,15 @@ function loadExample(exampleId) {
     if (state.graphicsEditor) {
         state.graphicsEditor.setValue(example.graphics || '');
     }
-    if (state.audioEditor && example.audio) {
-        state.audioEditor.setValue(example.audio);
+    if (state.audioEditor) {
+        state.audioEditor.setValue(example.audio || '');
     }
     if (state.jsEditor) {
         state.jsEditor.setValue(example.js || MINIMAL_JS);
+    }
+    // Clear common editor when loading examples (examples don't have common code)
+    if (state.commonEditor) {
+        state.commonEditor.setValue('');
     }
     
     // Update UI

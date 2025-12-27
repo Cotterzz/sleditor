@@ -272,6 +272,14 @@ function resetEditorState() {
     if (state.graphicsEditor) {
         state.graphicsEditor.setValue('');
     }
+    // Clear common editor when loading new shader
+    if (state.commonEditor) {
+        state.commonEditor.setValue('');
+    }
+    // Clear audio editor when loading new shader
+    if (state.audioEditor) {
+        state.audioEditor.setValue('');
+    }
     webgl.disposePassPrograms();
 }
 
