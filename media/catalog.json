@@ -114,9 +114,9 @@
     },
     {
         "id": "thing",
-        "name": "Sheep",
-        "path": "media/textures/thing.png",
-        "thumb": "media/textures/thing.jpg",
+        "name": "Nyanbat",
+        "path": "media/textures/nyanbat.png",
+        "thumb": "media/textures/nyanbatTN.png",
         "width": 256,
         "height": 32
     },
