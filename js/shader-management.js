@@ -457,6 +457,12 @@ export async function handleSaveClick() {
         return;
     }
     
+    // New shader (no database record) - enter edit mode to set title/description
+    if (!state.currentDatabaseShader) {
+        enterEditMode(false); // Not a fork, just a new shader
+        return;
+    }
+    
     // Not in edit mode - only save if owned
     if (isShaderOwnedByUser()) {
         await saveOwnedShader();
@@ -471,6 +477,12 @@ export async function handleForkClick() {
     // Check if user is signed in
     if (!state.currentUser) {
         logStatus('⚠ Sign in to fork shaders', 'error');
+        return;
+    }
+    
+    // Can't fork a new/unsaved shader - use Save instead
+    if (!state.currentDatabaseShader) {
+        logStatus('⚠ Save the shader first before forking', 'error');
         return;
     }
     
@@ -726,6 +738,7 @@ export function updateSaveButtons() {
     const inEditMode = isInEditMode();
     const isLoggedIn = !!state.currentUser;
     const inForkMode = state.isForkMode;
+    const isNewShader = !state.currentDatabaseShader; // No database record = new shader
     
     const forkIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><circle cx="6" cy="6" r="2" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="6" r="2" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="18" r="2" stroke="currentColor" stroke-width="2"/><path d="M6 8v3c0 2 1 3 3 3h7M18 8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
     
@@ -736,6 +749,11 @@ export function updateSaveButtons() {
         if (!isLoggedIn) {
             saveBtn.disabled = false;
             saveBtn.title = 'Save shader (requires sign in)';
+            saveBtn.style.opacity = '1';
+        } else if (isNewShader) {
+            // New shader (no database record) - can be saved by current user
+            saveBtn.disabled = false;
+            saveBtn.title = 'Save new shader';
             saveBtn.style.opacity = '1';
         } else if (inForkMode) {
             // Fork mode - save creates new shader
@@ -761,22 +779,30 @@ export function updateSaveButtons() {
     }
     
     // Update fork button
+    // Fork only makes sense when there's an existing database shader to fork
     if (forkBtn) {
-        forkBtn.innerHTML = state.isDirty ? forkIcon + '*' : forkIcon;
-        
-        if (!isLoggedIn) {
+        if (isNewShader) {
+            // New shader - nothing to fork, just use Save
+            forkBtn.innerHTML = forkIcon; // No * symbol
+            forkBtn.disabled = true;
+            forkBtn.title = 'Fork (save shader first)';
+            forkBtn.style.opacity = '0.4';
+        } else if (!isLoggedIn) {
+            forkBtn.innerHTML = forkIcon;
             forkBtn.disabled = false;
             forkBtn.title = 'Fork shader (requires sign in)';
             forkBtn.style.opacity = '1';
         } else if (inForkMode) {
             // Already in fork mode - fork button acts as save new
+            forkBtn.innerHTML = state.isDirty ? forkIcon + '*' : forkIcon;
             forkBtn.disabled = false;
             forkBtn.title = 'Save as new shader';
             forkBtn.style.opacity = '1';
         } else {
-            // Can always fork (creates a copy)
+            // Database shader loaded - can fork (creates a copy)
+            forkBtn.innerHTML = state.isDirty ? forkIcon + '*' : forkIcon;
             forkBtn.disabled = false;
-            forkBtn.title = isOwned ? 'Fork (create a copy of your shader)' : 'Fork (create a copy)';
+            forkBtn.title = isOwned ? 'Fork (create a copy of your shader)' : 'Fork (create your own copy)';
             forkBtn.style.opacity = '1';
         }
     }

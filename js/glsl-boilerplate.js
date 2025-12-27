@@ -94,7 +94,7 @@ ${CUSTOM_UNIFORMS}
 #define iMouse vec4(u_mouse, u_click)
 #define iDate u_date
 #define iSampleRate 48000.0
-
+#define HW_PERFORMANCE 1
 // === Output ===
 out vec4 fragColor;
 

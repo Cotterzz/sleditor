@@ -31,6 +31,7 @@ import * as community from './community.js';
 import * as waveformPanel from './ui/audio-waveform-panel.js';
 import * as channels from './channels.js';
 import * as mediaLoader from './media-loader.js';
+import * as shadertoyBrowser from './ui/shadertoy-browser.js';
 
 // Expose modules globally for inline functions and backwards compatibility
 window.tabConfig = tabConfig;
@@ -54,8 +55,135 @@ function createNewShader(type) {
 }
 
 // ============================================================================
-// Create New Shader
+// Shadertoy Import Handler
 // ============================================================================
+
+async function handleShadertoyImport(importedShader) {
+    console.log('Importing Shadertoy shader:', importedShader.title);
+    
+    // Temporarily disable dirty tracking during import
+    const wasInitializing = state.isInitializing;
+    state.isInitializing = true;
+    
+    try {
+        // Clear current state - treat this as a NEW shader owned by current user
+        state.currentExample = null;
+        state.currentDatabaseShader = null; // No database record - it's NEW
+        state.isDirty = false;
+        state.isForkMode = false;
+        
+        // Clear URL hash (this is a new unsaved shader)
+        window.history.pushState(null, '', window.location.pathname);
+        
+        // Reset channels first
+        channels.resetChannels();
+        shaderManagement.resetEditorState();
+        
+        // Set up active tabs from the imported code_types
+        state.activeTabs = [...(importedShader.code_types || ['glsl_stoy'])];
+        
+        // Load code into editors
+        if (importedShader.code) {
+            // Main graphics code
+            const graphicsCode = importedShader.code.glsl_stoy || 
+                                importedShader.code.glsl_fragment || 
+                                importedShader.code.graphics || '';
+            if (state.graphicsEditor && graphicsCode) {
+                state.graphicsEditor.setValue(graphicsCode);
+                state.tabCodeCache['glsl_stoy'] = graphicsCode;
+            }
+            
+            // Common code
+            if (importedShader.code.common && state.commonEditor) {
+                state.commonEditor.setValue(importedShader.code.common);
+                state.tabCodeCache['common'] = importedShader.code.common;
+            }
+            
+            // Audio code (from Sound pass)
+            if (importedShader.code.audio_glsl && state.audioEditor) {
+                state.audioEditor.setValue(importedShader.code.audio_glsl);
+                state.tabCodeCache['audio_glsl'] = importedShader.code.audio_glsl;
+            }
+            
+            // Buffer code - stored with tabName as key (e.g., buffer_ch1)
+            for (const [key, value] of Object.entries(importedShader.code)) {
+                if (key.startsWith('buffer_ch') && value) {
+                    state.tabCodeCache[key] = value;
+                }
+            }
+        }
+        
+        // Load channel configuration if present
+        if (importedShader.code && importedShader.code['_channel_meta']) {
+            try {
+                const channelConfig = JSON.parse(importedShader.code['_channel_meta']);
+                await channels.loadChannelConfig(channelConfig);
+            } catch (error) {
+                console.error('Failed to load channel config:', error);
+            }
+        }
+        
+        // Update UI elements - title and description from import
+        const titleEl = document.getElementById('shaderTitleDisplay');
+        const creatorEl = document.getElementById('shaderCreator');
+        const descEl = document.getElementById('shaderDescriptionDisplay');
+        
+        if (titleEl) titleEl.textContent = importedShader.title || 'Imported Shader';
+        if (creatorEl) creatorEl.textContent = ''; // Current user will own it, not original author
+        if (descEl) {
+            const descText = importedShader.description || '';
+            if (typeof marked !== 'undefined' && descText) {
+                descEl.innerHTML = marked.parse(descText);
+            } else {
+                descEl.textContent = descText;
+            }
+        }
+        
+        // Reset likes/views (new shader has none)
+        if (window.updateViewsAndLikes) {
+            window.updateViewsAndLikes(null);
+        }
+        
+        // Render tabs and switch to first tab
+        tabs.renderTabs();
+        const firstTab = state.activeTabs[0];
+        if (firstTab) {
+            tabs.switchTab(firstTab);
+        }
+        
+        // Show waveform panel if audio_glsl is present
+        if (state.activeTabs.includes('audio_glsl') && importedShader.code?.audio_glsl) {
+            const container = document.getElementById('audioWaveformContainer');
+            if (container) {
+                waveformPanel.mountPanel(container);
+                waveformPanel.onAudioShaderLoaded(importedShader.code.audio_glsl);
+            }
+        } else {
+            waveformPanel.hide();
+        }
+        
+        // Compile and reload the shader
+        if (window.reloadShader) {
+            await window.reloadShader();
+        }
+        await ui.restart(false);
+        
+        logStatus(`✓ Imported: ${importedShader.title}`, 'success');
+        
+    } finally {
+        state.isInitializing = wasInitializing;
+        
+        // Mark as dirty AFTER isInitializing is reset, so the UI updates correctly
+        // This is a new unsaved shader that needs to be saved
+        state.isDirty = true;
+        state.currentDatabaseShader = null; // Ensure it's null
+        
+        // Use setTimeout to ensure UI update happens after any pending operations
+        setTimeout(() => {
+            shaderManagement.updateSaveButtons();
+        }, 0);
+    }
+}
 
 // ============================================================================
 // Load Example
@@ -1034,6 +1162,14 @@ async function init() {
     // Initialize fullscreen mode
     fullscreen.init();
     aiAssistSettings.init();
+    
+    // Initialize Shadertoy Browser
+    shadertoyBrowser.init();
+    shadertoyBrowser.setImportCallback(handleShadertoyImport);
+    const stBrowserBtn = document.getElementById('shadertoyBrowserBtn');
+    if (stBrowserBtn) {
+        stBrowserBtn.addEventListener('click', () => shadertoyBrowser.open());
+    }
     
     // Performance monitor mini visualization disabled
     // const perfBtn = document.getElementById('perfMonitorBtn');

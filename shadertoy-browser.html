@@ -614,6 +614,10 @@ button.primary:hover {
             Shadertoy Browser
         </div>
         
+        <label style="display:flex;align-items:center;gap:0.25rem;font-size:0.75rem;color:var(--text-muted);" title="Case sensitive search">
+            <input type="checkbox" id="caseSensitive"> Aa
+        </label>
+        
         <div class="search-box" id="searchBox">
             <input type="text" id="searchInput" placeholder="Search (comma for multiple, &quot;exact&quot;)..." disabled>
             <button class="search-clear" id="searchClear" title="Clear search">×</button>
@@ -646,13 +650,10 @@ button.primary:hover {
                 <option value="200">200 per page</option>
                 <option value="500">500 per page</option>
                 <option value="1000">1k per page</option>
-                <option value="2000">2k per page</option>
-                <option value="4000">4k per page</option>
+                <option value="99999">All</option>
             </select>
             
-            <label style="display:flex;align-items:center;gap:0.25rem;font-size:0.75rem;color:var(--text-muted);">
-                <input type="checkbox" id="caseSensitive"> Aa
-            </label>
+            <button id="loadNewBtn" title="Load different JSON file" style="display:none;">📁 Load JSON</button>
         </div>
     </div>
 </header>
@@ -807,7 +808,7 @@ function loadFile(file) {
     reader.onload = (e) => {
         try {
             const data = JSON.parse(e.target.result);
-            initializeData(data);
+            initializeData(data, true); // true = save to localStorage
         } catch (err) {
             dropZone.innerHTML = `
                 <h2>❌ Error Loading File</h2>
@@ -819,7 +820,69 @@ function loadFile(file) {
     reader.readAsText(file);
 }
 
-function initializeData(data) {
+// LocalStorage key
+const STORAGE_KEY = 'shadertoy-browser-data';
+
+// Save data to localStorage
+function saveToStorage(data) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        console.log('Saved shader data to localStorage');
+    } catch (err) {
+        console.warn('Failed to save to localStorage:', err.message);
+    }
+}
+
+// Load data from localStorage
+function loadFromStorage() {
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+            return JSON.parse(stored);
+        }
+    } catch (err) {
+        console.warn('Failed to load from localStorage:', err.message);
+    }
+    return null;
+}
+
+// Clear localStorage and show drop zone
+function showDropZone() {
+    // Reset state
+    allShaders = [];
+    filteredShaders = [];
+    selectedShader = null;
+    currentPage = 1;
+    
+    // Reset UI
+    dropZone.style.display = 'block';
+    dropZone.innerHTML = `
+        <h2>📁 Load Your Shadertoy Library</h2>
+        <p>Drag and drop your shaders.json file here, or click to browse</p>
+        <button class="primary" onclick="document.getElementById('fileInput').click()">
+            Choose File
+        </button>
+        <input type="file" id="fileInput" accept=".json">
+    `;
+    // Re-attach file input listener
+    document.getElementById('fileInput').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) loadFile(file);
+    });
+    
+    shaderContainer.style.display = 'none';
+    statsBar.style.display = 'none';
+    detailPanel.classList.remove('open');
+    document.getElementById('loadNewBtn').style.display = 'none';
+    
+    // Disable controls
+    searchInput.disabled = true;
+    sortSelect.disabled = true;
+    filterSelect.disabled = true;
+    perPageSelect.disabled = true;
+}
+
+function initializeData(data, saveToLocalStorage = false) {
     // Handle both formats: { shaders: [...] } or just [...]
     if (Array.isArray(data)) {
         allShaders = data;
@@ -829,6 +892,11 @@ function initializeData(data) {
     
     if (allShaders.length === 0) {
         return;
+    }
+    
+    // Save to localStorage if requested (i.e., from file load, not from storage)
+    if (saveToLocalStorage) {
+        saveToStorage(data);
     }
     
     // Estimate dates for shaders without dates (private shaders)
@@ -857,6 +925,9 @@ function initializeData(data) {
     dropZone.style.display = 'none';
     shaderContainer.style.display = 'flex';
     statsBar.style.display = 'block';
+    
+    // Show "Load New JSON" button
+    document.getElementById('loadNewBtn').style.display = 'inline-block';
     
     // Initial render
     applyFilters();
@@ -965,13 +1036,13 @@ function applyFilters() {
 function getStatus(published) {
     if (published === undefined || published === null) return 'private';
     
-    // Handle numeric values (Shadertoy API format)
-    // 0 = private, 1 = unlisted, 2 = public, 3 = public+api
+    // Handle numeric values (Shadertoy plugin format)
+    // 0 = private, 1 = public, 2 = unlisted, 3 = public+api
     if (typeof published === 'number' || !isNaN(parseInt(published))) {
         const num = parseInt(published);
         if (num === 0) return 'private';
-        if (num === 1) return 'unlisted';
-        if (num === 2) return 'public';
+        if (num === 1) return 'public';
+        if (num === 2) return 'unlisted';
         if (num === 3) return 'public-api';
     }
     
@@ -1268,6 +1339,23 @@ document.addEventListener('keydown', (e) => {
         closeDetail();
     }
 });
+
+// "Load New JSON" button handler
+document.getElementById('loadNewBtn').addEventListener('click', () => {
+    if (confirm('Load a different JSON file? This will replace the current data.')) {
+        localStorage.removeItem(STORAGE_KEY);
+        showDropZone();
+    }
+});
+
+// Check for saved data on page load
+(function init() {
+    const savedData = loadFromStorage();
+    if (savedData) {
+        console.log('Loading shader data from localStorage');
+        initializeData(savedData, false); // false = don't re-save
+    }
+})();
 </script>
 
 </body>
