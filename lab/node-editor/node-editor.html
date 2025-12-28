@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Node Editor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #1a1a2e;
+            --bg-panel: #252540;
+            --bg-node: #3a3a5a;
+            --border-color: #5a5a7a;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0c0;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #4ade80;
+            --danger: #f87171;
+            --warning: #fbbf24;
+            --link-color: #22d3ee;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #16213e 100%);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            user-select: none;
+        }
+
+        /* ===================== LAYOUT ===================== */
+        #app {
+            display: grid;
+            grid-template-columns: auto 1fr 280px;
+            grid-template-rows: 1fr auto;
+            height: 100vh;
+            gap: 0;
+        }
+
+        /* ===================== NODE MENU (Left) ===================== */
+        #nodeMenu {
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border-color);
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 6px;
+            height: calc(100vh - 80px); /* Account for recycle bin */
+            overflow: hidden;
+            min-width: 52px;
+        }
+
+        .menu-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: var(--bg-node);
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: grab;
+            transition: all 0.15s ease;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        .menu-btn:hover {
+            transform: scale(1.1);
+            border-color: var(--accent);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .menu-btn:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+
+        .menu-btn::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: 6px;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            z-index: 1000;
+        }
+
+        .menu-btn:hover::after {
+            opacity: 1;
+        }
+
+        /* ===================== CANVAS AREA ===================== */
+        #canvasArea {
+            position: relative;
+            background: 
+                radial-gradient(circle at center, rgba(99, 102, 241, 0.03) 0%, transparent 70%),
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            overflow: hidden;
+        }
+
+        #svgLayer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #nodeLayer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+
+        /* ===================== NODES ===================== */
+        .node {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px 4px 4px;
+            background: var(--bg-node);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            cursor: move;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            transition: box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+
+        .node:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .node.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3), 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .node.dragging {
+            cursor: grabbing;
+            z-index: 100;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        }
+
+        .node.drop-target {
+            border-color: var(--success);
+            box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.3);
+        }
+
+        .node.link-source {
+            border-color: var(--link-color);
+            box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.3);
+        }
+
+        .node-icon {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            flex-shrink: 0;
+        }
+
+        .node-label {
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            color: var(--text-primary);
+            cursor: move;
+            user-select: none;
+            max-width: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Detach handle */
+        .detach-handle {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 18px;
+            height: 18px;
+            background: var(--bg-panel);
+            border: 2px solid var(--danger);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: var(--danger);
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            z-index: 20;
+        }
+
+        .node:hover .detach-handle,
+        .detach-handle:hover {
+            opacity: 1;
+        }
+
+        .detach-handle:hover {
+            transform: translateX(-50%) scale(1.15);
+            background: var(--danger);
+            color: white;
+        }
+
+        /* ===================== INSPECTOR (Right) ===================== */
+        #inspector {
+            background: var(--bg-panel);
+            border-left: 1px solid var(--border-color);
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        #inspector h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .inspector-section {
+            margin-bottom: 24px;
+        }
+
+        .inspector-field {
+            margin-bottom: 12px;
+        }
+
+        .inspector-field label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .inspector-field input,
+        .inspector-field select {
+            width: 100%;
+            padding: 8px 10px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .inspector-field input:focus,
+        .inspector-field select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .empty-inspector {
+            color: var(--text-secondary);
+            font-size: 13px;
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .node-links-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .node-links-list li {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 10px;
+            background: var(--bg-dark);
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .node-links-list li button {
+            background: transparent;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .node-links-list li button:hover {
+            background: rgba(248, 113, 113, 0.2);
+        }
+
+        /* ===================== RECYCLE BIN ===================== */
+        #recycleBin {
+            grid-column: 1 / -1;
+            height: 80px;
+            background: rgba(248, 113, 113, 0.1);
+            border-top: 2px dashed rgba(248, 113, 113, 0.4);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            font-size: 28px;
+            color: rgba(248, 113, 113, 0.6);
+            transition: all 0.2s ease;
+            pointer-events: none;
+        }
+
+        #recycleBin.active {
+            background: rgba(248, 113, 113, 0.25);
+            border-color: var(--danger);
+            color: var(--danger);
+            transform: scale(1.02);
+        }
+
+        #recycleBin small {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* ===================== LINK MODE OVERLAY ===================== */
+        #linkModeOverlay {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--link-color);
+            color: var(--bg-dark);
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 20px rgba(34, 211, 238, 0.4);
+        }
+
+        #linkModeOverlay.visible {
+            display: block;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* ===================== SVG LINES ===================== */
+        .connection-line {
+            stroke: #888;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .link-line {
+            stroke: var(--link-color);
+            stroke-width: 1.5;
+            stroke-dasharray: 4 3;
+            fill: none;
+            opacity: 0.4;
+        }
+
+        .preview-line {
+            stroke: var(--success);
+            stroke-width: 2;
+            stroke-dasharray: 6 4;
+            fill: none;
+            opacity: 0.8;
+        }
+
+        .link-preview-line {
+            stroke: var(--link-color);
+            stroke-width: 1.5;
+            stroke-dasharray: 4 3;
+            fill: none;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="nodeMenu"></div>
+        <div id="canvasArea">
+            <svg id="svgLayer"></svg>
+            <div id="nodeLayer"></div>
+        </div>
+        <div id="inspector">
+            <div class="empty-inspector">
+                Select a node to view properties
+            </div>
+        </div>
+        <div id="recycleBin">
+            <span>🗑️</span>
+            <small>Drop to delete</small>
+        </div>
+    </div>
+
+    <div id="linkModeOverlay">
+        🔗 Click another node to create a link (ESC to cancel)
+    </div>
+
+    <script>
+        // ===================== NODE TYPE DEFINITIONS =====================
+        const NODE_TYPES = [
+            { id: 'folder', icon: '📁', name: 'Folder', color: '#e74c3c' },
+            { id: 'file', icon: '📄', name: 'File', color: '#3498db' },
+            { id: 'link', icon: '🔗', name: 'Link', color: '#2ecc71' },
+            { id: 'settings', icon: '⚙️', name: 'Settings', color: '#f39c12' },
+            { id: 'user', icon: '👤', name: 'User', color: '#9b59b6' },
+            { id: 'chat', icon: '💬', name: 'Chat', color: '#1abc9c' },
+            { id: 'alert', icon: '🔔', name: 'Alert', color: '#e67e22' },
+            { id: 'chart', icon: '📊', name: 'Chart', color: '#34495e' },
+            { id: 'design', icon: '🎨', name: 'Design', color: '#e91e63' },
+            { id: 'search', icon: '🔍', name: 'Search', color: '#00bcd4' },
+            { id: 'edit', icon: '📝', name: 'Edit', color: '#8bc34a' },
+            { id: 'add', icon: '➕', name: 'Add', color: '#673ab7' },
+            { id: 'upload', icon: '📤', name: 'Upload', color: '#009688' },
+            { id: 'download', icon: '📥', name: 'Download', color: '#ffc107' },
+            { id: 'lock', icon: '🔒', name: 'Lock', color: '#795548' },
+            { id: 'star', icon: '⭐', name: 'Star', color: '#ff9800' },
+            { id: 'home', icon: '🏠', name: 'Home', color: '#4caf50' },
+            { id: 'email', icon: '📧', name: 'Email', color: '#2196f3' },
+            { id: 'calendar', icon: '📅', name: 'Calendar', color: '#9c27b0' },
+            { id: 'music', icon: '🎵', name: 'Music', color: '#00bcd4' },
+            { id: 'photo', icon: '📷', name: 'Photo', color: '#cddc39' },
+            { id: 'video', icon: '🎬', name: 'Video', color: '#ff5722' },
+            { id: 'database', icon: '🗄️', name: 'Database', color: '#607d8b' },
+            { id: 'api', icon: '🌐', name: 'API', color: '#00acc1' },
+        ];
+
+        // ===================== GLOBAL STATE =====================
+        let nodes = [];
+        let nonHierarchicalLinks = []; // { from: nodeId, to: nodeId }
+        let nodeCounter = 0;
+        let selectedNode = null;
+
+        // Drag state
+        let isDragging = false;
+        let draggedNode = null;
+        let dragOffset = { x: 0, y: 0 };
+        let dragFromMenu = false;
+        let dragMenuType = null;
+        let isDetached = false;
+
+        // Link mode state
+        let isLinkMode = false;
+        let linkSourceNode = null;
+
+        // DOM elements
+        const nodeMenu = document.getElementById('nodeMenu');
+        const canvasArea = document.getElementById('canvasArea');
+        const nodeLayer = document.getElementById('nodeLayer');
+        const svgLayer = document.getElementById('svgLayer');
+        const inspector = document.getElementById('inspector');
+        const recycleBin = document.getElementById('recycleBin');
+        const linkModeOverlay = document.getElementById('linkModeOverlay');
+
+        // ===================== INITIALIZATION =====================
+        function init() {
+            buildNodeMenu();
+            setupEventListeners();
+        }
+
+        function buildNodeMenu() {
+            NODE_TYPES.forEach(type => {
+                const btn = document.createElement('div');
+                btn.className = 'menu-btn';
+                btn.dataset.type = type.id;
+                btn.dataset.tooltip = type.name;
+                btn.innerHTML = type.icon;
+                btn.style.borderColor = type.color;
+                nodeMenu.appendChild(btn);
+            });
+        }
+
+        function setupEventListeners() {
+            // Menu item drag
+            nodeMenu.addEventListener('mousedown', onMenuMouseDown);
+
+            // Global mouse events
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+
+            // Canvas click (deselect)
+            canvasArea.addEventListener('mousedown', onCanvasMouseDown);
+
+            // Right-click for linking
+            document.addEventListener('contextmenu', onContextMenu);
+
+            // ESC to cancel link mode
+            document.addEventListener('keydown', onKeyDown);
+        }
+
+        // ===================== MENU DRAG =====================
+        function onMenuMouseDown(e) {
+            if (!e.target.classList.contains('menu-btn')) return;
+            if (e.button !== 0) return; // Left click only
+
+            e.preventDefault();
+            const type = e.target.dataset.type;
+            const typeInfo = NODE_TYPES.find(t => t.id === type);
+            if (!typeInfo) return;
+
+            // Create a new node
+            const node = createNode(typeInfo, e.clientX, e.clientY);
+            nodes.push(node);
+            nodeLayer.appendChild(node.element);
+
+            // Start dragging
+            isDragging = true;
+            draggedNode = node;
+            dragFromMenu = true;
+            isDetached = true;
+            dragOffset = { x: node.element.offsetWidth / 2, y: node.element.offsetHeight / 2 };
+
+            updateNodePosition(node, e.clientX, e.clientY);
+            selectNode(node);
+            redrawAll();
+        }
+
+        // ===================== NODE CREATION =====================
+        function createNode(typeInfo, x, y) {
+            const id = 'node_' + (++nodeCounter);
+            const label = typeInfo.name.toLowerCase() + nodeCounter;
+
+            const el = document.createElement('div');
+            el.className = 'node';
+            el.dataset.id = id;
+
+            el.innerHTML = `
+                <div class="detach-handle">×</div>
+                <div class="node-icon" style="background: ${typeInfo.color}40;">${typeInfo.icon}</div>
+                <span class="node-label" title="${label}">${label}</span>
+            `;
+
+            const node = {
+                id,
+                type: typeInfo.id,
+                typeInfo,
+                label,
+                x: 0,
+                y: 0,
+                parent: null, // Hierarchical parent
+                children: [], // Hierarchical children
+                element: el
+            };
+
+            // Event listeners
+            el.addEventListener('mousedown', (e) => onNodeMouseDown(e, node));
+            el.querySelector('.detach-handle').addEventListener('mousedown', (e) => onDetachMouseDown(e, node));
+
+            return node;
+        }
+
+        function updateNodePosition(node, clientX, clientY) {
+            const rect = canvasArea.getBoundingClientRect();
+            const newX = clientX - rect.left - dragOffset.x;
+            const newY = clientY - rect.top - dragOffset.y;
+            
+            // Calculate delta for moving children
+            const dx = newX - node.x;
+            const dy = newY - node.y;
+            
+            node.x = newX;
+            node.y = newY;
+            node.element.style.left = node.x + 'px';
+            node.element.style.top = node.y + 'px';
+            
+            // Move children along with parent if this node has any
+            if (node.children.length > 0) {
+                moveChildrenRecursively(node, dx, dy);
+            }
+        }
+
+        // ===================== NODE INTERACTION =====================
+        function onNodeMouseDown(e, node) {
+            if (e.target.classList.contains('detach-handle')) return;
+            if (e.target.tagName === 'INPUT') return;
+            if (e.button !== 0) return; // Left click only
+
+            e.stopPropagation();
+
+            // If in link mode, complete the link
+            if (isLinkMode && linkSourceNode && linkSourceNode !== node) {
+                createLink(linkSourceNode, node);
+                exitLinkMode();
+                return;
+            }
+
+            // Start dragging
+            isDragging = true;
+            draggedNode = node;
+            dragFromMenu = false;
+            isDetached = node.parent === null;
+
+            const rect = node.element.getBoundingClientRect();
+            const canvasRect = canvasArea.getBoundingClientRect();
+            dragOffset = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+
+            node.element.classList.add('dragging');
+            selectNode(node);
+        }
+
+        function onDetachMouseDown(e, node) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (node.parent) {
+                detachNode(node);
+            }
+
+            // Start dragging the detached node
+            isDragging = true;
+            draggedNode = node;
+            isDetached = true;
+
+            const rect = node.element.getBoundingClientRect();
+            dragOffset = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+
+            node.element.classList.add('dragging');
+            selectNode(node);
+        }
+
+        function detachNode(node) {
+            if (!node.parent) return;
+
+            const parent = node.parent;
+            parent.children = parent.children.filter(c => c !== node);
+            node.parent = null;
+            isDetached = true;
+            redrawAll();
+        }
+
+        // ===================== MOUSE MOVE =====================
+        function onMouseMove(e) {
+            if (!isDragging || !draggedNode) return;
+
+            e.preventDefault();
+
+            // Move the node (this also moves children)
+            updateNodePosition(draggedNode, e.clientX, e.clientY);
+
+            // Show drop preview for detached nodes (before redrawAll so it persists)
+            let dropTarget = null;
+            if (isDetached) {
+                dropTarget = updateDropPreview(e.clientX, e.clientY);
+            }
+
+            // Update lines (pass dropTarget to preserve preview line)
+            redrawAll(dropTarget, e.clientX, e.clientY);
+
+            // Update recycle bin
+            updateRecyclePreview(e.clientX, e.clientY);
+        }
+
+        function moveChildrenRecursively(node, dx, dy) {
+            // Move all hierarchical children by the same delta
+            node.children.forEach(child => {
+                child.x += dx;
+                child.y += dy;
+                child.element.style.left = child.x + 'px';
+                child.element.style.top = child.y + 'px';
+                // Recursively move grandchildren
+                moveChildrenRecursively(child, dx, dy);
+            });
+        }
+
+        // ===================== MOUSE UP =====================
+        function onMouseUp(e) {
+            if (!isDragging) return;
+
+            clearDropPreview();
+            clearRecyclePreview();
+
+            if (draggedNode) {
+                draggedNode.element.classList.remove('dragging');
+
+                // Check recycle bin
+                if (isOverRecycleBin(e.clientX, e.clientY)) {
+                    deleteNode(draggedNode);
+                } else if (isDetached) {
+                    // Check for drop target
+                    const target = findDropTarget(e.clientX, e.clientY);
+                    if (target && target !== draggedNode) {
+                        attachNode(draggedNode, target);
+                    }
+                }
+            }
+
+            isDragging = false;
+            draggedNode = null;
+            dragFromMenu = false;
+            isDetached = false;
+            redrawAll();
+        }
+
+        // ===================== DROP TARGETS =====================
+        function findDropTarget(x, y) {
+            const rect = canvasArea.getBoundingClientRect();
+            const canvasX = x - rect.left;
+            const canvasY = y - rect.top;
+
+            let bestTarget = null;
+            let bestDistance = Infinity;
+
+            for (const node of nodes) {
+                if (node === draggedNode) continue;
+                if (isDescendant(node, draggedNode)) continue;
+
+                const nodeRect = node.element.getBoundingClientRect();
+                const nodeX = nodeRect.left - rect.left;
+                const nodeY = nodeRect.top - rect.top;
+                const nodeCenterX = nodeX + nodeRect.width / 2;
+
+                // Drop zone is below the node - increased size
+                const dropZone = {
+                    left: nodeCenterX - 80,
+                    right: nodeCenterX + 80,
+                    top: nodeY + nodeRect.height + 15,
+                    bottom: nodeY + nodeRect.height + 150
+                };
+
+                if (canvasX >= dropZone.left && canvasX <= dropZone.right &&
+                    canvasY >= dropZone.top && canvasY <= dropZone.bottom) {
+                    // Calculate distance to node center for best match
+                    const dist = Math.hypot(canvasX - nodeCenterX, canvasY - (nodeY + nodeRect.height + 40));
+                    if (dist < bestDistance) {
+                        bestDistance = dist;
+                        bestTarget = node;
+                    }
+                }
+            }
+            return bestTarget;
+        }
+
+        function isDescendant(potentialParent, potentialChild) {
+            let current = potentialParent;
+            while (current) {
+                if (current === potentialChild) return true;
+                current = current.parent;
+            }
+            return false;
+        }
+
+        function updateDropPreview(x, y) {
+            const target = findDropTarget(x, y);
+
+            nodes.forEach(n => n.element.classList.remove('drop-target'));
+
+            if (target) {
+                target.element.classList.add('drop-target');
+            }
+            
+            return target; // Return target so redrawAll can draw the preview line
+        }
+
+        function clearDropPreview() {
+            nodes.forEach(n => n.element.classList.remove('drop-target'));
+        }
+
+        // ===================== ATTACH/DETACH =====================
+        function attachNode(child, parent) {
+            if (child.parent) {
+                child.parent.children = child.parent.children.filter(c => c !== child);
+            }
+            child.parent = parent;
+            parent.children.push(child);
+            isDetached = false;
+            redrawAll();
+        }
+
+        // ===================== RECYCLE BIN =====================
+        function isOverRecycleBin(x, y) {
+            const rect = recycleBin.getBoundingClientRect();
+            return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+        }
+
+        function updateRecyclePreview(x, y) {
+            if (isOverRecycleBin(x, y)) {
+                recycleBin.classList.add('active');
+            } else {
+                recycleBin.classList.remove('active');
+            }
+        }
+
+        function clearRecyclePreview() {
+            recycleBin.classList.remove('active');
+        }
+
+        function deleteNode(node) {
+            // Delete children recursively
+            [...node.children].forEach(child => deleteNode(child));
+
+            // Remove from parent
+            if (node.parent) {
+                node.parent.children = node.parent.children.filter(c => c !== node);
+            }
+
+            // Remove non-hierarchical links
+            nonHierarchicalLinks = nonHierarchicalLinks.filter(
+                link => link.from !== node.id && link.to !== node.id
+            );
+
+            // Remove from nodes array
+            nodes = nodes.filter(n => n !== node);
+
+            // Remove from DOM
+            node.element.remove();
+
+            // Deselect if selected
+            if (selectedNode === node) {
+                selectNode(null);
+            }
+
+            redrawAll();
+        }
+
+        // ===================== NON-HIERARCHICAL LINKS =====================
+        function onContextMenu(e) {
+            const nodeEl = e.target.closest('.node');
+            if (!nodeEl) return;
+
+            e.preventDefault();
+
+            const nodeId = nodeEl.dataset.id;
+            const node = nodes.find(n => n.id === nodeId);
+            if (!node) return;
+
+            if (isLinkMode) {
+                if (linkSourceNode === node) {
+                    exitLinkMode();
+                } else {
+                    createLink(linkSourceNode, node);
+                    exitLinkMode();
+                }
+            } else {
+                enterLinkMode(node);
+            }
+        }
+
+        function enterLinkMode(node) {
+            isLinkMode = true;
+            linkSourceNode = node;
+            node.element.classList.add('link-source');
+            linkModeOverlay.classList.add('visible');
+        }
+
+        function exitLinkMode() {
+            if (linkSourceNode) {
+                linkSourceNode.element.classList.remove('link-source');
+            }
+            isLinkMode = false;
+            linkSourceNode = null;
+            linkModeOverlay.classList.remove('visible');
+            clearLinkPreviewLine();
+            redrawAll();
+        }
+
+        function createLink(from, to) {
+            // Check if link already exists
+            const exists = nonHierarchicalLinks.some(
+                link => (link.from === from.id && link.to === to.id) ||
+                        (link.from === to.id && link.to === from.id)
+            );
+            if (exists) return;
+
+            nonHierarchicalLinks.push({ from: from.id, to: to.id });
+            redrawAll();
+            updateInspector();
+        }
+
+        function removeLink(fromId, toId) {
+            nonHierarchicalLinks = nonHierarchicalLinks.filter(
+                link => !(link.from === fromId && link.to === toId) &&
+                        !(link.from === toId && link.to === fromId)
+            );
+            redrawAll();
+            updateInspector();
+        }
+
+        function onKeyDown(e) {
+            if (e.key === 'Escape' && isLinkMode) {
+                exitLinkMode();
+            }
+        }
+
+        let linkPreviewLine = null;
+        function clearLinkPreviewLine() {
+            if (linkPreviewLine) {
+                linkPreviewLine.remove();
+                linkPreviewLine = null;
+            }
+        }
+
+        // ===================== CANVAS CLICK =====================
+        function onCanvasMouseDown(e) {
+            if (e.target === canvasArea || e.target === nodeLayer) {
+                if (isLinkMode) {
+                    exitLinkMode();
+                } else {
+                    selectNode(null);
+                }
+            }
+        }
+
+        // ===================== SELECTION =====================
+        function selectNode(node) {
+            if (selectedNode) {
+                selectedNode.element.classList.remove('selected');
+            }
+            selectedNode = node;
+            if (node) {
+                node.element.classList.add('selected');
+            }
+            updateInspector();
+        }
+
+        // ===================== INSPECTOR =====================
+        function updateInspector() {
+            if (!selectedNode) {
+                inspector.innerHTML = `
+                    <div class="empty-inspector">
+                        Select a node to view properties
+                    </div>
+                `;
+                return;
+            }
+
+            const node = selectedNode;
+            const nodeLinks = nonHierarchicalLinks.filter(
+                link => link.from === node.id || link.to === node.id
+            );
+
+            let linksHtml = '';
+            if (nodeLinks.length > 0) {
+                linksHtml = '<ul class="node-links-list">';
+                nodeLinks.forEach(link => {
+                    const otherId = link.from === node.id ? link.to : link.from;
+                    const otherNode = nodes.find(n => n.id === otherId);
+                    if (otherNode) {
+                        linksHtml += `
+                            <li>
+                                <span>${otherNode.typeInfo.icon} ${otherNode.label}</span>
+                                <button onclick="removeLink('${link.from}', '${link.to}')" title="Remove link">×</button>
+                            </li>
+                        `;
+                    }
+                });
+                linksHtml += '</ul>';
+            } else {
+                linksHtml = '<p style="color: var(--text-secondary); font-size: 12px;">No links. Right-click to add.</p>';
+            }
+
+            const childrenHtml = node.children.length > 0
+                ? node.children.map(c => `<li>${c.typeInfo.icon} ${c.label}</li>`).join('')
+                : '<li style="color: var(--text-secondary);">None</li>';
+
+            inspector.innerHTML = `
+                <div class="inspector-section">
+                    <h3>Node Properties</h3>
+                    <div class="inspector-field">
+                        <label>ID</label>
+                        <input type="text" value="${node.id}" readonly style="opacity: 0.6;">
+                    </div>
+                    <div class="inspector-field">
+                        <label>Type</label>
+                        <input type="text" value="${node.typeInfo.icon} ${node.typeInfo.name}" readonly style="opacity: 0.6;">
+                    </div>
+                    <div class="inspector-field">
+                        <label>Label</label>
+                        <input type="text" value="${node.label}" id="inspectorLabel">
+                    </div>
+                </div>
+
+                <div class="inspector-section">
+                    <h3>Hierarchy</h3>
+                    <div class="inspector-field">
+                        <label>Parent</label>
+                        <input type="text" value="${node.parent ? node.parent.typeInfo.icon + ' ' + node.parent.label : '(none)'}" readonly style="opacity: 0.6;">
+                    </div>
+                    <div class="inspector-field">
+                        <label>Children</label>
+                        <ul class="node-links-list">${childrenHtml}</ul>
+                    </div>
+                </div>
+
+                <div class="inspector-section">
+                    <h3>Non-Hierarchical Links</h3>
+                    ${linksHtml}
+                </div>
+            `;
+
+            // Bind label input
+            const labelInput = document.getElementById('inspectorLabel');
+            if (labelInput) {
+                labelInput.addEventListener('input', (e) => {
+                    node.label = e.target.value;
+                    const labelEl = node.element.querySelector('.node-label');
+                    if (labelEl) {
+                        labelEl.textContent = e.target.value;
+                        labelEl.title = e.target.value;
+                    }
+                });
+            }
+        }
+
+        // ===================== DRAWING =====================
+        function redrawAll(dropTarget = null, mouseX = 0, mouseY = 0) {
+            // Clear SVG
+            svgLayer.innerHTML = '';
+
+            // Draw hierarchical connections
+            nodes.forEach(node => {
+                if (node.parent) {
+                    drawHierarchicalLine(node.parent, node);
+                }
+            });
+
+            // Draw non-hierarchical links
+            nonHierarchicalLinks.forEach(link => {
+                const from = nodes.find(n => n.id === link.from);
+                const to = nodes.find(n => n.id === link.to);
+                if (from && to) {
+                    drawLinkLine(from, to);
+                }
+            });
+
+            // Draw drop preview line if we have a target
+            if (dropTarget) {
+                drawDropPreviewLine(dropTarget, mouseX, mouseY);
+            }
+        }
+
+        function drawDropPreviewLine(target, x, y) {
+            const rect = canvasArea.getBoundingClientRect();
+            const targetRect = target.element.getBoundingClientRect();
+
+            const x1 = targetRect.left - rect.left + targetRect.width / 2;
+            const y1 = targetRect.top - rect.top + targetRect.height / 2;
+            const x2 = x - rect.left;
+            const y2 = y - rect.top;
+
+            const pathData = `M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.classList.add('preview-line');
+            path.setAttribute('d', pathData);
+            svgLayer.appendChild(path);
+        }
+
+        function drawHierarchicalLine(parent, child) {
+            const rect = canvasArea.getBoundingClientRect();
+            const parentRect = parent.element.getBoundingClientRect();
+            const childRect = child.element.getBoundingClientRect();
+
+            const x1 = parentRect.left - rect.left + parentRect.width / 2;
+            const y1 = parentRect.top - rect.top + parentRect.height / 2;
+            const x2 = childRect.left - rect.left + childRect.width / 2;
+            const y2 = childRect.top - rect.top + childRect.height / 2;
+
+            const pathData = `M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathData);
+            path.classList.add('connection-line');
+            svgLayer.appendChild(path);
+        }
+
+        function drawLinkLine(from, to) {
+            const rect = canvasArea.getBoundingClientRect();
+            const fromRect = from.element.getBoundingClientRect();
+            const toRect = to.element.getBoundingClientRect();
+
+            const x1 = fromRect.left - rect.left + fromRect.width / 2;
+            const y1 = fromRect.top - rect.top + fromRect.height / 2;
+            const x2 = toRect.left - rect.left + toRect.width / 2;
+            const y2 = toRect.top - rect.top + toRect.height / 2;
+
+            // Use a horizontal arc curve for non-hierarchical links
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const dist = Math.hypot(dx, dy);
+            
+            // Curve outward perpendicular to the line
+            const perpX = -dy / dist;
+            const perpY = dx / dist;
+            const curveAmount = Math.min(dist * 0.25, 40);
+            
+            const mx = (x1 + x2) / 2 + perpX * curveAmount;
+            const my = (y1 + y2) / 2 + perpY * curveAmount;
+
+            const pathData = `M ${x1} ${y1} Q ${mx} ${my}, ${x2} ${y2}`;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathData);
+            path.classList.add('link-line');
+            svgLayer.appendChild(path);
+        }
+
+        // Expose removeLink globally for inline onclick
+        window.removeLink = removeLink;
+
+        // ===================== START =====================
+        init();
+    </script>
+</body>
+</html>
+
