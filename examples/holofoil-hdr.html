@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Holofoil HDR Demo</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: #eee;
+            font-family: system-ui, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        h1 { margin-bottom: 10px; }
+        .info { 
+            margin-bottom: 20px; 
+            text-align: center;
+            max-width: 600px;
+        }
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+        label { cursor: pointer; }
+        canvas {
+            border: 2px solid #333;
+            max-width: 100%;
+        }
+        .status {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #888;
+        }
+        .hdr-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .hdr-yes { background: #4ade80; color: #000; }
+        .hdr-no { background: #666; color: #fff; }
+    </style>
+</head>
+<body>
+    <h1>Holofoil HDR Demo
+        <span id="hdrBadge" class="hdr-badge hdr-no">SDR</span>
+    </h1>
+    
+    <div class="info">
+        <p>This demo renders a raymarched holofoil effect using WebGPU compute shaders with HDR output.</p>
+        <p>On HDR displays with "extended" tone mapping, bright areas will exceed standard white.</p>
+    </div>
+    
+    <div class="controls">
+        <span>Tone Mapping:</span>
+        <label>
+            <input type="radio" name="toneMap" value="standard" checked> Standard
+        </label>
+        <label>
+            <input type="radio" name="toneMap" value="extended"> Extended (HDR)
+        </label>
+        <span style="margin-left: 20px;">Brightness:</span>
+        <input type="range" id="brightness" min="0.5" max="5" step="0.1" value="1.5">
+        <span id="brightnessValue">1.5</span>
+    </div>
+    
+    <canvas id="canvas" width="800" height="600"></canvas>
+    
+    <div class="status" id="status">Initializing WebGPU...</div>
+
+<script type="module">
+// Check HDR support
+const isHDR = window.matchMedia("(dynamic-range: high)").matches;
+document.getElementById('hdrBadge').textContent = isHDR ? 'HDR' : 'SDR';
+document.getElementById('hdrBadge').className = `hdr-badge ${isHDR ? 'hdr-yes' : 'hdr-no'}`;
+
+const canvas = document.getElementById('canvas');
+const status = document.getElementById('status');
+const brightnessSlider = document.getElementById('brightness');
+const brightnessValue = document.getElementById('brightnessValue');
+
+let device, context, pipeline, bindGroup, uniformBuffer, outputTexture;
+let toneMapMode = 'standard';
+let brightness = 1.5;
+let startTime = performance.now();
+
+// Shader code
+const shaderCode = `
+struct Uniforms {
+    time: f32,
+    brightness: f32,
+    _pad0: f32,
+    _pad1: f32,
+}
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
+@group(0) @binding(1) var outputTexture: texture_storage_2d<rgba16float, write>;
+
+fn rot2(a: f32) -> mat2x2f {
+    let c = cos(a);
+    let s = sin(a);
+    return mat2x2f(c, s, -s, c);
+}
+
+fn hash(p: vec3f) -> f32 {
+    return fract(sin(dot(p, vec3f(127.1, 311.7, 74.7))) * 43758.5);
+}
+
+fn hash2(p: vec3f) -> f32 {
+    return fract(sin(dot(p, vec3f(43.7, 78.2, 123.4))) * 127.1);
+}
+
+fn march(I: vec2f, r: vec3f, Rx: mat2x2f, Ry: mat2x2f, Z: f32) -> f32 {
+    var col = 0.0;
+    var d = 0.0;
+    
+    for (var i = 0.0; i < 80.0; i += 1.0) {
+        var p = vec3f((I + I - r.xy) / r.y * d, d - 8.0);
+        
+        if (abs(p.x) > 5.0) { break; }
+        
+        let pxz = p.xz * Rx;
+        p = vec3f(pxz.x, p.y, pxz.y);
+        
+        let pxy = p.xy * Ry;
+        p = vec3f(pxy.x, pxy.y, p.z);
+        
+        let g = floor(p * 6.0);
+        let f = fract(p * 6.0) - 0.5;
+        let h = step(length(f), hash(g) * 0.3 + 0.1);
+        let a = hash2(g) * 6.28;
+        
+        var e = 1.0;
+        var sc = 2.0;
+        
+        for (var j = 0; j < 3; j++) {
+            let gg = abs(fract(p * sc / 2.0) * 2.0 - 1.0);
+            e = min(e, min(max(gg.x, gg.y), min(max(gg.y, gg.z), max(gg.x, gg.z))) / sc);
+            sc *= 0.6;
+        }
+        
+        let c = max(max(max(abs(p.x), abs(p.y)), abs(p.z)), dot(abs(p), vec3f(0.577)) * 0.9) - 3.0;
+        let s = 0.01 + 0.15 * abs(max(max(c, e - 0.1), length(sin(c)) - 0.3) + Z * 0.02 - i / 130.0);
+        d += s;
+        
+        let sf = smoothstep(0.02, 0.01, s);
+        col += 1.6 / s * (0.5 + 0.5 * sin(i * 0.3 + Z * 5.0) + sf * 4.0 * h * sin(a + i * 0.4 + Z * 5.0));
+    }
+    
+    return col;
+}
+
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) id: vec3u) {
+    let dims = textureDimensions(outputTexture);
+    if (id.x >= dims.x || id.y >= dims.y) { return; }
+    
+    let I = vec2f(f32(id.x), f32(dims.y - id.y - 1));
+    let r = vec3f(vec2f(dims), 0.0);
+    let t = uniforms.time / 2.0;
+    
+    let Rx = rot2(t);
+    let Ry = rot2(t);
+    
+    var O = vec4f(
+        march(I, r, Rx, Ry, -1.0),
+        march(I, r, Rx, Ry, 0.0),
+        march(I, r, Rx, Ry, 1.0),
+        1.0
+    );
+    
+    // Apply brightness and HDR-friendly tone mapping
+    // tanh provides soft clipping but allows values > 1.0 for HDR
+    O = tanh(O * O / 1e7) * uniforms.brightness;
+    
+    textureStore(outputTexture, vec2i(id.xy), O);
+}
+`;
+
+// Blit shader to copy compute output to canvas
+const blitShaderCode = `
+struct VertexOutput {
+    @builtin(position) position: vec4f,
+    @location(0) uv: vec2f,
+}
+
+@vertex
+fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
+    var pos = array<vec2f, 3>(
+        vec2f(-1.0, -3.0),
+        vec2f(3.0, 1.0),
+        vec2f(-1.0, 1.0)
+    );
+    var out: VertexOutput;
+    out.position = vec4f(pos[vertexIndex], 0.0, 1.0);
+    out.uv = (pos[vertexIndex] + 1.0) * 0.5;
+    out.uv.y = 1.0 - out.uv.y;
+    return out;
+}
+
+@group(0) @binding(0) var inputTexture: texture_2d<f32>;
+@group(0) @binding(1) var texSampler: sampler;
+
+@fragment
+fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
+    return textureSample(inputTexture, texSampler, uv);
+}
+`;
+
+async function init() {
+    if (!navigator.gpu) {
+        status.textContent = 'WebGPU not supported in this browser';
+        return false;
+    }
+    
+    const adapter = await navigator.gpu.requestAdapter();
+    if (!adapter) {
+        status.textContent = 'No WebGPU adapter found';
+        return false;
+    }
+    
+    device = await adapter.requestDevice();
+    context = canvas.getContext('webgpu');
+    
+    configureContext();
+    
+    // Create uniform buffer
+    uniformBuffer = device.createBuffer({
+        size: 16,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    
+    // Create output texture for compute shader
+    outputTexture = device.createTexture({
+        size: [canvas.width, canvas.height],
+        format: 'rgba16float',
+        usage: GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING,
+    });
+    
+    // Create compute pipeline
+    const computeModule = device.createShaderModule({ code: shaderCode });
+    pipeline = device.createComputePipeline({
+        layout: 'auto',
+        compute: {
+            module: computeModule,
+            entryPoint: 'main',
+        },
+    });
+    
+    // Create bind group for compute
+    bindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: { buffer: uniformBuffer } },
+            { binding: 1, resource: outputTexture.createView() },
+        ],
+    });
+    
+    // Create blit pipeline
+    const blitModule = device.createShaderModule({ code: blitShaderCode });
+    window.blitPipeline = device.createRenderPipeline({
+        layout: 'auto',
+        vertex: {
+            module: blitModule,
+            entryPoint: 'vs_main',
+        },
+        fragment: {
+            module: blitModule,
+            entryPoint: 'fs_main',
+            targets: [{ format: 'rgba16float' }],
+        },
+    });
+    
+    // Create sampler
+    window.sampler = device.createSampler({
+        magFilter: 'linear',
+        minFilter: 'linear',
+    });
+    
+    // Create blit bind group
+    window.blitBindGroup = device.createBindGroup({
+        layout: window.blitPipeline.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: outputTexture.createView() },
+            { binding: 1, resource: window.sampler },
+        ],
+    });
+    
+    status.textContent = `Running on ${adapter.info?.device || 'WebGPU'} | ${isHDR ? 'HDR Display Detected' : 'SDR Display'}`;
+    return true;
+}
+
+function configureContext() {
+    context.configure({
+        device: device,
+        format: 'rgba16float',
+        colorSpace: 'srgb',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+        toneMapping: { mode: toneMapMode },
+    });
+}
+
+function render() {
+    const time = (performance.now() - startTime) / 1000;
+    
+    // Update uniforms
+    const uniformData = new Float32Array([time, brightness, 0, 0]);
+    device.queue.writeBuffer(uniformBuffer, 0, uniformData);
+    
+    const commandEncoder = device.createCommandEncoder();
+    
+    // Compute pass
+    const computePass = commandEncoder.beginComputePass();
+    computePass.setPipeline(pipeline);
+    computePass.setBindGroup(0, bindGroup);
+    computePass.dispatchWorkgroups(
+        Math.ceil(canvas.width / 16),
+        Math.ceil(canvas.height / 16)
+    );
+    computePass.end();
+    
+    // Render pass (blit to canvas)
+    const renderPass = commandEncoder.beginRenderPass({
+        colorAttachments: [{
+            view: context.getCurrentTexture().createView(),
+            loadOp: 'clear',
+            storeOp: 'store',
+            clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        }],
+    });
+    renderPass.setPipeline(window.blitPipeline);
+    renderPass.setBindGroup(0, window.blitBindGroup);
+    renderPass.draw(3);
+    renderPass.end();
+    
+    device.queue.submit([commandEncoder.finish()]);
+    
+    requestAnimationFrame(render);
+}
+
+// Event listeners
+document.querySelectorAll('input[name="toneMap"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        toneMapMode = e.target.value;
+        configureContext();
+    });
+});
+
+brightnessSlider.addEventListener('input', (e) => {
+    brightness = parseFloat(e.target.value);
+    brightnessValue.textContent = brightness.toFixed(1);
+});
+
+// Start
+init().then(success => {
+    if (success) {
+        render();
+    }
+});
+</script>
+</body>
+</html>
+

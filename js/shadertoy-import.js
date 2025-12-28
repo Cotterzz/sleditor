@@ -77,10 +77,24 @@ export function validateShader(shader) {
         warnings.push(`Multi-buffer shader: ${bufferPasses.length} buffer pass(es)`);
     }
     
-    // Add info about sound pass
+    // Check sound pass for inputs (not currently supported)
     const soundPass = passes.find(p => p.type?.toLowerCase() === 'sound');
     if (soundPass) {
-        warnings.push('Sound pass will be imported as GLSL audio');
+        const soundInputs = soundPass.inputs || [];
+        if (soundInputs.length > 0) {
+            // Check what types of inputs
+            const hasBufferInput = soundInputs.some(i => i.type?.toLowerCase() === 'buffer');
+            const hasTextureInput = soundInputs.some(i => ['texture', 'video', 'cubemap'].includes(i.type?.toLowerCase()));
+            
+            if (hasBufferInput) {
+                errors.push('Sound pass with buffer inputs not supported (audio runs in separate thread)');
+            } else if (hasTextureInput) {
+                // Static textures could technically work but not implemented yet
+                errors.push('Sound pass with texture inputs not yet supported');
+            }
+        } else {
+            warnings.push('Sound pass will be imported as GLSL audio');
+        }
     }
     
     // Deduplicate errors
