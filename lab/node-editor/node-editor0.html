@@ -140,17 +140,6 @@
             z-index: 10;
         }
 
-        /* SVG layer above nodes for non-hierarchical links */
-        #svgLayerTop {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 15;
-        }
-
         /* ===================== NODES ===================== */
         .node {
             position: absolute;
@@ -191,113 +180,6 @@
             box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.3);
         }
 
-        .node.contain-target {
-            border-color: var(--warning);
-            box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.3);
-        }
-
-        .node.is-container {
-            min-width: 60px;
-            padding: 3px;
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .node.is-container .node-header {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            margin-bottom: 2px;
-        }
-
-        .node.is-container .node-contents {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            padding: 2px;
-            min-height: 20px;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 3px;
-        }
-
-        .node.contained {
-            position: relative !important;
-            left: auto !important;
-            top: auto !important;
-        }
-
-        /* Contained nodes are smaller - Level 1 */
-        .node.contained {
-            padding: 2px 4px 2px 2px;
-            gap: 4px;
-            border-radius: 6px;
-        }
-
-        .node.contained .node-icon {
-            width: 20px;
-            height: 20px;
-            font-size: 12px;
-            border-radius: 4px;
-        }
-
-        .node.contained .node-label {
-            font-size: 10px;
-            max-width: 50px;
-        }
-
-        /* Level 2 - nested inside a contained node */
-        .node.contained .node.contained {
-            padding: 1px 3px 1px 1px;
-            gap: 3px;
-            border-radius: 4px;
-        }
-
-        .node.contained .node.contained .node-icon {
-            width: 16px;
-            height: 16px;
-            font-size: 10px;
-            border-radius: 3px;
-        }
-
-        .node.contained .node.contained .node-label {
-            font-size: 9px;
-            max-width: 40px;
-        }
-
-        /* Level 3 - deeply nested */
-        .node.contained .node.contained .node.contained {
-            padding: 1px 2px 1px 1px;
-            gap: 2px;
-            border-radius: 3px;
-        }
-
-        .node.contained .node.contained .node.contained .node-icon {
-            width: 14px;
-            height: 14px;
-            font-size: 8px;
-            border-radius: 2px;
-        }
-
-        .node.contained .node.contained .node.contained .node-label {
-            font-size: 8px;
-            max-width: 30px;
-        }
-
-        /* Container styling adjustments for nested */
-        .node.contained.is-container .node-contents {
-            padding: 1px;
-            gap: 1px;
-            min-height: 16px;
-        }
-
-        .node.contained.is-container .node-header {
-            padding: 1px;
-            gap: 2px;
-            margin-bottom: 1px;
-        }
-
         .node-icon {
             width: 28px;
             height: 28px;
@@ -322,7 +204,7 @@
             text-overflow: ellipsis;
         }
 
-        /* Detach handle - only visible for nodes with hierarchical parents (not contained) */
+        /* Detach handle */
         .detach-handle {
             position: absolute;
             top: -10px;
@@ -333,7 +215,7 @@
             background: var(--bg-panel);
             border: 2px solid var(--danger);
             border-radius: 50%;
-            display: none; /* Hidden by default */
+            display: flex;
             align-items: center;
             justify-content: center;
             font-size: 11px;
@@ -342,31 +224,17 @@
             opacity: 0;
             transition: opacity 0.15s ease, transform 0.15s ease;
             z-index: 20;
-            pointer-events: none; /* Disabled by default */
         }
 
-        /* Only show for nodes with parent AND not contained */
-        .node.has-parent:not(.contained) > .detach-handle {
-            display: flex;
-            pointer-events: auto;
-        }
-
-        .node.has-parent:not(.contained):hover > .detach-handle {
+        .node:hover .detach-handle,
+        .detach-handle:hover {
             opacity: 1;
         }
 
-        .node.has-parent:not(.contained) > .detach-handle:hover {
-            opacity: 1;
+        .detach-handle:hover {
             transform: translateX(-50%) scale(1.15);
             background: var(--danger);
             color: white;
-        }
-
-        /* Ensure contained nodes never show detach handle */
-        .node.contained .detach-handle,
-        .node.contained > .detach-handle {
-            display: none !important;
-            pointer-events: none !important;
         }
 
         /* ===================== INSPECTOR (Right) ===================== */
@@ -552,7 +420,6 @@
         <div id="canvasArea">
             <svg id="svgLayer"></svg>
             <div id="nodeLayer"></div>
-            <svg id="svgLayerTop"></svg>
         </div>
         <div id="inspector">
             <div class="empty-inspector">
@@ -621,7 +488,6 @@
         const canvasArea = document.getElementById('canvasArea');
         const nodeLayer = document.getElementById('nodeLayer');
         const svgLayer = document.getElementById('svgLayer');
-        const svgLayerTop = document.getElementById('svgLayerTop');
         const inspector = document.getElementById('inspector');
         const recycleBin = document.getElementById('recycleBin');
         const linkModeOverlay = document.getElementById('linkModeOverlay');
@@ -713,8 +579,6 @@
                 y: 0,
                 parent: null, // Hierarchical parent
                 children: [], // Hierarchical children
-                container: null, // Node that contains this one
-                containedNodes: [], // Nodes contained inside this one
                 element: el
             };
 
@@ -764,10 +628,7 @@
             isDragging = true;
             draggedNode = node;
             dragFromMenu = false;
-            
-            // Contained nodes are not "detached" in the hierarchical sense
-            // but they can be dragged out of their container
-            isDetached = node.parent === null && node.container === null;
+            isDetached = node.parent === null;
 
             const rect = node.element.getBoundingClientRect();
             const canvasRect = canvasArea.getBoundingClientRect();
@@ -775,16 +636,6 @@
                 x: e.clientX - rect.left,
                 y: e.clientY - rect.top
             };
-
-            // If contained, temporarily move to canvas for dragging
-            if (node.container) {
-                node.x = rect.left - canvasRect.left;
-                node.y = rect.top - canvasRect.top;
-                node.element.style.position = 'absolute';
-                node.element.style.left = node.x + 'px';
-                node.element.style.top = node.y + 'px';
-                nodeLayer.appendChild(node.element);
-            }
 
             node.element.classList.add('dragging');
             selectNode(node);
@@ -819,7 +670,6 @@
             const parent = node.parent;
             parent.children = parent.children.filter(c => c !== node);
             node.parent = null;
-            node.element.classList.remove('has-parent');
             isDetached = true;
             redrawAll();
         }
@@ -872,24 +722,10 @@
                 if (isOverRecycleBin(e.clientX, e.clientY)) {
                     deleteNode(draggedNode);
                 } else if (isDetached) {
-                    // Check for containment target first (dropping ON a node)
-                    const containTarget = findContainTarget(e.clientX, e.clientY);
-                    if (containTarget && containTarget !== draggedNode) {
-                        containNode(draggedNode, containTarget);
-                    } else {
-                        // Check for hierarchical drop target (dropping BELOW a node)
-                        const target = findDropTarget(e.clientX, e.clientY);
-                        if (target && target !== draggedNode) {
-                            attachNode(draggedNode, target);
-                        }
-                    }
-                } else if (draggedNode.container) {
-                    // Check if dragging a contained node outside its container
-                    if (!isOverNode(e.clientX, e.clientY, draggedNode.container)) {
-                        uncontainNode(draggedNode);
-                    } else {
-                        // Snap back inside container
-                        snapNodeToContainer(draggedNode);
+                    // Check for drop target
+                    const target = findDropTarget(e.clientX, e.clientY);
+                    if (target && target !== draggedNode) {
+                        attachNode(draggedNode, target);
                     }
                 }
             }
@@ -913,8 +749,6 @@
             for (const node of nodes) {
                 if (node === draggedNode) continue;
                 if (isDescendant(node, draggedNode)) continue;
-                if (node.container) continue; // Can't drop onto a contained node
-                if (draggedNode && draggedNode.container) continue; // Contained nodes can't be parented
 
                 const nodeRect = node.element.getBoundingClientRect();
                 const nodeX = nodeRect.left - rect.left;
@@ -951,204 +785,31 @@
             return false;
         }
 
-        // Find a node to contain the dragged node (dropping directly ON the node)
-        function findContainTarget(x, y) {
-            const rect = canvasArea.getBoundingClientRect();
-            
-            for (const node of nodes) {
-                if (node === draggedNode) continue;
-                if (isDescendant(node, draggedNode)) continue;
-                if (node.children.length > 0) continue; // Can't contain if has hierarchical children
-                if (draggedNode.children.length > 0) continue; // Can't be contained if has hierarchical children
-                if (draggedNode.container) continue; // Already contained
-                
-                const nodeRect = node.element.getBoundingClientRect();
-                
-                // Check if directly over the node
-                if (x >= nodeRect.left && x <= nodeRect.right &&
-                    y >= nodeRect.top && y <= nodeRect.bottom) {
-                    return node;
-                }
-            }
-            return null;
-        }
-
-        // Check if point is over a specific node
-        function isOverNode(x, y, node) {
-            const nodeRect = node.element.getBoundingClientRect();
-            // Add some padding for easier release
-            const padding = 20;
-            return x >= nodeRect.left - padding && x <= nodeRect.right + padding &&
-                   y >= nodeRect.top - padding && y <= nodeRect.bottom + padding;
-        }
-
         function updateDropPreview(x, y) {
-            const containTarget = findContainTarget(x, y);
-            const dropTarget = containTarget ? null : findDropTarget(x, y);
+            const target = findDropTarget(x, y);
 
-            nodes.forEach(n => {
-                n.element.classList.remove('drop-target');
-                n.element.classList.remove('contain-target');
-            });
+            nodes.forEach(n => n.element.classList.remove('drop-target'));
 
-            if (containTarget) {
-                containTarget.element.classList.add('contain-target');
-                return null; // Don't draw line for containment
-            } else if (dropTarget) {
-                dropTarget.element.classList.add('drop-target');
-                return dropTarget;
+            if (target) {
+                target.element.classList.add('drop-target');
             }
             
-            return null;
+            return target; // Return target so redrawAll can draw the preview line
         }
 
         function clearDropPreview() {
-            nodes.forEach(n => {
-                n.element.classList.remove('drop-target');
-                n.element.classList.remove('contain-target');
-            });
+            nodes.forEach(n => n.element.classList.remove('drop-target'));
         }
 
         // ===================== ATTACH/DETACH =====================
         function attachNode(child, parent) {
-            // Can't attach if either is contained
-            if (child.container) return;
-            if (parent.container) return;
-            
             if (child.parent) {
                 child.parent.children = child.parent.children.filter(c => c !== child);
-                child.element.classList.remove('has-parent');
             }
             child.parent = parent;
             parent.children.push(child);
-            child.element.classList.add('has-parent');
             isDetached = false;
             redrawAll();
-        }
-
-        // ===================== CONTAINMENT =====================
-        function containNode(nodeToContain, containerNode) {
-            // Validation
-            if (nodeToContain.container) return; // Already contained
-            if (nodeToContain.children.length > 0) return; // Has hierarchical children
-            if (containerNode.children.length > 0) return; // Container has hierarchical children
-            if (nodeToContain.parent) return; // Has hierarchical parent
-            
-            // Remove from nodes layer and add to container
-            nodeToContain.container = containerNode;
-            containerNode.containedNodes.push(nodeToContain);
-            
-            // Update DOM structure
-            updateContainerDOM(containerNode);
-            
-            // Mark the contained node
-            nodeToContain.element.classList.add('contained');
-            
-            isDetached = false;
-            redrawAll();
-        }
-
-        function uncontainNode(node) {
-            if (!node.container) return;
-            
-            const container = node.container;
-            
-            // Remove from container's list
-            container.containedNodes = container.containedNodes.filter(n => n !== node);
-            
-            // Update container DOM
-            updateContainerDOM(container);
-            
-            // Move back to node layer
-            node.container = null;
-            node.element.classList.remove('contained');
-            nodeLayer.appendChild(node.element);
-            
-            // Position near the container
-            const containerRect = container.element.getBoundingClientRect();
-            const canvasRect = canvasArea.getBoundingClientRect();
-            node.x = containerRect.right - canvasRect.left + 20;
-            node.y = containerRect.top - canvasRect.top;
-            node.element.style.left = node.x + 'px';
-            node.element.style.top = node.y + 'px';
-            node.element.style.position = 'absolute';
-            
-            isDetached = true;
-            redrawAll();
-        }
-
-        function snapNodeToContainer(node) {
-            if (!node.container) return;
-            
-            // Put node back inside container's contents
-            const contents = node.container.element.querySelector('.node-contents');
-            if (contents) {
-                node.element.style.position = 'relative';
-                node.element.style.left = 'auto';
-                node.element.style.top = 'auto';
-                node.element.classList.add('contained');
-                contents.appendChild(node.element);
-            }
-        }
-
-        function updateContainerDOM(containerNode) {
-            const el = containerNode.element;
-            
-            if (containerNode.containedNodes.length > 0) {
-                // Transform into container layout
-                el.classList.add('is-container');
-                
-                // Check if already has container structure
-                let header = el.querySelector('.node-header');
-                let contents = el.querySelector('.node-contents');
-                
-                if (!header) {
-                    // Restructure the node
-                    const icon = el.querySelector('.node-icon');
-                    const label = el.querySelector('.node-label');
-                    const detach = el.querySelector('.detach-handle');
-                    
-                    header = document.createElement('div');
-                    header.className = 'node-header';
-                    if (icon) header.appendChild(icon);
-                    if (label) header.appendChild(label);
-                    
-                    contents = document.createElement('div');
-                    contents.className = 'node-contents';
-                    
-                    // Clear and rebuild
-                    el.innerHTML = '';
-                    if (detach) el.appendChild(detach);
-                    el.appendChild(header);
-                    el.appendChild(contents);
-                }
-                
-                // Add contained nodes to contents
-                contents.innerHTML = '';
-                containerNode.containedNodes.forEach(contained => {
-                    contained.element.style.position = 'relative';
-                    contained.element.style.left = 'auto';
-                    contained.element.style.top = 'auto';
-                    contents.appendChild(contained.element);
-                });
-            } else {
-                // Revert to normal node layout
-                el.classList.remove('is-container');
-                
-                const header = el.querySelector('.node-header');
-                const contents = el.querySelector('.node-contents');
-                const detach = el.querySelector('.detach-handle');
-                
-                if (header) {
-                    const icon = header.querySelector('.node-icon');
-                    const label = header.querySelector('.node-label');
-                    
-                    el.innerHTML = '';
-                    if (detach) el.appendChild(detach);
-                    if (icon) el.appendChild(icon);
-                    if (label) el.appendChild(label);
-                }
-            }
         }
 
         // ===================== RECYCLE BIN =====================
@@ -1172,20 +833,10 @@
         function deleteNode(node) {
             // Delete children recursively
             [...node.children].forEach(child => deleteNode(child));
-            
-            // Delete contained nodes recursively
-            [...node.containedNodes].forEach(contained => deleteNode(contained));
 
             // Remove from parent
             if (node.parent) {
                 node.parent.children = node.parent.children.filter(c => c !== node);
-                node.element.classList.remove('has-parent');
-            }
-            
-            // Remove from container
-            if (node.container) {
-                node.container.containedNodes = node.container.containedNodes.filter(c => c !== node);
-                updateContainerDOM(node.container);
             }
 
             // Remove non-hierarchical links
@@ -1347,14 +998,6 @@
                 ? node.children.map(c => `<li>${c.typeInfo.icon} ${c.label}</li>`).join('')
                 : '<li style="color: var(--text-secondary);">None</li>';
 
-            const containedHtml = node.containedNodes.length > 0
-                ? node.containedNodes.map(c => `<li>${c.typeInfo.icon} ${c.label}</li>`).join('')
-                : '<li style="color: var(--text-secondary);">None</li>';
-
-            const containerInfo = node.container 
-                ? `${node.container.typeInfo.icon} ${node.container.label}`
-                : '(none)';
-
             inspector.innerHTML = `
                 <div class="inspector-section">
                     <h3>Node Properties</h3>
@@ -1385,18 +1028,6 @@
                 </div>
 
                 <div class="inspector-section">
-                    <h3>Containment</h3>
-                    <div class="inspector-field">
-                        <label>Contained In</label>
-                        <input type="text" value="${containerInfo}" readonly style="opacity: 0.6;">
-                    </div>
-                    <div class="inspector-field">
-                        <label>Contains</label>
-                        <ul class="node-links-list">${containedHtml}</ul>
-                    </div>
-                </div>
-
-                <div class="inspector-section">
                     <h3>Non-Hierarchical Links</h3>
                     ${linksHtml}
                 </div>
@@ -1418,23 +1049,17 @@
 
         // ===================== DRAWING =====================
         function redrawAll(dropTarget = null, mouseX = 0, mouseY = 0) {
-            // Clear SVG layers
+            // Clear SVG
             svgLayer.innerHTML = '';
-            svgLayerTop.innerHTML = '';
 
-            // Draw hierarchical connections (below nodes)
+            // Draw hierarchical connections
             nodes.forEach(node => {
                 if (node.parent) {
                     drawHierarchicalLine(node.parent, node);
                 }
             });
 
-            // Draw drop preview line if we have a target (below nodes)
-            if (dropTarget) {
-                drawDropPreviewLine(dropTarget, mouseX, mouseY);
-            }
-
-            // Draw non-hierarchical links (above nodes)
+            // Draw non-hierarchical links
             nonHierarchicalLinks.forEach(link => {
                 const from = nodes.find(n => n.id === link.from);
                 const to = nodes.find(n => n.id === link.to);
@@ -1442,6 +1067,11 @@
                     drawLinkLine(from, to);
                 }
             });
+
+            // Draw drop preview line if we have a target
+            if (dropTarget) {
+                drawDropPreviewLine(dropTarget, mouseX, mouseY);
+            }
         }
 
         function drawDropPreviewLine(target, x, y) {
@@ -1507,7 +1137,7 @@
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', pathData);
             path.classList.add('link-line');
-            svgLayerTop.appendChild(path);
+            svgLayer.appendChild(path);
         }
 
         // Expose removeLink globally for inline onclick
