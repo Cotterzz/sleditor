@@ -611,6 +611,11 @@
         let dragFromMenu = false;
         let dragMenuType = null;
         let isDetached = false;
+        
+        // Contained drag state
+        let dragStartPos = { x: 0, y: 0 };
+        let containedDragStarted = false;
+        const DRAG_THRESHOLD = 5; // Pixels before drag is considered started
 
         // Link mode state
         let isLinkMode = false;
@@ -775,16 +780,10 @@
                 x: e.clientX - rect.left,
                 y: e.clientY - rect.top
             };
-
-            // If contained, temporarily move to canvas for dragging
-            if (node.container) {
-                node.x = rect.left - canvasRect.left;
-                node.y = rect.top - canvasRect.top;
-                node.element.style.position = 'absolute';
-                node.element.style.left = node.x + 'px';
-                node.element.style.top = node.y + 'px';
-                nodeLayer.appendChild(node.element);
-            }
+            
+            // Store start position for contained node drag detection
+            dragStartPos = { x: e.clientX, y: e.clientY };
+            containedDragStarted = false;
 
             node.element.classList.add('dragging');
             selectNode(node);
@@ -829,6 +828,25 @@
             if (!isDragging || !draggedNode) return;
 
             e.preventDefault();
+            
+            // For contained nodes, check if we've moved enough to start dragging
+            if (draggedNode.container && !containedDragStarted) {
+                const dx = e.clientX - dragStartPos.x;
+                const dy = e.clientY - dragStartPos.y;
+                if (Math.hypot(dx, dy) < DRAG_THRESHOLD) {
+                    return; // Not enough movement yet
+                }
+                // Start the contained drag - move node to canvas
+                containedDragStarted = true;
+                const rect = draggedNode.element.getBoundingClientRect();
+                const canvasRect = canvasArea.getBoundingClientRect();
+                draggedNode.x = rect.left - canvasRect.left;
+                draggedNode.y = rect.top - canvasRect.top;
+                draggedNode.element.style.position = 'absolute';
+                draggedNode.element.style.left = draggedNode.x + 'px';
+                draggedNode.element.style.top = draggedNode.y + 'px';
+                nodeLayer.appendChild(draggedNode.element);
+            }
 
             // Move the node (this also moves children)
             updateNodePosition(draggedNode, e.clientX, e.clientY);
@@ -884,13 +902,17 @@
                         }
                     }
                 } else if (draggedNode.container) {
-                    // Check if dragging a contained node outside its container
-                    if (!isOverNode(e.clientX, e.clientY, draggedNode.container)) {
-                        uncontainNode(draggedNode);
-                    } else {
-                        // Snap back inside container
-                        snapNodeToContainer(draggedNode);
+                    // Only process if we actually started dragging
+                    if (containedDragStarted) {
+                        // Check if dragging a contained node outside its container
+                        if (!isOverNode(e.clientX, e.clientY, draggedNode.container)) {
+                            uncontainNode(draggedNode);
+                        } else {
+                            // Snap back inside container
+                            snapNodeToContainer(draggedNode);
+                        }
                     }
+                    // If containedDragStarted is false, it was just a click - do nothing
                 }
             }
 
@@ -898,6 +920,7 @@
             draggedNode = null;
             dragFromMenu = false;
             isDetached = false;
+            containedDragStarted = false;
             redrawAll();
         }
 
@@ -952,25 +975,35 @@
         }
 
         // Find a node to contain the dragged node (dropping directly ON the node)
+        // Returns the deepest/smallest matching container for proper nesting
         function findContainTarget(x, y) {
-            const rect = canvasArea.getBoundingClientRect();
+            let bestMatch = null;
+            let smallestArea = Infinity;
             
             for (const node of nodes) {
                 if (node === draggedNode) continue;
                 if (isDescendant(node, draggedNode)) continue;
-                if (node.children.length > 0) continue; // Can't contain if has hierarchical children
-                if (draggedNode.children.length > 0) continue; // Can't be contained if has hierarchical children
+                // Dragged node can't have hierarchical relationships if being contained
+                if (draggedNode.children.length > 0) continue;
+                if (draggedNode.parent) continue;
                 if (draggedNode.container) continue; // Already contained
+                // Note: target CAN be contained (allows nested containment)
+                // Note: target CAN have children (nodes with children can be containers)
                 
                 const nodeRect = node.element.getBoundingClientRect();
                 
                 // Check if directly over the node
                 if (x >= nodeRect.left && x <= nodeRect.right &&
                     y >= nodeRect.top && y <= nodeRect.bottom) {
-                    return node;
+                    // Find the smallest (deepest) container
+                    const area = nodeRect.width * nodeRect.height;
+                    if (area < smallestArea) {
+                        smallestArea = area;
+                        bestMatch = node;
+                    }
                 }
             }
-            return null;
+            return bestMatch;
         }
 
         // Check if point is over a specific node
@@ -1028,11 +1061,12 @@
 
         // ===================== CONTAINMENT =====================
         function containNode(nodeToContain, containerNode) {
-            // Validation
+            // Validation for node being contained:
             if (nodeToContain.container) return; // Already contained
-            if (nodeToContain.children.length > 0) return; // Has hierarchical children
-            if (containerNode.children.length > 0) return; // Container has hierarchical children
-            if (nodeToContain.parent) return; // Has hierarchical parent
+            if (nodeToContain.children.length > 0) return; // Has hierarchical children - can't be contained
+            if (nodeToContain.parent) return; // Has hierarchical parent - can't be contained
+            // Note: containerNode CAN have children - nodes with children can be containers
+            // Note: containerNode CAN be contained itself - allows nested containment
             
             // Remove from nodes layer and add to container
             nodeToContain.container = containerNode;
