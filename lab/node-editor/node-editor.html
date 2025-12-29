@@ -34,6 +34,9 @@
             overflow: hidden;
             height: 100vh;
             user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: none;
         }
 
         /* ===================== LAYOUT ===================== */
@@ -620,6 +623,12 @@
         // Link mode state
         let isLinkMode = false;
         let linkSourceNode = null;
+        
+        // Touch/double-tap state
+        let lastTapTime = 0;
+        let lastTapNode = null;
+        const DOUBLE_TAP_DELAY = 300; // ms
+        let activeTouchId = null;
 
         // DOM elements
         const nodeMenu = document.getElementById('nodeMenu');
@@ -652,19 +661,33 @@
         function setupEventListeners() {
             // Menu item drag
             nodeMenu.addEventListener('mousedown', onMenuMouseDown);
+            nodeMenu.addEventListener('touchstart', onMenuTouchStart, { passive: false });
 
             // Global mouse events
             document.addEventListener('mousemove', onMouseMove);
             document.addEventListener('mouseup', onMouseUp);
+            
+            // Global touch events
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            document.addEventListener('touchend', onTouchEnd);
+            document.addEventListener('touchcancel', onTouchEnd);
 
             // Canvas click (deselect)
             canvasArea.addEventListener('mousedown', onCanvasMouseDown);
+            canvasArea.addEventListener('touchstart', onCanvasTouchStart, { passive: false });
 
-            // Right-click for linking
+            // Right-click for linking (desktop)
             document.addEventListener('contextmenu', onContextMenu);
 
             // ESC to cancel link mode
             document.addEventListener('keydown', onKeyDown);
+            
+            // Prevent unwanted behaviors on mobile
+            canvasArea.addEventListener('touchstart', (e) => {
+                if (e.target.closest('.node')) {
+                    e.preventDefault(); // Prevent scroll when touching nodes
+                }
+            }, { passive: false });
         }
 
         // ===================== MENU DRAG =====================
@@ -725,7 +748,9 @@
 
             // Event listeners
             el.addEventListener('mousedown', (e) => onNodeMouseDown(e, node));
+            el.addEventListener('touchstart', (e) => onNodeTouchStart(e, node), { passive: false });
             el.querySelector('.detach-handle').addEventListener('mousedown', (e) => onDetachMouseDown(e, node));
+            el.querySelector('.detach-handle').addEventListener('touchstart', (e) => onDetachTouchStart(e, node), { passive: false });
 
             return node;
         }
@@ -812,6 +837,34 @@
             selectNode(node);
         }
 
+        function onDetachTouchStart(e, node) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const touch = e.touches[0];
+            activeTouchId = touch.identifier;
+
+            if (node.parent) {
+                detachNode(node);
+            }
+
+            // Start dragging the detached node
+            isDragging = true;
+            draggedNode = node;
+            isDetached = true;
+            dragStartPos = { x: touch.clientX, y: touch.clientY };
+            containedDragStarted = false;
+
+            const rect = node.element.getBoundingClientRect();
+            dragOffset = {
+                x: touch.clientX - rect.left,
+                y: touch.clientY - rect.top
+            };
+
+            node.element.classList.add('dragging');
+            selectNode(node);
+        }
+
         function detachNode(node) {
             if (!node.parent) return;
 
@@ -838,14 +891,29 @@
                 }
                 // Start the contained drag - move node to canvas
                 containedDragStarted = true;
+                
+                // Get position BEFORE removing from container
                 const rect = draggedNode.element.getBoundingClientRect();
                 const canvasRect = canvasArea.getBoundingClientRect();
-                draggedNode.x = rect.left - canvasRect.left;
-                draggedNode.y = rect.top - canvasRect.top;
-                draggedNode.element.style.position = 'absolute';
-                draggedNode.element.style.left = draggedNode.x + 'px';
-                draggedNode.element.style.top = draggedNode.y + 'px';
+                
+                // Calculate new position relative to canvas
+                const newX = rect.left - canvasRect.left;
+                const newY = rect.top - canvasRect.top;
+                
+                // Remove contained class BEFORE setting position (has !important)
+                draggedNode.element.classList.remove('contained');
+                
+                // Move to canvas layer and set position
                 nodeLayer.appendChild(draggedNode.element);
+                draggedNode.x = newX;
+                draggedNode.y = newY;
+                draggedNode.element.style.position = 'absolute';
+                draggedNode.element.style.left = newX + 'px';
+                draggedNode.element.style.top = newY + 'px';
+                
+                // Recalculate drag offset now that node is on canvas
+                dragOffset.x = e.clientX - rect.left;
+                dragOffset.y = e.clientY - rect.top;
             }
 
             // Move the node (this also moves children)
@@ -1117,10 +1185,12 @@
             // Put node back inside container's contents
             const contents = node.container.element.querySelector('.node-contents');
             if (contents) {
-                node.element.style.position = 'relative';
-                node.element.style.left = 'auto';
-                node.element.style.top = 'auto';
+                // Add contained class first (it has the !important styles)
                 node.element.classList.add('contained');
+                // Clear inline styles
+                node.element.style.position = '';
+                node.element.style.left = '';
+                node.element.style.top = '';
                 contents.appendChild(node.element);
             }
         }
@@ -1262,6 +1332,202 @@
             } else {
                 enterLinkMode(node);
             }
+        }
+
+        // ===================== TOUCH HANDLERS =====================
+        function getTouchPos(touch) {
+            return { x: touch.clientX, y: touch.clientY };
+        }
+
+        function onMenuTouchStart(e) {
+            if (!e.target.classList.contains('menu-btn')) return;
+            
+            e.preventDefault();
+            const touch = e.touches[0];
+            activeTouchId = touch.identifier;
+            
+            const type = e.target.dataset.type;
+            const typeInfo = NODE_TYPES.find(t => t.id === type);
+            if (!typeInfo) return;
+
+            // Create a new node
+            const node = createNode(typeInfo, touch.clientX, touch.clientY);
+            nodes.push(node);
+            nodeLayer.appendChild(node.element);
+
+            // Start dragging
+            isDragging = true;
+            draggedNode = node;
+            dragFromMenu = true;
+            isDetached = true;
+            dragOffset = { x: node.element.offsetWidth / 2, y: node.element.offsetHeight / 2 };
+            dragStartPos = { x: touch.clientX, y: touch.clientY };
+            containedDragStarted = false;
+        }
+
+        function onCanvasTouchStart(e) {
+            // Deselect if touching empty canvas
+            if (e.target === canvasArea || e.target === nodeLayer) {
+                selectNode(null);
+                if (isLinkMode) exitLinkMode();
+            }
+        }
+
+        function onNodeTouchStart(e, node) {
+            if (e.target.classList.contains('detach-handle')) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const touch = e.touches[0];
+            activeTouchId = touch.identifier;
+            
+            // Check for double-tap (for linking)
+            const now = Date.now();
+            if (lastTapNode === node && (now - lastTapTime) < DOUBLE_TAP_DELAY) {
+                // Double tap - enter/complete link mode
+                if (isLinkMode) {
+                    if (linkSourceNode === node) {
+                        exitLinkMode();
+                    } else {
+                        createLink(linkSourceNode, node);
+                        exitLinkMode();
+                    }
+                } else {
+                    enterLinkMode(node);
+                }
+                lastTapTime = 0;
+                lastTapNode = null;
+                return;
+            }
+            lastTapTime = now;
+            lastTapNode = node;
+
+            // If in link mode, complete the link on single tap
+            if (isLinkMode && linkSourceNode && linkSourceNode !== node) {
+                createLink(linkSourceNode, node);
+                exitLinkMode();
+                return;
+            }
+
+            // Start dragging
+            isDragging = true;
+            draggedNode = node;
+            dragFromMenu = false;
+            isDetached = node.parent === null && node.container === null;
+
+            const rect = node.element.getBoundingClientRect();
+            dragOffset = {
+                x: touch.clientX - rect.left,
+                y: touch.clientY - rect.top
+            };
+            dragStartPos = { x: touch.clientX, y: touch.clientY };
+            containedDragStarted = false;
+
+            node.element.classList.add('dragging');
+            selectNode(node);
+        }
+
+        function onTouchMove(e) {
+            if (!isDragging || !draggedNode) return;
+            
+            // Find our active touch
+            let touch = null;
+            for (let i = 0; i < e.touches.length; i++) {
+                if (e.touches[i].identifier === activeTouchId) {
+                    touch = e.touches[i];
+                    break;
+                }
+            }
+            if (!touch) return;
+
+            e.preventDefault();
+            
+            // For contained nodes, check if we've moved enough to start dragging
+            if (draggedNode.container && !containedDragStarted) {
+                const dx = touch.clientX - dragStartPos.x;
+                const dy = touch.clientY - dragStartPos.y;
+                if (Math.hypot(dx, dy) < DRAG_THRESHOLD) {
+                    return;
+                }
+                containedDragStarted = true;
+                const rect = draggedNode.element.getBoundingClientRect();
+                const canvasRect = canvasArea.getBoundingClientRect();
+                const newX = rect.left - canvasRect.left;
+                const newY = rect.top - canvasRect.top;
+                
+                draggedNode.element.classList.remove('contained');
+                nodeLayer.appendChild(draggedNode.element);
+                draggedNode.x = newX;
+                draggedNode.y = newY;
+                draggedNode.element.style.position = 'absolute';
+                draggedNode.element.style.left = newX + 'px';
+                draggedNode.element.style.top = newY + 'px';
+                
+                dragOffset.x = touch.clientX - rect.left;
+                dragOffset.y = touch.clientY - rect.top;
+            }
+
+            updateNodePosition(draggedNode, touch.clientX, touch.clientY);
+
+            let dropTarget = null;
+            if (isDetached) {
+                dropTarget = updateDropPreview(touch.clientX, touch.clientY);
+            }
+
+            redrawAll(dropTarget, touch.clientX, touch.clientY);
+            updateRecyclePreview(touch.clientX, touch.clientY);
+        }
+
+        function onTouchEnd(e) {
+            if (!isDragging) return;
+            
+            // Find the ended touch
+            let touch = null;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === activeTouchId) {
+                    touch = e.changedTouches[i];
+                    break;
+                }
+            }
+            if (!touch) return;
+
+            clearDropPreview();
+            clearRecyclePreview();
+
+            if (draggedNode) {
+                draggedNode.element.classList.remove('dragging');
+
+                if (isOverRecycleBin(touch.clientX, touch.clientY)) {
+                    deleteNode(draggedNode);
+                } else if (isDetached) {
+                    const containTarget = findContainTarget(touch.clientX, touch.clientY);
+                    if (containTarget && containTarget !== draggedNode) {
+                        containNode(draggedNode, containTarget);
+                    } else {
+                        const target = findDropTarget(touch.clientX, touch.clientY);
+                        if (target && target !== draggedNode) {
+                            attachNode(draggedNode, target);
+                        }
+                    }
+                } else if (draggedNode.container) {
+                    if (containedDragStarted) {
+                        if (!isOverNode(touch.clientX, touch.clientY, draggedNode.container)) {
+                            uncontainNode(draggedNode);
+                        } else {
+                            snapNodeToContainer(draggedNode);
+                        }
+                    }
+                }
+            }
+
+            isDragging = false;
+            draggedNode = null;
+            dragFromMenu = false;
+            isDetached = false;
+            containedDragStarted = false;
+            activeTouchId = null;
+            redrawAll();
         }
 
         function enterLinkMode(node) {

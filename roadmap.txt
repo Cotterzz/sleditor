@@ -42,29 +42,44 @@ View different channels in main viewer
 Multiple fonts in shadertoy compatible format
 OpenRouter api for multi model AI-assist
 Video recording - muxer with multipel codecs and frame preservation
-SDF editor - standalone version with shadertoy glsl output
+Standalone: SDF editor - standalone version with shadertoy glsl output
 Audio Buffer support
 Video buffer support
+Standalone: Three.js Editor
 User loaded video
 User loaded audio
 Shader of the week tab visible to everyone
-
-
-Currently: Shadertoy import
-Requires first:
-   GLSL Audio (continuous)
-   Webcam/mic input
-(cubemap and volume will be in a later phase)
+Chromatogram
+user notifications - likes and comments
+user profile - description. display name pfp
+GLSL Audio (continuous)
+Standalone: GLSL Audio shader
+Shader License
+Shader timeline slider
+Gallery pagination
+Webcam
+Mic
+Volumes
+Cubemaps
+sRGB and Linear modes
+GLSL Audio now gets mouse and custom uniforms for live interactivity
+GLSL Audio - wavefrom viewer
+Common GLSL editor tab
+Standalone and integrated: Shadertoy browser
+Asset mapped (from shadertoy) library
+Shadertoy Import
+Select-all on right-click
 
 
 TODO:
+Autodetect GLSL mode
+Mobile support and dedicated UI
+Advanced, windowed UI
 Integrate SDF editor with sleditor
 Completely rebuilt and populated help/documentation system
 import code with built-in libraries
 custom user libraries
 shared user libraries
-user notifications - likes and comments.
-user profile - description. display name pfp
 Gallery search
 shader tags and categories
 user gallery folders
@@ -88,9 +103,6 @@ Plugin system for customisable/optional functionality
 Expanded webGPU support - multiple custom passes/entrypoints
 WGSL Frag Shaders
 Midi input
-Advanced shadertoy passes - cubemap and volume
-Mobile support and dedicated UI
-Advanced, windowed UI
 gsl.golf to host its own interface for simple golfed shaders
 Gesture based code input on devices without keyboard
 Vertex shaders
