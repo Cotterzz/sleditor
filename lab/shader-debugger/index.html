@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shader Debugger</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            border-bottom: 1px solid #333;
+        }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 500;
+            color: #00d4ff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        header h1::before {
+            content: '🔍';
+        }
+
+        .status {
+            font-size: 12px;
+            color: #888;
+            margin-left: auto;
+        }
+
+        .status.error {
+            color: #ff6b6b;
+        }
+
+        .status.success {
+            color: #51cf66;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .editor-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #333;
+        }
+
+        .editor-header {
+            background: #1a1a2e;
+            padding: 8px 16px;
+            font-size: 12px;
+            color: #888;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .editor-header button {
+            background: #2a2a4e;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+        }
+
+        .editor-header button:hover {
+            background: #3a3a5e;
+            color: #fff;
+        }
+
+        .editor-header button.primary {
+            background: #0066cc;
+            border-color: #0077ee;
+        }
+
+        .editor-header button.primary:hover {
+            background: #0077ee;
+        }
+
+        #editor {
+            flex: 1;
+            background: #0d0d14;
+            padding: 16px;
+            overflow: auto;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        #editor textarea {
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            border: none;
+            color: #e0e0e0;
+            font-family: inherit;
+            font-size: inherit;
+            line-height: inherit;
+            resize: none;
+            outline: none;
+        }
+
+        .preview-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            position: relative;
+        }
+
+        #mainCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            cursor: crosshair;
+        }
+
+        .pixel-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #00d4ff;
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+            display: none;
+        }
+
+        .pixel-marker.active {
+            display: block;
+        }
+
+        .pixel-marker::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 4px;
+            background: #00d4ff;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .controls-panel {
+            background: #1a1a2e;
+            padding: 16px 20px;
+            border-top: 1px solid #333;
+        }
+
+        .time-control {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .time-control label {
+            font-size: 12px;
+            color: #888;
+            min-width: 60px;
+        }
+
+        .time-control input[type="range"] {
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #333;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .time-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #00d4ff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .time-display {
+            font-size: 14px;
+            font-weight: 500;
+            color: #00d4ff;
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .play-btn {
+            background: #2a2a4e;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .play-btn:hover {
+            background: #3a3a5e;
+        }
+
+        .play-btn.playing {
+            background: #cc3300;
+            border-color: #ee4400;
+        }
+
+        .debug-panel {
+            background: #12121a;
+            padding: 12px 16px;
+            border-top: 1px solid #333;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .debug-panel h3 {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+
+        .debug-values {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .debug-value {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+            padding: 4px 8px;
+            background: #1a1a24;
+            border-radius: 4px;
+        }
+
+        .debug-value .expr {
+            color: #ff79c6;
+            flex: 1;
+        }
+
+        .debug-value .value {
+            color: #50fa7b;
+            font-weight: 500;
+            min-width: 100px;
+            text-align: right;
+        }
+
+        .debug-value .value.negative {
+            color: #ff6b6b;
+        }
+
+        .debug-value .value.large {
+            color: #ffb86c;
+        }
+
+        .coord-display {
+            font-size: 11px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .info-bar {
+            display: flex;
+            gap: 20px;
+            margin-top: 12px;
+        }
+
+        .info-item {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .info-item span {
+            color: #aaa;
+        }
+
+        /* Syntax highlighting for code display */
+        .code-line {
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .line-number {
+            color: #444;
+            min-width: 40px;
+            text-align: right;
+            padding-right: 16px;
+            user-select: none;
+        }
+
+        .line-content {
+            flex: 1;
+            white-space: pre;
+        }
+
+        .debug-directive {
+            color: #ff79c6;
+        }
+
+        .debug-inline-value {
+            color: #50fa7b;
+            background: rgba(80, 250, 123, 0.1);
+            padding: 0 4px;
+            border-radius: 2px;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Shader Debugger</h1>
+        <span class="status" id="status">Ready</span>
+    </header>
+
+    <div class="main-container">
+        <div class="editor-panel">
+            <div class="editor-header">
+                <span>GLSL Shader</span>
+                <button id="compileBtn" class="primary">Compile</button>
+                <button id="showDebugShaderBtn">Show Debug Shader</button>
+                <button id="resetBtn">Reset</button>
+            </div>
+            <div id="editor">
+                <textarea id="shaderCode" spellcheck="false">void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+    vec2 uv = fragCoord/iResolution.xy;
+#DEBUG uv.x
+#DEBUG uv.y
+
+    vec3 col = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));
+#DEBUG col.r
+#DEBUG col.g
+#DEBUG col.b
+
+    fragColor = vec4(col,1.0);
+}</textarea>
+            </div>
+        </div>
+
+        <div class="preview-panel">
+            <div class="canvas-container">
+                <canvas id="mainCanvas" width="640" height="360"></canvas>
+                <div class="pixel-marker" id="pixelMarker"></div>
+            </div>
+
+            <div class="controls-panel">
+                <div class="time-control">
+                    <button class="play-btn" id="playBtn">▶</button>
+                    <label>Time:</label>
+                    <input type="range" id="timeSlider" min="0" max="60" step="0.01" value="0">
+                    <span class="time-display" id="timeDisplay">0.00s</span>
+                </div>
+                <div class="info-bar">
+                    <div class="info-item">Resolution: <span id="resInfo">640 × 360</span></div>
+                    <div class="info-item">FPS: <span id="fpsInfo">--</span></div>
+                    <div class="info-item">Debug vars: <span id="debugCount">0</span></div>
+                </div>
+            </div>
+
+            <div class="debug-panel">
+                <h3>Debug Values <span id="coordDisplay"></span></h3>
+                <div class="debug-values" id="debugValues">
+                    <div style="color: #666; font-size: 12px;">Click on the canvas to inspect a pixel</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===================== STATE =====================
+        const state = {
+            time: 0,
+            playing: false,
+            debugCoord: null, // { x, y } in pixels
+            debugDirectives: [], // { line, expr, value }
+            lastFrameTime: 0,
+            frameCount: 0,
+            fps: 0
+        };
+
+        // ===================== DOM ELEMENTS =====================
+        const canvas = document.getElementById('mainCanvas');
+        const gl = canvas.getContext('webgl2', { antialias: false });
+        const shaderCodeEl = document.getElementById('shaderCode');
+        const timeSlider = document.getElementById('timeSlider');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const playBtn = document.getElementById('playBtn');
+        const compileBtn = document.getElementById('compileBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const statusEl = document.getElementById('status');
+        const debugValuesEl = document.getElementById('debugValues');
+        const coordDisplayEl = document.getElementById('coordDisplay');
+        const pixelMarker = document.getElementById('pixelMarker');
+        const debugCountEl = document.getElementById('debugCount');
+        const fpsInfoEl = document.getElementById('fpsInfo');
+        const canvasContainer = document.querySelector('.canvas-container');
+
+        // ===================== WEBGL SETUP =====================
+        let mainProgram = null;
+        let debugProgram = null;
+        let debugFramebuffer = null;
+        let debugTexture = null;
+
+        // Check for float texture support
+        const floatExt = gl.getExtension('EXT_color_buffer_float');
+        if (!floatExt) {
+            console.warn('EXT_color_buffer_float not supported, using fallback encoding');
+        }
+
+        // Vertex shader (fullscreen quad)
+        const vertexShaderSource = `#version 300 es
+            in vec2 position;
+            void main() {
+                gl_Position = vec4(position, 0.0, 1.0);
+            }
+        `;
+
+        // Create fullscreen quad
+        const quadBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, -1,  1, -1,  -1, 1,
+            -1,  1,  1, -1,   1, 1
+        ]), gl.STATIC_DRAW);
+
+        // ===================== SHADER COMPILATION =====================
+        function compileShader(source, type) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                const error = gl.getShaderInfoLog(shader);
+                gl.deleteShader(shader);
+                throw new Error(error);
+            }
+            return shader;
+        }
+
+        function createProgram(vertSource, fragSource) {
+            const vertShader = compileShader(vertSource, gl.VERTEX_SHADER);
+            const fragShader = compileShader(fragSource, gl.FRAGMENT_SHADER);
+            
+            const program = gl.createProgram();
+            gl.attachShader(program, vertShader);
+            gl.attachShader(program, fragShader);
+            gl.linkProgram(program);
+            
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                const error = gl.getProgramInfoLog(program);
+                gl.deleteProgram(program);
+                throw new Error(error);
+            }
+            
+            gl.deleteShader(vertShader);
+            gl.deleteShader(fragShader);
+            
+            return program;
+        }
+
+        // ===================== PARSE DEBUG DIRECTIVES =====================
+        function parseDebugDirectives(code) {
+            const directives = [];
+            const lines = code.split('\n');
+            
+            lines.forEach((line, index) => {
+                const match = line.match(/^\s*#DEBUG\s+(.+?)\s*$/);
+                if (match) {
+                    directives.push({
+                        line: index,
+                        expr: match[1].trim(),
+                        value: null
+                    });
+                }
+            });
+            
+            return directives;
+        }
+
+        // ===================== GENERATE MAIN SHADER =====================
+        function generateMainShader(userCode) {
+            // Remove #DEBUG lines for main shader
+            const cleanCode = userCode.split('\n')
+                .filter(line => !line.trim().startsWith('#DEBUG'))
+                .join('\n');
+
+            return `#version 300 es
+                precision highp float;
+                
+                uniform vec3 iResolution;
+                uniform float iTime;
+                uniform vec4 iMouse;
+                
+                out vec4 outColor;
+                
+                ${cleanCode}
+                
+                void main() {
+                    mainImage(outColor, gl_FragCoord.xy);
+                }
+            `;
+        }
+
+        // ===================== GENERATE DEBUG SHADER =====================
+        function generateDebugShader(userCode, directives) {
+            if (directives.length === 0) {
+                return null;
+            }
+
+            const lines = userCode.split('\n');
+            let modifiedLines = [];
+            let preprocessorLines = []; // #define, #ifdef, etc.
+            let debugIndex = 0;
+
+            // First, declare all debug variables at the top
+            let debugVarDecls = '';
+            for (let i = 0; i < directives.length; i++) {
+                debugVarDecls += `float _dbg${i} = 0.0;\n`;
+            }
+
+            // Separate preprocessor directives and modify code
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmed = line.trim();
+                
+                // Check for #DEBUG directive
+                const debugMatch = trimmed.match(/^#DEBUG\s+(.+?)\s*$/);
+                if (debugMatch) {
+                    const expr = debugMatch[1].trim();
+                    modifiedLines.push(`    _dbg${debugIndex} = float(${expr});`);
+                    debugIndex++;
+                }
+                // Check for other preprocessor directives (but not #DEBUG)
+                else if (trimmed.startsWith('#define') || trimmed.startsWith('#ifdef') || 
+                         trimmed.startsWith('#ifndef') || trimmed.startsWith('#endif') ||
+                         trimmed.startsWith('#else') || trimmed.startsWith('#undef')) {
+                    preprocessorLines.push(line);
+                    modifiedLines.push(''); // Keep line numbering consistent
+                } else {
+                    modifiedLines.push(line);
+                }
+            }
+
+            // Generate output logic
+            let debugOutputs = '';
+            for (let i = 0; i < directives.length; i++) {
+                debugOutputs += `
+                    if (pixelIndex == ${i}) {
+                        outColor = vec4(_dbg${i}, 0.0, 0.0, 1.0);
+                        return;
+                    }`;
+            }
+
+            // Replace mainImage signature and add debug coord
+            let codeBody = modifiedLines.join('\n');
+            
+            // Extract the body of mainImage - find the function and extract just the body
+            // Flexible regex: handles "out vec4 O, vec2 P" and "out vec4 fragColor, in vec2 fragCoord"
+            const mainImageMatch = codeBody.match(/void\s+mainImage\s*\(\s*out\s+vec4\s+(\w+)\s*,\s*(?:in\s+)?vec2\s+(\w+)\s*\)\s*\{/);
+            if (!mainImageMatch) {
+                throw new Error('Could not find mainImage function');
+            }
+
+            const fragColorVar = mainImageMatch[1];
+            const fragCoordVar = mainImageMatch[2];
+            
+            // Find the function body by matching braces
+            const funcStart = codeBody.indexOf(mainImageMatch[0]);
+            let braceCount = 0;
+            let funcEnd = funcStart;
+            let inFunc = false;
+            
+            for (let i = funcStart; i < codeBody.length; i++) {
+                if (codeBody[i] === '{') {
+                    braceCount++;
+                    inFunc = true;
+                } else if (codeBody[i] === '}') {
+                    braceCount--;
+                    if (inFunc && braceCount === 0) {
+                        funcEnd = i + 1;
+                        break;
+                    }
+                }
+            }
+            
+            // Extract just the body content (without the outer braces)
+            const bodyStart = codeBody.indexOf('{', funcStart) + 1;
+            const bodyEnd = funcEnd - 1;
+            const funcBody = codeBody.substring(bodyStart, bodyEnd);
+
+            // Combine preprocessor directives
+            const preprocessorBlock = preprocessorLines.join('\n');
+
+            return `#version 300 es
+precision highp float;
+
+// User preprocessor directives
+${preprocessorBlock}
+
+uniform vec3 iResolution;
+uniform float iTime;
+uniform vec4 iMouse;
+uniform vec2 debugCoord;
+uniform vec2 debugResolution;
+
+out vec4 outColor;
+
+// Debug value storage
+${debugVarDecls}
+
+void main() {
+    // Calculate which debug value this pixel should output
+    int pixelIndex = int(gl_FragCoord.x) + int(gl_FragCoord.y) * int(debugResolution.x);
+    
+    // Set up variables for shader code
+    vec2 ${fragCoordVar} = debugCoord;
+    vec4 ${fragColorVar};
+    
+    // === User shader code with debug captures ===
+    ${funcBody}
+    
+    // === Debug output ===
+    ${debugOutputs}
+    
+    outColor = vec4(0.0);
+}
+`;
+        }
+
+        // ===================== SETUP DEBUG FRAMEBUFFER =====================
+        function setupDebugFramebuffer(numDebugVars) {
+            if (debugFramebuffer) {
+                gl.deleteFramebuffer(debugFramebuffer);
+                gl.deleteTexture(debugTexture);
+            }
+
+            // Small texture: 16 wide, enough rows for all debug vars
+            const width = 16;
+            const height = Math.ceil(numDebugVars / width);
+
+            debugTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, debugTexture);
+            
+            if (floatExt) {
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, width, height, 0, gl.RGBA, gl.FLOAT, null);
+            } else {
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            }
+            
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+            debugFramebuffer = gl.createFramebuffer();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, debugFramebuffer);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, debugTexture, 0);
+
+            const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+            if (status !== gl.FRAMEBUFFER_COMPLETE) {
+                console.error('Debug framebuffer incomplete:', status);
+            }
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+            return { width, height };
+        }
+
+        // ===================== COMPILE USER SHADER =====================
+        function compileUserShader() {
+            const userCode = shaderCodeEl.value;
+            
+            try {
+                // Parse debug directives
+                state.debugDirectives = parseDebugDirectives(userCode);
+                debugCountEl.textContent = state.debugDirectives.length;
+
+                // Generate and compile main shader
+                const mainSource = generateMainShader(userCode);
+                if (mainProgram) gl.deleteProgram(mainProgram);
+                mainProgram = createProgram(vertexShaderSource, mainSource);
+
+                // Generate and compile debug shader (if we have debug directives)
+                if (state.debugDirectives.length > 0) {
+                    const debugSource = generateDebugShader(userCode, state.debugDirectives);
+                    console.log('=== Generated Debug Shader ===\n', debugSource);
+                    if (debugProgram) gl.deleteProgram(debugProgram);
+                    debugProgram = createProgram(vertexShaderSource, debugSource);
+                    setupDebugFramebuffer(state.debugDirectives.length);
+                } else {
+                    debugProgram = null;
+                }
+
+                setStatus('Compiled successfully', 'success');
+                
+                // Update debug values if we have a coord
+                if (state.debugCoord) {
+                    captureDebugValues();
+                }
+
+            } catch (error) {
+                setStatus('Compile error: ' + error.message, 'error');
+                console.error('Shader compile error:', error);
+            }
+        }
+
+        // ===================== RENDER MAIN FRAME =====================
+        function renderMain() {
+            if (!mainProgram) return;
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.useProgram(mainProgram);
+
+            // Set uniforms
+            const resLoc = gl.getUniformLocation(mainProgram, 'iResolution');
+            const timeLoc = gl.getUniformLocation(mainProgram, 'iTime');
+            const mouseLoc = gl.getUniformLocation(mainProgram, 'iMouse');
+
+            gl.uniform3f(resLoc, canvas.width, canvas.height, 1.0);
+            gl.uniform1f(timeLoc, state.time);
+            
+            // Mouse: xy = current pos, zw = click pos
+            if (state.debugCoord) {
+                gl.uniform4f(mouseLoc, 
+                    state.debugCoord.x, 
+                    canvas.height - state.debugCoord.y,
+                    state.debugCoord.x,
+                    canvas.height - state.debugCoord.y
+                );
+            } else {
+                gl.uniform4f(mouseLoc, 0, 0, 0, 0);
+            }
+
+            // Draw
+            const posLoc = gl.getAttribLocation(mainProgram, 'position');
+            gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+
+        // ===================== CAPTURE DEBUG VALUES =====================
+        function captureDebugValues() {
+            if (!debugProgram || !state.debugCoord || state.debugDirectives.length === 0) {
+                return;
+            }
+
+            const numVars = state.debugDirectives.length;
+            const debugWidth = 16;
+            const debugHeight = Math.ceil(numVars / debugWidth);
+
+            // Render to debug framebuffer
+            gl.bindFramebuffer(gl.FRAMEBUFFER, debugFramebuffer);
+            gl.viewport(0, 0, debugWidth, debugHeight);
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            gl.useProgram(debugProgram);
+
+            // Set uniforms - use REAL resolution for shader math
+            const resLoc = gl.getUniformLocation(debugProgram, 'iResolution');
+            const timeLoc = gl.getUniformLocation(debugProgram, 'iTime');
+            const mouseLoc = gl.getUniformLocation(debugProgram, 'iMouse');
+            const debugCoordLoc = gl.getUniformLocation(debugProgram, 'debugCoord');
+            const debugResLoc = gl.getUniformLocation(debugProgram, 'debugResolution');
+
+            // Debug: log time value
+            // console.log('Debug capture at time:', state.time);
+
+            gl.uniform3f(resLoc, canvas.width, canvas.height, 1.0);
+            gl.uniform1f(timeLoc, state.time);
+            gl.uniform4f(mouseLoc, 
+                state.debugCoord.x, 
+                canvas.height - state.debugCoord.y,
+                state.debugCoord.x,
+                canvas.height - state.debugCoord.y
+            );
+            gl.uniform2f(debugCoordLoc, state.debugCoord.x, canvas.height - state.debugCoord.y);
+            gl.uniform2f(debugResLoc, debugWidth, debugHeight);
+
+            // Draw
+            const posLoc = gl.getAttribLocation(debugProgram, 'position');
+            gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            // Read back values
+            let pixels;
+            if (floatExt) {
+                pixels = new Float32Array(debugWidth * debugHeight * 4);
+                gl.readPixels(0, 0, debugWidth, debugHeight, gl.RGBA, gl.FLOAT, pixels);
+            } else {
+                pixels = new Uint8Array(debugWidth * debugHeight * 4);
+                gl.readPixels(0, 0, debugWidth, debugHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+            }
+
+            // Extract debug values
+            for (let i = 0; i < numVars; i++) {
+                let value;
+                if (floatExt) {
+                    value = pixels[i * 4]; // R channel contains the float
+                } else {
+                    // Decode from RGBA8 (simple 0-1 mapping for now)
+                    value = pixels[i * 4] / 255.0;
+                }
+                state.debugDirectives[i].value = value;
+            }
+
+            // Update display
+            updateDebugDisplay();
+
+            // Switch back to main framebuffer
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
+
+        // ===================== UPDATE DEBUG DISPLAY =====================
+        function updateDebugDisplay() {
+            if (state.debugDirectives.length === 0) {
+                debugValuesEl.innerHTML = '<div style="color: #666; font-size: 12px;">No #DEBUG directives found</div>';
+                return;
+            }
+
+            if (!state.debugCoord) {
+                debugValuesEl.innerHTML = '<div style="color: #666; font-size: 12px;">Click on the canvas to inspect a pixel</div>';
+                return;
+            }
+
+            coordDisplayEl.textContent = `@ (${state.debugCoord.x.toFixed(0)}, ${state.debugCoord.y.toFixed(0)})`;
+
+            let html = '';
+            for (const directive of state.debugDirectives) {
+                const value = directive.value;
+                let valueClass = '';
+                let valueStr = value !== null ? value.toFixed(6) : '---';
+                
+                if (value !== null) {
+                    if (value < 0) valueClass = 'negative';
+                    else if (value > 1) valueClass = 'large';
+                }
+
+                html += `
+                    <div class="debug-value">
+                        <span class="expr">#DEBUG ${directive.expr}</span>
+                        <span class="value ${valueClass}">${valueStr}</span>
+                    </div>
+                `;
+            }
+
+            debugValuesEl.innerHTML = html;
+        }
+
+        // ===================== ANIMATION LOOP =====================
+        function animate(timestamp) {
+            // FPS calculation
+            state.frameCount++;
+            if (timestamp - state.lastFrameTime >= 1000) {
+                state.fps = state.frameCount;
+                state.frameCount = 0;
+                state.lastFrameTime = timestamp;
+                fpsInfoEl.textContent = state.fps;
+            }
+
+            // Update time if playing
+            if (state.playing) {
+                state.time += 1/60;
+                if (state.time > 60) state.time = 0;
+                timeSlider.value = state.time;
+                timeDisplay.textContent = state.time.toFixed(2) + 's';
+                
+                // Capture debug values while playing
+                if (state.debugCoord) {
+                    captureDebugValues();
+                }
+            }
+
+            renderMain();
+            requestAnimationFrame(animate);
+        }
+
+        // ===================== EVENT HANDLERS =====================
+        function setStatus(message, type = '') {
+            statusEl.textContent = message;
+            statusEl.className = 'status ' + type;
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            state.debugCoord = {
+                x: (e.clientX - rect.left) * scaleX,
+                y: (e.clientY - rect.top) * scaleY
+            };
+
+            // Update marker position
+            pixelMarker.style.left = e.clientX - canvasContainer.getBoundingClientRect().left + 'px';
+            pixelMarker.style.top = e.clientY - canvasContainer.getBoundingClientRect().top + 'px';
+            pixelMarker.classList.add('active');
+
+            // Capture values
+            captureDebugValues();
+        });
+
+        timeSlider.addEventListener('input', (e) => {
+            state.time = parseFloat(e.target.value);
+            timeDisplay.textContent = state.time.toFixed(2) + 's';
+            
+            if (state.debugCoord) {
+                captureDebugValues();
+            }
+        });
+
+        playBtn.addEventListener('click', () => {
+            state.playing = !state.playing;
+            playBtn.textContent = state.playing ? '⏸' : '▶';
+            playBtn.classList.toggle('playing', state.playing);
+        });
+
+        compileBtn.addEventListener('click', compileUserShader);
+
+        resetBtn.addEventListener('click', () => {
+            state.time = 0;
+            state.playing = false;
+            state.debugCoord = null;
+            timeSlider.value = 0;
+            timeDisplay.textContent = '0.00s';
+            playBtn.textContent = '▶';
+            playBtn.classList.remove('playing');
+            pixelMarker.classList.remove('active');
+            updateDebugDisplay();
+        });
+
+        document.getElementById('showDebugShaderBtn').addEventListener('click', () => {
+            if (state.debugDirectives.length > 0) {
+                const debugSource = generateDebugShader(shaderCodeEl.value, state.debugDirectives);
+                console.log('=== Debug Shader Source ===');
+                console.log(debugSource);
+                alert('Debug shader logged to console (F12 to view)');
+            } else {
+                alert('No #DEBUG directives found');
+            }
+        });
+
+        // Compile on Ctrl+Enter
+        shaderCodeEl.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                compileUserShader();
+            }
+        });
+
+        // ===================== INIT =====================
+        compileUserShader();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
+
