@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Breakpoint Debugger</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            border-bottom: 1px solid #333;
+        }
+
+        header h1 {
+            font-size: 18px;
+            font-weight: 500;
+            color: #ff6b6b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        header h1::before {
+            content: '🔴';
+        }
+
+        .status {
+            font-size: 12px;
+            color: #888;
+            margin-left: auto;
+        }
+
+        .status.error { color: #ff6b6b; }
+        .status.success { color: #51cf66; }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .editor-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #333;
+        }
+
+        .editor-header {
+            background: #1a1a2e;
+            padding: 8px 16px;
+            font-size: 12px;
+            color: #888;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .editor-header button {
+            background: #2a2a4e;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+        }
+
+        .editor-header button:hover {
+            background: #3a3a5e;
+            color: #fff;
+        }
+
+        .editor-header button.primary {
+            background: #cc3333;
+            border-color: #ee4444;
+        }
+
+        .editor-header button.primary:hover {
+            background: #dd4444;
+        }
+
+        #editor {
+            flex: 1;
+            background: #0d0d14;
+            padding: 16px;
+            overflow: auto;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        #editor textarea {
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            border: none;
+            color: #e0e0e0;
+            font-family: inherit;
+            font-size: inherit;
+            line-height: inherit;
+            resize: none;
+            outline: none;
+        }
+
+        .preview-panel {
+            width: 50%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            position: relative;
+        }
+
+        #mainCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            cursor: crosshair;
+        }
+
+        .pixel-marker {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #ff6b6b;
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+            display: none;
+        }
+
+        .pixel-marker.active { display: block; }
+
+        .controls-panel {
+            background: #1a1a2e;
+            padding: 12px 20px;
+            border-top: 1px solid #333;
+        }
+
+        .time-control {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .time-control label {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .time-control input[type="range"] {
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #333;
+            border-radius: 3px;
+        }
+
+        .time-control input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .time-display {
+            font-size: 13px;
+            color: #ff6b6b;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        .play-btn {
+            background: #2a2a4e;
+            border: 1px solid #444;
+            color: #ccc;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .play-btn.playing {
+            background: #cc3300;
+            border-color: #ee4400;
+        }
+
+        /* Breakpoints panel */
+        .breakpoints-panel {
+            background: #12121a;
+            border-top: 1px solid #333;
+        }
+
+        .breakpoint-tabs {
+            display: flex;
+            gap: 2px;
+            padding: 8px 12px 0;
+            background: #0d0d14;
+        }
+
+        .breakpoint-tab {
+            background: #1a1a24;
+            border: 1px solid #333;
+            border-bottom: none;
+            color: #888;
+            padding: 6px 14px;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            font-size: 11px;
+            font-family: inherit;
+        }
+
+        .breakpoint-tab:hover {
+            background: #252530;
+            color: #ccc;
+        }
+
+        .breakpoint-tab.active {
+            background: #12121a;
+            color: #ff6b6b;
+            border-color: #ff6b6b;
+            border-bottom: 1px solid #12121a;
+            margin-bottom: -1px;
+        }
+
+        .breakpoint-content {
+            padding: 12px 16px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+
+        .breakpoint-header {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .breakpoint-header .coord {
+            color: #888;
+            font-weight: normal;
+            text-transform: none;
+            letter-spacing: 0;
+        }
+
+        .follow-values {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .follow-value {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+            padding: 4px 8px;
+            background: #1a1a24;
+            border-radius: 4px;
+        }
+
+        .follow-value .var-name {
+            color: #ffd93d;
+            min-width: 100px;
+        }
+
+        .follow-value .value {
+            color: #50fa7b;
+            font-weight: 500;
+            flex: 1;
+            text-align: right;
+        }
+
+        .follow-value .value.negative { color: #ff6b6b; }
+        .follow-value .value.large { color: #ffb86c; }
+        .follow-value .value.unavailable { color: #555; font-style: italic; }
+        .follow-value.dimmed { opacity: 0.5; }
+
+        .info-bar {
+            display: flex;
+            gap: 16px;
+            font-size: 11px;
+            color: #666;
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px solid #222;
+        }
+
+        .info-bar span { color: #888; }
+
+        .no-data {
+            color: #555;
+            font-size: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Breakpoint Debugger</h1>
+        <span class="status" id="status">Ready</span>
+    </header>
+
+    <div class="main-container">
+        <div class="editor-panel">
+            <div class="editor-header">
+                <span>GLSL Shader</span>
+                <button id="compileBtn" class="primary">Compile</button>
+                <button id="resetBtn">Reset</button>
+            </div>
+            <div id="editor">
+                <textarea id="shaderCode" spellcheck="false">#FOLLOW uv.x uv.y col.r col.g col.b
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord )
+{
+    vec2 uv = fragCoord/iResolution.xy;
+#BREAK init
+
+    vec3 col = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));
+#BREAK color
+
+    col *= uv.x * uv.y;
+#BREAK final
+
+    fragColor = vec4(col,1.0);
+}</textarea>
+            </div>
+        </div>
+
+        <div class="preview-panel">
+            <div class="canvas-container">
+                <canvas id="mainCanvas" width="640" height="360"></canvas>
+                <div class="pixel-marker" id="pixelMarker"></div>
+            </div>
+
+            <div class="controls-panel">
+                <div class="time-control">
+                    <button class="play-btn" id="playBtn">▶</button>
+                    <label>Time:</label>
+                    <input type="range" id="timeSlider" min="0" max="60" step="0.01" value="0">
+                    <span class="time-display" id="timeDisplay">0.00s</span>
+                </div>
+                <div class="info-bar">
+                    <div>Followed: <span id="followCount">0</span></div>
+                    <div>Breakpoints: <span id="breakCount">0</span></div>
+                    <div>FPS: <span id="fpsInfo">--</span></div>
+                </div>
+            </div>
+
+            <div class="breakpoints-panel">
+                <div class="breakpoint-tabs" id="breakpointTabs">
+                    <!-- Tabs generated dynamically -->
+                </div>
+                <div class="breakpoint-content" id="breakpointContent">
+                    <div class="no-data">Click on canvas to inspect a pixel</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===================== STATE =====================
+        const state = {
+            time: 0,
+            playing: false,
+            debugCoord: null,
+            followedVars: [],      // { name }
+            breakpoints: [],       // { id, line }
+            breakpointValues: {},  // { breakpointId: { varName: value } }
+            availableVarsAtBreakpoint: {}, // { breakpointId: Set of base var names }
+            selectedBreakpoint: null,
+            lastFrameTime: 0,
+            frameCount: 0,
+            fps: 0
+        };
+
+        // ===================== DOM ELEMENTS =====================
+        const canvas = document.getElementById('mainCanvas');
+        const gl = canvas.getContext('webgl2', { antialias: false });
+        const shaderCodeEl = document.getElementById('shaderCode');
+        const timeSlider = document.getElementById('timeSlider');
+        const timeDisplay = document.getElementById('timeDisplay');
+        const playBtn = document.getElementById('playBtn');
+        const compileBtn = document.getElementById('compileBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const statusEl = document.getElementById('status');
+        const breakpointTabsEl = document.getElementById('breakpointTabs');
+        const breakpointContentEl = document.getElementById('breakpointContent');
+        const pixelMarker = document.getElementById('pixelMarker');
+        const followCountEl = document.getElementById('followCount');
+        const breakCountEl = document.getElementById('breakCount');
+        const fpsInfoEl = document.getElementById('fpsInfo');
+        const canvasContainer = document.querySelector('.canvas-container');
+
+        // ===================== WEBGL SETUP =====================
+        let mainProgram = null;
+        let debugPrograms = {};  // { breakpointId: program }
+        let debugFramebuffer = null;
+        let debugTexture = null;
+
+        const floatExt = gl.getExtension('EXT_color_buffer_float');
+
+        const vertexShaderSource = `#version 300 es
+            in vec2 position;
+            void main() { gl_Position = vec4(position, 0.0, 1.0); }
+        `;
+
+        const quadBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, -1,  1, -1,  -1, 1,
+            -1,  1,  1, -1,   1, 1
+        ]), gl.STATIC_DRAW);
+
+        // ===================== SHADER COMPILATION =====================
+        function compileShader(source, type) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                const error = gl.getShaderInfoLog(shader);
+                gl.deleteShader(shader);
+                throw new Error(error);
+            }
+            return shader;
+        }
+
+        function createProgram(vertSource, fragSource) {
+            const vertShader = compileShader(vertSource, gl.VERTEX_SHADER);
+            const fragShader = compileShader(fragSource, gl.FRAGMENT_SHADER);
+            const program = gl.createProgram();
+            gl.attachShader(program, vertShader);
+            gl.attachShader(program, fragShader);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                const error = gl.getProgramInfoLog(program);
+                gl.deleteProgram(program);
+                throw new Error(error);
+            }
+            gl.deleteShader(vertShader);
+            gl.deleteShader(fragShader);
+            return program;
+        }
+
+        // ===================== PARSE DIRECTIVES =====================
+        function parseDirectives(code) {
+            const followedVars = [];
+            const breakpoints = [];
+            const lines = code.split('\n');
+            
+            lines.forEach((line, index) => {
+                // #FOLLOW var1 var2 var3 ... (space-separated)
+                const followMatch = line.match(/^\s*#FOLLOW\s+(.+?)\s*$/);
+                if (followMatch) {
+                    const vars = followMatch[1].trim().split(/\s+/);
+                    for (const varName of vars) {
+                        if (varName && !followedVars.find(v => v.name === varName)) {
+                            followedVars.push({ name: varName, line: index });
+                        }
+                    }
+                }
+                
+                // #BREAK [id]
+                const breakMatch = line.match(/^\s*#BREAK\s*(.*)$/);
+                if (breakMatch) {
+                    const id = breakMatch[1].trim() || `break_${breakpoints.length}`;
+                    breakpoints.push({ id, line: index });
+                }
+            });
+            
+            return { followedVars, breakpoints };
+        }
+
+        // ===================== GENERATE MAIN SHADER =====================
+        function generateMainShader(userCode) {
+            const cleanCode = userCode.split('\n')
+                .filter(line => !line.trim().startsWith('#FOLLOW') && !line.trim().startsWith('#BREAK'))
+                .join('\n');
+
+            return `#version 300 es
+                precision highp float;
+                uniform vec3 iResolution;
+                uniform float iTime;
+                uniform vec4 iMouse;
+                out vec4 outColor;
+                ${cleanCode}
+                void main() { mainImage(outColor, gl_FragCoord.xy); }
+            `;
+        }
+
+        // ===================== FIND DECLARED VARS BEFORE LINE =====================
+        function findDeclaredVars(lines, beforeLine) {
+            const declaredVars = new Set();
+            const typeMacros = new Set(); // Track #define type aliases
+            
+            // First pass: collect type macros
+            for (let i = 0; i < beforeLine; i++) {
+                const trimmed = lines[i].trim();
+                const defineMatch = trimmed.match(/^#define\s+(\w+)\s+(float|vec[234]|mat[234]|int|uint|bool|ivec[234]|uvec[234])\b/);
+                if (defineMatch) {
+                    typeMacros.add(defineMatch[1]);
+                }
+            }
+            
+            // Build regex for types including macros
+            const builtinTypes = 'float|vec[234]|mat[234]|int|uint|bool|ivec[234]|uvec[234]';
+            const macroTypes = [...typeMacros].join('|');
+            const allTypes = macroTypes ? `${builtinTypes}|${macroTypes}` : builtinTypes;
+            const typeRegex = new RegExp(`^(${allTypes})$`);
+            
+            // Second pass: find declarations
+            // Join lines to handle multi-line declarations, then split by semicolons
+            const codeBlock = lines.slice(0, beforeLine).join('\n');
+            
+            // Find all TYPE followed by identifier(s)
+            // Pattern: TYPE word (with optional comma-separated more words)
+            const declPattern = new RegExp(`\\b(${allTypes})\\s+([a-zA-Z_]\\w*(?:\\s*,\\s*[a-zA-Z_]\\w*)*)`, 'g');
+            let match;
+            while ((match = declPattern.exec(codeBlock)) !== null) {
+                const varList = match[2];
+                // Split by comma and extract just the variable names
+                const vars = varList.split(',').map(v => {
+                    // Handle "varname = value" or just "varname"
+                    const parts = v.trim().split(/[\s=]/);
+                    return parts[0].trim();
+                });
+                vars.forEach(v => {
+                    if (v && /^[a-zA-Z_]\w*$/.test(v)) {
+                        declaredVars.add(v);
+                    }
+                });
+            }
+            
+            // Also catch function parameters: out vec4 O, vec2 P
+            const paramPattern = new RegExp(`\\b(?:in|out|inout)?\\s*(${allTypes})\\s+([a-zA-Z_]\\w*)`, 'g');
+            while ((match = paramPattern.exec(codeBlock)) !== null) {
+                const varName = match[2];
+                if (varName && /^[a-zA-Z_]\w*$/.test(varName)) {
+                    declaredVars.add(varName);
+                }
+            }
+            
+            return declaredVars;
+        }
+
+        // ===================== GENERATE DEBUG SHADER FOR BREAKPOINT =====================
+        function generateBreakpointShader(userCode, breakpoint, followedVars) {
+            if (followedVars.length === 0) return null;
+
+            const lines = userCode.split('\n');
+            let preprocessorLines = [];
+            let modifiedLines = [];
+            
+            // Find which variables are declared before this breakpoint
+            const declaredVars = findDeclaredVars(lines, breakpoint.line);
+            
+            // Filter followed vars to only those that exist at this breakpoint
+            const availableVars = followedVars.filter(v => {
+                // Extract base variable name (e.g., "col" from "col.r")
+                const baseName = v.name.split('.')[0].split('[')[0];
+                return declaredVars.has(baseName);
+            });
+            
+            // Declare storage for followed vars
+            let varDecls = followedVars.map((v, i) => `float _fv${i} = 0.0;`).join('\n');
+
+            // Process lines up to and including breakpoint
+            let reachedBreak = false;
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmed = line.trim();
+                
+                if (trimmed.startsWith('#FOLLOW')) {
+                    modifiedLines.push(''); // Skip
+                } else if (trimmed.startsWith('#BREAK')) {
+                    if (i === breakpoint.line) {
+                        // This is our breakpoint - capture only available vars here
+                        followedVars.forEach((v, idx) => {
+                            const baseName = v.name.split('.')[0].split('[')[0];
+                            if (declaredVars.has(baseName)) {
+                                modifiedLines.push(`    _fv${idx} = float(${v.name});`);
+                            }
+                            // Otherwise _fv${idx} stays at 0.0
+                        });
+                        reachedBreak = true;
+                    }
+                    modifiedLines.push(''); // Remove the #BREAK line
+                } else if (trimmed.startsWith('#define') || trimmed.startsWith('#ifdef') || 
+                           trimmed.startsWith('#ifndef') || trimmed.startsWith('#endif') ||
+                           trimmed.startsWith('#else') || trimmed.startsWith('#undef')) {
+                    preprocessorLines.push(line);
+                    modifiedLines.push('');
+                } else {
+                    modifiedLines.push(line);
+                }
+            }
+
+            let codeBody = modifiedLines.join('\n');
+            
+            // Find mainImage function
+            const mainImageMatch = codeBody.match(/void\s+mainImage\s*\(\s*out\s+vec4\s+(\w+)\s*,\s*(?:in\s+)?vec2\s+(\w+)\s*\)\s*\{/);
+            if (!mainImageMatch) throw new Error('Could not find mainImage function');
+
+            const fragColorVar = mainImageMatch[1];
+            const fragCoordVar = mainImageMatch[2];
+            
+            // Extract function body
+            const funcStart = codeBody.indexOf(mainImageMatch[0]);
+            let braceCount = 0, funcEnd = funcStart, inFunc = false;
+            for (let i = funcStart; i < codeBody.length; i++) {
+                if (codeBody[i] === '{') { braceCount++; inFunc = true; }
+                else if (codeBody[i] === '}') { braceCount--; if (inFunc && braceCount === 0) { funcEnd = i + 1; break; } }
+            }
+            const bodyStart = codeBody.indexOf('{', funcStart) + 1;
+            const funcBody = codeBody.substring(bodyStart, funcEnd - 1);
+
+            // Output logic
+            let outputs = followedVars.map((v, i) => 
+                `if (pixelIndex == ${i}) { outColor = vec4(_fv${i}, 0.0, 0.0, 1.0); return; }`
+            ).join('\n    ');
+
+            return `#version 300 es
+precision highp float;
+${preprocessorLines.join('\n')}
+uniform vec3 iResolution;
+uniform float iTime;
+uniform vec4 iMouse;
+uniform vec2 debugCoord;
+uniform vec2 debugResolution;
+out vec4 outColor;
+${varDecls}
+void main() {
+    int pixelIndex = int(gl_FragCoord.x) + int(gl_FragCoord.y) * int(debugResolution.x);
+    vec2 ${fragCoordVar} = debugCoord;
+    vec4 ${fragColorVar};
+    ${funcBody}
+    ${outputs}
+    outColor = vec4(0.0);
+}
+`;
+        }
+
+        // ===================== SETUP DEBUG FRAMEBUFFER =====================
+        function setupDebugFramebuffer(numVars) {
+            if (debugFramebuffer) {
+                gl.deleteFramebuffer(debugFramebuffer);
+                gl.deleteTexture(debugTexture);
+            }
+            const width = 16, height = Math.ceil(numVars / width) || 1;
+            debugTexture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, debugTexture);
+            if (floatExt) {
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, width, height, 0, gl.RGBA, gl.FLOAT, null);
+            } else {
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            }
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            debugFramebuffer = gl.createFramebuffer();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, debugFramebuffer);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, debugTexture, 0);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            return { width, height };
+        }
+
+        // ===================== COMPILE =====================
+        function compileUserShader() {
+            const userCode = shaderCodeEl.value;
+            
+            try {
+                const { followedVars, breakpoints } = parseDirectives(userCode);
+                state.followedVars = followedVars;
+                state.breakpoints = breakpoints;
+                state.breakpointValues = {};
+                
+                followCountEl.textContent = followedVars.length;
+                breakCountEl.textContent = breakpoints.length;
+
+                // Main shader
+                const mainSource = generateMainShader(userCode);
+                if (mainProgram) gl.deleteProgram(mainProgram);
+                mainProgram = createProgram(vertexShaderSource, mainSource);
+
+                // Debug shaders for each breakpoint
+                Object.values(debugPrograms).forEach(p => gl.deleteProgram(p));
+                debugPrograms = {};
+                state.availableVarsAtBreakpoint = {};
+                
+                const lines = userCode.split('\n');
+                for (const bp of breakpoints) {
+                    // Store which vars are available at each breakpoint
+                    const declaredVars = findDeclaredVars(lines, bp.line);
+                    state.availableVarsAtBreakpoint[bp.id] = declaredVars;
+                    console.log(`Breakpoint "${bp.id}" at line ${bp.line}, declared vars:`, [...declaredVars]);
+                    
+                    try {
+                        const debugSource = generateBreakpointShader(userCode, bp, followedVars);
+                        if (debugSource) {
+                            debugPrograms[bp.id] = createProgram(vertexShaderSource, debugSource);
+                        }
+                    } catch (e) {
+                        console.warn(`Failed to compile debug shader for ${bp.id}:`, e);
+                    }
+                }
+
+                if (followedVars.length > 0) {
+                    setupDebugFramebuffer(followedVars.length);
+                }
+
+                // Update UI
+                updateBreakpointTabs();
+                if (breakpoints.length > 0 && !state.selectedBreakpoint) {
+                    state.selectedBreakpoint = breakpoints[0].id;
+                }
+
+                setStatus('Compiled successfully', 'success');
+                
+                if (state.debugCoord) captureAllBreakpoints();
+
+            } catch (error) {
+                setStatus('Compile error: ' + error.message, 'error');
+                console.error(error);
+            }
+        }
+
+        // ===================== RENDER =====================
+        function renderMain() {
+            if (!mainProgram) return;
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.useProgram(mainProgram);
+
+            gl.uniform3f(gl.getUniformLocation(mainProgram, 'iResolution'), canvas.width, canvas.height, 1.0);
+            gl.uniform1f(gl.getUniformLocation(mainProgram, 'iTime'), state.time);
+            const mouse = state.debugCoord ? [state.debugCoord.x, canvas.height - state.debugCoord.y] : [0, 0];
+            gl.uniform4f(gl.getUniformLocation(mainProgram, 'iMouse'), mouse[0], mouse[1], mouse[0], mouse[1]);
+
+            const posLoc = gl.getAttribLocation(mainProgram, 'position');
+            gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+
+        // ===================== CAPTURE BREAKPOINT VALUES =====================
+        function captureBreakpoint(breakpointId) {
+            const program = debugPrograms[breakpointId];
+            if (!program || !state.debugCoord || state.followedVars.length === 0) return;
+
+            const numVars = state.followedVars.length;
+            const debugWidth = 16, debugHeight = Math.ceil(numVars / debugWidth) || 1;
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, debugFramebuffer);
+            gl.viewport(0, 0, debugWidth, debugHeight);
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.useProgram(program);
+
+            gl.uniform3f(gl.getUniformLocation(program, 'iResolution'), canvas.width, canvas.height, 1.0);
+            gl.uniform1f(gl.getUniformLocation(program, 'iTime'), state.time);
+            const mouse = [state.debugCoord.x, canvas.height - state.debugCoord.y];
+            gl.uniform4f(gl.getUniformLocation(program, 'iMouse'), mouse[0], mouse[1], mouse[0], mouse[1]);
+            gl.uniform2f(gl.getUniformLocation(program, 'debugCoord'), mouse[0], mouse[1]);
+            gl.uniform2f(gl.getUniformLocation(program, 'debugResolution'), debugWidth, debugHeight);
+
+            const posLoc = gl.getAttribLocation(program, 'position');
+            gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            let pixels;
+            if (floatExt) {
+                pixels = new Float32Array(debugWidth * debugHeight * 4);
+                gl.readPixels(0, 0, debugWidth, debugHeight, gl.RGBA, gl.FLOAT, pixels);
+            } else {
+                pixels = new Uint8Array(debugWidth * debugHeight * 4);
+                gl.readPixels(0, 0, debugWidth, debugHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+            }
+
+            const values = {};
+            for (let i = 0; i < numVars; i++) {
+                const value = floatExt ? pixels[i * 4] : pixels[i * 4] / 255.0;
+                values[state.followedVars[i].name] = value;
+            }
+            state.breakpointValues[breakpointId] = values;
+            
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
+
+        function captureAllBreakpoints() {
+            for (const bp of state.breakpoints) {
+                captureBreakpoint(bp.id);
+            }
+            updateBreakpointDisplay();
+        }
+
+        // ===================== UI =====================
+        function updateBreakpointTabs() {
+            let html = '';
+            for (const bp of state.breakpoints) {
+                const active = bp.id === state.selectedBreakpoint ? 'active' : '';
+                html += `<button class="breakpoint-tab ${active}" data-id="${bp.id}">${bp.id}</button>`;
+            }
+            breakpointTabsEl.innerHTML = html;
+
+            breakpointTabsEl.querySelectorAll('.breakpoint-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    state.selectedBreakpoint = tab.dataset.id;
+                    updateBreakpointTabs();
+                    updateBreakpointDisplay();
+                });
+            });
+        }
+
+        function updateBreakpointDisplay() {
+            if (!state.debugCoord) {
+                breakpointContentEl.innerHTML = '<div class="no-data">Click on canvas to inspect a pixel</div>';
+                return;
+            }
+
+            if (state.breakpoints.length === 0) {
+                breakpointContentEl.innerHTML = '<div class="no-data">No #BREAK directives found</div>';
+                return;
+            }
+
+            const values = state.breakpointValues[state.selectedBreakpoint];
+            const availableVars = state.availableVarsAtBreakpoint?.[state.selectedBreakpoint] || new Set();
+            
+            if (!values) {
+                breakpointContentEl.innerHTML = '<div class="no-data">No values captured</div>';
+                return;
+            }
+
+            let html = `<div class="breakpoint-header">
+                <span>@ ${state.selectedBreakpoint}</span>
+                <span class="coord">(${state.debugCoord.x.toFixed(0)}, ${state.debugCoord.y.toFixed(0)})</span>
+            </div>`;
+            html += '<div class="follow-values">';
+            
+            for (const v of state.followedVars) {
+                const baseName = v.name.split('.')[0].split('[')[0];
+                const isAvailable = availableVars.has(baseName);
+                const val = values[v.name];
+                
+                let valueClass = '';
+                let valueStr = '';
+                
+                if (!isAvailable) {
+                    valueClass = 'unavailable';
+                    valueStr = '(not declared)';
+                } else if (val !== undefined) {
+                    if (val < 0) valueClass = 'negative';
+                    else if (val > 1) valueClass = 'large';
+                    valueStr = val.toFixed(6);
+                } else {
+                    valueStr = '---';
+                }
+                
+                html += `<div class="follow-value${!isAvailable ? ' dimmed' : ''}">
+                    <span class="var-name">${v.name}</span>
+                    <span class="value ${valueClass}">${valueStr}</span>
+                </div>`;
+            }
+            html += '</div>';
+            
+            breakpointContentEl.innerHTML = html;
+        }
+
+        function setStatus(msg, type = '') {
+            statusEl.textContent = msg;
+            statusEl.className = 'status ' + type;
+        }
+
+        // ===================== ANIMATION =====================
+        function animate(timestamp) {
+            state.frameCount++;
+            if (timestamp - state.lastFrameTime >= 1000) {
+                fpsInfoEl.textContent = state.frameCount;
+                state.frameCount = 0;
+                state.lastFrameTime = timestamp;
+            }
+
+            if (state.playing) {
+                state.time += 1/60;
+                if (state.time > 60) state.time = 0;
+                timeSlider.value = state.time;
+                timeDisplay.textContent = state.time.toFixed(2) + 's';
+                if (state.debugCoord) captureAllBreakpoints();
+            }
+
+            renderMain();
+            requestAnimationFrame(animate);
+        }
+
+        // ===================== EVENTS =====================
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            state.debugCoord = {
+                x: (e.clientX - rect.left) * canvas.width / rect.width,
+                y: (e.clientY - rect.top) * canvas.height / rect.height
+            };
+            pixelMarker.style.left = e.clientX - canvasContainer.getBoundingClientRect().left + 'px';
+            pixelMarker.style.top = e.clientY - canvasContainer.getBoundingClientRect().top + 'px';
+            pixelMarker.classList.add('active');
+            captureAllBreakpoints();
+        });
+
+        timeSlider.addEventListener('input', (e) => {
+            state.time = parseFloat(e.target.value);
+            timeDisplay.textContent = state.time.toFixed(2) + 's';
+            if (state.debugCoord) captureAllBreakpoints();
+        });
+
+        playBtn.addEventListener('click', () => {
+            state.playing = !state.playing;
+            playBtn.textContent = state.playing ? '⏸' : '▶';
+            playBtn.classList.toggle('playing', state.playing);
+        });
+
+        compileBtn.addEventListener('click', compileUserShader);
+
+        resetBtn.addEventListener('click', () => {
+            state.time = 0;
+            state.playing = false;
+            state.debugCoord = null;
+            timeSlider.value = 0;
+            timeDisplay.textContent = '0.00s';
+            playBtn.textContent = '▶';
+            playBtn.classList.remove('playing');
+            pixelMarker.classList.remove('active');
+            state.breakpointValues = {};
+            updateBreakpointDisplay();
+        });
+
+        shaderCodeEl.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                compileUserShader();
+            }
+        });
+
+        // ===================== INIT =====================
+        compileUserShader();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
+
