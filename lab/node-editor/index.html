@@ -1,0 +1,1821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Node Editor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #1a1a2e;
+            --bg-panel: #252540;
+            --bg-node: #3a3a5a;
+            --border-color: #5a5a7a;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0c0;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --success: #4ade80;
+            --danger: #f87171;
+            --warning: #fbbf24;
+            --link-color: #22d3ee;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #16213e 100%);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: none;
+        }
+
+        /* ===================== LAYOUT ===================== */
+        #app {
+            display: grid;
+            grid-template-columns: auto 1fr 280px;
+            grid-template-rows: 1fr auto;
+            height: 100vh;
+            gap: 0;
+        }
+
+        /* ===================== NODE MENU (Left) ===================== */
+        #nodeMenu {
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border-color);
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 6px;
+            height: calc(100vh - 80px); /* Account for recycle bin */
+            overflow: hidden;
+            min-width: 52px;
+        }
+
+        .menu-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            background: var(--bg-node);
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: grab;
+            transition: all 0.15s ease;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        .menu-btn:hover {
+            transform: scale(1.1);
+            border-color: var(--accent);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .menu-btn:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+
+        .menu-btn::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: 6px;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            z-index: 1000;
+        }
+
+        .menu-btn:hover::after {
+            opacity: 1;
+        }
+
+        /* ===================== CANVAS AREA ===================== */
+        #canvasArea {
+            position: relative;
+            background: 
+                radial-gradient(circle at center, rgba(99, 102, 241, 0.03) 0%, transparent 70%),
+                linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            overflow: hidden;
+        }
+
+        #svgLayer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        #nodeLayer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+        }
+
+        /* SVG layer above nodes for non-hierarchical links */
+        #svgLayerTop {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 15;
+        }
+
+        /* ===================== NODES ===================== */
+        .node {
+            position: absolute;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px 4px 4px;
+            background: var(--bg-node);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            cursor: move;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+            transition: box-shadow 0.15s ease, border-color 0.15s ease;
+        }
+
+        .node:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .node.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3), 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .node.dragging {
+            cursor: grabbing;
+            z-index: 100;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+        }
+
+        .node.drop-target {
+            border-color: var(--success);
+            box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.3);
+        }
+
+        .node.link-source {
+            border-color: var(--link-color);
+            box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.3);
+        }
+
+        .node.contain-target {
+            border-color: var(--warning);
+            box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.3);
+        }
+
+        .node.is-container {
+            min-width: 60px;
+            padding: 3px;
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .node.is-container .node-header {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 2px;
+        }
+
+        .node.is-container .node-contents {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 2px;
+            min-height: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+        }
+
+        .node.contained {
+            position: relative !important;
+            left: auto !important;
+            top: auto !important;
+        }
+
+        /* Contained nodes are smaller - Level 1 */
+        .node.contained {
+            padding: 2px 4px 2px 2px;
+            gap: 4px;
+            border-radius: 6px;
+        }
+
+        .node.contained .node-icon {
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+
+        .node.contained .node-label {
+            font-size: 10px;
+            max-width: 50px;
+        }
+
+        /* Level 2 - nested inside a contained node */
+        .node.contained .node.contained {
+            padding: 1px 3px 1px 1px;
+            gap: 3px;
+            border-radius: 4px;
+        }
+
+        .node.contained .node.contained .node-icon {
+            width: 16px;
+            height: 16px;
+            font-size: 10px;
+            border-radius: 3px;
+        }
+
+        .node.contained .node.contained .node-label {
+            font-size: 9px;
+            max-width: 40px;
+        }
+
+        /* Level 3 - deeply nested */
+        .node.contained .node.contained .node.contained {
+            padding: 1px 2px 1px 1px;
+            gap: 2px;
+            border-radius: 3px;
+        }
+
+        .node.contained .node.contained .node.contained .node-icon {
+            width: 14px;
+            height: 14px;
+            font-size: 8px;
+            border-radius: 2px;
+        }
+
+        .node.contained .node.contained .node.contained .node-label {
+            font-size: 8px;
+            max-width: 30px;
+        }
+
+        /* Container styling adjustments for nested */
+        .node.contained.is-container .node-contents {
+            padding: 1px;
+            gap: 1px;
+            min-height: 16px;
+        }
+
+        .node.contained.is-container .node-header {
+            padding: 1px;
+            gap: 2px;
+            margin-bottom: 1px;
+        }
+
+        .node-icon {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            flex-shrink: 0;
+        }
+
+        .node-label {
+            font-size: 12px;
+            font-weight: 500;
+            white-space: nowrap;
+            color: var(--text-primary);
+            cursor: move;
+            user-select: none;
+            max-width: 60px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Detach handle - only visible for nodes with hierarchical parents (not contained) */
+        .detach-handle {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 18px;
+            height: 18px;
+            background: var(--bg-panel);
+            border: 2px solid var(--danger);
+            border-radius: 50%;
+            display: none; /* Hidden by default */
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            color: var(--danger);
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+            z-index: 20;
+            pointer-events: none; /* Disabled by default */
+        }
+
+        /* Only show for nodes with parent AND not contained */
+        .node.has-parent:not(.contained) > .detach-handle {
+            display: flex;
+            pointer-events: auto;
+        }
+
+        .node.has-parent:not(.contained):hover > .detach-handle {
+            opacity: 1;
+        }
+
+        .node.has-parent:not(.contained) > .detach-handle:hover {
+            opacity: 1;
+            transform: translateX(-50%) scale(1.15);
+            background: var(--danger);
+            color: white;
+        }
+
+        /* Ensure contained nodes never show detach handle */
+        .node.contained .detach-handle,
+        .node.contained > .detach-handle {
+            display: none !important;
+            pointer-events: none !important;
+        }
+
+        /* ===================== INSPECTOR (Right) ===================== */
+        #inspector {
+            background: var(--bg-panel);
+            border-left: 1px solid var(--border-color);
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        #inspector h3 {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .inspector-section {
+            margin-bottom: 24px;
+        }
+
+        .inspector-field {
+            margin-bottom: 12px;
+        }
+
+        .inspector-field label {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .inspector-field input,
+        .inspector-field select {
+            width: 100%;
+            padding: 8px 10px;
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .inspector-field input:focus,
+        .inspector-field select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .empty-inspector {
+            color: var(--text-secondary);
+            font-size: 13px;
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .node-links-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .node-links-list li {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 10px;
+            background: var(--bg-dark);
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .node-links-list li button {
+            background: transparent;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-size: 16px;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .node-links-list li button:hover {
+            background: rgba(248, 113, 113, 0.2);
+        }
+
+        /* ===================== RECYCLE BIN ===================== */
+        #recycleBin {
+            grid-column: 1 / -1;
+            height: 80px;
+            background: rgba(248, 113, 113, 0.1);
+            border-top: 2px dashed rgba(248, 113, 113, 0.4);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            font-size: 28px;
+            color: rgba(248, 113, 113, 0.6);
+            transition: all 0.2s ease;
+            pointer-events: none;
+        }
+
+        #recycleBin.active {
+            background: rgba(248, 113, 113, 0.25);
+            border-color: var(--danger);
+            color: var(--danger);
+            transform: scale(1.02);
+        }
+
+        #recycleBin small {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* ===================== LINK MODE OVERLAY ===================== */
+        #linkModeOverlay {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--link-color);
+            color: var(--bg-dark);
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 4px 20px rgba(34, 211, 238, 0.4);
+        }
+
+        #linkModeOverlay.visible {
+            display: block;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* ===================== SVG LINES ===================== */
+        .connection-line {
+            stroke: #888;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .link-line {
+            stroke: var(--link-color);
+            stroke-width: 1.5;
+            stroke-dasharray: 4 3;
+            fill: none;
+            opacity: 0.4;
+        }
+
+        .preview-line {
+            stroke: var(--success);
+            stroke-width: 2;
+            stroke-dasharray: 6 4;
+            fill: none;
+            opacity: 0.8;
+        }
+
+        .link-preview-line {
+            stroke: var(--link-color);
+            stroke-width: 1.5;
+            stroke-dasharray: 4 3;
+            fill: none;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="nodeMenu"></div>
+        <div id="canvasArea">
+            <svg id="svgLayer"></svg>
+            <div id="nodeLayer"></div>
+            <svg id="svgLayerTop"></svg>
+        </div>
+        <div id="inspector">
+            <div class="empty-inspector">
+                Select a node to view properties
+            </div>
+        </div>
+        <div id="recycleBin">
+            <span>🗑️</span>
+            <small>Drop to delete</small>
+        </div>
+    </div>
+
+    <div id="linkModeOverlay">
+        🔗 Click another node to create a link (ESC to cancel)
+    </div>
+
+    <script>
+        // ===================== NODE TYPE DEFINITIONS =====================
+        const NODE_TYPES = [
+            { id: 'folder', icon: '📁', name: 'Folder', color: '#e74c3c' },
+            { id: 'file', icon: '📄', name: 'File', color: '#3498db' },
+            { id: 'link', icon: '🔗', name: 'Link', color: '#2ecc71' },
+            { id: 'settings', icon: '⚙️', name: 'Settings', color: '#f39c12' },
+            { id: 'user', icon: '👤', name: 'User', color: '#9b59b6' },
+            { id: 'chat', icon: '💬', name: 'Chat', color: '#1abc9c' },
+            { id: 'alert', icon: '🔔', name: 'Alert', color: '#e67e22' },
+            { id: 'chart', icon: '📊', name: 'Chart', color: '#34495e' },
+            { id: 'design', icon: '🎨', name: 'Design', color: '#e91e63' },
+            { id: 'search', icon: '🔍', name: 'Search', color: '#00bcd4' },
+            { id: 'edit', icon: '📝', name: 'Edit', color: '#8bc34a' },
+            { id: 'add', icon: '➕', name: 'Add', color: '#673ab7' },
+            { id: 'upload', icon: '📤', name: 'Upload', color: '#009688' },
+            { id: 'download', icon: '📥', name: 'Download', color: '#ffc107' },
+            { id: 'lock', icon: '🔒', name: 'Lock', color: '#795548' },
+            { id: 'star', icon: '⭐', name: 'Star', color: '#ff9800' },
+            { id: 'home', icon: '🏠', name: 'Home', color: '#4caf50' },
+            { id: 'email', icon: '📧', name: 'Email', color: '#2196f3' },
+            { id: 'calendar', icon: '📅', name: 'Calendar', color: '#9c27b0' },
+            { id: 'music', icon: '🎵', name: 'Music', color: '#00bcd4' },
+            { id: 'photo', icon: '📷', name: 'Photo', color: '#cddc39' },
+            { id: 'video', icon: '🎬', name: 'Video', color: '#ff5722' },
+            { id: 'database', icon: '🗄️', name: 'Database', color: '#607d8b' },
+            { id: 'api', icon: '🌐', name: 'API', color: '#00acc1' },
+        ];
+
+        // ===================== GLOBAL STATE =====================
+        let nodes = [];
+        let nonHierarchicalLinks = []; // { from: nodeId, to: nodeId }
+        let nodeCounter = 0;
+        let selectedNode = null;
+
+        // Drag state
+        let isDragging = false;
+        let draggedNode = null;
+        let dragOffset = { x: 0, y: 0 };
+        let dragFromMenu = false;
+        let dragMenuType = null;
+        let isDetached = false;
+        
+        // Contained drag state
+        let dragStartPos = { x: 0, y: 0 };
+        let containedDragStarted = false;
+        const DRAG_THRESHOLD = 5; // Pixels before drag is considered started
+
+        // Link mode state
+        let isLinkMode = false;
+        let linkSourceNode = null;
+        
+        // Touch/double-tap state
+        let lastTapTime = 0;
+        let lastTapNode = null;
+        const DOUBLE_TAP_DELAY = 300; // ms
+        let activeTouchId = null;
+
+        // DOM elements
+        const nodeMenu = document.getElementById('nodeMenu');
+        const canvasArea = document.getElementById('canvasArea');
+        const nodeLayer = document.getElementById('nodeLayer');
+        const svgLayer = document.getElementById('svgLayer');
+        const svgLayerTop = document.getElementById('svgLayerTop');
+        const inspector = document.getElementById('inspector');
+        const recycleBin = document.getElementById('recycleBin');
+        const linkModeOverlay = document.getElementById('linkModeOverlay');
+
+        // ===================== INITIALIZATION =====================
+        function init() {
+            buildNodeMenu();
+            setupEventListeners();
+        }
+
+        function buildNodeMenu() {
+            NODE_TYPES.forEach(type => {
+                const btn = document.createElement('div');
+                btn.className = 'menu-btn';
+                btn.dataset.type = type.id;
+                btn.dataset.tooltip = type.name;
+                btn.innerHTML = type.icon;
+                btn.style.borderColor = type.color;
+                nodeMenu.appendChild(btn);
+            });
+        }
+
+        function setupEventListeners() {
+            // Menu item drag
+            nodeMenu.addEventListener('mousedown', onMenuMouseDown);
+            nodeMenu.addEventListener('touchstart', onMenuTouchStart, { passive: false });
+
+            // Global mouse events
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            
+            // Global touch events
+            document.addEventListener('touchmove', onTouchMove, { passive: false });
+            document.addEventListener('touchend', onTouchEnd);
+            document.addEventListener('touchcancel', onTouchEnd);
+
+            // Canvas click (deselect)
+            canvasArea.addEventListener('mousedown', onCanvasMouseDown);
+            canvasArea.addEventListener('touchstart', onCanvasTouchStart, { passive: false });
+
+            // Right-click for linking (desktop)
+            document.addEventListener('contextmenu', onContextMenu);
+
+            // ESC to cancel link mode
+            document.addEventListener('keydown', onKeyDown);
+            
+            // Prevent unwanted behaviors on mobile
+            canvasArea.addEventListener('touchstart', (e) => {
+                if (e.target.closest('.node')) {
+                    e.preventDefault(); // Prevent scroll when touching nodes
+                }
+            }, { passive: false });
+        }
+
+        // ===================== MENU DRAG =====================
+        function onMenuMouseDown(e) {
+            if (!e.target.classList.contains('menu-btn')) return;
+            if (e.button !== 0) return; // Left click only
+
+            e.preventDefault();
+            const type = e.target.dataset.type;
+            const typeInfo = NODE_TYPES.find(t => t.id === type);
+            if (!typeInfo) return;
+
+            // Create a new node
+            const node = createNode(typeInfo, e.clientX, e.clientY);
+            nodes.push(node);
+            nodeLayer.appendChild(node.element);
+
+            // Start dragging
+            isDragging = true;
+            draggedNode = node;
+            dragFromMenu = true;
+            isDetached = true;
+            dragOffset = { x: node.element.offsetWidth / 2, y: node.element.offsetHeight / 2 };
+
+            updateNodePosition(node, e.clientX, e.clientY);
+            selectNode(node);
+            redrawAll();
+        }
+
+        // ===================== NODE CREATION =====================
+        function createNode(typeInfo, x, y) {
+            const id = 'node_' + (++nodeCounter);
+            const label = typeInfo.name.toLowerCase() + nodeCounter;
+
+            const el = document.createElement('div');
+            el.className = 'node';
+            el.dataset.id = id;
+
+            el.innerHTML = `
+                <div class="detach-handle">×</div>
+                <div class="node-icon" style="background: ${typeInfo.color}40;">${typeInfo.icon}</div>
+                <span class="node-label" title="${label}">${label}</span>
+            `;
+
+            const node = {
+                id,
+                type: typeInfo.id,
+                typeInfo,
+                label,
+                x: 0,
+                y: 0,
+                parent: null, // Hierarchical parent
+                children: [], // Hierarchical children
+                container: null, // Node that contains this one
+                containedNodes: [], // Nodes contained inside this one
+                element: el
+            };
+
+            // Event listeners
+            el.addEventListener('mousedown', (e) => onNodeMouseDown(e, node));
+            el.addEventListener('touchstart', (e) => onNodeTouchStart(e, node), { passive: false });
+            el.querySelector('.detach-handle').addEventListener('mousedown', (e) => onDetachMouseDown(e, node));
+            el.querySelector('.detach-handle').addEventListener('touchstart', (e) => onDetachTouchStart(e, node), { passive: false });
+
+            return node;
+        }
+
+        function updateNodePosition(node, clientX, clientY) {
+            const rect = canvasArea.getBoundingClientRect();
+            const newX = clientX - rect.left - dragOffset.x;
+            const newY = clientY - rect.top - dragOffset.y;
+            
+            // Calculate delta for moving children
+            const dx = newX - node.x;
+            const dy = newY - node.y;
+            
+            node.x = newX;
+            node.y = newY;
+            node.element.style.left = node.x + 'px';
+            node.element.style.top = node.y + 'px';
+            
+            // Move children along with parent if this node has any
+            if (node.children.length > 0) {
+                moveChildrenRecursively(node, dx, dy);
+            }
+        }
+
+        // ===================== NODE INTERACTION =====================
+        function onNodeMouseDown(e, node) {
+            if (e.target.classList.contains('detach-handle')) return;
+            if (e.target.tagName === 'INPUT') return;
+            if (e.button !== 0) return; // Left click only
+
+            e.stopPropagation();
+
+            // If in link mode, complete the link
+            if (isLinkMode && linkSourceNode && linkSourceNode !== node) {
+                createLink(linkSourceNode, node);
+                exitLinkMode();
+                return;
+            }
+
+            // Start dragging
+            isDragging = true;
+            draggedNode = node;
+            dragFromMenu = false;
+            
+            // Contained nodes are not "detached" in the hierarchical sense
+            // but they can be dragged out of their container
+            isDetached = node.parent === null && node.container === null;
+
+            const rect = node.element.getBoundingClientRect();
+            const canvasRect = canvasArea.getBoundingClientRect();
+            dragOffset = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            
+            // Store start position for contained node drag detection
+            dragStartPos = { x: e.clientX, y: e.clientY };
+            containedDragStarted = false;
+
+            node.element.classList.add('dragging');
+            selectNode(node);
+        }
+
+        function onDetachMouseDown(e, node) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (node.parent) {
+                detachNode(node);
+            }
+
+            // Start dragging the detached node
+            isDragging = true;
+            draggedNode = node;
+            isDetached = true;
+
+            const rect = node.element.getBoundingClientRect();
+            dragOffset = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+
+            node.element.classList.add('dragging');
+            selectNode(node);
+        }
+
+        function onDetachTouchStart(e, node) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const touch = e.touches[0];
+            activeTouchId = touch.identifier;
+
+            if (node.parent) {
+                detachNode(node);
+            }
+
+            // Start dragging the detached node
+            isDragging = true;
+            draggedNode = node;
+            isDetached = true;
+            dragStartPos = { x: touch.clientX, y: touch.clientY };
+            containedDragStarted = false;
+
+            const rect = node.element.getBoundingClientRect();
+            dragOffset = {
+                x: touch.clientX - rect.left,
+                y: touch.clientY - rect.top
+            };
+
+            node.element.classList.add('dragging');
+            selectNode(node);
+        }
+
+        function detachNode(node) {
+            if (!node.parent) return;
+
+            const parent = node.parent;
+            parent.children = parent.children.filter(c => c !== node);
+            node.parent = null;
+            node.element.classList.remove('has-parent');
+            isDetached = true;
+            redrawAll();
+        }
+
+        // ===================== MOUSE MOVE =====================
+        function onMouseMove(e) {
+            if (!isDragging || !draggedNode) return;
+
+            e.preventDefault();
+            
+            // For contained nodes, check if we've moved enough to start dragging
+            if (draggedNode.container && !containedDragStarted) {
+                const dx = e.clientX - dragStartPos.x;
+                const dy = e.clientY - dragStartPos.y;
+                if (Math.hypot(dx, dy) < DRAG_THRESHOLD) {
+                    return; // Not enough movement yet
+                }
+                // Start the contained drag - move node to canvas
+                containedDragStarted = true;
+                
+                // Get position BEFORE removing from container
+                const rect = draggedNode.element.getBoundingClientRect();
+                const canvasRect = canvasArea.getBoundingClientRect();
+                
+                // Calculate new position relative to canvas
+                const newX = rect.left - canvasRect.left;
+                const newY = rect.top - canvasRect.top;
+                
+                // Remove contained class BEFORE setting position (has !important)
+                draggedNode.element.classList.remove('contained');
+                
+                // Move to canvas layer and set position
+                nodeLayer.appendChild(draggedNode.element);
+                draggedNode.x = newX;
+                draggedNode.y = newY;
+                draggedNode.element.style.position = 'absolute';
+                draggedNode.element.style.left = newX + 'px';
+                draggedNode.element.style.top = newY + 'px';
+                
+                // Recalculate drag offset now that node is on canvas
+                dragOffset.x = e.clientX - rect.left;
+                dragOffset.y = e.clientY - rect.top;
+            }
+
+            // Move the node (this also moves children)
+            updateNodePosition(draggedNode, e.clientX, e.clientY);
+
+            // Show drop preview for detached nodes (before redrawAll so it persists)
+            let dropTarget = null;
+            if (isDetached) {
+                dropTarget = updateDropPreview(e.clientX, e.clientY);
+            }
+
+            // Update lines (pass dropTarget to preserve preview line)
+            redrawAll(dropTarget, e.clientX, e.clientY);
+
+            // Update recycle bin
+            updateRecyclePreview(e.clientX, e.clientY);
+        }
+
+        function moveChildrenRecursively(node, dx, dy) {
+            // Move all hierarchical children by the same delta
+            node.children.forEach(child => {
+                child.x += dx;
+                child.y += dy;
+                child.element.style.left = child.x + 'px';
+                child.element.style.top = child.y + 'px';
+                // Recursively move grandchildren
+                moveChildrenRecursively(child, dx, dy);
+            });
+        }
+
+        // ===================== MOUSE UP =====================
+        function onMouseUp(e) {
+            if (!isDragging) return;
+
+            clearDropPreview();
+            clearRecyclePreview();
+
+            if (draggedNode) {
+                draggedNode.element.classList.remove('dragging');
+
+                // Check recycle bin
+                if (isOverRecycleBin(e.clientX, e.clientY)) {
+                    deleteNode(draggedNode);
+                } else if (isDetached) {
+                    // Check for containment target first (dropping ON a node)
+                    const containTarget = findContainTarget(e.clientX, e.clientY);
+                    if (containTarget && containTarget !== draggedNode) {
+                        containNode(draggedNode, containTarget);
+                    } else {
+                        // Check for hierarchical drop target (dropping BELOW a node)
+                        const target = findDropTarget(e.clientX, e.clientY);
+                        if (target && target !== draggedNode) {
+                            attachNode(draggedNode, target);
+                        }
+                    }
+                } else if (draggedNode.container) {
+                    // Only process if we actually started dragging
+                    if (containedDragStarted) {
+                        // Check if dragging a contained node outside its container
+                        if (!isOverNode(e.clientX, e.clientY, draggedNode.container)) {
+                            uncontainNode(draggedNode);
+                        } else {
+                            // Snap back inside container
+                            snapNodeToContainer(draggedNode);
+                        }
+                    }
+                    // If containedDragStarted is false, it was just a click - do nothing
+                }
+            }
+
+            isDragging = false;
+            draggedNode = null;
+            dragFromMenu = false;
+            isDetached = false;
+            containedDragStarted = false;
+            redrawAll();
+        }
+
+        // ===================== DROP TARGETS =====================
+        function findDropTarget(x, y) {
+            const rect = canvasArea.getBoundingClientRect();
+            const canvasX = x - rect.left;
+            const canvasY = y - rect.top;
+
+            let bestTarget = null;
+            let bestDistance = Infinity;
+
+            for (const node of nodes) {
+                if (node === draggedNode) continue;
+                if (isDescendant(node, draggedNode)) continue;
+                if (node.container) continue; // Can't drop onto a contained node
+                if (draggedNode && draggedNode.container) continue; // Contained nodes can't be parented
+
+                const nodeRect = node.element.getBoundingClientRect();
+                const nodeX = nodeRect.left - rect.left;
+                const nodeY = nodeRect.top - rect.top;
+                const nodeCenterX = nodeX + nodeRect.width / 2;
+
+                // Drop zone is below the node - increased size
+                const dropZone = {
+                    left: nodeCenterX - 80,
+                    right: nodeCenterX + 80,
+                    top: nodeY + nodeRect.height + 15,
+                    bottom: nodeY + nodeRect.height + 150
+                };
+
+                if (canvasX >= dropZone.left && canvasX <= dropZone.right &&
+                    canvasY >= dropZone.top && canvasY <= dropZone.bottom) {
+                    // Calculate distance to node center for best match
+                    const dist = Math.hypot(canvasX - nodeCenterX, canvasY - (nodeY + nodeRect.height + 40));
+                    if (dist < bestDistance) {
+                        bestDistance = dist;
+                        bestTarget = node;
+                    }
+                }
+            }
+            return bestTarget;
+        }
+
+        function isDescendant(potentialParent, potentialChild) {
+            let current = potentialParent;
+            while (current) {
+                if (current === potentialChild) return true;
+                current = current.parent;
+            }
+            return false;
+        }
+
+        // Find a node to contain the dragged node (dropping directly ON the node)
+        // Returns the deepest/smallest matching container for proper nesting
+        function findContainTarget(x, y) {
+            let bestMatch = null;
+            let smallestArea = Infinity;
+            
+            for (const node of nodes) {
+                if (node === draggedNode) continue;
+                if (isDescendant(node, draggedNode)) continue;
+                // Dragged node can't have hierarchical relationships if being contained
+                if (draggedNode.children.length > 0) continue;
+                if (draggedNode.parent) continue;
+                if (draggedNode.container) continue; // Already contained
+                // Note: target CAN be contained (allows nested containment)
+                // Note: target CAN have children (nodes with children can be containers)
+                
+                const nodeRect = node.element.getBoundingClientRect();
+                
+                // Check if directly over the node
+                if (x >= nodeRect.left && x <= nodeRect.right &&
+                    y >= nodeRect.top && y <= nodeRect.bottom) {
+                    // Find the smallest (deepest) container
+                    const area = nodeRect.width * nodeRect.height;
+                    if (area < smallestArea) {
+                        smallestArea = area;
+                        bestMatch = node;
+                    }
+                }
+            }
+            return bestMatch;
+        }
+
+        // Check if point is over a specific node
+        function isOverNode(x, y, node) {
+            const nodeRect = node.element.getBoundingClientRect();
+            // Add some padding for easier release
+            const padding = 20;
+            return x >= nodeRect.left - padding && x <= nodeRect.right + padding &&
+                   y >= nodeRect.top - padding && y <= nodeRect.bottom + padding;
+        }
+
+        function updateDropPreview(x, y) {
+            const containTarget = findContainTarget(x, y);
+            const dropTarget = containTarget ? null : findDropTarget(x, y);
+
+            nodes.forEach(n => {
+                n.element.classList.remove('drop-target');
+                n.element.classList.remove('contain-target');
+            });
+
+            if (containTarget) {
+                containTarget.element.classList.add('contain-target');
+                return null; // Don't draw line for containment
+            } else if (dropTarget) {
+                dropTarget.element.classList.add('drop-target');
+                return dropTarget;
+            }
+            
+            return null;
+        }
+
+        function clearDropPreview() {
+            nodes.forEach(n => {
+                n.element.classList.remove('drop-target');
+                n.element.classList.remove('contain-target');
+            });
+        }
+
+        // ===================== ATTACH/DETACH =====================
+        function attachNode(child, parent) {
+            // Can't attach if either is contained
+            if (child.container) return;
+            if (parent.container) return;
+            
+            if (child.parent) {
+                child.parent.children = child.parent.children.filter(c => c !== child);
+                child.element.classList.remove('has-parent');
+            }
+            child.parent = parent;
+            parent.children.push(child);
+            child.element.classList.add('has-parent');
+            isDetached = false;
+            redrawAll();
+        }
+
+        // ===================== CONTAINMENT =====================
+        function containNode(nodeToContain, containerNode) {
+            // Validation for node being contained:
+            if (nodeToContain.container) return; // Already contained
+            if (nodeToContain.children.length > 0) return; // Has hierarchical children - can't be contained
+            if (nodeToContain.parent) return; // Has hierarchical parent - can't be contained
+            // Note: containerNode CAN have children - nodes with children can be containers
+            // Note: containerNode CAN be contained itself - allows nested containment
+            
+            // Remove from nodes layer and add to container
+            nodeToContain.container = containerNode;
+            containerNode.containedNodes.push(nodeToContain);
+            
+            // Update DOM structure
+            updateContainerDOM(containerNode);
+            
+            // Mark the contained node
+            nodeToContain.element.classList.add('contained');
+            
+            isDetached = false;
+            redrawAll();
+        }
+
+        function uncontainNode(node) {
+            if (!node.container) return;
+            
+            const container = node.container;
+            
+            // Remove from container's list
+            container.containedNodes = container.containedNodes.filter(n => n !== node);
+            
+            // Update container DOM
+            updateContainerDOM(container);
+            
+            // Move back to node layer
+            node.container = null;
+            node.element.classList.remove('contained');
+            nodeLayer.appendChild(node.element);
+            
+            // Position near the container
+            const containerRect = container.element.getBoundingClientRect();
+            const canvasRect = canvasArea.getBoundingClientRect();
+            node.x = containerRect.right - canvasRect.left + 20;
+            node.y = containerRect.top - canvasRect.top;
+            node.element.style.left = node.x + 'px';
+            node.element.style.top = node.y + 'px';
+            node.element.style.position = 'absolute';
+            
+            isDetached = true;
+            redrawAll();
+        }
+
+        function snapNodeToContainer(node) {
+            if (!node.container) return;
+            
+            // Put node back inside container's contents
+            const contents = node.container.element.querySelector('.node-contents');
+            if (contents) {
+                // Add contained class first (it has the !important styles)
+                node.element.classList.add('contained');
+                // Clear inline styles
+                node.element.style.position = '';
+                node.element.style.left = '';
+                node.element.style.top = '';
+                contents.appendChild(node.element);
+            }
+        }
+
+        function updateContainerDOM(containerNode) {
+            const el = containerNode.element;
+            
+            if (containerNode.containedNodes.length > 0) {
+                // Transform into container layout
+                el.classList.add('is-container');
+                
+                // Check if already has container structure
+                let header = el.querySelector('.node-header');
+                let contents = el.querySelector('.node-contents');
+                
+                if (!header) {
+                    // Restructure the node
+                    const icon = el.querySelector('.node-icon');
+                    const label = el.querySelector('.node-label');
+                    const detach = el.querySelector('.detach-handle');
+                    
+                    header = document.createElement('div');
+                    header.className = 'node-header';
+                    if (icon) header.appendChild(icon);
+                    if (label) header.appendChild(label);
+                    
+                    contents = document.createElement('div');
+                    contents.className = 'node-contents';
+                    
+                    // Clear and rebuild
+                    el.innerHTML = '';
+                    if (detach) el.appendChild(detach);
+                    el.appendChild(header);
+                    el.appendChild(contents);
+                }
+                
+                // Add contained nodes to contents
+                contents.innerHTML = '';
+                containerNode.containedNodes.forEach(contained => {
+                    contained.element.style.position = 'relative';
+                    contained.element.style.left = 'auto';
+                    contained.element.style.top = 'auto';
+                    contents.appendChild(contained.element);
+                });
+            } else {
+                // Revert to normal node layout
+                el.classList.remove('is-container');
+                
+                const header = el.querySelector('.node-header');
+                const contents = el.querySelector('.node-contents');
+                const detach = el.querySelector('.detach-handle');
+                
+                if (header) {
+                    const icon = header.querySelector('.node-icon');
+                    const label = header.querySelector('.node-label');
+                    
+                    el.innerHTML = '';
+                    if (detach) el.appendChild(detach);
+                    if (icon) el.appendChild(icon);
+                    if (label) el.appendChild(label);
+                }
+            }
+        }
+
+        // ===================== RECYCLE BIN =====================
+        function isOverRecycleBin(x, y) {
+            const rect = recycleBin.getBoundingClientRect();
+            return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+        }
+
+        function updateRecyclePreview(x, y) {
+            if (isOverRecycleBin(x, y)) {
+                recycleBin.classList.add('active');
+            } else {
+                recycleBin.classList.remove('active');
+            }
+        }
+
+        function clearRecyclePreview() {
+            recycleBin.classList.remove('active');
+        }
+
+        function deleteNode(node) {
+            // Delete children recursively
+            [...node.children].forEach(child => deleteNode(child));
+            
+            // Delete contained nodes recursively
+            [...node.containedNodes].forEach(contained => deleteNode(contained));
+
+            // Remove from parent
+            if (node.parent) {
+                node.parent.children = node.parent.children.filter(c => c !== node);
+                node.element.classList.remove('has-parent');
+            }
+            
+            // Remove from container
+            if (node.container) {
+                node.container.containedNodes = node.container.containedNodes.filter(c => c !== node);
+                updateContainerDOM(node.container);
+            }
+
+            // Remove non-hierarchical links
+            nonHierarchicalLinks = nonHierarchicalLinks.filter(
+                link => link.from !== node.id && link.to !== node.id
+            );
+
+            // Remove from nodes array
+            nodes = nodes.filter(n => n !== node);
+
+            // Remove from DOM
+            node.element.remove();
+
+            // Deselect if selected
+            if (selectedNode === node) {
+                selectNode(null);
+            }
+
+            redrawAll();
+        }
+
+        // ===================== NON-HIERARCHICAL LINKS =====================
+        function onContextMenu(e) {
+            const nodeEl = e.target.closest('.node');
+            if (!nodeEl) return;
+
+            e.preventDefault();
+
+            const nodeId = nodeEl.dataset.id;
+            const node = nodes.find(n => n.id === nodeId);
+            if (!node) return;
+
+            if (isLinkMode) {
+                if (linkSourceNode === node) {
+                    exitLinkMode();
+                } else {
+                    createLink(linkSourceNode, node);
+                    exitLinkMode();
+                }
+            } else {
+                enterLinkMode(node);
+            }
+        }
+
+        // ===================== TOUCH HANDLERS =====================
+        function getTouchPos(touch) {
+            return { x: touch.clientX, y: touch.clientY };
+        }
+
+        function onMenuTouchStart(e) {
+            if (!e.target.classList.contains('menu-btn')) return;
+            
+            e.preventDefault();
+            const touch = e.touches[0];
+            activeTouchId = touch.identifier;
+            
+            const type = e.target.dataset.type;
+            const typeInfo = NODE_TYPES.find(t => t.id === type);
+            if (!typeInfo) return;
+
+            // Create a new node
+            const node = createNode(typeInfo, touch.clientX, touch.clientY);
+            nodes.push(node);
+            nodeLayer.appendChild(node.element);
+
+            // Start dragging
+            isDragging = true;
+            draggedNode = node;
+            dragFromMenu = true;
+            isDetached = true;
+            dragOffset = { x: node.element.offsetWidth / 2, y: node.element.offsetHeight / 2 };
+            dragStartPos = { x: touch.clientX, y: touch.clientY };
+            containedDragStarted = false;
+        }
+
+        function onCanvasTouchStart(e) {
+            // Deselect if touching empty canvas
+            if (e.target === canvasArea || e.target === nodeLayer) {
+                selectNode(null);
+                if (isLinkMode) exitLinkMode();
+            }
+        }
+
+        function onNodeTouchStart(e, node) {
+            if (e.target.classList.contains('detach-handle')) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const touch = e.touches[0];
+            activeTouchId = touch.identifier;
+            
+            // Check for double-tap (for linking)
+            const now = Date.now();
+            if (lastTapNode === node && (now - lastTapTime) < DOUBLE_TAP_DELAY) {
+                // Double tap - enter/complete link mode
+                if (isLinkMode) {
+                    if (linkSourceNode === node) {
+                        exitLinkMode();
+                    } else {
+                        createLink(linkSourceNode, node);
+                        exitLinkMode();
+                    }
+                } else {
+                    enterLinkMode(node);
+                }
+                lastTapTime = 0;
+                lastTapNode = null;
+                return;
+            }
+            lastTapTime = now;
+            lastTapNode = node;
+
+            // If in link mode, complete the link on single tap
+            if (isLinkMode && linkSourceNode && linkSourceNode !== node) {
+                createLink(linkSourceNode, node);
+                exitLinkMode();
+                return;
+            }
+
+            // Start dragging
+            isDragging = true;
+            draggedNode = node;
+            dragFromMenu = false;
+            isDetached = node.parent === null && node.container === null;
+
+            const rect = node.element.getBoundingClientRect();
+            dragOffset = {
+                x: touch.clientX - rect.left,
+                y: touch.clientY - rect.top
+            };
+            dragStartPos = { x: touch.clientX, y: touch.clientY };
+            containedDragStarted = false;
+
+            node.element.classList.add('dragging');
+            selectNode(node);
+        }
+
+        function onTouchMove(e) {
+            if (!isDragging || !draggedNode) return;
+            
+            // Find our active touch
+            let touch = null;
+            for (let i = 0; i < e.touches.length; i++) {
+                if (e.touches[i].identifier === activeTouchId) {
+                    touch = e.touches[i];
+                    break;
+                }
+            }
+            if (!touch) return;
+
+            e.preventDefault();
+            
+            // For contained nodes, check if we've moved enough to start dragging
+            if (draggedNode.container && !containedDragStarted) {
+                const dx = touch.clientX - dragStartPos.x;
+                const dy = touch.clientY - dragStartPos.y;
+                if (Math.hypot(dx, dy) < DRAG_THRESHOLD) {
+                    return;
+                }
+                containedDragStarted = true;
+                const rect = draggedNode.element.getBoundingClientRect();
+                const canvasRect = canvasArea.getBoundingClientRect();
+                const newX = rect.left - canvasRect.left;
+                const newY = rect.top - canvasRect.top;
+                
+                draggedNode.element.classList.remove('contained');
+                nodeLayer.appendChild(draggedNode.element);
+                draggedNode.x = newX;
+                draggedNode.y = newY;
+                draggedNode.element.style.position = 'absolute';
+                draggedNode.element.style.left = newX + 'px';
+                draggedNode.element.style.top = newY + 'px';
+                
+                dragOffset.x = touch.clientX - rect.left;
+                dragOffset.y = touch.clientY - rect.top;
+            }
+
+            updateNodePosition(draggedNode, touch.clientX, touch.clientY);
+
+            let dropTarget = null;
+            if (isDetached) {
+                dropTarget = updateDropPreview(touch.clientX, touch.clientY);
+            }
+
+            redrawAll(dropTarget, touch.clientX, touch.clientY);
+            updateRecyclePreview(touch.clientX, touch.clientY);
+        }
+
+        function onTouchEnd(e) {
+            if (!isDragging) return;
+            
+            // Find the ended touch
+            let touch = null;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === activeTouchId) {
+                    touch = e.changedTouches[i];
+                    break;
+                }
+            }
+            if (!touch) return;
+
+            clearDropPreview();
+            clearRecyclePreview();
+
+            if (draggedNode) {
+                draggedNode.element.classList.remove('dragging');
+
+                if (isOverRecycleBin(touch.clientX, touch.clientY)) {
+                    deleteNode(draggedNode);
+                } else if (isDetached) {
+                    const containTarget = findContainTarget(touch.clientX, touch.clientY);
+                    if (containTarget && containTarget !== draggedNode) {
+                        containNode(draggedNode, containTarget);
+                    } else {
+                        const target = findDropTarget(touch.clientX, touch.clientY);
+                        if (target && target !== draggedNode) {
+                            attachNode(draggedNode, target);
+                        }
+                    }
+                } else if (draggedNode.container) {
+                    if (containedDragStarted) {
+                        if (!isOverNode(touch.clientX, touch.clientY, draggedNode.container)) {
+                            uncontainNode(draggedNode);
+                        } else {
+                            snapNodeToContainer(draggedNode);
+                        }
+                    }
+                }
+            }
+
+            isDragging = false;
+            draggedNode = null;
+            dragFromMenu = false;
+            isDetached = false;
+            containedDragStarted = false;
+            activeTouchId = null;
+            redrawAll();
+        }
+
+        function enterLinkMode(node) {
+            isLinkMode = true;
+            linkSourceNode = node;
+            node.element.classList.add('link-source');
+            linkModeOverlay.classList.add('visible');
+        }
+
+        function exitLinkMode() {
+            if (linkSourceNode) {
+                linkSourceNode.element.classList.remove('link-source');
+            }
+            isLinkMode = false;
+            linkSourceNode = null;
+            linkModeOverlay.classList.remove('visible');
+            clearLinkPreviewLine();
+            redrawAll();
+        }
+
+        function createLink(from, to) {
+            // Check if link already exists
+            const exists = nonHierarchicalLinks.some(
+                link => (link.from === from.id && link.to === to.id) ||
+                        (link.from === to.id && link.to === from.id)
+            );
+            if (exists) return;
+
+            nonHierarchicalLinks.push({ from: from.id, to: to.id });
+            redrawAll();
+            updateInspector();
+        }
+
+        function removeLink(fromId, toId) {
+            nonHierarchicalLinks = nonHierarchicalLinks.filter(
+                link => !(link.from === fromId && link.to === toId) &&
+                        !(link.from === toId && link.to === fromId)
+            );
+            redrawAll();
+            updateInspector();
+        }
+
+        function onKeyDown(e) {
+            if (e.key === 'Escape' && isLinkMode) {
+                exitLinkMode();
+            }
+        }
+
+        let linkPreviewLine = null;
+        function clearLinkPreviewLine() {
+            if (linkPreviewLine) {
+                linkPreviewLine.remove();
+                linkPreviewLine = null;
+            }
+        }
+
+        // ===================== CANVAS CLICK =====================
+        function onCanvasMouseDown(e) {
+            if (e.target === canvasArea || e.target === nodeLayer) {
+                if (isLinkMode) {
+                    exitLinkMode();
+                } else {
+                    selectNode(null);
+                }
+            }
+        }
+
+        // ===================== SELECTION =====================
+        function selectNode(node) {
+            if (selectedNode) {
+                selectedNode.element.classList.remove('selected');
+            }
+            selectedNode = node;
+            if (node) {
+                node.element.classList.add('selected');
+            }
+            updateInspector();
+        }
+
+        // ===================== INSPECTOR =====================
+        function updateInspector() {
+            if (!selectedNode) {
+                inspector.innerHTML = `
+                    <div class="empty-inspector">
+                        Select a node to view properties
+                    </div>
+                `;
+                return;
+            }
+
+            const node = selectedNode;
+            const nodeLinks = nonHierarchicalLinks.filter(
+                link => link.from === node.id || link.to === node.id
+            );
+
+            let linksHtml = '';
+            if (nodeLinks.length > 0) {
+                linksHtml = '<ul class="node-links-list">';
+                nodeLinks.forEach(link => {
+                    const otherId = link.from === node.id ? link.to : link.from;
+                    const otherNode = nodes.find(n => n.id === otherId);
+                    if (otherNode) {
+                        linksHtml += `
+                            <li>
+                                <span>${otherNode.typeInfo.icon} ${otherNode.label}</span>
+                                <button onclick="removeLink('${link.from}', '${link.to}')" title="Remove link">×</button>
+                            </li>
+                        `;
+                    }
+                });
+                linksHtml += '</ul>';
+            } else {
+                linksHtml = '<p style="color: var(--text-secondary); font-size: 12px;">No links. Right-click to add.</p>';
+            }
+
+            const childrenHtml = node.children.length > 0
+                ? node.children.map(c => `<li>${c.typeInfo.icon} ${c.label}</li>`).join('')
+                : '<li style="color: var(--text-secondary);">None</li>';
+
+            const containedHtml = node.containedNodes.length > 0
+                ? node.containedNodes.map(c => `<li>${c.typeInfo.icon} ${c.label}</li>`).join('')
+                : '<li style="color: var(--text-secondary);">None</li>';
+
+            const containerInfo = node.container 
+                ? `${node.container.typeInfo.icon} ${node.container.label}`
+                : '(none)';
+
+            inspector.innerHTML = `
+                <div class="inspector-section">
+                    <h3>Node Properties</h3>
+                    <div class="inspector-field">
+                        <label>ID</label>
+                        <input type="text" value="${node.id}" readonly style="opacity: 0.6;">
+                    </div>
+                    <div class="inspector-field">
+                        <label>Type</label>
+                        <input type="text" value="${node.typeInfo.icon} ${node.typeInfo.name}" readonly style="opacity: 0.6;">
+                    </div>
+                    <div class="inspector-field">
+                        <label>Label</label>
+                        <input type="text" value="${node.label}" id="inspectorLabel">
+                    </div>
+                </div>
+
+                <div class="inspector-section">
+                    <h3>Hierarchy</h3>
+                    <div class="inspector-field">
+                        <label>Parent</label>
+                        <input type="text" value="${node.parent ? node.parent.typeInfo.icon + ' ' + node.parent.label : '(none)'}" readonly style="opacity: 0.6;">
+                    </div>
+                    <div class="inspector-field">
+                        <label>Children</label>
+                        <ul class="node-links-list">${childrenHtml}</ul>
+                    </div>
+                </div>
+
+                <div class="inspector-section">
+                    <h3>Containment</h3>
+                    <div class="inspector-field">
+                        <label>Contained In</label>
+                        <input type="text" value="${containerInfo}" readonly style="opacity: 0.6;">
+                    </div>
+                    <div class="inspector-field">
+                        <label>Contains</label>
+                        <ul class="node-links-list">${containedHtml}</ul>
+                    </div>
+                </div>
+
+                <div class="inspector-section">
+                    <h3>Non-Hierarchical Links</h3>
+                    ${linksHtml}
+                </div>
+            `;
+
+            // Bind label input
+            const labelInput = document.getElementById('inspectorLabel');
+            if (labelInput) {
+                labelInput.addEventListener('input', (e) => {
+                    node.label = e.target.value;
+                    const labelEl = node.element.querySelector('.node-label');
+                    if (labelEl) {
+                        labelEl.textContent = e.target.value;
+                        labelEl.title = e.target.value;
+                    }
+                });
+            }
+        }
+
+        // ===================== DRAWING =====================
+        function redrawAll(dropTarget = null, mouseX = 0, mouseY = 0) {
+            // Clear SVG layers
+            svgLayer.innerHTML = '';
+            svgLayerTop.innerHTML = '';
+
+            // Draw hierarchical connections (below nodes)
+            nodes.forEach(node => {
+                if (node.parent) {
+                    drawHierarchicalLine(node.parent, node);
+                }
+            });
+
+            // Draw drop preview line if we have a target (below nodes)
+            if (dropTarget) {
+                drawDropPreviewLine(dropTarget, mouseX, mouseY);
+            }
+
+            // Draw non-hierarchical links (above nodes)
+            nonHierarchicalLinks.forEach(link => {
+                const from = nodes.find(n => n.id === link.from);
+                const to = nodes.find(n => n.id === link.to);
+                if (from && to) {
+                    drawLinkLine(from, to);
+                }
+            });
+        }
+
+        function drawDropPreviewLine(target, x, y) {
+            const rect = canvasArea.getBoundingClientRect();
+            const targetRect = target.element.getBoundingClientRect();
+
+            const x1 = targetRect.left - rect.left + targetRect.width / 2;
+            const y1 = targetRect.top - rect.top + targetRect.height / 2;
+            const x2 = x - rect.left;
+            const y2 = y - rect.top;
+
+            const pathData = `M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.classList.add('preview-line');
+            path.setAttribute('d', pathData);
+            svgLayer.appendChild(path);
+        }
+
+        function drawHierarchicalLine(parent, child) {
+            const rect = canvasArea.getBoundingClientRect();
+            const parentRect = parent.element.getBoundingClientRect();
+            const childRect = child.element.getBoundingClientRect();
+
+            const x1 = parentRect.left - rect.left + parentRect.width / 2;
+            const y1 = parentRect.top - rect.top + parentRect.height / 2;
+            const x2 = childRect.left - rect.left + childRect.width / 2;
+            const y2 = childRect.top - rect.top + childRect.height / 2;
+
+            const pathData = `M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathData);
+            path.classList.add('connection-line');
+            svgLayer.appendChild(path);
+        }
+
+        function drawLinkLine(from, to) {
+            const rect = canvasArea.getBoundingClientRect();
+            const fromRect = from.element.getBoundingClientRect();
+            const toRect = to.element.getBoundingClientRect();
+
+            const x1 = fromRect.left - rect.left + fromRect.width / 2;
+            const y1 = fromRect.top - rect.top + fromRect.height / 2;
+            const x2 = toRect.left - rect.left + toRect.width / 2;
+            const y2 = toRect.top - rect.top + toRect.height / 2;
+
+            // Use a horizontal arc curve for non-hierarchical links
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const dist = Math.hypot(dx, dy);
+            
+            // Curve outward perpendicular to the line
+            const perpX = -dy / dist;
+            const perpY = dx / dist;
+            const curveAmount = Math.min(dist * 0.25, 40);
+            
+            const mx = (x1 + x2) / 2 + perpX * curveAmount;
+            const my = (y1 + y2) / 2 + perpY * curveAmount;
+
+            const pathData = `M ${x1} ${y1} Q ${mx} ${my}, ${x2} ${y2}`;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathData);
+            path.classList.add('link-line');
+            svgLayerTop.appendChild(path);
+        }
+
+        // Expose removeLink globally for inline onclick
+        window.removeLink = removeLink;
+
+        // ===================== START =====================
+        init();
+    </script>
+</body>
+</html>
+

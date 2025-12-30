@@ -1,0 +1,1788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Structure Mapper</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #0d1117;
+            --bg-panel: #161b22;
+            --bg-node: #21262d;
+            --border-color: #30363d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --accent-hover: #79c0ff;
+            --success: #3fb950;
+            --danger: #f85149;
+            --warning: #d29922;
+            --purple: #a371f7;
+            --pink: #db61a2;
+            --cyan: #39c5cf;
+            --orange: #db6d28;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            user-select: none;
+        }
+
+        #app {
+            display: grid;
+            grid-template-columns: 280px 1fr 320px;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+        }
+
+        /* Header */
+        #header {
+            grid-column: 1 / -1;
+            background: var(--bg-panel);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        #header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        #header .controls {
+            display: flex;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        .btn {
+            background: var(--bg-node);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn:hover {
+            background: var(--border-color);
+            border-color: var(--accent);
+        }
+
+        .btn.primary {
+            background: var(--accent);
+            color: var(--bg-dark);
+            border-color: var(--accent);
+        }
+
+        .btn.primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .project-select {
+            background: var(--bg-node);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+            min-width: 150px;
+        }
+
+        .project-select:hover {
+            border-color: var(--accent);
+        }
+
+        .project-select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* File Tree Panel */
+        #fileTree {
+            background: var(--bg-panel);
+            border-right: 1px solid var(--border-color);
+            padding: 12px;
+            overflow-y: auto;
+        }
+
+        #fileTree h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            margin-bottom: 2px;
+        }
+
+        .file-item:hover {
+            background: var(--bg-node);
+        }
+
+        .file-item.active {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--accent);
+        }
+
+        .file-item .icon {
+            font-size: 14px;
+        }
+
+        .file-item.html .icon { color: var(--orange); }
+        .file-item.css .icon { color: var(--purple); }
+        .file-item.js .icon { color: var(--warning); }
+        .file-item.external .icon { color: var(--text-secondary); }
+
+        .file-item .status {
+            margin-left: auto;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: var(--bg-dark);
+        }
+
+        .file-item .status.parsed { color: var(--success); }
+        .file-item .status.pending { color: var(--text-secondary); }
+        .file-item .status.error { color: var(--danger); }
+
+        /* Canvas Area */
+        #canvasArea {
+            position: relative;
+            background: 
+                linear-gradient(rgba(48, 54, 61, 0.3) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(48, 54, 61, 0.3) 1px, transparent 1px);
+            background-size: 25px 25px;
+            overflow: hidden;
+            cursor: grab;
+        }
+
+        #canvasArea:active {
+            cursor: grabbing;
+        }
+
+        #svgLayer, #svgLayerTop {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+        }
+
+        #svgLayer { z-index: 5; }
+        #svgLayerTop { z-index: 15; }
+
+        #nodeLayer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 10000px;
+            height: 10000px;
+            z-index: 10;
+        }
+
+        /* Nodes */
+        .node {
+            position: absolute;
+            background: var(--bg-node);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 6px 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: move;
+            min-width: 120px;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .node:hover {
+            border-color: var(--accent);
+        }
+
+        .node.selected {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.3);
+        }
+
+        .node.dragging {
+            opacity: 0.8;
+            z-index: 100;
+        }
+
+        .node.html { border-color: var(--orange); }
+        .node.css { border-color: var(--purple); }
+        .node.js { border-color: var(--warning); }
+        .node.function { border-color: var(--cyan); }
+        .node.external { border-color: var(--text-secondary); border-style: dashed; }
+
+        .node-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            flex-shrink: 0;
+        }
+
+        .node.html .node-icon { background: rgba(219, 109, 40, 0.2); }
+        .node.css .node-icon { background: rgba(163, 113, 247, 0.2); }
+        .node.js .node-icon { background: rgba(210, 153, 34, 0.2); }
+        .node.function .node-icon { background: rgba(57, 197, 207, 0.2); }
+        .node.external .node-icon { background: rgba(139, 148, 158, 0.2); }
+
+        .node-label {
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 150px;
+        }
+
+        /* Container nodes */
+        .node.is-container {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 4px;
+            min-width: 140px;
+        }
+
+        .node.is-container .node-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 6px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 4px;
+        }
+
+        .node.is-container .node-contents {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            padding: 4px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            min-height: 30px;
+            /* No max-height - show all functions */
+        }
+
+        .node.contained {
+            position: relative !important;
+            left: auto !important;
+            top: auto !important;
+            min-width: auto;
+            padding: 3px 6px;
+            font-size: 10px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .node.contained:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .node.contained.selected {
+            background: rgba(88, 166, 255, 0.2);
+            border-color: var(--accent);
+        }
+
+        .node.contained .node-icon {
+            width: 18px;
+            height: 18px;
+            font-size: 10px;
+        }
+
+        .node.contained .node-label {
+            font-size: 10px;
+            max-width: 100px;
+        }
+
+        /* SVG Lines */
+        .hierarchy-line {
+            fill: none;
+            stroke: var(--border-color);
+            stroke-width: 2;
+        }
+
+        .call-line {
+            fill: none;
+            stroke: var(--success);
+            stroke-width: 2;
+            opacity: 0.8;
+        }
+
+        .call-line.incoming {
+            stroke: var(--pink);
+        }
+
+        .call-arrow {
+            fill: var(--success);
+            opacity: 0.8;
+        }
+
+        .call-arrow.incoming {
+            fill: var(--pink);
+        }
+
+        /* Info Panel */
+        #infoPanel {
+            background: var(--bg-panel);
+            border-left: 1px solid var(--border-color);
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        #infoPanel h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .info-section {
+            margin-bottom: 20px;
+        }
+
+        .info-section h4 {
+            font-size: 12px;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .info-item {
+            font-size: 11px;
+            color: var(--text-secondary);
+            padding: 4px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .info-item:last-child {
+            border-bottom: none;
+        }
+
+        .info-item .label {
+            color: var(--text-secondary);
+        }
+
+        .info-item .value {
+            color: var(--text-primary);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .stat-box {
+            background: var(--bg-node);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .stat-box .number {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .stat-box .label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Log area */
+        #logArea {
+            background: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 10px;
+        }
+
+        .log-entry {
+            padding: 2px 0;
+            color: var(--text-secondary);
+        }
+
+        .log-entry.info { color: var(--accent); }
+        .log-entry.success { color: var(--success); }
+        .log-entry.warning { color: var(--warning); }
+        .log-entry.error { color: var(--danger); }
+
+        /* Loading overlay */
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(13, 17, 23, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        #loading.hidden {
+            display: none;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #loading p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header id="header">
+            <h1>📊 Project Structure Mapper</h1>
+            <div class="controls">
+                <button class="btn" id="zoomOutBtn">−</button>
+                <span id="zoomLevel" style="color: var(--text-secondary); font-size: 12px; min-width: 50px; text-align: center;">100%</span>
+                <button class="btn" id="zoomInBtn">+</button>
+                <button class="btn" id="resetBtn">Reset View</button>
+                <button class="btn" id="autoLayoutBtn">Auto Layout</button>
+                <select id="projectSelect" class="project-select">
+                    <option value="editor/index.html">Lab Editor</option>
+                    <option value="../index.html">Sleditor Main</option>
+                </select>
+                <button class="btn primary" id="scanBtn">Scan Project</button>
+            </div>
+        </header>
+
+        <aside id="fileTree">
+            <h3>📁 Files Discovered</h3>
+            <div id="fileList"></div>
+        </aside>
+
+        <main id="canvasArea">
+            <svg id="svgLayer"></svg>
+            <div id="nodeLayer"></div>
+            <svg id="svgLayerTop"></svg>
+        </main>
+
+        <aside id="infoPanel">
+            <div class="info-section">
+                <h3>📈 Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="number" id="statFiles">0</div>
+                        <div class="label">Files</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number" id="statFunctions">0</div>
+                        <div class="label">Functions</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number" id="statDeps">0</div>
+                        <div class="label">Dependencies</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number" id="statCalls">0</div>
+                        <div class="label">Calls</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>📝 Activity Log</h3>
+                <div id="logArea"></div>
+            </div>
+
+            <div class="info-section" id="selectedInfo" style="display: none;">
+                <h3>🔍 Selected Node</h3>
+                <div id="selectedDetails"></div>
+            </div>
+        </aside>
+    </div>
+
+    <div id="loading" class="hidden">
+        <div class="spinner"></div>
+        <p id="loadingText">Scanning project...</p>
+    </div>
+
+    <script>
+        // ===================== STATE =====================
+        const state = {
+            files: new Map(), // path -> { type, content, parsed, node }
+            nodes: [],
+            links: [], // { from, to, type: 'hierarchy' | 'call' }
+            selectedNode: null,
+            isDragging: false,
+            draggedNode: null,
+            dragOffset: { x: 0, y: 0 }
+        };
+
+        // ===================== DOM REFS =====================
+        const canvasArea = document.getElementById('canvasArea');
+        const nodeLayer = document.getElementById('nodeLayer');
+        const svgLayer = document.getElementById('svgLayer');
+        const svgLayerTop = document.getElementById('svgLayerTop');
+        const fileList = document.getElementById('fileList');
+        const logArea = document.getElementById('logArea');
+        const loading = document.getElementById('loading');
+        const loadingText = document.getElementById('loadingText');
+
+        // ===================== UTILITIES =====================
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logArea.appendChild(entry);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function getFileType(path) {
+            if (path.endsWith('.html') || path.endsWith('.htm')) return 'html';
+            if (path.endsWith('.css')) return 'css';
+            if (path.endsWith('.js') || path.endsWith('.mjs')) return 'js';
+            return 'other';
+        }
+
+        // Files to ignore (injected by dev server, etc.)
+        const IGNORE_FILES = [
+            'fiveserver.js',
+            'livereload.js',
+            'browser-sync',
+            '__vite',
+            '__webpack'
+        ];
+
+        function shouldIgnoreFile(path) {
+            const filename = getFileName(path).toLowerCase();
+            return IGNORE_FILES.some(ignore => filename.includes(ignore.toLowerCase()));
+        }
+
+        function getFileName(path) {
+            return path.split('/').pop();
+        }
+
+        function isExternalUrl(path) {
+            return path.startsWith('http://') || path.startsWith('https://') || path.startsWith('//');
+        }
+
+        function resolvePath(base, relative) {
+            if (isExternalUrl(relative)) return relative;
+            if (relative.startsWith('/')) return relative;
+            
+            const baseParts = base.split('/');
+            baseParts.pop(); // Remove filename
+            const relativeParts = relative.split('/');
+            
+            for (const part of relativeParts) {
+                if (part === '..') {
+                    baseParts.pop();
+                } else if (part !== '.') {
+                    baseParts.push(part);
+                }
+            }
+            
+            return baseParts.join('/');
+        }
+
+        function generateId() {
+            return 'node_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        // ===================== FILE LOADING =====================
+        async function loadFile(path) {
+            if (isExternalUrl(path)) {
+                log(`Skipping external: ${getFileName(path)}`, 'warning');
+                return null;
+            }
+
+            try {
+                const response = await fetch(path);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const content = await response.text();
+                log(`Loaded: ${getFileName(path)}`, 'success');
+                return content;
+            } catch (err) {
+                log(`Failed to load: ${path} - ${err.message}`, 'error');
+                return null;
+            }
+        }
+
+        // ===================== PARSING =====================
+        function parseHTML(content, basePath) {
+            const results = {
+                scripts: [],
+                styles: [],
+                modules: [],
+                inlineConfigs: []
+            };
+
+            // Find ALL script tags with a more robust regex
+            // This handles attributes in any order
+            const scriptTagRegex = /<script([^>]*)>([^<]*)<\/script>|<script([^>]*)\/>/gi;
+            let match;
+            
+            while ((match = scriptTagRegex.exec(content)) !== null) {
+                const attrs = match[1] || match[3] || '';
+                const inlineContent = match[2] || '';
+                
+                // Extract src attribute
+                const srcMatch = attrs.match(/src\s*=\s*["']([^"']+)["']/i);
+                const typeMatch = attrs.match(/type\s*=\s*["']([^"']+)["']/i);
+                
+                const src = srcMatch ? srcMatch[1] : null;
+                const type = typeMatch ? typeMatch[1] : null;
+                
+                if (src) {
+                    const resolved = resolvePath(basePath, src);
+                    if (type === 'module') {
+                        results.modules.push(resolved);
+                    } else {
+                        results.scripts.push(resolved);
+                    }
+                } else if (inlineContent.trim()) {
+                    // Check for interesting inline configs (like require.config)
+                    if (inlineContent.includes('require.config') || 
+                        inlineContent.includes('import ') ||
+                        inlineContent.includes('paths:')) {
+                        results.inlineConfigs.push({
+                            type: type || 'inline',
+                            preview: inlineContent.trim().substring(0, 100) + '...'
+                        });
+                        
+                        // Parse import statements from inline module scripts
+                        if (type === 'module' && inlineContent.includes('import ')) {
+                            const importRegex = /import\s+(?:[\w{}\s,*]+\s+from\s+)?['"]([^'"]+)['"]/g;
+                            let importMatch;
+                            while ((importMatch = importRegex.exec(inlineContent)) !== null) {
+                                const importPath = importMatch[1];
+                                if (importPath.startsWith('.') || importPath.startsWith('/')) {
+                                    const resolved = resolvePath(basePath, importPath);
+                                    if (!results.modules.includes(resolved)) {
+                                        results.modules.push(resolved);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Find link tags (CSS) - handle attributes in any order
+            const linkRegex = /<link([^>]*)>/gi;
+            while ((match = linkRegex.exec(content)) !== null) {
+                const attrs = match[1];
+                const hrefMatch = attrs.match(/href\s*=\s*["']([^"']+)["']/i);
+                const relMatch = attrs.match(/rel\s*=\s*["']([^"']+)["']/i);
+                
+                if (hrefMatch && relMatch && relMatch[1].toLowerCase() === 'stylesheet') {
+                    results.styles.push(resolvePath(basePath, hrefMatch[1]));
+                }
+            }
+
+            return results;
+        }
+
+        function parseJS(content, basePath) {
+            const results = {
+                functions: [], // Now array of { name, body }
+                imports: [],
+                exports: [],
+                calls: []
+            };
+
+            // Find function declarations with their bodies
+            const reserved = ['if', 'for', 'while', 'switch', 'catch', 'with', 'return', 'new', 'typeof', 'delete', 'void', 'throw', 'class', 'extends', 'super', 'this', 'import', 'export', 'default', 'from', 'as', 'try', 'finally'];
+            const seenNames = new Set();
+            
+            // Pattern to find function starts
+            const funcStartRegex = /(?:function\s+(\w+)|(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:function|\([^)]*\)\s*=>)|(?:async\s+)?(\w+)\s*\([^)]*\)\s*\{)/g;
+            
+            let match;
+            while ((match = funcStartRegex.exec(content)) !== null) {
+                const name = match[1] || match[2] || match[3];
+                if (!name || reserved.includes(name) || seenNames.has(name)) continue;
+                
+                // Extra validation
+                const beforeMatch = content.substring(Math.max(0, match.index - 20), match.index);
+                if (beforeMatch.includes('.') && !beforeMatch.trim().endsWith('=')) continue;
+                
+                seenNames.add(name);
+                
+                // Extract function body by finding the opening brace and matching closing brace
+                const afterMatch = content.substring(match.index);
+                const braceStart = afterMatch.indexOf('{');
+                let body = '';
+                
+                if (braceStart !== -1) {
+                    let braceCount = 0;
+                    let inString = false;
+                    let stringChar = '';
+                    let bodyEnd = braceStart;
+                    
+                    for (let i = braceStart; i < Math.min(afterMatch.length, braceStart + 5000); i++) {
+                        const char = afterMatch[i];
+                        const prevChar = i > 0 ? afterMatch[i - 1] : '';
+                        
+                        if (inString) {
+                            if (char === stringChar && prevChar !== '\\') inString = false;
+                        } else {
+                            if (char === '"' || char === "'" || char === '`') {
+                                inString = true;
+                                stringChar = char;
+                            } else if (char === '{') {
+                                braceCount++;
+                            } else if (char === '}') {
+                                braceCount--;
+                                if (braceCount === 0) {
+                                    bodyEnd = i + 1;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    body = afterMatch.substring(braceStart, bodyEnd);
+                }
+                
+                results.functions.push({ name, body });
+            }
+
+            // Find ES module imports - multiple patterns
+            // import x from './path'
+            // import { x } from './path'
+            // import * as x from './path'
+            // import './path'
+            const importPatterns = [
+                /import\s+(?:[\w{}\s,*]+\s+from\s+)?['"]([^'"]+)['"]/g,
+            ];
+            
+            for (const regex of importPatterns) {
+                let match;
+                while ((match = regex.exec(content)) !== null) {
+                    const importPath = match[1];
+                    if (importPath.startsWith('.') || importPath.startsWith('/')) {
+                        // Relative import - resolve path
+                        let resolved = resolvePath(basePath, importPath);
+                        // Add .js extension if missing
+                        if (!resolved.endsWith('.js') && !resolved.endsWith('.mjs')) {
+                            resolved += '.js';
+                        }
+                        results.imports.push(resolved);
+                    } else {
+                        // Package/CDN import - mark as external
+                        results.imports.push('pkg:' + importPath);
+                    }
+                }
+            }
+
+            // Find dynamic imports: import('./path')
+            const dynamicImportRegex = /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+            while ((match = dynamicImportRegex.exec(content)) !== null) {
+                const importPath = match[1];
+                if (importPath.startsWith('.') || importPath.startsWith('/')) {
+                    let resolved = resolvePath(basePath, importPath);
+                    if (!resolved.endsWith('.js') && !resolved.endsWith('.mjs')) {
+                        resolved += '.js';
+                    }
+                    if (!results.imports.includes(resolved)) {
+                        results.imports.push(resolved);
+                    }
+                }
+            }
+
+            // Find require calls
+            const requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+            while ((match = requireRegex.exec(content)) !== null) {
+                const requirePath = match[1];
+                if (requirePath.startsWith('.') || requirePath.startsWith('/')) {
+                    results.imports.push(resolvePath(basePath, requirePath));
+                } else {
+                    results.imports.push('npm:' + requirePath);
+                }
+            }
+
+            // Find exports (to understand module interface)
+            const exportRegex = /export\s+(?:default\s+)?(?:function|class|const|let|var)?\s*(\w+)/g;
+            while ((match = exportRegex.exec(content)) !== null) {
+                if (match[1] && !results.exports.includes(match[1])) {
+                    results.exports.push(match[1]);
+                }
+            }
+
+            return results;
+        }
+
+        function findFunctionCalls(content, knownFunctions) {
+            const calls = [];
+            for (const func of knownFunctions) {
+                // Look for function being called (not defined)
+                const callRegex = new RegExp(`(?<!function\\s)(?<!\\.)\\b${func}\\s*\\(`, 'g');
+                if (callRegex.test(content)) {
+                    calls.push(func);
+                }
+            }
+            return calls;
+        }
+
+        // ===================== NODE CREATION =====================
+        function createNode(id, type, label, x, y) {
+            const el = document.createElement('div');
+            el.className = `node ${type}`;
+            el.dataset.id = id;
+
+            const icons = {
+                html: '📄',
+                css: '🎨',
+                js: '⚡',
+                function: 'ƒ',
+                external: '🔗'
+            };
+
+            el.innerHTML = `
+                <div class="node-icon">${icons[type] || '📦'}</div>
+                <span class="node-label" title="${label}">${label}</span>
+            `;
+
+            const node = {
+                id,
+                type,
+                label,
+                x,
+                y,
+                element: el,
+                parent: null,
+                children: [],
+                containedNodes: [],
+                container: null,
+                data: {}
+            };
+
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+
+            // Event listeners
+            el.addEventListener('mousedown', (e) => onNodeMouseDown(e, node));
+
+            return node;
+        }
+
+        function addNode(node) {
+            state.nodes.push(node);
+            nodeLayer.appendChild(node.element);
+        }
+
+        function addLink(fromId, toId, type = 'hierarchy') {
+            // Avoid duplicates
+            const exists = state.links.some(l => 
+                l.from === fromId && l.to === toId && l.type === type
+            );
+            if (!exists) {
+                state.links.push({ from: fromId, to: toId, type });
+            }
+        }
+
+        // ===================== CONTAINER LOGIC =====================
+        function containNode(child, parent) {
+            child.container = parent;
+            parent.containedNodes.push(child);
+            
+            // Update DOM
+            updateContainerDOM(parent);
+            child.element.classList.add('contained');
+        }
+
+        function updateContainerDOM(containerNode) {
+            const el = containerNode.element;
+            
+            if (containerNode.containedNodes.length > 0) {
+                el.classList.add('is-container');
+                
+                let header = el.querySelector('.node-header');
+                let contents = el.querySelector('.node-contents');
+                
+                if (!header) {
+                    const icon = el.querySelector('.node-icon');
+                    const label = el.querySelector('.node-label');
+                    
+                    header = document.createElement('div');
+                    header.className = 'node-header';
+                    if (icon) header.appendChild(icon.cloneNode(true));
+                    if (label) header.appendChild(label.cloneNode(true));
+                    
+                    contents = document.createElement('div');
+                    contents.className = 'node-contents';
+                    
+                    el.innerHTML = '';
+                    el.appendChild(header);
+                    el.appendChild(contents);
+                }
+                
+                contents.innerHTML = '';
+                containerNode.containedNodes.forEach(contained => {
+                    contained.element.style.position = 'relative';
+                    contained.element.style.left = 'auto';
+                    contained.element.style.top = 'auto';
+                    contents.appendChild(contained.element);
+                });
+            }
+        }
+
+        // ===================== SCANNING =====================
+        async function scanProject() {
+            loading.classList.remove('hidden');
+            loadingText.textContent = 'Starting scan...';
+            
+            // Clear previous state
+            state.files.clear();
+            state.nodes = [];
+            state.links = [];
+            nodeLayer.innerHTML = '';
+            fileList.innerHTML = '';
+
+            try {
+                // Get selected project path from dropdown
+                const projectSelect = document.getElementById('projectSelect');
+                const entryPoint = projectSelect.value;
+                
+                log(`Scanning project: ${entryPoint}`, 'info');
+                await scanFile(entryPoint, null, 100, 100);
+                
+                // Auto layout
+                autoLayout();
+                
+                // Find function calls between files
+                findAllFunctionCalls();
+                
+                // Update UI
+                updateFileList();
+                updateStats();
+                redrawAll();
+                
+                log('Scan complete!', 'success');
+            } catch (err) {
+                log(`Scan failed: ${err.message}`, 'error');
+            }
+
+            loading.classList.add('hidden');
+        }
+
+        async function scanFile(path, parentNode, x, y) {
+            if (state.files.has(path)) return state.files.get(path).node;
+            
+            // Skip ignored files
+            if (shouldIgnoreFile(path)) {
+                log(`Ignoring: ${getFileName(path)} (dev server injection)`, 'warning');
+                return null;
+            }
+            
+            loadingText.textContent = `Scanning: ${getFileName(path)}`;
+            
+            // Check for package imports (npm: or pkg:)
+            const isPackage = path.startsWith('npm:') || path.startsWith('pkg:');
+            const isExternal = isExternalUrl(path) || isPackage;
+            const type = isPackage ? 'external' : getFileType(path);
+            
+            // Get display name
+            let displayName = getFileName(path);
+            if (isPackage) {
+                displayName = path.replace('npm:', '').replace('pkg:', '');
+            }
+            
+            // Create node
+            const node = createNode(
+                generateId(),
+                isExternal ? 'external' : type,
+                displayName,
+                x, y
+            );
+            node.data.path = path;
+            node.data.isExternal = isExternal;
+            node.data.isPackage = isPackage;
+            
+            addNode(node);
+            
+            // Track in files map
+            state.files.set(path, {
+                type,
+                content: null,
+                parsed: false,
+                node,
+                isExternal
+            });
+
+            // Add hierarchy link to parent
+            if (parentNode) {
+                addLink(parentNode.id, node.id, 'hierarchy');
+                node.parent = parentNode;
+                parentNode.children.push(node);
+            }
+
+            // Don't parse external files
+            if (isExternal) {
+                state.files.get(path).parsed = true;
+                return node;
+            }
+
+            // Load and parse the file
+            const content = await loadFile(path);
+            if (!content) {
+                state.files.get(path).parsed = true;
+                return node;
+            }
+
+            state.files.get(path).content = content;
+
+            if (type === 'html') {
+                const parsed = parseHTML(content, path);
+                let childY = y;
+                let childX = x + 200;
+
+                // Process regular scripts (including CDN)
+                for (const script of parsed.scripts) {
+                    await scanFile(script, node, childX, childY);
+                    childY += 60;
+                }
+
+                // Process ES modules
+                for (const mod of parsed.modules) {
+                    await scanFile(mod, node, childX, childY);
+                    childY += 60;
+                }
+
+                // Process styles
+                for (const style of parsed.styles) {
+                    await scanFile(style, node, childX, childY);
+                    childY += 60;
+                }
+
+                // Note inline configs in the node data
+                if (parsed.inlineConfigs.length > 0) {
+                    node.data.inlineConfigs = parsed.inlineConfigs;
+                    log(`Found ${parsed.inlineConfigs.length} inline config(s) in ${getFileName(path)}`, 'info');
+                }
+            } else if (type === 'js') {
+                const parsed = parseJS(content, path);
+                node.data.functions = parsed.functions;
+                node.data.exports = parsed.exports;
+
+                // Add functions as contained nodes
+                for (const func of parsed.functions) {
+                    const funcNode = createNode(
+                        generateId(),
+                        'function',
+                        func.name + '()',
+                        0, 0
+                    );
+                    funcNode.data.functionName = func.name;
+                    funcNode.data.body = func.body;
+                    funcNode.data.parentFile = path;
+                    funcNode.data.isExported = parsed.exports.includes(func.name);
+                    state.nodes.push(funcNode);
+                    containNode(funcNode, node);
+                }
+
+                // Log function count
+                if (parsed.functions.length > 0) {
+                    log(`Found ${parsed.functions.length} functions in ${getFileName(path)}`, 'info');
+                }
+
+                // Process imports
+                let childY = y;
+                let childX = x + 200;
+                for (const imp of parsed.imports) {
+                    await scanFile(imp, node, childX, childY);
+                    childY += 60;
+                }
+            }
+
+            state.files.get(path).parsed = true;
+            return node;
+        }
+
+        function findAllFunctionCalls() {
+            // Collect all known function names -> node
+            const allFunctions = new Map();
+            for (const node of state.nodes) {
+                if (node.type === 'function' && node.data.functionName) {
+                    allFunctions.set(node.data.functionName, node);
+                }
+            }
+
+            // For each JS file, find which functions call which
+            for (const [path, fileData] of state.files) {
+                if (fileData.type !== 'js' || !fileData.content) continue;
+
+                const functionsInFile = fileData.node.containedNodes;
+                
+                // For each function in this file, check what it calls
+                for (const callerNode of functionsInFile) {
+                    const callerName = callerNode.data.functionName;
+                    const callerBody = callerNode.data.body || '';
+                    
+                    for (const [funcName, funcNode] of allFunctions) {
+                        // Skip self-calls
+                        if (funcName === callerName) continue;
+                        
+                        // Check if this function calls the target
+                        const callRegex = new RegExp(`\\b${funcName}\\s*\\(`, 'g');
+                        if (callRegex.test(callerBody)) {
+                            // Link from calling function to called function
+                            addLink(callerNode.id, funcNode.id, 'call');
+                        }
+                    }
+                }
+                
+                // Also check top-level calls (not in any function)
+                for (const [funcName, funcNode] of allFunctions) {
+                    const callRegex = new RegExp(`\\b${funcName}\\s*\\(`, 'g');
+                    if (callRegex.test(fileData.content)) {
+                        // Check if any function in this file already links to it
+                        const alreadyLinked = functionsInFile.some(fn => 
+                            state.links.some(l => l.from === fn.id && l.to === funcNode.id)
+                        );
+                        if (!alreadyLinked) {
+                            // Link from file node for top-level calls
+                            addLink(fileData.node.id, funcNode.id, 'call');
+                        }
+                    }
+                }
+            }
+
+            updateStats();
+        }
+
+        // ===================== LAYOUT =====================
+        function autoLayout() {
+            // Reset pan first
+            resetPan();
+            
+            // Group nodes by depth for horizontal layout
+            const rootNodes = state.nodes.filter(n => !n.parent && !n.container);
+            
+            const COLUMN_WIDTH = 160;
+            const ROW_GAP = 4;
+            const COL_GAP = 30;
+            const MAX_COLUMN_HEIGHT = 600; // Wrap to new sub-column after this
+            
+            // Collect all nodes by their depth level
+            const nodesByDepth = new Map();
+            
+            function collectByDepth(node, depth) {
+                if (!nodesByDepth.has(depth)) {
+                    nodesByDepth.set(depth, []);
+                }
+                nodesByDepth.get(depth).push(node);
+                
+                for (const child of node.children) {
+                    collectByDepth(child, depth + 1);
+                }
+            }
+            
+            for (const root of rootNodes) {
+                collectByDepth(root, 0);
+            }
+            
+            // Get node height (use actual if rendered, else estimate)
+            function getNodeHeight(node) {
+                if (node.element.offsetHeight > 0) {
+                    return node.element.offsetHeight;
+                }
+                const baseHeight = 32;
+                const containedHeight = node.containedNodes.length * 22;
+                return Math.max(baseHeight, containedHeight + 36);
+            }
+            
+            // Layout each depth - wrap to sub-columns when too tall
+            const maxDepth = Math.max(...nodesByDepth.keys());
+            let baseX = 50;
+            
+            for (let depth = 0; depth <= maxDepth; depth++) {
+                const nodesAtDepth = nodesByDepth.get(depth) || [];
+                
+                let x = baseX;
+                let y = 30;
+                let maxWidthInColumn = COLUMN_WIDTH;
+                
+                for (const node of nodesAtDepth) {
+                    const nodeHeight = getNodeHeight(node);
+                    
+                    // Wrap to new sub-column if too tall
+                    if (y + nodeHeight > MAX_COLUMN_HEIGHT && y > 30) {
+                        x += maxWidthInColumn + 20;
+                        y = 30;
+                        maxWidthInColumn = COLUMN_WIDTH;
+                    }
+                    
+                    node.x = x;
+                    node.y = y;
+                    node.element.style.left = x + 'px';
+                    node.element.style.top = y + 'px';
+                    
+                    y += nodeHeight + ROW_GAP;
+                }
+                
+                // Move base X for next depth level
+                baseX = x + maxWidthInColumn + COL_GAP;
+            }
+
+            updateTransform();
+            redrawAll();
+        }
+
+        // ===================== DRAWING =====================
+        function redrawAll() {
+            svgLayer.innerHTML = '';
+            svgLayerTop.innerHTML = '';
+
+            // Draw hierarchy lines
+            for (const link of state.links) {
+                if (link.type === 'hierarchy') {
+                    const fromNode = state.nodes.find(n => n.id === link.from);
+                    const toNode = state.nodes.find(n => n.id === link.to);
+                    if (fromNode && toNode && !toNode.container) {
+                        drawHierarchyLine(fromNode, toNode);
+                    }
+                }
+            }
+
+            // Draw call lines based on selection
+            if (selectedFunction) {
+                // selectedFunction can be a function node or a file node
+                const isFileNode = selectedFunction.type !== 'function';
+                
+                for (const link of state.links) {
+                    if (link.type === 'call') {
+                        const fromNode = state.nodes.find(n => n.id === link.from);
+                        const toNode = state.nodes.find(n => n.id === link.to);
+                        
+                        if (!fromNode || !toNode) continue;
+                        
+                        let isOutgoing = false;
+                        let isIncoming = false;
+                        
+                        if (isFileNode) {
+                            // File node selected - show all calls to/from functions in this file
+                            const selectedFileId = selectedFunction.id;
+                            
+                            // Outgoing: this file's functions call other functions
+                            if (fromNode.id === selectedFileId || 
+                                (fromNode.container && fromNode.container.id === selectedFileId)) {
+                                isOutgoing = true;
+                            }
+                            
+                            // Incoming: other functions call this file's functions
+                            if (toNode.container && toNode.container.id === selectedFileId) {
+                                isIncoming = true;
+                            }
+                        } else {
+                            // Individual function selected
+                            const funcId = selectedFunction.id;
+                            
+                            // Outgoing: this function calls another (fromNode is selected function)
+                            if (fromNode.id === funcId) {
+                                isOutgoing = true;
+                            }
+                            
+                            // Incoming: another function calls this one (toNode is selected function)
+                            if (toNode.id === funcId) {
+                                isIncoming = true;
+                            }
+                        }
+                        
+                        if (isOutgoing) {
+                            drawCallLine(fromNode, toNode, true); // Green - outgoing
+                        }
+                        if (isIncoming) {
+                            drawCallLine(fromNode, toNode, false); // Pink - incoming
+                        }
+                    }
+                }
+            }
+        }
+
+        function drawHierarchyLine(from, to) {
+            const rect = canvasArea.getBoundingClientRect();
+            const fromRect = from.element.getBoundingClientRect();
+            const toRect = to.element.getBoundingClientRect();
+
+            // Get screen positions and convert to canvas space
+            const x1 = fromRect.right - rect.left;
+            const y1 = fromRect.top - rect.top + fromRect.height / 2;
+            const x2 = toRect.left - rect.left;
+            const y2 = toRect.top - rect.top + toRect.height / 2;
+
+            const midX = (x1 + x2) / 2;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`);
+            path.classList.add('hierarchy-line');
+            svgLayer.appendChild(path);
+        }
+
+        function drawCallLine(from, to, isOutgoing = true) {
+            const rect = canvasArea.getBoundingClientRect();
+            
+            const fromEl = from.element;
+            const toEl = to.element;
+            
+            const fromRect = fromEl.getBoundingClientRect();
+            const toRect = toEl.getBoundingClientRect();
+
+            // Get screen positions
+            const x1 = fromRect.left - rect.left + fromRect.width / 2;
+            const y1 = fromRect.top - rect.top + fromRect.height / 2;
+            const x2 = toRect.left - rect.left + toRect.width / 2;
+            const y2 = toRect.top - rect.top + toRect.height / 2;
+
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const dist = Math.hypot(dx, dy);
+            if (dist < 1) return;
+            
+            const perpX = -dy / dist;
+            const perpY = dx / dist;
+            const curveAmount = Math.min(dist * 0.2, 30);
+            const mx = (x1 + x2) / 2 + perpX * curveAmount;
+            const my = (y1 + y2) / 2 + perpY * curveAmount;
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', `M ${x1} ${y1} Q ${mx} ${my}, ${x2} ${y2}`);
+            path.classList.add('call-line');
+            if (!isOutgoing) path.classList.add('incoming');
+            svgLayerTop.appendChild(path);
+
+            // Draw arrow at end
+            const arrowSize = 8;
+            // Calculate direction at end of curve
+            const t = 0.95;
+            const endX = (1-t)*(1-t)*x1 + 2*(1-t)*t*mx + t*t*x2;
+            const endY = (1-t)*(1-t)*y1 + 2*(1-t)*t*my + t*t*y2;
+            const dirX = (x2 - mx) / Math.hypot(x2 - mx, y2 - my);
+            const dirY = (y2 - my) / Math.hypot(x2 - mx, y2 - my);
+            
+            const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            const ax = x2;
+            const ay = y2;
+            const p1x = ax - dirX * arrowSize - dirY * arrowSize * 0.5;
+            const p1y = ay - dirY * arrowSize + dirX * arrowSize * 0.5;
+            const p2x = ax - dirX * arrowSize + dirY * arrowSize * 0.5;
+            const p2y = ay - dirY * arrowSize - dirX * arrowSize * 0.5;
+            
+            arrow.setAttribute('points', `${ax},${ay} ${p1x},${p1y} ${p2x},${p2y}`);
+            arrow.classList.add('call-arrow');
+            if (!isOutgoing) arrow.classList.add('incoming');
+            svgLayerTop.appendChild(arrow);
+        }
+
+        // ===================== UI UPDATES =====================
+        function updateFileList() {
+            fileList.innerHTML = '';
+            
+            for (const [path, data] of state.files) {
+                const item = document.createElement('div');
+                item.className = `file-item ${data.type} ${data.isExternal ? 'external' : ''}`;
+                
+                const icons = { html: '📄', css: '🎨', js: '⚡', other: '📦' };
+                
+                item.innerHTML = `
+                    <span class="icon">${data.isExternal ? '🔗' : icons[data.type] || '📦'}</span>
+                    <span class="name">${getFileName(path)}</span>
+                    <span class="status ${data.parsed ? 'parsed' : 'pending'}">${data.parsed ? '✓' : '...'}</span>
+                `;
+                
+                item.addEventListener('click', () => {
+                    selectNode(data.node);
+                    // Center on node
+                    // TODO: pan canvas to node
+                });
+                
+                fileList.appendChild(item);
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('statFiles').textContent = state.files.size;
+            document.getElementById('statFunctions').textContent = 
+                state.nodes.filter(n => n.type === 'function').length;
+            document.getElementById('statDeps').textContent = 
+                state.links.filter(l => l.type === 'hierarchy').length;
+            document.getElementById('statCalls').textContent = 
+                state.links.filter(l => l.type === 'call').length;
+        }
+
+        function selectNode(node) {
+            if (state.selectedNode) {
+                state.selectedNode.element.classList.remove('selected');
+            }
+            state.selectedNode = node;
+            
+            // Track selected node for showing call connections
+            // Can be a function OR a file node (js type)
+            if (node && (node.type === 'function' || node.type === 'js')) {
+                selectedFunction = node;
+            } else {
+                selectedFunction = null;
+            }
+            
+            if (node) {
+                node.element.classList.add('selected');
+                showNodeInfo(node);
+            } else {
+                document.getElementById('selectedInfo').style.display = 'none';
+            }
+            
+            redrawAll();
+        }
+
+        function showNodeInfo(node) {
+            const container = document.getElementById('selectedInfo');
+            const details = document.getElementById('selectedDetails');
+            
+            container.style.display = 'block';
+            
+            let html = `
+                <div class="info-item">
+                    <span class="label">Type:</span>
+                    <span class="value">${node.type}${node.data.isExternal ? ' (CDN)' : ''}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Name:</span>
+                    <span class="value">${node.label}</span>
+                </div>
+            `;
+
+            if (node.data.path) {
+                const displayPath = node.data.path.length > 40 
+                    ? '...' + node.data.path.slice(-37) 
+                    : node.data.path;
+                html += `
+                    <div class="info-item">
+                        <span class="label">Path:</span>
+                        <span class="value" title="${node.data.path}">${displayPath}</span>
+                    </div>
+                `;
+            }
+
+            if (node.data.functions && node.data.functions.length > 0) {
+                html += `
+                    <div class="info-item">
+                        <span class="label">Functions:</span>
+                        <span class="value">${node.data.functions.length}</span>
+                    </div>
+                    <div class="info-item" style="font-size: 10px; color: var(--text-secondary);">
+                        ${node.data.functions.slice(0, 10).join(', ')}${node.data.functions.length > 10 ? '...' : ''}
+                    </div>
+                `;
+            }
+
+            if (node.data.exports && node.data.exports.length > 0) {
+                html += `
+                    <div class="info-item">
+                        <span class="label">Exports:</span>
+                        <span class="value">${node.data.exports.length}</span>
+                    </div>
+                `;
+            }
+
+            if (node.children.length > 0) {
+                html += `
+                    <div class="info-item">
+                        <span class="label">Dependencies:</span>
+                        <span class="value">${node.children.length}</span>
+                    </div>
+                `;
+            }
+
+            if (node.containedNodes.length > 0) {
+                html += `
+                    <div class="info-item">
+                        <span class="label">Contains:</span>
+                        <span class="value">${node.containedNodes.length} functions</span>
+                    </div>
+                `;
+            }
+
+            if (node.data.inlineConfigs && node.data.inlineConfigs.length > 0) {
+                html += `
+                    <div class="info-item">
+                        <span class="label">Inline Scripts:</span>
+                        <span class="value">${node.data.inlineConfigs.length}</span>
+                    </div>
+                `;
+            }
+
+            // Show call statistics
+            if (node.type === 'function' || node.type === 'js') {
+                const nodeId = node.id;
+                const containerId = node.container ? node.container.id : nodeId;
+                
+                let callsCount = 0;
+                let calledByCount = 0;
+                
+                for (const link of state.links) {
+                    if (link.type === 'call') {
+                        if (node.type === 'function') {
+                            // For functions
+                            const toNode = state.nodes.find(n => n.id === link.to);
+                            if (toNode && toNode.id === nodeId) calledByCount++;
+                            if (link.from === containerId) callsCount++;
+                        } else {
+                            // For files
+                            const toNode = state.nodes.find(n => n.id === link.to);
+                            if (link.from === nodeId) callsCount++;
+                            if (toNode && toNode.container && toNode.container.id === nodeId) calledByCount++;
+                        }
+                    }
+                }
+                
+                html += `
+                    <div class="info-item" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color);">
+                        <span class="label" style="color: var(--success);">↗ Calls:</span>
+                        <span class="value">${callsCount}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label" style="color: var(--pink);">↙ Called by:</span>
+                        <span class="value">${calledByCount}</span>
+                    </div>
+                `;
+            }
+
+            details.innerHTML = html;
+        }
+
+        // ===================== PAN & ZOOM STATE =====================
+        let isPanning = false;
+        let panStart = { x: 0, y: 0 };
+        let panOffset = { x: 0, y: 0 };
+        let zoomLevel = 1;
+        const MIN_ZOOM = 0.1;
+        const MAX_ZOOM = 2;
+        
+        // Selected function for showing connections
+        let selectedFunction = null;
+
+        // ===================== INTERACTION =====================
+        function onNodeMouseDown(e, node) {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+
+            state.isDragging = true;
+            state.draggedNode = node;
+
+            // Calculate drag offset accounting for zoom
+            const rect = node.element.getBoundingClientRect();
+            state.dragOffset = {
+                x: (e.clientX - rect.left) / zoomLevel,
+                y: (e.clientY - rect.top) / zoomLevel
+            };
+
+            node.element.classList.add('dragging');
+            selectNode(node);
+        }
+
+        function moveNodeWithChildren(node, dx, dy) {
+            node.x += dx;
+            node.y += dy;
+            node.element.style.left = node.x + 'px';
+            node.element.style.top = node.y + 'px';
+            
+            // Move all children recursively
+            for (const child of node.children) {
+                moveNodeWithChildren(child, dx, dy);
+            }
+        }
+
+        document.addEventListener('mousemove', (e) => {
+            // Handle panning
+            if (isPanning) {
+                const dx = e.clientX - panStart.x;
+                const dy = e.clientY - panStart.y;
+                
+                const tempOffset = { x: panOffset.x + dx, y: panOffset.y + dy };
+                const transform = `translate(${tempOffset.x}px, ${tempOffset.y}px) scale(${zoomLevel})`;
+                nodeLayer.style.transform = transform;
+                nodeLayer.style.transformOrigin = '0 0';
+                // Redraw lines to match new positions
+                redrawAll();
+                return;
+            }
+
+            if (!state.isDragging || !state.draggedNode) return;
+            
+            const node = state.draggedNode;
+            if (node.container) return; // Don't drag contained nodes
+            
+            const rect = canvasArea.getBoundingClientRect();
+            
+            // Account for zoom level in position calculation
+            const newX = (e.clientX - rect.left - panOffset.x) / zoomLevel - state.dragOffset.x;
+            const newY = (e.clientY - rect.top - panOffset.y) / zoomLevel - state.dragOffset.y;
+            
+            const dx = newX - node.x;
+            const dy = newY - node.y;
+            
+            // Move node and all its children
+            moveNodeWithChildren(node, dx, dy);
+            
+            redrawAll();
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (isPanning) {
+                panOffset.x += e.clientX - panStart.x;
+                panOffset.y += e.clientY - panStart.y;
+                isPanning = false;
+                canvasArea.style.cursor = 'default';
+            }
+            
+            if (state.draggedNode) {
+                state.draggedNode.element.classList.remove('dragging');
+            }
+            state.isDragging = false;
+            state.draggedNode = null;
+        });
+
+        canvasArea.addEventListener('mousedown', (e) => {
+            if (e.target === canvasArea || e.target === nodeLayer || 
+                e.target === svgLayer || e.target === svgLayerTop) {
+                
+                if (e.button === 0) {
+                    // Left click on empty space - start panning
+                    isPanning = true;
+                    panStart = { x: e.clientX, y: e.clientY };
+                    canvasArea.style.cursor = 'grabbing';
+                }
+                
+                selectNode(null);
+            }
+        });
+
+        // Update all layer transforms
+        function updateTransform() {
+            const transform = `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomLevel})`;
+            nodeLayer.style.transform = transform;
+            nodeLayer.style.transformOrigin = '0 0';
+            // SVG layers handled separately in redrawAll
+        }
+
+        // Reset pan and zoom
+        function resetPan() {
+            panOffset = { x: 0, y: 0 };
+            zoomLevel = 1;
+            updateTransform();
+            redrawAll();
+        }
+
+        // Zoom handler
+        canvasArea.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomLevel + delta));
+            
+            if (newZoom !== zoomLevel) {
+                // Zoom towards mouse position
+                const rect = canvasArea.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                // Adjust pan to zoom towards mouse
+                const zoomRatio = newZoom / zoomLevel;
+                panOffset.x = mouseX - (mouseX - panOffset.x) * zoomRatio;
+                panOffset.y = mouseY - (mouseY - panOffset.y) * zoomRatio;
+                
+                zoomLevel = newZoom;
+                updateZoomDisplay();
+                updateTransform();
+                redrawAll();
+            }
+        }, { passive: false });
+
+        // ===================== BUTTON HANDLERS =====================
+        document.getElementById('scanBtn').addEventListener('click', scanProject);
+        document.getElementById('autoLayoutBtn').addEventListener('click', autoLayout);
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            resetPan();
+        });
+        
+        document.getElementById('zoomInBtn').addEventListener('click', () => {
+            zoomLevel = Math.min(MAX_ZOOM, zoomLevel + 0.1);
+            updateZoomDisplay();
+            updateTransform();
+            redrawAll();
+        });
+        
+        document.getElementById('zoomOutBtn').addEventListener('click', () => {
+            zoomLevel = Math.max(MIN_ZOOM, zoomLevel - 0.1);
+            updateZoomDisplay();
+            updateTransform();
+            redrawAll();
+        });
+
+        function updateZoomDisplay() {
+            document.getElementById('zoomLevel').textContent = Math.round(zoomLevel * 100) + '%';
+        }
+
+        // ===================== INIT =====================
+        log('Project Mapper ready. Click "Scan Project" to begin.', 'info');
+    </script>
+</body>
+</html>
+

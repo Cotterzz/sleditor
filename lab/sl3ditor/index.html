@@ -1,0 +1,3328 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="author" content="John Cotterell">
+    <title>Three.js Scene Builder</title>
+    <!-- v1.0.1 -->
+    <link href="https://fonts.googleapis.com/css?family=Abel|Quicksand:500|Source+Code+Pro" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+            font-family: 'Abel', sans-serif;
+        }
+
+        #drawing {
+            position: fixed;
+            left: 200px;
+            top: 0;
+            width: calc(100% - 200px - 340px);
+            height: 100%;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        #rootnode {
+            font-size: 20px;
+            position: fixed;
+            width: calc(100% - 200px - 340px);
+            height: 100%;
+            left: 200px;
+            top: 0;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        #rootnode > * {
+            pointer-events: auto;
+        }
+
+        .node {
+            font-family: 'Quicksand', sans-serif;
+            font-size: .9em;
+            padding: 8px 12px;
+            border: 2px solid #cccccc;
+            border-radius: 5px;
+            background: #eeeeee;
+            position: absolute;
+            z-index: 9;
+            cursor: move;
+            min-width: 80px;
+            text-align: center;
+        }
+
+        .node .detach-wrapper {
+            position: absolute;
+            top: -32px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 30px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.35);
+            border: 1px dashed rgba(197, 48, 48, 0.6);
+            opacity: 0;
+            pointer-events: auto;
+            transition: opacity 0.2s;
+        }
+
+        .detach-wrapper .detach-handle {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid rgba(0, 0, 0, 0.25);
+            background: #fff;
+            color: #c53030;
+            font-size: 13px;
+            line-height: 18px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            pointer-events: auto;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+        }
+
+        .node.node-hover .detach-wrapper,
+        .detach-wrapper:hover {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .node.scene {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-color: #5a67d8;
+            color: white;
+        }
+
+        .node.mesh {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            border-color: #38b2ac;
+            color: white;
+        }
+
+        .node.light {
+            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            border-color: #f6ad55;
+            color: #2d3748;
+        }
+
+        .node.group {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            border-color: #81e6d9;
+            color: #2d3748;
+        }
+
+        .node.selected {
+            box-shadow: 0 0 0 3px #ffcc00;
+        }
+
+        .nodetitle {
+            font-weight: 500;
+            cursor: default;
+        }
+
+        #sidebar {
+            font-family: 'Abel', sans-serif;
+            font-size: 16px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 200px;
+            height: 100%;
+            background: #2d3748;
+            color: white;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        #sidebar h3 {
+            margin: 15px 0 10px 0;
+            font-size: 14px;
+            text-transform: uppercase;
+            color: #a0aec0;
+            border-bottom: 1px solid #4a5568;
+            padding-bottom: 5px;
+        }
+
+        .menu-item {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 4px;
+            cursor: grab;
+            transition: background 0.2s;
+        }
+
+        .menu-item:hover {
+            background: #4a5568;
+        }
+
+        .menu-item.mesh {
+            border-left: 3px solid #4facfe;
+        }
+
+        .menu-item.light {
+            border-left: 3px solid #f6ad55;
+        }
+
+        .menu-item.group {
+            border-left: 3px solid #81e6d9;
+        }
+
+        #paramPanel {
+            font-family: 'Abel', sans-serif;
+            position: fixed;
+            right: 0;
+            top: 0;
+            width: 340px;
+            height: 100%;
+            background: #1a202c;
+            color: white;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            z-index: 100;
+        }
+
+        #paramPanel h3 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            color: #63b3ed;
+        }
+
+        .param-group {
+            margin: 15px 0;
+            padding: 10px;
+            background: #2d3748;
+            border-radius: 5px;
+        }
+
+        .param-group h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #a0aec0;
+            text-transform: uppercase;
+        }
+
+        .lathe-editor {
+            width: 100%;
+            height: 200px;
+            background: #1a202c;
+            border: 1px solid #4a5568;
+            border-radius: 4px;
+            position: relative;
+            cursor: crosshair;
+            margin-bottom: 10px;
+        }
+
+        .lathe-editor canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .lathe-editor-controls {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .lathe-editor-controls button {
+            flex: 1;
+            padding: 4px 8px;
+            font-size: 11px;
+            background: #4a5568;
+            border: none;
+            border-radius: 3px;
+            color: white;
+            cursor: pointer;
+        }
+
+        .lathe-editor-controls button:hover {
+            background: #5a67d8;
+        }
+
+        .loft-slice-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: #2d3748;
+            border-radius: 4px;
+        }
+
+        .loft-slice-selector input[type="range"] {
+            flex: 1;
+        }
+
+        .loft-slice-selector .slice-label {
+            font-size: 12px;
+            color: #a0aec0;
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .loft-slice-selector .slice-angle {
+            font-size: 11px;
+            color: #718096;
+            min-width: 40px;
+        }
+
+        .param-item {
+            margin: 8px 0;
+        }
+
+        .param-slider-container {
+            margin: 12px 0;
+        }
+
+        .param-slider-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: #cbd5e0;
+        }
+
+        .param-slider-value {
+            font-family: 'Source Code Pro', monospace;
+            color: #63b3ed;
+            font-size: 12px;
+        }
+
+        .param-slider-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .param-slider {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: #4a5568;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .param-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #63b3ed;
+            cursor: pointer;
+            border: 2px solid #1a202c;
+        }
+
+        .param-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #63b3ed;
+            cursor: pointer;
+            border: 2px solid #1a202c;
+        }
+
+        .param-fine-control {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .param-fine-btn {
+            width: 24px;
+            height: 16px;
+            background: #4a5568;
+            border: none;
+            border-radius: 3px;
+            color: #cbd5e0;
+            cursor: pointer;
+            font-size: 10px;
+            line-height: 16px;
+            padding: 0;
+            transition: background 0.2s;
+        }
+
+        .param-fine-btn:hover {
+            background: #63b3ed;
+            color: white;
+        }
+
+        .param-fine-btn:active {
+            background: #4299e1;
+        }
+
+        .param-label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: #cbd5e0;
+        }
+
+        .param-input {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #4a5568;
+            border-radius: 3px;
+            background: #1a202c;
+            color: white;
+            font-family: 'Source Code Pro', monospace;
+            box-sizing: border-box;
+        }
+
+        #recycleBin {
+            position: absolute;
+            left: calc(220px + 20px);
+            bottom: 20px;
+            width: 160px;
+            height: 90px;
+            border: 2px dashed rgba(255, 99, 71, 0.6);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 99, 71, 0.08);
+            font-family: 'Abel', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 36px;
+            transition: background 0.2s, transform 0.2s, border-color 0.2s;
+            z-index: 80;
+            color: rgba(255, 99, 71, 0.6);
+            pointer-events: none;
+        }
+
+        #recycleBin small {
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        #recycleBin.active {
+            background: rgba(255, 99, 71, 0.25);
+            border-color: rgba(255, 255, 255, 0.9);
+            transform: scale(1.05);
+        }
+
+        #preview {
+            position: fixed;
+            left: 200px;
+            top: 0;
+            width: calc(100% - 200px - 340px);
+            height: 100%;
+            z-index: 1;
+        }
+
+        #codeOutput {
+            display: none;
+            position: fixed;
+            left: 200px;
+            top: 0;
+            right: 340px;
+            bottom: 0;
+            background: #1a202c;
+            color: #a0aec0;
+            padding: 20px;
+            overflow: auto;
+            z-index: 200;
+        }
+
+        #codeOutput .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #4a5568;
+        }
+
+        #codeOutput .code-header h2 {
+            margin: 0;
+            color: #63b3ed;
+            font-size: 18px;
+        }
+
+        #codeOutput .code-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        #codeOutput .code-btn {
+            padding: 8px 16px;
+            background: #4a5568;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Abel', sans-serif;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        #codeOutput .code-btn:hover {
+            background: #63b3ed;
+        }
+
+        #codeOutput .code-btn.primary {
+            background: #667eea;
+        }
+
+        #codeOutput .code-btn.primary:hover {
+            background: #5a67d8;
+        }
+
+        #codeOutput pre {
+            font-family: 'Source Code Pro', monospace;
+            font-size: 13px;
+            margin: 0;
+            white-space: pre-wrap;
+            user-select: text;
+            cursor: text;
+            background: #2d3748;
+            padding: 15px;
+            border-radius: 5px;
+        }
+
+        .copy-notification {
+            position: fixed;
+            top: 20px;
+            right: 360px;
+            background: #48bb78;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 5px;
+            font-family: 'Abel', sans-serif;
+            font-size: 14px;
+            z-index: 300;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: opacity 0.3s, transform 0.3s;
+            pointer-events: none;
+        }
+
+        .copy-notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .control-buttons {
+            position: fixed;
+            left: 50%;
+            bottom: 20px;
+            transform: translateX(-50%);
+            z-index: 120;
+            display: flex;
+            gap: 10px;
+        }
+
+        .control-buttons button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-family: 'Abel', sans-serif;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .control-buttons button:hover {
+            background: #5a67d8;
+        }
+
+        .color-input {
+            width: 100%;
+            height: 30px;
+            border: 1px solid #4a5568;
+            border-radius: 3px;
+            background: #1a202c;
+            cursor: pointer;
+        }
+
+        select.param-input {
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body data-server-no-reload>
+
+<div id="sidebar">
+    <h3>Meshes</h3>
+    <div class="menu-item mesh" data-type="Box">Box</div>
+    <div class="menu-item mesh" data-type="Sphere">Sphere</div>
+    <div class="menu-item mesh" data-type="Cylinder">Cylinder</div>
+    <div class="menu-item mesh" data-type="Cone">Cone</div>
+    <div class="menu-item mesh" data-type="Torus">Torus</div>
+    <div class="menu-item mesh" data-type="TorusKnot">Torus Knot</div>
+    <div class="menu-item mesh" data-type="Plane">Plane</div>
+    <div class="menu-item mesh" data-type="Dodecahedron">Dodecahedron</div>
+    <div class="menu-item mesh" data-type="Icosahedron">Icosahedron</div>
+    <div class="menu-item mesh" data-type="Octahedron">Octahedron</div>
+    <div class="menu-item mesh" data-type="Tetrahedron">Tetrahedron</div>
+    <div class="menu-item mesh" data-type="Lathe">Lathe</div>
+    <div class="menu-item mesh" data-type="LoftLathe">Loft Lathe</div>
+    <div class="menu-item mesh" data-type="Tube">Tube</div>
+    <div class="menu-item mesh" data-type="Parametric">Parametric</div>
+    
+    <h3>Lights</h3>
+    <div class="menu-item light" data-type="AmbientLight">Ambient</div>
+    <div class="menu-item light" data-type="DirectionalLight">Directional</div>
+    <div class="menu-item light" data-type="PointLight">Point</div>
+    <div class="menu-item light" data-type="SpotLight">Spot</div>
+    <div class="menu-item light" data-type="HemisphereLight">Hemisphere</div>
+    
+    <h3>Organization</h3>
+    <div class="menu-item group" data-type="Group">Group</div>
+</div>
+
+<div id="paramPanel">
+    <h3>Properties</h3>
+    <div id="paramContent">
+        <p style="color: #718096;">Select a node to edit properties</p>
+    </div>
+</div>
+
+<svg id="drawing"></svg>
+
+<div id="rootnode"></div>
+
+<div id="recycleBin">
+    <div>♻</div>
+    <small>Recycle</small>
+</div>
+
+<div id="preview"></div>
+
+<div class="control-buttons">
+    <button id="saveSceneBtn">Save Scene</button>
+    <button id="generateCodeBtn">Generate Code</button>
+</div>
+
+<div id="codeOutput">
+    <div class="code-header">
+        <h2>Generated Code</h2>
+        <div class="code-buttons">
+            <button class="code-btn" id="copyCodeBtn">Copy to Clipboard</button>
+            <button class="code-btn" id="downloadCodeBtn">Download HTML</button>
+            <button class="code-btn primary" id="closeCodeBtn">Close</button>
+        </div>
+    </div>
+    <pre id="codeText"></pre>
+</div>
+
+<div class="copy-notification" id="copyNotification">
+    ✓ Code copied to clipboard!
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/svg.js/2.7.1/svg.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/ParametricGeometry.js"></script>
+<script src="LoftLatheBufferGeometry.js"></script>
+<script>
+// Node type definitions
+const NODE_TYPES = {
+    Scene: {
+        category: 'scene',
+        maxChildren: 999,
+        params: {
+            backgroundColor: { type: 'color', default: '#000000' },
+            fog: { type: 'boolean', default: false },
+            fogColor: { type: 'color', default: '#ffffff' },
+            fogNear: { type: 'number', default: 1, min: 0, max: 50, step: 0.5 },
+            fogFar: { type: 'number', default: 50, min: 1, max: 200, step: 1 }
+        }
+    },
+    Group: {
+        category: 'group',
+        maxChildren: 999,
+        params: {}
+    },
+    Box: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            width: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            height: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            depth: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    Sphere: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            widthSegments: { type: 'number', default: 32, min: 3, max: 64, step: 1 },
+            heightSegments: { type: 'number', default: 32, min: 2, max: 64, step: 1 }
+        }
+    },
+    Cylinder: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radiusTop: { type: 'number', default: 1, min: 0, max: 10, step: 0.1 },
+            radiusBottom: { type: 'number', default: 1, min: 0, max: 10, step: 0.1 },
+            height: { type: 'number', default: 2, min: 0.1, max: 10, step: 0.1 },
+            radialSegments: { type: 'number', default: 32, min: 3, max: 64, step: 1 }
+        }
+    },
+    Cone: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            height: { type: 'number', default: 2, min: 0.1, max: 10, step: 0.1 },
+            radialSegments: { type: 'number', default: 32, min: 3, max: 64, step: 1 }
+        }
+    },
+    Torus: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            tube: { type: 'number', default: 0.4, min: 0.1, max: 5, step: 0.1 },
+            radialSegments: { type: 'number', default: 16, min: 3, max: 64, step: 1 },
+            tubularSegments: { type: 'number', default: 100, min: 3, max: 200, step: 1 }
+        }
+    },
+    TorusKnot: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            tube: { type: 'number', default: 0.3, min: 0.1, max: 5, step: 0.1 },
+            tubularSegments: { type: 'number', default: 64, min: 3, max: 200, step: 1 },
+            radialSegments: { type: 'number', default: 8, min: 3, max: 64, step: 1 },
+            p: { type: 'number', default: 2, min: 1, max: 10, step: 1 },
+            q: { type: 'number', default: 3, min: 1, max: 10, step: 1 }
+        }
+    },
+    Plane: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            width: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+            height: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    Dodecahedron: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    Icosahedron: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    Octahedron: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    Tetrahedron: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            radius: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+        }
+    },
+    Lathe: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            // Default wine cup/goblet shape points [x, y] - x is radius, y is height
+            points: { 
+                type: 'lathePoints', 
+                default: [
+                    [0.0, 0.0],
+                    [0.4, 0.05],
+                    [0.35, 0.1],
+                    [0.1, 0.15],
+                    [0.08, 0.5],
+                    [0.1, 0.55],
+                    [0.5, 0.9],
+                    [0.5, 1.0],
+                    [0.45, 1.0],
+                    [0.45, 0.95],
+                    [0.08, 0.6],
+                    [0.0, 0.6]
+                ]
+            },
+            segments: { type: 'number', default: 32, min: 3, max: 64, step: 1 },
+            scale: { type: 'number', default: 1, min: 0.1, max: 5, step: 0.1 }
+        }
+    },
+    LoftLathe: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            // Default head shape - 8 slices, 12 points each
+            slices: { 
+                type: 'loftLatheSlices', 
+                default: [
+                    // Slice 0 (0°) - back of head
+                    [[0, 0], [1.5, 0.5], [4, 2], [5, 3], [6, 4], [6, 5], [5, 6], [4, 7], [3, 7.5], [1, 8], [0.5, 8], [0, 7]],
+                    // Slice 1 (45°)
+                    [[0, 0], [1.5, 0.5], [4, 2], [5, 3], [6, 4], [6, 5], [5, 6], [4, 7], [3, 7.5], [1, 8], [0.5, 8], [0, 7]],
+                    // Slice 2 (90°)
+                    [[0, 0], [1.5, 0.5], [4, 2], [5, 3], [6, 4], [6, 5], [5, 6], [4, 7], [3, 7.5], [1, 8], [0.5, 8], [0, 7]],
+                    // Slice 3 (135°) - side with ear indent
+                    [[0, 0], [2, 0.5], [5, 2], [5, 3], [6, 4], [6, 5], [5, 6], [5, 7], [4, 7.5], [2, 8], [1, 8], [0, 7]],
+                    // Slice 4 (180°) - front with nose
+                    [[0, 0], [2, 1], [4, 2], [1.5, 3], [3.5, 4], [4, 5], [3.5, 6], [3.5, 6], [3.5, 6.5], [4, 7], [1, 8], [0, 7]],
+                    // Slice 5 (225°)
+                    [[0, 0], [2, 1], [3, 2], [4, 2.5], [6, 4], [4, 5], [3.5, 6], [3, 6], [3.5, 6.5], [3.5, 7], [2, 8], [0, 7]],
+                    // Slice 6 (270°)
+                    [[0, 0], [2, 1], [4, 2], [1.5, 3], [3.5, 4], [4, 5], [3.5, 6], [3.5, 6], [3.5, 6.5], [4, 7], [1, 8], [0, 7]],
+                    // Slice 7 (315°) - side
+                    [[0, 0], [2, 0.5], [5, 2], [5, 3], [6, 4], [6, 5], [5, 6], [5, 7], [4, 7.5], [2, 8], [1, 8], [0, 7]]
+                ]
+            },
+            segments: { type: 'number', default: 64, min: 8, max: 128, step: 1 },
+            scale: { type: 'number', default: 0.1, min: 0.01, max: 1, step: 0.01 }
+        }
+    },
+    Tube: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            // Tube geometry params
+            tubularSegments: { type: 'number', default: 24, min: 3, max: 128, step: 1 },
+            radius: { type: 'number', default: 0.3, min: 0.01, max: 5, step: 0.01 },
+            radialSegments: { type: 'number', default: 8, min: 3, max: 32, step: 1 },
+            closed: { type: 'boolean', default: false },
+            // Sin curve params
+            curveScale: { type: 'number', default: 2, min: 0.1, max: 10, step: 0.1 },
+            curveLength: { type: 'number', default: 3, min: 0.5, max: 10, step: 0.1 },
+            frequency: { type: 'number', default: 1, min: 0.1, max: 5, step: 0.1 },
+            amplitude: { type: 'number', default: 1, min: 0, max: 5, step: 0.1 },
+            phase: { type: 'number', default: 0, min: 0, max: 6.28, step: 0.1 }
+        }
+    },
+    Parametric: {
+        category: 'mesh',
+        maxChildren: 999,
+        params: {
+            shape: { 
+                type: 'select', 
+                default: 'klein',
+                options: ['klein', 'mobius', 'helicoid', 'catenoid', 'enneper', 'dini', 'heart', 'apple']
+            },
+            scale: { type: 'number', default: 1, min: 0.1, max: 5, step: 0.1 },
+            segmentsU: { type: 'number', default: 32, min: 8, max: 128, step: 1 },
+            segmentsV: { type: 'number', default: 32, min: 8, max: 128, step: 1 },
+            // Shape-specific params
+            twist: { type: 'number', default: 1, min: 0.1, max: 5, step: 0.1, forShapes: ['helicoid', 'dini'] },
+            fatness: { type: 'number', default: 1, min: 0.5, max: 2, step: 0.1, forShapes: ['heart', 'apple'] },
+            indent: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1, forShapes: ['apple'] },
+            seamOffset: { type: 'number', default: 0, min: -0.5, max: 0.5, step: 0.01, forShapes: ['klein'] }
+        }
+    },
+    AmbientLight: {
+        category: 'light',
+        maxChildren: 0,
+        params: {
+            color: { type: 'color', default: '#ffffff' },
+            intensity: { type: 'number', default: 0.5, min: 0, max: 2, step: 0.1 }
+        }
+    },
+    DirectionalLight: {
+        category: 'light',
+        maxChildren: 0,
+        params: {
+            color: { type: 'color', default: '#ffffff' },
+            intensity: { type: 'number', default: 1, min: 0, max: 2, step: 0.1 },
+            castShadow: { type: 'boolean', default: true }
+        }
+    },
+    PointLight: {
+        category: 'light',
+        maxChildren: 0,
+        params: {
+            color: { type: 'color', default: '#ffffff' },
+            intensity: { type: 'number', default: 1, min: 0, max: 2, step: 0.1 },
+            distance: { type: 'number', default: 0, min: 0, max: 100, step: 1 },
+            decay: { type: 'number', default: 1, min: 0, max: 10, step: 0.1 },
+            castShadow: { type: 'boolean', default: false }
+        }
+    },
+    SpotLight: {
+        category: 'light',
+        maxChildren: 0,
+        params: {
+            color: { type: 'color', default: '#ffffff' },
+            intensity: { type: 'number', default: 1, min: 0, max: 2, step: 0.1 },
+            distance: { type: 'number', default: 0, min: 0, max: 100, step: 1 },
+            angle: { type: 'number', default: Math.PI / 3, min: 0, max: Math.PI / 2, step: 0.1 },
+            penumbra: { type: 'number', default: 0, min: 0, max: 1, step: 0.1 },
+            decay: { type: 'number', default: 1, min: 0, max: 10, step: 0.1 },
+            castShadow: { type: 'boolean', default: false }
+        }
+    },
+    HemisphereLight: {
+        category: 'light',
+        maxChildren: 0,
+        params: {
+            skyColor: { type: 'color', default: '#ffffff' },
+            groundColor: { type: 'color', default: '#444444' },
+            intensity: { type: 'number', default: 0.6, min: 0, max: 2, step: 0.1 }
+        }
+    }
+};
+
+// Transform parameters for all nodes (except Scene and lights)
+const TRANSFORM_PARAMS = {
+    posX: { type: 'number', default: 0, min: -20, max: 20, step: 0.1 },
+    posY: { type: 'number', default: 0, min: -20, max: 20, step: 0.1 },
+    posZ: { type: 'number', default: 0, min: -20, max: 20, step: 0.1 },
+    rotX: { type: 'number', default: 0, min: 0, max: 360, step: 1 },
+    rotY: { type: 'number', default: 0, min: 0, max: 360, step: 1 },
+    rotZ: { type: 'number', default: 0, min: 0, max: 360, step: 1 },
+    scaleX: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+    scaleY: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 },
+    scaleZ: { type: 'number', default: 1, min: 0.1, max: 10, step: 0.1 }
+};
+
+// Material parameters for mesh nodes
+const MATERIAL_PARAMS = {
+    materialType: { type: 'select', default: 'standard', options: ['basic', 'standard', 'phong', 'physical'] },
+    color: { type: 'color', default: '#3498db' },
+    metalness: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1 },
+    roughness: { type: 'number', default: 0.5, min: 0, max: 1, step: 0.1 },
+    emissive: { type: 'color', default: '#000000' },
+    emissiveIntensity: { type: 'number', default: 0, min: 0, max: 2, step: 0.1 },
+    wireframe: { type: 'boolean', default: false },
+    transparent: { type: 'boolean', default: false },
+    opacity: { type: 'number', default: 1, min: 0, max: 1, step: 0.1 },
+    doubleSided: { type: 'boolean', default: false }
+};
+
+// Non-orientable surfaces that should default to double-sided
+const NON_ORIENTABLE_SHAPES = ['klein', 'mobius'];
+
+// Global state
+const draw = SVG('drawing').size('100%', '100%');
+let nodesArray = [];
+let lines = [];
+let nodeCounter = 0;
+let dragging = false;
+let dragged = null;
+let selectedNode = null;
+let pos3 = 0, pos4 = 0;
+let detached = false;
+let dragFromMenu = false;
+let dropPreview = null;
+let currentDropTarget = null;
+const recycleBin = document.getElementById('recycleBin');
+const recycleRect = () => recycleBin.getBoundingClientRect();
+let recycleActive = false;
+
+// Three.js scene
+let scene, camera, renderer, controls;
+let previewObjects = new Map();
+let defaultLights = [];
+
+// Initialize
+initThreeJS();
+initNodeEditor();
+
+function initNodeEditor() {
+    createSceneNode();
+    scanNodes();
+    addLines();
+    setupMenuItems();
+    setupEventListeners();
+    
+    // Try to load saved scene (after initial setup)
+    setTimeout(() => {
+        if (loadSceneFromStorage()) {
+            console.log('[3ditor] Restored saved scene');
+        }
+    }, 100);
+}
+
+function scanNodes() {
+    const nodesObject = document.getElementsByClassName("node");
+    nodesArray = [];
+    for (let i = 0; i < nodesObject.length; i++) {
+        nodesArray.push(nodesObject[i]);
+        if (!nodesObject[i].id || nodesObject[i].id === '') {
+            nodesObject[i].id = 'node_' + nodeCounter++;
+        }
+        ensureDetachHandle(nodesObject[i]);
+    }
+}
+
+function ensureDetachHandle(node) {
+    if (node.dataset.type === 'Scene') return;
+    if (node.querySelector('.detach-wrapper')) return;
+    
+    const detachWrapper = document.createElement('div');
+    const detachHandle = document.createElement('div');
+    
+    detachWrapper.className = 'detach-wrapper';
+    detachHandle.className = 'detach-handle';
+    detachHandle.textContent = '×';
+    
+    detachWrapper.appendChild(detachHandle);
+    node.insertBefore(detachWrapper, node.firstChild);
+    
+    detachHandle.addEventListener('mousedown', onDetachHandleMouseDown);
+    attachNodeHoverHandlers(node);
+    attachDetachWrapperHandlers(node);
+}
+
+function attachNodeHoverHandlers(node) {
+    if (node.dataset.type === 'Scene' || node._hoverHandlersAttached) return;
+    node.addEventListener('mouseover', handleNodeMouseOver);
+    node.addEventListener('mouseout', handleNodeMouseOut);
+    node._hoverHandlersAttached = true;
+}
+
+function attachDetachWrapperHandlers(node) {
+    if (node.dataset.type === 'Scene') return;
+    const wrapper = node.querySelector('.detach-wrapper');
+    if (!wrapper || wrapper._hoverHandlersAttached) return;
+    
+    wrapper.addEventListener('mouseenter', () => {
+        node.classList.add('node-hover');
+    });
+    wrapper.addEventListener('mouseleave', (event) => {
+        const related = event.relatedTarget;
+        if (related && (node.contains(related) || wrapper.contains(related))) return;
+        node.classList.remove('node-hover');
+    });
+    wrapper._hoverHandlersAttached = true;
+}
+
+function handleNodeMouseOver(event) {
+    if (event.target !== event.currentTarget) return;
+    event.currentTarget.classList.add('node-hover');
+}
+
+function handleNodeMouseOut(event) {
+    if (event.target !== event.currentTarget) return;
+    const related = event.relatedTarget;
+    if (related && event.currentTarget.contains(related)) return;
+    event.currentTarget.classList.remove('node-hover');
+}
+
+function onDetachHandleMouseDown(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const node = event.target.closest('.node');
+    if (!node || node.dataset.type === 'Scene') return;
+    
+    detachNodeToRoot(node);
+    
+    // Start dragging the detached node
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    const rect = node.getBoundingClientRect();
+    node.dataset.dragOffsetX = event.clientX - rect.left;
+    node.dataset.dragOffsetY = event.clientY - rect.top;
+    dragging = true;
+    dragged = node;
+    detached = true; // Mark as detached so it can be reattached
+    selectNode(node);
+}
+
+function detachNodeToRoot(node) {
+    const root = document.getElementById('rootnode');
+    reparentNodePreservingPosition(node, root);
+    updateLine(node);
+    updatePreview();
+}
+
+function reparentNodePreservingPosition(node, newParent) {
+    const nodeRect = node.getBoundingClientRect();
+    const parentRect = newParent.getBoundingClientRect();
+    newParent.appendChild(node);
+    node.style.left = `${nodeRect.left - parentRect.left}px`;
+    node.style.top = `${nodeRect.top - parentRect.top}px`;
+}
+
+function addLines() {
+    for (let i = 0; i < nodesArray.length; i++) {
+        addLine(i);
+    }
+}
+
+function addLine(num) {
+    const node = nodesArray[num];
+    const box1 = node.getBoundingClientRect();
+    const box2 = node.parentNode.getBoundingClientRect();
+    const x1 = box1.left + (box1.width / 2);
+    const y1 = box1.top + (box1.height / 2);
+    const x2 = box2.left + (box2.width / 2);
+    const y2 = box2.top + (box2.height / 2);
+    
+    // Adjust for sidebar (drawing SVG starts at left: 200px)
+    const adjustedX1 = x1 - 200;
+    const adjustedX2 = x2 - 200;
+    
+    if (lines[num]) {
+        lines[num].plot([['M', adjustedX1, y1], ['C', adjustedX1, y2, adjustedX2, y1, adjustedX2, y2]]);
+    } else {
+        lines[num] = draw.path([['M', adjustedX1, y1], ['C', adjustedX1, y2, adjustedX2, y1, adjustedX2, y2]])
+            .fill('none')
+            .stroke({ width: 2, color: "#888888" });
+    }
+    
+    if (!node.parentNode.classList.contains("node")) {
+        lines[num].hide();
+    } else {
+        lines[num].show();
+    }
+}
+
+function updateLine(node) {
+    const nodeIndex = nodesArray.indexOf(node);
+    if (nodeIndex >= 0) {
+        addLine(nodeIndex);
+    }
+    
+    const children = node.querySelectorAll('.node');
+    children.forEach(child => {
+        const childIndex = nodesArray.indexOf(child);
+        if (childIndex >= 0) {
+            addLine(childIndex);
+        }
+    });
+}
+
+function updateAllLines() {
+    for (let i = 0; i < nodesArray.length; i++) {
+        addLine(i);
+    }
+}
+
+function initThreeJS() {
+    const container = document.getElementById('preview');
+    
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x000000);
+    
+    // Default lights are now represented as nodes in the editor
+    // They will be added via updatePreview() when light nodes are processed
+    
+    camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(5, 5, 5);
+    camera.lookAt(0, 0, 0);
+    
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+    
+    // Handle window resize
+    window.addEventListener('resize', onWindowResize);
+    
+    // Simple orbit controls (manual implementation)
+    let isRotating = false;
+    let prevMouseX = 0;
+    let prevMouseY = 0;
+    let cameraRotationX = 0;
+    let cameraRotationY = 0;
+    let cameraDistance = 10;
+    let cameraTarget = { x: 0, y: 0, z: 0 };
+    let isPanning = false;
+    
+    function updateCameraPosition() {
+        camera.position.x = cameraTarget.x + cameraDistance * Math.cos(cameraRotationX) * Math.sin(cameraRotationY);
+        camera.position.y = cameraTarget.y + cameraDistance * Math.sin(cameraRotationX);
+        camera.position.z = cameraTarget.z + cameraDistance * Math.cos(cameraRotationX) * Math.cos(cameraRotationY);
+        camera.lookAt(cameraTarget.x, cameraTarget.y, cameraTarget.z);
+    }
+    
+    container.addEventListener('mousedown', (e) => {
+        if (e.button === 2) {
+            // Right click - pan
+            isPanning = true;
+            e.preventDefault();
+        } else if (e.button === 0) {
+            // Left click - rotate
+            isRotating = true;
+        }
+        prevMouseX = e.clientX;
+        prevMouseY = e.clientY;
+    });
+    
+    container.addEventListener('contextmenu', (e) => e.preventDefault());
+    
+    document.addEventListener('mousemove', (e) => {
+        if (isRotating) {
+            const deltaX = e.clientX - prevMouseX;
+            const deltaY = e.clientY - prevMouseY;
+            
+            cameraRotationY -= deltaX * 0.005;
+            cameraRotationX += deltaY * 0.005;
+            cameraRotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraRotationX));
+            
+            updateCameraPosition();
+            
+            prevMouseX = e.clientX;
+            prevMouseY = e.clientY;
+        } else if (isPanning) {
+            const deltaX = e.clientX - prevMouseX;
+            const deltaY = e.clientY - prevMouseY;
+            
+            // Calculate right and up vectors
+            const right = new THREE.Vector3();
+            const up = new THREE.Vector3(0, 1, 0);
+            camera.getWorldDirection(right);
+            right.cross(up).normalize();
+            up.copy(camera.up);
+            
+            const panScale = cameraDistance * 0.002;
+            cameraTarget.x -= deltaX * panScale * right.x;
+            cameraTarget.y += deltaY * panScale;
+            cameraTarget.z -= deltaX * panScale * right.z;
+            
+            updateCameraPosition();
+            
+            prevMouseX = e.clientX;
+            prevMouseY = e.clientY;
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        isRotating = false;
+        isPanning = false;
+    });
+    
+    container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        cameraDistance = Math.max(2, Math.min(50, cameraDistance + e.deltaY * 0.01));
+        updateCameraPosition();
+    });
+    
+    animate();
+}
+
+function onWindowResize() {
+    const container = document.getElementById('preview');
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
+}
+
+function createSceneNode() {
+    const sceneNode = createNode('Scene');
+    sceneNode.style.left = '100px';
+    sceneNode.style.top = '50px';
+    document.getElementById('rootnode').appendChild(sceneNode);
+    nodesArray.push(sceneNode);
+    
+    // Add default ambient light as a node
+    const ambientNode = createNode('AmbientLight');
+    ambientNode.style.left = '40px';
+    ambientNode.style.top = '40px';
+    sceneNode.appendChild(ambientNode);
+    nodesArray.push(ambientNode);
+    
+    // Add default directional light as a node
+    const directionalNode = createNode('DirectionalLight');
+    directionalNode.style.left = '40px';
+    directionalNode.style.top = '80px';
+    sceneNode.appendChild(directionalNode);
+    nodesArray.push(directionalNode);
+}
+
+// ========================
+// SCENE SAVE/LOAD
+// ========================
+
+const STORAGE_KEY = '3ditorSceneState';
+
+function serializeNodeTree(node) {
+    if (!node) return null;
+    const params = JSON.parse(JSON.stringify(getNodeParams(node) || {}));
+    const titleEl = node.querySelector('.nodetitle');
+    const childNodes = Array.from(node.children).filter(child => child.classList.contains('node'));
+    
+    return {
+        type: node.dataset.type,
+        title: titleEl ? titleEl.textContent.trim() : '',
+        params: params,
+        style: {
+            left: node.style.left || '',
+            top: node.style.top || ''
+        },
+        children: childNodes.map(child => serializeNodeTree(child))
+    };
+}
+
+function rebuildNodesFromData(data, parent) {
+    if (!data || !parent) return null;
+    
+    if (data.type === 'Scene') {
+        // Scene node already exists, just update it
+        const sceneNode = parent;
+        const titleEl = sceneNode.querySelector('.nodetitle');
+        if (titleEl && data.title) {
+            titleEl.textContent = data.title;
+        }
+        if (data.params) {
+            setNodeParams(sceneNode, data.params);
+        }
+        (data.children || []).forEach(child => rebuildNodesFromData(child, sceneNode));
+        return sceneNode;
+    }
+    
+    if (!NODE_TYPES[data.type]) {
+        console.warn('Unknown node type in saved scene:', data.type);
+        return null;
+    }
+    
+    const node = createNode(data.type);
+    nodesArray.push(node);
+    
+    const titleEl = node.querySelector('.nodetitle');
+    if (titleEl && data.title) {
+        titleEl.textContent = data.title;
+    }
+    if (data.params) {
+        setNodeParams(node, data.params);
+    }
+    if (data.style) {
+        if (data.style.left) node.style.left = data.style.left;
+        if (data.style.top) node.style.top = data.style.top;
+    }
+    
+    parent.appendChild(node);
+    (data.children || []).forEach(child => rebuildNodesFromData(child, node));
+    
+    return node;
+}
+
+function saveSceneToStorage() {
+    try {
+        const sceneNode = nodesArray.find(n => n.dataset.type === 'Scene');
+        if (!sceneNode) {
+            console.warn('No scene node found to save');
+            return;
+        }
+        
+        const state = {
+            version: 1,
+            nodes: serializeNodeTree(sceneNode)
+        };
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        
+        // Visual feedback
+        const btn = document.getElementById('saveSceneBtn');
+        const original = btn.textContent;
+        btn.textContent = 'Saved ✓';
+        btn.disabled = true;
+        setTimeout(() => {
+            btn.textContent = original;
+            btn.disabled = false;
+        }, 1200);
+        
+        console.log('[3ditor] Scene saved to localStorage');
+    } catch (err) {
+        console.error('Failed to save scene:', err);
+        alert('Failed to save scene: ' + err.message);
+    }
+}
+
+function loadSceneFromStorage() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        
+        const state = JSON.parse(raw);
+        if (!state || !state.nodes) return false;
+        
+        // Clear existing nodes (except Scene)
+        const sceneNode = nodesArray.find(n => n.dataset.type === 'Scene');
+        if (!sceneNode) return false;
+        
+        // Remove all children from scene
+        const children = Array.from(sceneNode.children).filter(c => c.classList.contains('node'));
+        children.forEach(child => child.remove());
+        
+        // Reset nodesArray to just scene
+        nodesArray = [sceneNode];
+        
+        // Rebuild from saved data
+        rebuildNodesFromData(state.nodes, sceneNode);
+        
+        // Rebuild lines
+        draw.clear();
+        lines = [];
+        scanNodes();
+        addLines();
+        
+        // Update preview
+        updatePreview();
+        
+        console.log('[3ditor] Scene loaded from localStorage');
+        return true;
+    } catch (err) {
+        console.error('Failed to load saved scene:', err);
+        return false;
+    }
+}
+
+function setupMenuItems() {
+    const menuItems = document.querySelectorAll('.menu-item');
+    menuItems.forEach(item => {
+        item.addEventListener('mousedown', onMenuItemMouseDown);
+    });
+}
+
+function setupEventListeners() {
+    document.addEventListener('mouseup', onDocumentMouseUp);
+    document.addEventListener('mousemove', onDocumentMouseMove);
+    
+    document.getElementById('generateCodeBtn').addEventListener('click', generateCode);
+    document.getElementById('saveSceneBtn').addEventListener('click', saveSceneToStorage);
+    
+    // Code output buttons (will be added after code is generated)
+    document.addEventListener('click', (e) => {
+        if (e.target.id === 'closeCodeBtn') closeCodeView();
+        if (e.target.id === 'copyCodeBtn') copyCodeToClipboard();
+        if (e.target.id === 'downloadCodeBtn') downloadCode();
+    });
+}
+
+function onMenuItemMouseDown(event) {
+    event.preventDefault();
+    const nodeType = event.target.dataset.type;
+    
+    const newNode = createNode(nodeType);
+    document.getElementById("rootnode").appendChild(newNode);
+    nodesArray.push(newNode);
+    
+    newNode.style.left = event.clientX - 200 - 50 + "px";
+    newNode.style.top = event.clientY - 15 + "px";
+    
+    addLine(nodesArray.length - 1);
+    
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    newNode.dataset.dragOffsetX = 50;
+    newNode.dataset.dragOffsetY = 15;
+    dragging = true;
+    dragged = newNode;
+    detached = true; // Important: dragging from menu is always detached
+    dragFromMenu = true;
+}
+
+function createNode(nodeType) {
+    const typeDef = NODE_TYPES[nodeType];
+    const newNode = document.createElement("DIV");
+    const newText = document.createElement("DIV");
+    
+    newText.className = "nodetitle";
+    newText.textContent = nodeType;
+    
+    newNode.className = "node " + typeDef.category;
+    newNode.id = 'node_' + nodeCounter++;
+    newNode.dataset.type = nodeType;
+    
+    // Initialize parameters
+    const params = {};
+    if (typeDef.params) {
+        for (const [key, val] of Object.entries(typeDef.params)) {
+            params[key] = val.default;
+        }
+    }
+    
+    // Add transform params for meshes and groups
+    if (typeDef.category === 'mesh' || typeDef.category === 'group') {
+        for (const [key, val] of Object.entries(TRANSFORM_PARAMS)) {
+            params[key] = val.default;
+        }
+    }
+    
+    // Add material params for meshes
+    if (typeDef.category === 'mesh') {
+        for (const [key, val] of Object.entries(MATERIAL_PARAMS)) {
+            params[key] = val.default;
+        }
+        // Default to double-sided for non-orientable surfaces
+        if (nodeType === 'Parametric' && NON_ORIENTABLE_SHAPES.includes(params.shape)) {
+            params.doubleSided = true;
+        }
+    }
+    
+    // Add position params for lights
+    if (typeDef.category === 'light') {
+        params.posX = 0;
+        params.posY = 5;
+        params.posZ = 5;
+    }
+    
+    setNodeParams(newNode, params);
+    
+    // Add detach handle (not for Scene)
+    if (nodeType !== 'Scene') {
+        ensureDetachHandle(newNode);
+    }
+    
+    newNode.appendChild(newText);
+    newNode.addEventListener('mousedown', onNodeMouseDown);
+    newNode.addEventListener('dblclick', onNodeDoubleClick);
+    
+    return newNode;
+}
+
+function setNodeParams(node, params) {
+    node.dataset.params = JSON.stringify(params);
+}
+
+function getNodeParams(node) {
+    return JSON.parse(node.dataset.params || '{}');
+}
+
+function onNodeMouseDown(event) {
+    if (event.target.classList.contains('param-input')) return;
+    if (event.target.classList.contains('detach-handle')) return;
+    
+    event.stopPropagation();
+    dragging = true;
+    dragged = event.currentTarget;
+    
+    // Check if this node is already detached (not attached to another node)
+    const parentIsNode = dragged.parentNode && dragged.parentNode.classList && dragged.parentNode.classList.contains('node');
+    detached = !parentIsNode; // If parent is rootnode, it's detached
+    
+    const rect = dragged.getBoundingClientRect();
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    dragged.dataset.dragOffsetX = event.clientX - rect.left;
+    dragged.dataset.dragOffsetY = event.clientY - rect.top;
+    
+    selectNode(dragged);
+}
+
+function onNodeDoubleClick(event) {
+    event.stopPropagation();
+    // Could add node title editing here
+}
+
+function onDocumentMouseMove(event) {
+    if (!dragging || !dragged) return;
+    
+    event.preventDefault();
+    
+    pos3 = event.clientX;
+    pos4 = event.clientY;
+    
+    const offsetX = Number(dragged.dataset.dragOffsetX ?? dragged.offsetWidth / 2);
+    const offsetY = Number(dragged.dataset.dragOffsetY ?? dragged.offsetHeight / 2);
+    
+    // Calculate position relative to parent
+    const parent = dragged.parentNode;
+    const parentRect = parent.getBoundingClientRect();
+    
+    dragged.style.left = (pos3 - parentRect.left - offsetX) + "px";
+    dragged.style.top = (pos4 - parentRect.top - offsetY) + "px";
+    
+    // Update the line during drag
+    updateLine(dragged);
+    
+    // Only show drop preview if node is detached (from menu or detach button)
+    if (detached) {
+        updateDropPreview();
+    }
+    
+    // Update recycle bin preview
+    updateRecyclePreview();
+}
+
+function updateDropPreview() {
+    if (!dragged || !detached) {
+        clearDropPreview();
+        return;
+    }
+    
+    const pointerX = pos3;
+    const pointerY = pos4;
+    if (!Number.isFinite(pointerX) || !Number.isFinite(pointerY)) return;
+    
+    const targetInfo = findDropTarget(pointerX, pointerY);
+    if (!targetInfo) {
+        clearDropPreview();
+        // Remove all highlights
+        nodesArray.forEach(node => {
+            if (node !== dragged) {
+                node.style.boxShadow = node === selectedNode ? '0 0 0 3px #ffcc00' : '';
+            }
+        });
+        return;
+    }
+    
+    // Highlight target node
+    nodesArray.forEach(node => {
+        if (node === targetInfo.node) {
+            node.style.boxShadow = '0 0 0 3px #4ade80';
+        } else if (node !== dragged && node !== selectedNode) {
+            node.style.boxShadow = '';
+        }
+    });
+    
+    // Draw connection preview
+    if (currentDropTarget === targetInfo.node) {
+        if (dropPreview) {
+            dropPreview.plot(getPreviewPathData(targetInfo.zone, pointerX, pointerY));
+        }
+        return;
+    }
+    
+    currentDropTarget = targetInfo.node;
+    const pathData = getPreviewPathData(targetInfo.zone, pointerX, pointerY);
+    if (!dropPreview) {
+        dropPreview = draw.path(pathData)
+            .fill('none')
+            .stroke({ width: 2, color: '#4ade80', dasharray: '6 4', linecap: 'round' });
+    } else {
+        dropPreview.plot(pathData);
+    }
+}
+
+function clearDropPreview() {
+    if (dropPreview) {
+        dropPreview.remove();
+        dropPreview = null;
+    }
+    currentDropTarget = null;
+}
+
+function getDropZoneRect(node) {
+    const rect = node.getBoundingClientRect();
+    const padding = 10;
+    const width = rect.width * 1.2;
+    const height = rect.height * 2.2;
+    const centerX = rect.left + rect.width / 2;
+    return {
+        left: centerX - width / 2,
+        right: centerX + width / 2,
+        top: rect.bottom + padding,
+        bottom: rect.bottom + padding + height,
+        anchorX: centerX - 200, // Adjust for sidebar for SVG coordinates
+        anchorY: rect.top + rect.height / 2
+    };
+}
+
+function findDropTarget(x, y) {
+    for (const node of nodesArray) {
+        if (!isValidDropTarget(dragged, node)) continue;
+        const zone = getDropZoneRect(node);
+        if (x >= zone.left && x <= zone.right && y >= zone.top && y <= zone.bottom) {
+            return { node, zone };
+        }
+    }
+    return null;
+}
+
+function isValidDropTarget(draggedNode, targetNode) {
+    if (!draggedNode || !targetNode) return false;
+    if (draggedNode === targetNode) return false;
+    if (draggedNode.parentNode === targetNode) return false;
+    if (isDescendant(targetNode, draggedNode)) return false;
+    return canAcceptChild(targetNode);
+}
+
+function getPreviewPathData(zone, pointerX, pointerY) {
+    const midY = (zone.anchorY + pointerY) / 2;
+    // Adjust for sidebar offset  
+    return [
+        ['M', zone.anchorX, zone.anchorY],
+        ['C', zone.anchorX, midY, pointerX - 200, midY, pointerX - 200, pointerY]
+    ];
+}
+
+function onDocumentMouseUp(event) {
+    if (dragging && dragged) {
+        clearDropPreview();
+        clearRecyclePreview();
+        
+        // Check recycle bin first
+        if (checkRecycleBin(pos3, pos4)) {
+            deleteNodeWithChildren(dragged);
+            dragging = false;
+            dragged = null;
+            detached = false;
+            dragFromMenu = false;
+            return;
+        }
+        
+        const targetInfo = findDropTarget(pos3, pos4);
+        
+        if (targetInfo && detached) {
+            attachNodeToParent(dragged, targetInfo.node);
+        }
+        
+        // Remove all highlights
+        nodesArray.forEach(node => {
+            node.style.boxShadow = node === selectedNode ? '0 0 0 3px #ffcc00' : '';
+        });
+        
+        // Clear and rebuild lines
+        draw.clear();
+        lines = [];
+        
+        // Rescan and update
+        scanNodes();
+        addLines();
+        updatePreview();
+    }
+    
+    dragging = false;
+    dragged = null;
+    detached = false;
+    dragFromMenu = false;
+}
+
+function updateRecyclePreview() {
+    if (!dragged) return;
+    const rect = recycleRect();
+    const inBin = pos3 >= rect.left && pos3 <= rect.right && pos4 >= rect.top && pos4 <= rect.bottom;
+    if (inBin && !recycleActive) {
+        recycleActive = true;
+        recycleBin.classList.add('active');
+    } else if (!inBin && recycleActive) {
+        recycleActive = false;
+        recycleBin.classList.remove('active');
+    }
+}
+
+function clearRecyclePreview() {
+    recycleActive = false;
+    recycleBin.classList.remove('active');
+}
+
+function checkRecycleBin(clientX, clientY) {
+    const rect = recycleRect();
+    return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+}
+
+function deleteNodeWithChildren(node) {
+    if (!node || node.dataset.type === 'Scene') return;
+    if (selectedNode && (selectedNode === node || node.contains(selectedNode))) {
+        selectNode(null);
+    }
+    
+    // Remove the node from DOM
+    node.remove();
+    
+    // Clear all lines and rebuild
+    draw.clear();
+    lines = [];
+    
+    // Rescan nodes and rebuild lines
+    scanNodes();
+    addLines();
+    updatePreview();
+}
+
+function isDescendant(parent, child) {
+    let node = child.parentNode;
+    while (node) {
+        if (node === parent) return true;
+        if (node.id === 'rootnode') break;
+        node = node.parentNode;
+    }
+    return false;
+}
+
+function canAcceptChild(parentNode) {
+    const parentType = parentNode.dataset.type;
+    const typeDef = NODE_TYPES[parentType];
+    if (!typeDef) return false;
+    
+    const currentChildren = Array.from(parentNode.children).filter(child => child.classList.contains('node'));
+    return currentChildren.length < typeDef.maxChildren;
+}
+
+function attachNodeToParent(child, parent) {
+    if (!canAcceptChild(parent)) {
+        document.getElementById("rootnode").appendChild(child);
+        return false;
+    }
+    
+    reparentNodePreservingPosition(child, parent);
+    updateLine(child);
+    updatePreview();
+    return true;
+}
+
+function selectNode(node) {
+    if (selectedNode) {
+        selectedNode.classList.remove('selected');
+    }
+    
+    selectedNode = node;
+    
+    if (node) {
+        node.classList.add('selected');
+        renderParamPanel(node);
+    } else {
+        // Clear param panel when nothing selected
+        const paramContent = document.getElementById('paramContent');
+        paramContent.innerHTML = '<p style="color: #718096;">Select a node to edit parameters</p>';
+    }
+}
+
+function renderParamPanel(node) {
+    const paramContent = document.getElementById('paramContent');
+    const nodeType = node.dataset.type;
+    const typeDef = NODE_TYPES[nodeType];
+    const params = getNodeParams(node);
+    
+    let html = `<h3>${nodeType}</h3>`;
+    
+    // Geometry/Light parameters
+    if (typeDef.params && Object.keys(typeDef.params).length > 0) {
+        html += '<div class="param-group"><h4>Properties</h4>';
+        const currentShape = params.shape; // For Parametric type
+        for (const [key, def] of Object.entries(typeDef.params)) {
+            // Skip params that are for specific shapes if current shape doesn't match
+            if (def.forShapes && (!currentShape || !def.forShapes.includes(currentShape))) {
+                continue;
+            }
+            html += createParamInput(key, def, params[key]);
+        }
+        html += '</div>';
+    }
+    
+    // Transform parameters BEFORE Material
+    if (typeDef.category === 'mesh' || typeDef.category === 'group') {
+        html += '<div class="param-group"><h4>Transform</h4>';
+        for (const [key, def] of Object.entries(TRANSFORM_PARAMS)) {
+            html += createParamInput(key, def, params[key]);
+        }
+        html += '</div>';
+    }
+    
+    // Material parameters for meshes
+    if (typeDef.category === 'mesh') {
+        html += '<div class="param-group"><h4>Material</h4>';
+        for (const [key, def] of Object.entries(MATERIAL_PARAMS)) {
+            html += createParamInput(key, def, params[key]);
+        }
+        html += '</div>';
+    }
+    
+    // Position for lights
+    if (typeDef.category === 'light') {
+        html += '<div class="param-group"><h4>Position</h4>';
+        html += createParamInput('posX', { type: 'number', min: -20, max: 20, step: 0.1 }, params.posX);
+        html += createParamInput('posY', { type: 'number', min: -20, max: 20, step: 0.1 }, params.posY);
+        html += createParamInput('posZ', { type: 'number', min: -20, max: 20, step: 0.1 }, params.posZ);
+        html += '</div>';
+    }
+    
+    paramContent.innerHTML = html;
+    
+    // Attach event listeners
+    paramContent.querySelectorAll('.param-input').forEach(input => {
+        input.addEventListener('input', onParamChange);
+        input.addEventListener('change', onParamChange);
+    });
+    
+    // Attach fine control button listeners
+    paramContent.querySelectorAll('.param-fine-btn').forEach(btn => {
+        btn.addEventListener('click', onParamChange);
+    });
+    
+    // Initialize lathe editors
+    paramContent.querySelectorAll('.lathe-editor:not(.loft-lathe-editor)').forEach(container => {
+        const key = container.dataset.key;
+        initLatheEditor(container, key);
+    });
+    
+    // Initialize loft lathe editors
+    paramContent.querySelectorAll('.loft-lathe-editor').forEach(container => {
+        const key = container.dataset.key;
+        initLoftLatheEditor(container, key);
+    });
+}
+
+function createParamInput(key, def, value) {
+    const label = key.replace(/([A-Z])/g, ' $1').trim();
+    
+    if (def.type === 'color') {
+        return `
+            <div class="param-item">
+                <label class="param-label">${label}</label>
+                <input type="color" class="color-input param-input" data-key="${key}" value="${value}">
+            </div>
+        `;
+    } else if (def.type === 'boolean') {
+        return `
+            <div class="param-item">
+                <label class="param-label">
+                    <input type="checkbox" class="param-input" data-key="${key}" ${value ? 'checked' : ''}>
+                    ${label}
+                </label>
+            </div>
+        `;
+    } else if (def.type === 'select') {
+        const options = def.options.map(opt => 
+            `<option value="${opt}" ${value === opt ? 'selected' : ''}>${opt}</option>`
+        ).join('');
+        return `
+            <div class="param-item">
+                <label class="param-label">${label}</label>
+                <select class="param-input" data-key="${key}">${options}</select>
+            </div>
+        `;
+    } else if (def.type === 'number') {
+        // Determine if this is an integer or continuous value
+        const isInteger = def.step === 1 || (def.step && def.step >= 1);
+        const min = def.min ?? 0;
+        const max = def.max ?? 100;
+        const step = def.step ?? (isInteger ? 1 : 0.01);
+        
+        if (isInteger) {
+            // Integer values: just a slider
+            return `
+                <div class="param-slider-container">
+                    <div class="param-slider-label">
+                        <span>${label}</span>
+                        <span class="param-slider-value" data-value-for="${key}">${value}</span>
+                    </div>
+                    <div class="param-slider-row">
+                        <input type="range" class="param-slider param-input" 
+                            data-key="${key}"
+                            value="${value}" 
+                            min="${min}" 
+                            max="${max}" 
+                            step="${step}">
+                    </div>
+                </div>
+            `;
+        } else {
+            // Continuous values: slider + fine control buttons
+            return `
+                <div class="param-slider-container">
+                    <div class="param-slider-label">
+                        <span>${label}</span>
+                        <span class="param-slider-value" data-value-for="${key}">${value.toFixed(2)}</span>
+                    </div>
+                    <div class="param-slider-row">
+                        <input type="range" class="param-slider param-input" 
+                            data-key="${key}"
+                            value="${value}" 
+                            min="${min}" 
+                            max="${max}" 
+                            step="${step}">
+                        <div class="param-fine-control">
+                            <button class="param-fine-btn" data-key="${key}" data-fine="up">▲</button>
+                            <button class="param-fine-btn" data-key="${key}" data-fine="down">▼</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+    } else if (def.type === 'lathePoints') {
+        // Lathe point editor - creates a canvas-based editor
+        const pointsJson = JSON.stringify(value);
+        return `
+            <div class="param-item">
+                <label class="param-label">${label}</label>
+                <div class="lathe-editor" data-key="${key}">
+                    <canvas></canvas>
+                </div>
+                <div class="lathe-editor-controls">
+                    <button onclick="addLathePoint('${key}')">+ Add</button>
+                    <button onclick="removeLathePoint('${key}')">- Remove</button>
+                    <button onclick="resetLathePoints('${key}')">Reset</button>
+                </div>
+                <input type="hidden" class="param-input lathe-points-data" data-key="${key}" value='${pointsJson}'>
+            </div>
+        `;
+    } else if (def.type === 'loftLatheSlices') {
+        // Loft Lathe editor - multiple slices with a slider to switch between them
+        const slicesJson = JSON.stringify(value);
+        const numSlices = value.length;
+        return `
+            <div class="param-item">
+                <label class="param-label">${label}</label>
+                <div class="loft-slice-selector">
+                    <span class="slice-label">Slice <span class="current-slice">1</span>/${numSlices}</span>
+                    <input type="range" class="slice-slider" data-key="${key}" min="0" max="${numSlices - 1}" value="0" step="1">
+                    <span class="slice-angle">0°</span>
+                </div>
+                <div class="lathe-editor loft-lathe-editor" data-key="${key}" data-slice-index="0">
+                    <canvas></canvas>
+                </div>
+                <input type="hidden" class="param-input loft-slices-data" data-key="${key}" value='${slicesJson}'>
+            </div>
+        `;
+    }
+    
+    return '';
+}
+
+// Lathe point editor functions
+let activeLatheEditor = null;
+let draggedPointIndex = -1;
+
+function initLatheEditor(container, key) {
+    const canvas = container.querySelector('canvas');
+    const ctx = canvas.getContext('2d');
+    const rect = container.getBoundingClientRect();
+    
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    
+    const input = document.querySelector(`.lathe-points-data[data-key="${key}"]`);
+    let points = JSON.parse(input.value);
+    
+    function pointToCanvas(p) {
+        // Map point [x, y] where x is 0-1 (radius) and y is 0-1 (height)
+        // to canvas coordinates
+        const padding = 10;
+        const availWidth = canvas.width - padding * 2;
+        const availHeight = canvas.height - padding * 2;
+        return {
+            x: padding + p[0] * availWidth,
+            y: padding + (1 - p[1]) * availHeight // Flip Y
+        };
+    }
+    
+    function canvasToPoint(cx, cy) {
+        const padding = 10;
+        const availWidth = canvas.width - padding * 2;
+        const availHeight = canvas.height - padding * 2;
+        return [
+            Math.max(0, Math.min(1, (cx - padding) / availWidth)),
+            Math.max(0, Math.min(1, 1 - (cy - padding) / availHeight))
+        ];
+    }
+    
+    function draw() {
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw grid
+        ctx.strokeStyle = '#2d3748';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 10; i++) {
+            const x = 10 + (canvas.width - 20) * i / 10;
+            const y = 10 + (canvas.height - 20) * i / 10;
+            ctx.beginPath();
+            ctx.moveTo(x, 10);
+            ctx.lineTo(x, canvas.height - 10);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(10, y);
+            ctx.lineTo(canvas.width - 10, y);
+            ctx.stroke();
+        }
+        
+        // Draw center line (axis)
+        ctx.strokeStyle = '#4a5568';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(10, 10);
+        ctx.lineTo(10, canvas.height - 10);
+        ctx.stroke();
+        
+        // Draw profile line
+        if (points.length > 1) {
+            ctx.strokeStyle = '#48bb78';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const first = pointToCanvas(points[0]);
+            ctx.moveTo(first.x, first.y);
+            for (let i = 1; i < points.length; i++) {
+                const p = pointToCanvas(points[i]);
+                ctx.lineTo(p.x, p.y);
+            }
+            ctx.stroke();
+            
+            // Draw mirrored profile (lathe preview)
+            ctx.strokeStyle = 'rgba(72, 187, 120, 0.3)';
+            ctx.beginPath();
+            const firstM = pointToCanvas(points[0]);
+            ctx.moveTo(20 - firstM.x + 10, firstM.y);
+            for (let i = 1; i < points.length; i++) {
+                const p = pointToCanvas(points[i]);
+                ctx.lineTo(20 - p.x + 10, p.y);
+            }
+            ctx.stroke();
+        }
+        
+        // Draw points
+        points.forEach((p, i) => {
+            const cp = pointToCanvas(p);
+            ctx.fillStyle = i === draggedPointIndex ? '#f6ad55' : '#4facfe';
+            ctx.beginPath();
+            ctx.arc(cp.x, cp.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        });
+    }
+    
+    function findPointAt(cx, cy) {
+        for (let i = 0; i < points.length; i++) {
+            const cp = pointToCanvas(points[i]);
+            const dx = cx - cp.x;
+            const dy = cy - cp.y;
+            if (dx * dx + dy * dy < 100) return i;
+        }
+        return -1;
+    }
+    
+    function updatePoints(newPoints) {
+        points = newPoints;
+        // Also update the stored reference so add/remove work correctly
+        if (container._latheEditor) {
+            container._latheEditor.points = points;
+        }
+        input.value = JSON.stringify(points);
+        draw();
+        
+        // Trigger update
+        if (selectedNode) {
+            const params = getNodeParams(selectedNode);
+            params[key] = points;
+            setNodeParams(selectedNode, params);
+            updatePreview();
+        }
+    }
+    
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        
+        draggedPointIndex = findPointAt(cx, cy);
+        if (draggedPointIndex === -1) {
+            // Add new point
+            const newPoint = canvasToPoint(cx, cy);
+            // Insert at correct Y position
+            let insertIndex = points.length;
+            for (let i = 0; i < points.length; i++) {
+                if (points[i][1] > newPoint[1]) {
+                    insertIndex = i;
+                    break;
+                }
+            }
+            points.splice(insertIndex, 0, newPoint);
+            draggedPointIndex = insertIndex;
+            updatePoints([...points]);
+        }
+        activeLatheEditor = { canvas, points, key, updatePoints };
+    });
+    
+    canvas.addEventListener('mousemove', (e) => {
+        if (draggedPointIndex === -1 || !activeLatheEditor) return;
+        const rect = canvas.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        const newPoint = canvasToPoint(cx, cy);
+        points[draggedPointIndex] = newPoint;
+        updatePoints([...points]);
+    });
+    
+    canvas.addEventListener('mouseup', () => {
+        draggedPointIndex = -1;
+        activeLatheEditor = null;
+    });
+    
+    canvas.addEventListener('mouseleave', () => {
+        if (draggedPointIndex !== -1) {
+            draggedPointIndex = -1;
+            activeLatheEditor = null;
+        }
+    });
+    
+    // Store reference for external functions
+    container._latheEditor = { points, updatePoints, draw };
+    
+    draw();
+}
+
+function addLathePoint(key) {
+    const container = document.querySelector(`.lathe-editor[data-key="${key}"]`);
+    if (!container || !container._latheEditor) return;
+    const editor = container._latheEditor;
+    // Add point at middle
+    editor.points.push([0.3, 0.5]);
+    editor.updatePoints([...editor.points]);
+}
+
+function removeLathePoint(key) {
+    const container = document.querySelector(`.lathe-editor[data-key="${key}"]`);
+    if (!container || !container._latheEditor) return;
+    const editor = container._latheEditor;
+    if (editor.points.length > 2) {
+        editor.points.pop();
+        editor.updatePoints([...editor.points]);
+    }
+}
+
+function resetLathePoints(key) {
+    const container = document.querySelector(`.lathe-editor[data-key="${key}"]`);
+    if (!container || !container._latheEditor) return;
+    const editor = container._latheEditor;
+    // Reset to wine cup shape
+    const defaultPoints = [
+        [0.0, 0.0],
+        [0.4, 0.05],
+        [0.35, 0.1],
+        [0.1, 0.15],
+        [0.08, 0.5],
+        [0.1, 0.55],
+        [0.5, 0.9],
+        [0.5, 1.0],
+        [0.45, 1.0],
+        [0.45, 0.95],
+        [0.08, 0.6],
+        [0.0, 0.6]
+    ];
+    editor.updatePoints(defaultPoints);
+}
+
+// Loft Lathe editor functions
+function initLoftLatheEditor(container, key) {
+    const canvas = container.querySelector('canvas');
+    const ctx = canvas.getContext('2d');
+    const rect = container.getBoundingClientRect();
+    
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    
+    const input = document.querySelector(`.loft-slices-data[data-key="${key}"]`);
+    let allSlices = JSON.parse(input.value);
+    let currentSliceIndex = 0;
+    
+    // Get the slice slider and labels
+    const sliceSlider = document.querySelector(`.slice-slider[data-key="${key}"]`);
+    const sliceLabel = container.closest('.param-item').querySelector('.current-slice');
+    const angleLabel = container.closest('.param-item').querySelector('.slice-angle');
+    
+    function getCurrentPoints() {
+        return allSlices[currentSliceIndex];
+    }
+    
+    function pointToCanvas(p) {
+        const padding = 10;
+        const availWidth = canvas.width - padding * 2;
+        const availHeight = canvas.height - padding * 2;
+        // Scale based on max values in head data (roughly 6 for x, 8 for y)
+        // Don't flip Y - matches the rotated 3D model
+        const scaleX = availWidth / 8;
+        const scaleY = availHeight / 10;
+        return {
+            x: padding + p[0] * scaleX,
+            y: padding + p[1] * scaleY
+        };
+    }
+    
+    function canvasToPoint(cx, cy) {
+        const padding = 10;
+        const availWidth = canvas.width - padding * 2;
+        const availHeight = canvas.height - padding * 2;
+        const scaleX = availWidth / 8;
+        const scaleY = availHeight / 10;
+        return [
+            Math.max(0, (cx - padding) / scaleX),
+            Math.max(0, (cy - padding) / scaleY)
+        ];
+    }
+    
+    function draw() {
+        const points = getCurrentPoints();
+        
+        ctx.fillStyle = '#1a202c';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw grid
+        ctx.strokeStyle = '#2d3748';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 10; i++) {
+            const x = 10 + (canvas.width - 20) * i / 10;
+            const y = 10 + (canvas.height - 20) * i / 10;
+            ctx.beginPath();
+            ctx.moveTo(x, 10);
+            ctx.lineTo(x, canvas.height - 10);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(10, y);
+            ctx.lineTo(canvas.width - 10, y);
+            ctx.stroke();
+        }
+        
+        // Draw axis line
+        ctx.strokeStyle = '#4a5568';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(10, 10);
+        ctx.lineTo(10, canvas.height - 10);
+        ctx.stroke();
+        
+        // Draw other slices faintly
+        allSlices.forEach((slice, idx) => {
+            if (idx === currentSliceIndex) return;
+            ctx.strokeStyle = 'rgba(100, 100, 100, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            const first = pointToCanvas(slice[0]);
+            ctx.moveTo(first.x, first.y);
+            for (let i = 1; i < slice.length; i++) {
+                const p = pointToCanvas(slice[i]);
+                ctx.lineTo(p.x, p.y);
+            }
+            ctx.stroke();
+        });
+        
+        // Draw current slice profile
+        if (points.length > 1) {
+            ctx.strokeStyle = '#f6ad55';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const first = pointToCanvas(points[0]);
+            ctx.moveTo(first.x, first.y);
+            for (let i = 1; i < points.length; i++) {
+                const p = pointToCanvas(points[i]);
+                ctx.lineTo(p.x, p.y);
+            }
+            ctx.stroke();
+        }
+        
+        // Draw points
+        points.forEach((p, i) => {
+            const cp = pointToCanvas(p);
+            ctx.fillStyle = i === draggedPointIndex ? '#48bb78' : '#f6ad55';
+            ctx.beginPath();
+            ctx.arc(cp.x, cp.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        });
+        
+        // Draw slice angle indicator
+        const angle = (currentSliceIndex / allSlices.length) * 360;
+        ctx.fillStyle = '#a0aec0';
+        ctx.font = '11px Abel';
+        ctx.fillText(`${angle.toFixed(0)}°`, canvas.width - 30, 20);
+    }
+    
+    function findPointAt(cx, cy) {
+        const points = getCurrentPoints();
+        for (let i = 0; i < points.length; i++) {
+            const cp = pointToCanvas(points[i]);
+            const dx = cx - cp.x;
+            const dy = cy - cp.y;
+            if (dx * dx + dy * dy < 64) return i;
+        }
+        return -1;
+    }
+    
+    function updateSlices(newSlices) {
+        allSlices = newSlices;
+        input.value = JSON.stringify(allSlices);
+        draw();
+        
+        if (selectedNode) {
+            const params = getNodeParams(selectedNode);
+            params[key] = allSlices;
+            setNodeParams(selectedNode, params);
+            updatePreview();
+        }
+    }
+    
+    function setSliceIndex(idx) {
+        currentSliceIndex = idx;
+        container.dataset.sliceIndex = idx;
+        if (sliceLabel) sliceLabel.textContent = idx + 1;
+        if (angleLabel) {
+            const angle = (idx / allSlices.length) * 360;
+            angleLabel.textContent = `${angle.toFixed(0)}°`;
+        }
+        draw();
+    }
+    
+    // Slice slider event
+    if (sliceSlider) {
+        sliceSlider.addEventListener('input', (e) => {
+            setSliceIndex(parseInt(e.target.value));
+        });
+    }
+    
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        
+        draggedPointIndex = findPointAt(cx, cy);
+        activeLatheEditor = { canvas, allSlices, key, updateSlices, currentSliceIndex: () => currentSliceIndex };
+    });
+    
+    canvas.addEventListener('mousemove', (e) => {
+        if (draggedPointIndex === -1 || !activeLatheEditor) return;
+        const rect = canvas.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        const newPoint = canvasToPoint(cx, cy);
+        allSlices[currentSliceIndex][draggedPointIndex] = newPoint;
+        updateSlices([...allSlices.map(s => [...s])]);
+    });
+    
+    canvas.addEventListener('mouseup', () => {
+        draggedPointIndex = -1;
+        activeLatheEditor = null;
+    });
+    
+    canvas.addEventListener('mouseleave', () => {
+        if (draggedPointIndex !== -1) {
+            draggedPointIndex = -1;
+            activeLatheEditor = null;
+        }
+    });
+    
+    container._loftLatheEditor = { allSlices, updateSlices, draw, setSliceIndex };
+    draw();
+}
+
+function onParamChange(event) {
+    if (!selectedNode) return;
+    
+    const target = event.target;
+    const key = target.dataset.key;
+    const params = getNodeParams(selectedNode);
+    
+    if (target.classList.contains('param-fine-btn')) {
+        // Fine control buttons
+        const direction = target.dataset.fine;
+        const currentValue = parseFloat(params[key]);
+        const step = 0.01; // Fine adjustment step
+        const newValue = direction === 'up' ? currentValue + step : currentValue - step;
+        params[key] = newValue;
+        
+        // Update the slider and value display
+        const slider = document.querySelector(`.param-slider[data-key="${key}"]`);
+        if (slider) slider.value = newValue;
+        const valueDisplay = document.querySelector(`.param-slider-value[data-value-for="${key}"]`);
+        if (valueDisplay) valueDisplay.textContent = newValue.toFixed(2);
+    } else if (target.type === 'checkbox') {
+        params[key] = target.checked;
+    } else if (target.type === 'range') {
+        // Slider
+        const newValue = parseFloat(target.value);
+        params[key] = newValue;
+        
+        // Update value display
+        const valueDisplay = document.querySelector(`.param-slider-value[data-value-for="${key}"]`);
+        if (valueDisplay) {
+            // Check if integer or float
+            const isInteger = Number.isInteger(newValue) && newValue === parseFloat(target.value);
+            valueDisplay.textContent = isInteger ? newValue.toString() : newValue.toFixed(2);
+        }
+    } else if (target.type === 'number') {
+        params[key] = parseFloat(target.value);
+    } else {
+        params[key] = target.value;
+    }
+    
+    setNodeParams(selectedNode, params);
+    updatePreview();
+    
+    // Re-render panel if shape changed (to show/hide shape-specific params)
+    if (key === 'shape') {
+        renderParamPanel(selectedNode);
+    }
+}
+
+function updatePreview() {
+    // Clear existing objects (but not default lights)
+    previewObjects.forEach(obj => {
+        scene.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+    });
+    previewObjects.clear();
+    
+    // Find scene node
+    const sceneNode = nodesArray.find(n => n.dataset.type === 'Scene');
+    if (!sceneNode) {
+        return;
+    }
+    
+    // Update scene background
+    const sceneParams = getNodeParams(sceneNode);
+    scene.background = new THREE.Color(sceneParams.backgroundColor);
+    
+    // Update fog
+    if (sceneParams.fog) {
+        scene.fog = new THREE.Fog(
+            new THREE.Color(sceneParams.fogColor),
+            sceneParams.fogNear,
+            sceneParams.fogFar
+        );
+    } else {
+        scene.fog = null;
+    }
+    
+    // Build scene hierarchy
+    buildSceneHierarchy(sceneNode);
+}
+
+function buildSceneHierarchy(node, parentObject = scene) {
+    const nodeType = node.dataset.type;
+    const params = getNodeParams(node);
+    
+    let object3D = null;
+    
+    if (nodeType === 'Scene') {
+        // Scene is the root, process children only
+    } else if (nodeType === 'Group') {
+        object3D = new THREE.Group();
+    } else if (NODE_TYPES[nodeType] && NODE_TYPES[nodeType].category === 'mesh') {
+        object3D = createMesh(nodeType, params);
+    } else if (NODE_TYPES[nodeType] && NODE_TYPES[nodeType].category === 'light') {
+        object3D = createLight(nodeType, params);
+    }
+    
+    if (object3D) {
+        // Apply transforms
+        if (params.posX !== undefined) {
+            object3D.position.set(params.posX, params.posY, params.posZ);
+        }
+        if (params.rotX !== undefined) {
+            object3D.rotation.set(
+                params.rotX * Math.PI / 180,
+                params.rotY * Math.PI / 180,
+                params.rotZ * Math.PI / 180
+            );
+        }
+        if (params.scaleX !== undefined) {
+            object3D.scale.set(params.scaleX, params.scaleY, params.scaleZ);
+        }
+        
+        parentObject.add(object3D);
+        previewObjects.set(node.id, object3D);
+    }
+    
+    // Process children
+    const children = Array.from(node.children).filter(child => child.classList.contains('node'));
+    children.forEach(child => {
+        buildSceneHierarchy(child, object3D || parentObject);
+    });
+}
+
+// Parametric surface functions
+function getParametricFunction(shape, params) {
+    const twist = params.twist || 1;
+    const fatness = params.fatness || 1;
+    const appleIndent = params.indent || 0.5;
+    const seamOffset = params.seamOffset || 0;
+    
+    switch(shape) {
+        case 'klein':
+            // Klein Bottle (official Three.js formula - note v,u swap)
+            // Note: Klein bottle is non-orientable, so normals flip at the seam
+            // seamOffset rotates the seam around the tube circumference
+            return function(v, u, target) {
+                u *= Math.PI;
+                v = (v + seamOffset) * 2 * Math.PI;
+                u = u * 2;
+                let x, z;
+                if (u < Math.PI) {
+                    x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(u) * Math.cos(v);
+                    z = -8 * Math.sin(u) - 2 * (1 - Math.cos(u) / 2) * Math.sin(u) * Math.cos(v);
+                } else {
+                    x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(v + Math.PI);
+                    z = -8 * Math.sin(u);
+                }
+                const y = -2 * (1 - Math.cos(u) / 2) * Math.sin(v);
+                target.set(x, y, z).multiplyScalar(0.15);
+            };
+            
+        case 'mobius':
+            // Möbius Strip
+            return function(u, v, target) {
+                u = u * Math.PI * 2;
+                v = (v - 0.5) * 2;
+                const x = (1 + v / 2 * Math.cos(u / 2)) * Math.cos(u);
+                const y = (1 + v / 2 * Math.cos(u / 2)) * Math.sin(u);
+                const z = v / 2 * Math.sin(u / 2);
+                target.set(x, y, z);
+            };
+            
+        case 'helicoid':
+            // Helicoid (spiral ramp)
+            return function(u, v, target) {
+                u = u * Math.PI * 4 - Math.PI * 2;
+                v = (v - 0.5) * 4;
+                const x = v * Math.cos(u);
+                const y = u * twist * 0.3;
+                const z = v * Math.sin(u);
+                target.set(x, y, z);
+            };
+            
+        case 'catenoid':
+            // Catenoid (minimal surface)
+            return function(u, v, target) {
+                u = u * Math.PI * 2;
+                v = (v - 0.5) * 4;
+                const c = 1;
+                const x = c * Math.cosh(v / c) * Math.cos(u);
+                const y = c * Math.cosh(v / c) * Math.sin(u);
+                const z = v;
+                target.set(x * 0.5, z * 0.5, y * 0.5);
+            };
+            
+        case 'enneper':
+            // Enneper Surface (minimal surface with folds)
+            return function(u, v, target) {
+                u = (u - 0.5) * 3;
+                v = (v - 0.5) * 3;
+                const x = u - u*u*u / 3 + u * v*v;
+                const y = v - v*v*v / 3 + v * u*u;
+                const z = u*u - v*v;
+                target.set(x * 0.3, z * 0.3, y * 0.3);
+            };
+            
+        case 'dini':
+            // Dini's Surface (twisted pseudosphere)
+            return function(u, v, target) {
+                u = u * Math.PI * 4;
+                v = v * 2 + 0.1; // Avoid singularity at 0
+                const a = twist * 0.2;
+                const x = Math.cos(u) * Math.sin(v);
+                const y = Math.sin(u) * Math.sin(v);
+                const z = Math.cos(v) + Math.log(Math.tan(v / 2)) + a * u;
+                target.set(x, z * 0.3, y);
+            };
+            
+        case 'heart':
+            // Heart Surface
+            return function(u, v, target) {
+                u = u * Math.PI;
+                v = v * Math.PI * 2;
+                const sinU = Math.sin(u);
+                const cosU = Math.cos(u);
+                const sinV = Math.sin(v);
+                const cosV = Math.cos(v);
+                const f = fatness;
+                const x = sinU * cosV * f;
+                const y = sinU * sinV * f;
+                const z = cosU + Math.pow(Math.abs(sinU * cosV), 0.5) * cosU * 0.5 * f;
+                // Heart shape modification
+                const heartMod = 1 - Math.pow(Math.abs(cosV), 0.8) * 0.3;
+                target.set(x * heartMod, z - 0.5, y * heartMod);
+            };
+            
+        case 'apple':
+            // Apple Surface
+            return function(u, v, target) {
+                u = u * Math.PI * 2;
+                v = v * Math.PI;
+                const cosU = Math.cos(u);
+                const sinU = Math.sin(u);
+                const cosV = Math.cos(v);
+                const sinV = Math.sin(v);
+                const f = fatness;
+                const i = appleIndent;
+                // Apple profile: wider at bottom, indent at top
+                const r = sinV * (1 + 0.2 * cosV) * f;
+                const topIndent = Math.pow(Math.max(0, cosV), 2) * i;
+                const x = r * cosU;
+                const y = cosV - topIndent * 0.5;
+                const z = r * sinU;
+                target.set(x, y, z);
+            };
+            
+        default:
+            // Default sphere
+            return function(u, v, target) {
+                u *= Math.PI * 2;
+                v *= Math.PI;
+                target.set(
+                    Math.sin(v) * Math.cos(u),
+                    Math.cos(v),
+                    Math.sin(v) * Math.sin(u)
+                );
+            };
+    }
+}
+
+function createMesh(type, params) {
+    let geometry;
+    
+    switch(type) {
+        case 'Box':
+            geometry = new THREE.BoxGeometry(params.width, params.height, params.depth);
+            break;
+        case 'Sphere':
+            geometry = new THREE.SphereGeometry(params.radius, params.widthSegments, params.heightSegments);
+            break;
+        case 'Cylinder':
+            geometry = new THREE.CylinderGeometry(params.radiusTop, params.radiusBottom, params.height, params.radialSegments);
+            break;
+        case 'Cone':
+            geometry = new THREE.ConeGeometry(params.radius, params.height, params.radialSegments);
+            break;
+        case 'Torus':
+            geometry = new THREE.TorusGeometry(params.radius, params.tube, params.radialSegments, params.tubularSegments);
+            break;
+        case 'TorusKnot':
+            geometry = new THREE.TorusKnotGeometry(params.radius, params.tube, params.tubularSegments, params.radialSegments, params.p, params.q);
+            break;
+        case 'Plane':
+            geometry = new THREE.PlaneGeometry(params.width, params.height);
+            break;
+        case 'Dodecahedron':
+            geometry = new THREE.DodecahedronGeometry(params.radius);
+            break;
+        case 'Icosahedron':
+            geometry = new THREE.IcosahedronGeometry(params.radius);
+            break;
+        case 'Octahedron':
+            geometry = new THREE.OctahedronGeometry(params.radius);
+            break;
+        case 'Tetrahedron':
+            geometry = new THREE.TetrahedronGeometry(params.radius);
+            break;
+        case 'Lathe':
+            // Convert points array to THREE.Vector2 array
+            const lathePoints = (params.points || []).map(p => 
+                new THREE.Vector2(p[0] * params.scale, p[1] * params.scale)
+            );
+            geometry = new THREE.LatheGeometry(lathePoints, params.segments);
+            break;
+        case 'LoftLathe':
+            // Convert slices to array of Vector2 arrays
+            const loftSlices = (params.slices || []).map(slice =>
+                slice.map(p => new THREE.Vector2(p[0] * params.scale, p[1] * params.scale))
+            );
+            geometry = new LoftLatheBufferGeometry(loftSlices, params.segments);
+            // Rotate geometry 180° around X axis to flip right-side up (preserves normals)
+            geometry.rotateX(Math.PI);
+            break;
+        case 'Tube':
+            // Create custom sin curve for tube path
+            const tubeCurve = new THREE.Curve();
+            tubeCurve.getPoint = function(t) {
+                const tx = (t * params.curveLength - params.curveLength / 2) * params.curveScale;
+                const ty = Math.sin(params.frequency * 2 * Math.PI * t + params.phase) * params.amplitude;
+                const tz = 0;
+                return new THREE.Vector3(tx, ty, tz);
+            };
+            geometry = new THREE.TubeGeometry(
+                tubeCurve,
+                params.tubularSegments,
+                params.radius,
+                params.radialSegments,
+                params.closed
+            );
+            break;
+        case 'Parametric':
+            const paramFunc = getParametricFunction(params.shape, params);
+            geometry = new THREE.ParametricGeometry(paramFunc, params.segmentsU, params.segmentsV);
+            geometry.scale(params.scale, params.scale, params.scale);
+            break;
+        default:
+            geometry = new THREE.BoxGeometry(1, 1, 1);
+    }
+    
+    const material = createMaterial(params);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    
+    return mesh;
+}
+
+function createMaterial(params) {
+    const commonProps = {
+        color: new THREE.Color(params.color),
+        wireframe: params.wireframe,
+        transparent: params.transparent,
+        opacity: params.opacity,
+        side: params.doubleSided ? THREE.DoubleSide : THREE.FrontSide
+    };
+    
+    switch(params.materialType) {
+        case 'basic':
+            return new THREE.MeshBasicMaterial(commonProps);
+        case 'phong':
+            return new THREE.MeshPhongMaterial({
+                ...commonProps,
+                emissive: new THREE.Color(params.emissive),
+                emissiveIntensity: params.emissiveIntensity
+            });
+        case 'physical':
+            return new THREE.MeshPhysicalMaterial({
+                ...commonProps,
+                metalness: params.metalness,
+                roughness: params.roughness,
+                emissive: new THREE.Color(params.emissive),
+                emissiveIntensity: params.emissiveIntensity
+            });
+        case 'standard':
+        default:
+            return new THREE.MeshStandardMaterial({
+                ...commonProps,
+                metalness: params.metalness,
+                roughness: params.roughness,
+                emissive: new THREE.Color(params.emissive),
+                emissiveIntensity: params.emissiveIntensity
+            });
+    }
+}
+
+function createLight(type, params) {
+    let light;
+    
+    switch(type) {
+        case 'AmbientLight':
+            light = new THREE.AmbientLight(params.color, params.intensity);
+            break;
+        case 'DirectionalLight':
+            light = new THREE.DirectionalLight(params.color, params.intensity);
+            light.castShadow = params.castShadow;
+            if (params.castShadow) {
+                light.shadow.mapSize.width = 1024;
+                light.shadow.mapSize.height = 1024;
+            }
+            break;
+        case 'PointLight':
+            light = new THREE.PointLight(params.color, params.intensity, params.distance, params.decay);
+            light.castShadow = params.castShadow;
+            break;
+        case 'SpotLight':
+            light = new THREE.SpotLight(params.color, params.intensity, params.distance, params.angle, params.penumbra, params.decay);
+            light.castShadow = params.castShadow;
+            break;
+        case 'HemisphereLight':
+            light = new THREE.HemisphereLight(params.skyColor, params.groundColor, params.intensity);
+            break;
+        default:
+            light = new THREE.AmbientLight(0xffffff, 0.5);
+    }
+    
+    return light;
+}
+
+function generateCode() {
+    const sceneNode = nodesArray.find(n => n.dataset.type === 'Scene');
+    if (!sceneNode) {
+        alert('No scene found!');
+        return;
+    }
+    
+    let code = '<!DOCTYPE html>\n';
+    code += '<html>\n';
+    code += '<head>\n';
+    code += '    <meta charset="UTF-8">\n';
+    code += '    <title>Three.js Scene</title>\n';
+    code += '    <style>\n';
+    code += '        body { margin: 0; overflow: hidden; }\n';
+    code += '        canvas { display: block; }\n';
+    code += '    </style>\n';
+    code += '</head>\n';
+    code += '<body>\n';
+    code += '<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></sc' + 'ript>\n';
+    code += '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></sc' + 'ript>\n';
+    code += '<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/ParametricGeometry.js"></sc' + 'ript>\n';
+    code += '<sc' + 'ript>\n';
+    
+    // Check if any LoftLathe nodes exist - if so, include the geometry class
+    const hasLoftLathe = nodesArray.some(n => n.dataset.type === 'LoftLathe');
+    if (hasLoftLathe) {
+        code += '// LoftLatheBufferGeometry class\n';
+        code += `class LoftLatheBufferGeometry extends THREE.BufferGeometry {
+    constructor(points, segments, phiStart, phiLength) {
+        super();
+        this.type = 'LoftLatheBufferGeometry';
+        segments = Math.floor(segments) || 12;
+        phiStart = phiStart || 0;
+        phiLength = phiLength || Math.PI * 2;
+        phiLength = Math.max(0, Math.min(Math.PI * 2, phiLength));
+        var indices = [], vertices = [], uvs = [];
+        var inverseSegments = 1.0 / segments;
+        var vertex = new THREE.Vector3();
+        var uv = new THREE.Vector2();
+        for (var i = 0; i <= segments; i++) {
+            var phi = phiStart + i * inverseSegments * phiLength;
+            var sin = Math.sin(phi), cos = Math.cos(phi);
+            var indexExact = points.length * (phi / (Math.PI * 2));
+            var indexA = Math.floor(indexExact);
+            var indexB = Math.ceil(indexExact);
+            var weight = indexExact - indexA;
+            if (indexB == points.length) indexB = 0;
+            if (indexA == points.length) indexA = 0;
+            for (var j = 0; j <= (points[0].length - 1); j++) {
+                var xa = points[indexA][j].x, xb = points[indexB][j].x;
+                var ipx = xa + ((xb - xa) * weight);
+                var ya = points[indexA][j].y, yb = points[indexB][j].y;
+                var ipy = ya + ((yb - ya) * weight);
+                vertex.x = ipx * sin; vertex.y = ipy; vertex.z = ipx * cos;
+                vertices.push(vertex.x, vertex.y, vertex.z);
+                uv.x = i / segments; uv.y = j / (points[0].length - 1);
+                uvs.push(uv.x, uv.y);
+            }
+        }
+        for (i = 0; i < segments; i++) {
+            for (j = 0; j < (points[0].length - 1); j++) {
+                var base = j + i * points[0].length;
+                indices.push(base, base + points[0].length, base + 1);
+                indices.push(base + points[0].length, base + points[0].length + 1, base + 1);
+            }
+        }
+        this.setIndex(indices);
+        this.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        this.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        this.computeVertexNormals();
+    }
+}\n\n`;
+    }
+    
+    code += '// Scene setup\n';
+    code += 'const scene = new THREE.Scene();\n';
+    
+    const sceneParams = getNodeParams(sceneNode);
+    code += 'scene.background = new THREE.Color(' + JSON.stringify(sceneParams.backgroundColor) + ');\n';
+    
+    if (sceneParams.fog) {
+        code += 'scene.fog = new THREE.Fog(' + JSON.stringify(sceneParams.fogColor) + ', ' + sceneParams.fogNear + ', ' + sceneParams.fogFar + ');\n';
+    }
+    
+    code += '\n// Camera\n';
+    code += 'const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);\n';
+    code += 'camera.position.set(5, 5, 5);\n';
+    code += 'camera.lookAt(0, 0, 0);\n';
+    code += '\n';
+    code += '// Renderer\n';
+    code += 'const renderer = new THREE.WebGLRenderer({ antialias: true });\n';
+    code += 'renderer.setSize(window.innerWidth, window.innerHeight);\n';
+    code += 'renderer.shadowMap.enabled = true;\n';
+    code += 'renderer.shadowMap.type = THREE.PCFSoftShadowMap;\n';
+    code += 'document.body.appendChild(renderer.domElement);\n';
+    code += '\n';
+    code += '// OrbitControls\n';
+    code += 'const controls = new THREE.OrbitControls(camera, renderer.domElement);\n';
+    code += 'controls.enableDamping = true;\n';
+    code += 'controls.dampingFactor = 0.05;\n';
+    code += 'controls.screenSpacePanning = false;\n';
+    code += 'controls.minDistance = 2;\n';
+    code += 'controls.maxDistance = 50;\n';
+    code += '\n';
+    code += '// Handle window resize\n';
+    code += 'window.addEventListener(\'resize\', () => {\n';
+    code += '    camera.aspect = window.innerWidth / window.innerHeight;\n';
+    code += '    camera.updateProjectionMatrix();\n';
+    code += '    renderer.setSize(window.innerWidth, window.innerHeight);\n';
+    code += '});\n';
+    code += '\n';
+    
+    // Generate scene hierarchy
+    let objectCounter = 0;
+    const objectMap = new Map();
+    let hasLights = false;
+    
+    function generateNodeCode(node, parentVarName = 'scene', indent = '') {
+        const nodeType = node.dataset.type;
+        const params = getNodeParams(node);
+        
+        if (nodeType === 'Scene') {
+            // Skip, already handled
+        } else {
+            const varName = `obj${objectCounter++}`;
+            objectMap.set(node.id, varName);
+            
+            if (nodeType === 'Group') {
+                code += `${indent}const ${varName} = new THREE.Group();\n`;
+            } else if (NODE_TYPES[nodeType].category === 'mesh') {
+                code += generateMeshCode(nodeType, params, varName, indent);
+            } else if (NODE_TYPES[nodeType].category === 'light') {
+                hasLights = true;
+                code += generateLightCode(nodeType, params, varName, indent);
+            }
+            
+            // Apply transforms
+            if (params.posX !== undefined) {
+                code += `${indent}${varName}.position.set(${params.posX}, ${params.posY}, ${params.posZ});\n`;
+            }
+            if (params.rotX !== undefined) {
+                code += `${indent}${varName}.rotation.set(${params.rotX * Math.PI / 180}, ${params.rotY * Math.PI / 180}, ${params.rotZ * Math.PI / 180});\n`;
+            }
+            if (params.scaleX !== undefined) {
+                code += `${indent}${varName}.scale.set(${params.scaleX}, ${params.scaleY}, ${params.scaleZ});\n`;
+            }
+            
+            code += `${indent}${parentVarName}.add(${varName});\n\n`;
+            
+            parentVarName = varName;
+        }
+        
+        // Process children
+        const children = Array.from(node.children).filter(child => child.classList.contains('node'));
+        children.forEach(child => {
+            generateNodeCode(child, parentVarName, indent);
+        });
+    }
+    
+    generateNodeCode(sceneNode);
+    
+    // Add default lights if no lights were added by user
+    if (!hasLights) {
+        code += '// Default lights (auto-added)\n';
+        code += 'const defaultAmbient = new THREE.AmbientLight(0xffffff, 0.5);\n';
+        code += 'scene.add(defaultAmbient);\n';
+        code += 'const defaultDirectional = new THREE.DirectionalLight(0xffffff, 0.8);\n';
+        code += 'defaultDirectional.position.set(5, 10, 7);\n';
+        code += 'defaultDirectional.castShadow = true;\n';
+        code += 'scene.add(defaultDirectional);\n\n';
+    }
+    
+    code += '// Animation loop\n';
+    code += 'function animate() {\n';
+    code += '    requestAnimationFrame(animate);\n';
+    code += '    controls.update();\n';
+    code += '    renderer.render(scene, camera);\n';
+    code += '}\n';
+    code += 'animate();\n';
+    code += '</sc' + 'ript>\n';
+    code += '</body>\n';
+    code += '</html>';
+    
+    // Store the generated code globally for copying/downloading
+    window.generatedCode = code;
+    
+    // Display the code
+    document.getElementById('codeText').textContent = code;
+    document.getElementById('codeOutput').style.display = 'block';
+    
+    // Auto-copy to clipboard
+    copyCodeToClipboard();
+}
+
+// Generate parametric function code for output
+function generateParametricFunctionCode(shape, params) {
+    const twist = params.twist || 1;
+    const fatness = params.fatness || 1;
+    const appleIndent = params.indent || 0.5;
+    
+    switch(shape) {
+        case 'klein':
+            // Official Three.js Klein bottle formula (note v,u swap)
+            // Klein bottle is non-orientable - seamOffset rotates the seam around the tube
+            const seamOffset = params.seamOffset || 0;
+            return `const paramFunc = function(v, u, target) {
+            u *= Math.PI;
+            v = (v + ${seamOffset}) * 2 * Math.PI;
+            u = u * 2;
+            let x, z;
+            if (u < Math.PI) {
+                x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(u) * Math.cos(v);
+                z = -8 * Math.sin(u) - 2 * (1 - Math.cos(u) / 2) * Math.sin(u) * Math.cos(v);
+            } else {
+                x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(v + Math.PI);
+                z = -8 * Math.sin(u);
+            }
+            const y = -2 * (1 - Math.cos(u) / 2) * Math.sin(v);
+            target.set(x, y, z).multiplyScalar(0.15);
+        };`;
+        
+        case 'mobius':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI * 2;
+            v = (v - 0.5) * 2;
+            const x = (1 + v / 2 * Math.cos(u / 2)) * Math.cos(u);
+            const y = (1 + v / 2 * Math.cos(u / 2)) * Math.sin(u);
+            const z = v / 2 * Math.sin(u / 2);
+            target.set(x, y, z);
+        };`;
+        
+        case 'helicoid':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI * 4 - Math.PI * 2;
+            v = (v - 0.5) * 4;
+            const x = v * Math.cos(u);
+            const y = u * ${twist} * 0.3;
+            const z = v * Math.sin(u);
+            target.set(x, y, z);
+        };`;
+        
+        case 'catenoid':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI * 2;
+            v = (v - 0.5) * 4;
+            const c = 1;
+            const x = c * Math.cosh(v / c) * Math.cos(u);
+            const y = c * Math.cosh(v / c) * Math.sin(u);
+            const z = v;
+            target.set(x * 0.5, z * 0.5, y * 0.5);
+        };`;
+        
+        case 'enneper':
+            return `const paramFunc = function(u, v, target) {
+            u = (u - 0.5) * 3;
+            v = (v - 0.5) * 3;
+            const x = u - u*u*u / 3 + u * v*v;
+            const y = v - v*v*v / 3 + v * u*u;
+            const z = u*u - v*v;
+            target.set(x * 0.3, z * 0.3, y * 0.3);
+        };`;
+        
+        case 'dini':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI * 4;
+            v = v * 2 + 0.1;
+            const a = ${twist} * 0.2;
+            const x = Math.cos(u) * Math.sin(v);
+            const y = Math.sin(u) * Math.sin(v);
+            const z = Math.cos(v) + Math.log(Math.tan(v / 2)) + a * u;
+            target.set(x, z * 0.3, y);
+        };`;
+        
+        case 'heart':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI;
+            v = v * Math.PI * 2;
+            const sinU = Math.sin(u);
+            const cosU = Math.cos(u);
+            const sinV = Math.sin(v);
+            const cosV = Math.cos(v);
+            const f = ${fatness};
+            const x = sinU * cosV * f;
+            const y = sinU * sinV * f;
+            const z = cosU + Math.pow(Math.abs(sinU * cosV), 0.5) * cosU * 0.5 * f;
+            const heartMod = 1 - Math.pow(Math.abs(cosV), 0.8) * 0.3;
+            target.set(x * heartMod, z - 0.5, y * heartMod);
+        };`;
+        
+        case 'apple':
+            return `const paramFunc = function(u, v, target) {
+            u = u * Math.PI * 2;
+            v = v * Math.PI;
+            const cosU = Math.cos(u);
+            const sinU = Math.sin(u);
+            const cosV = Math.cos(v);
+            const sinV = Math.sin(v);
+            const f = ${fatness};
+            const i = ${appleIndent};
+            const r = sinV * (1 + 0.2 * cosV) * f;
+            const topIndent = Math.pow(Math.max(0, cosV), 2) * i;
+            const x = r * cosU;
+            const y = cosV - topIndent * 0.5;
+            const z = r * sinU;
+            target.set(x, y, z);
+        };`;
+        
+        default:
+            return `const paramFunc = function(u, v, target) {
+            u *= Math.PI * 2;
+            v *= Math.PI;
+            target.set(Math.sin(v) * Math.cos(u), Math.cos(v), Math.sin(v) * Math.sin(u));
+        };`;
+    }
+}
+
+function generateMeshCode(type, params, varName, indent) {
+    let code = '';
+    let geomCode = '';
+    
+    switch(type) {
+        case 'Box':
+            geomCode = `new THREE.BoxGeometry(${params.width}, ${params.height}, ${params.depth})`;
+            break;
+        case 'Sphere':
+            geomCode = `new THREE.SphereGeometry(${params.radius}, ${params.widthSegments}, ${params.heightSegments})`;
+            break;
+        case 'Cylinder':
+            geomCode = `new THREE.CylinderGeometry(${params.radiusTop}, ${params.radiusBottom}, ${params.height}, ${params.radialSegments})`;
+            break;
+        case 'Cone':
+            geomCode = `new THREE.ConeGeometry(${params.radius}, ${params.height}, ${params.radialSegments})`;
+            break;
+        case 'Torus':
+            geomCode = `new THREE.TorusGeometry(${params.radius}, ${params.tube}, ${params.radialSegments}, ${params.tubularSegments})`;
+            break;
+        case 'TorusKnot':
+            geomCode = `new THREE.TorusKnotGeometry(${params.radius}, ${params.tube}, ${params.tubularSegments}, ${params.radialSegments}, ${params.p}, ${params.q})`;
+            break;
+        case 'Plane':
+            geomCode = `new THREE.PlaneGeometry(${params.width}, ${params.height})`;
+            break;
+        case 'Dodecahedron':
+            geomCode = `new THREE.DodecahedronGeometry(${params.radius})`;
+            break;
+        case 'Icosahedron':
+            geomCode = `new THREE.IcosahedronGeometry(${params.radius})`;
+            break;
+        case 'Octahedron':
+            geomCode = `new THREE.OctahedronGeometry(${params.radius})`;
+            break;
+        case 'Tetrahedron':
+            geomCode = `new THREE.TetrahedronGeometry(${params.radius})`;
+            break;
+        case 'Lathe':
+            const pointsCode = (params.points || []).map(p => 
+                `new THREE.Vector2(${(p[0] * params.scale).toFixed(3)}, ${(p[1] * params.scale).toFixed(3)})`
+            ).join(', ');
+            geomCode = `new THREE.LatheGeometry([${pointsCode}], ${params.segments})`;
+            break;
+        case 'LoftLathe':
+            const slicesCode = (params.slices || []).map(slice => {
+                const slicePoints = slice.map(p => 
+                    `new THREE.Vector2(${(p[0] * params.scale).toFixed(3)}, ${(p[1] * params.scale).toFixed(3)})`
+                ).join(', ');
+                return `[${slicePoints}]`;
+            }).join(',\n        ');
+            // Special case: need to create geometry first, rotate it, then use
+            geomCode = `(() => { const g = new LoftLatheBufferGeometry([\n        ${slicesCode}\n    ], ${params.segments}); g.rotateX(Math.PI); return g; })()`;
+            break;
+        case 'Tube':
+            geomCode = `(() => {
+        const curve = new THREE.Curve();
+        curve.getPoint = function(t) {
+            const tx = (t * ${params.curveLength} - ${params.curveLength / 2}) * ${params.curveScale};
+            const ty = Math.sin(${params.frequency} * 2 * Math.PI * t + ${params.phase}) * ${params.amplitude};
+            return new THREE.Vector3(tx, ty, 0);
+        };
+        return new THREE.TubeGeometry(curve, ${params.tubularSegments}, ${params.radius}, ${params.radialSegments}, ${params.closed});
+    })()`;
+            break;
+        case 'Parametric':
+            geomCode = `(() => {
+        ${generateParametricFunctionCode(params.shape, params)}
+        const g = new THREE.ParametricGeometry(paramFunc, ${params.segmentsU}, ${params.segmentsV});
+        g.scale(${params.scale}, ${params.scale}, ${params.scale});
+        return g;
+    })()`;
+            break;
+    }
+    
+    let matType = 'MeshStandardMaterial';
+    switch(params.materialType) {
+        case 'basic': matType = 'MeshBasicMaterial'; break;
+        case 'phong': matType = 'MeshPhongMaterial'; break;
+        case 'physical': matType = 'MeshPhysicalMaterial'; break;
+    }
+    
+    code += `${indent}const ${varName} = new THREE.Mesh(\n`;
+    code += `${indent}    ${geomCode},\n`;
+    code += `${indent}    new THREE.${matType}({\n`;
+    code += `${indent}        color: ${JSON.stringify(params.color)},\n`;
+    
+    if (params.materialType !== 'basic') {
+        if (params.metalness !== undefined) {
+            code += `${indent}        metalness: ${params.metalness},\n`;
+            code += `${indent}        roughness: ${params.roughness},\n`;
+        }
+        code += `${indent}        emissive: ${JSON.stringify(params.emissive)},\n`;
+        code += `${indent}        emissiveIntensity: ${params.emissiveIntensity},\n`;
+    }
+    
+    code += `${indent}        wireframe: ${params.wireframe},\n`;
+    code += `${indent}        transparent: ${params.transparent},\n`;
+    code += `${indent}        opacity: ${params.opacity},\n`;
+    code += `${indent}        side: ${params.doubleSided ? 'THREE.DoubleSide' : 'THREE.FrontSide'}\n`;
+    code += `${indent}    })\n`;
+    code += `${indent});\n`;
+    code += `${indent}${varName}.castShadow = true;\n`;
+    code += `${indent}${varName}.receiveShadow = true;\n`;
+    
+    return code;
+}
+
+function generateLightCode(type, params, varName, indent) {
+    let code = '';
+    
+    switch(type) {
+        case 'AmbientLight':
+            code += `${indent}const ${varName} = new THREE.AmbientLight(${JSON.stringify(params.color)}, ${params.intensity});\n`;
+            break;
+        case 'DirectionalLight':
+            code += `${indent}const ${varName} = new THREE.DirectionalLight(${JSON.stringify(params.color)}, ${params.intensity});\n`;
+            code += `${indent}${varName}.castShadow = ${params.castShadow};\n`;
+            break;
+        case 'PointLight':
+            code += `${indent}const ${varName} = new THREE.PointLight(${JSON.stringify(params.color)}, ${params.intensity}, ${params.distance}, ${params.decay});\n`;
+            code += `${indent}${varName}.castShadow = ${params.castShadow};\n`;
+            break;
+        case 'SpotLight':
+            code += `${indent}const ${varName} = new THREE.SpotLight(${JSON.stringify(params.color)}, ${params.intensity}, ${params.distance}, ${params.angle}, ${params.penumbra}, ${params.decay});\n`;
+            code += `${indent}${varName}.castShadow = ${params.castShadow};\n`;
+            break;
+        case 'HemisphereLight':
+            code += `${indent}const ${varName} = new THREE.HemisphereLight(${JSON.stringify(params.skyColor)}, ${JSON.stringify(params.groundColor)}, ${params.intensity});\n`;
+            break;
+    }
+    
+    return code;
+}
+
+function closeCodeView() {
+    document.getElementById('codeOutput').style.display = 'none';
+}
+
+function copyCodeToClipboard() {
+    const code = window.generatedCode || document.getElementById('codeText').textContent;
+    
+    navigator.clipboard.writeText(code).then(() => {
+        // Show notification
+        const notification = document.getElementById('copyNotification');
+        notification.classList.add('show');
+        
+        setTimeout(() => {
+            notification.classList.remove('show');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        alert('Failed to copy to clipboard. Please select and copy manually.');
+    });
+}
+
+function downloadCode() {
+    const code = window.generatedCode || document.getElementById('codeText').textContent;
+    const blob = new Blob([code], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'threejs-scene.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// End of script
+</script>
+</body>
+</html>
