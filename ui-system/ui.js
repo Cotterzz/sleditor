@@ -2957,10 +2957,396 @@ const SLUI = (function() {
                 sliderElements[expandedIndex].sliderAPI.collapse();
             }
         };
+
+        return container;
+    }
+
+    // ========================================
+    // PARAMETER SLIDER - Title + Slider + Value + Incrementer
+    // ========================================
+    
+    function ParameterSlider(options = {}) {
+        const {
+            title = 'Parameter',
+            min = 0,
+            max = 1,
+            value = 0.5,
+            step = 0.01,
+            isInt = false,
+            showIncrementer = true,
+            valueFormat = null,
+            disabled = false,
+            onChange = null
+        } = options;
+        
+        let currentValue = Math.max(min, Math.min(max, value));
+        let currentStep = isInt ? Math.max(1, Math.round(step)) : step;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-param-slider';
+        if (disabled) container.classList.add('disabled');
+        
+        // Title
+        const titleEl = document.createElement('span');
+        titleEl.className = 'sl-param-title';
+        titleEl.textContent = title;
+        container.appendChild(titleEl);
+        
+        // Slider track
+        const track = document.createElement('div');
+        track.className = 'sl-slider-track';
+        track.style.cursor = disabled ? 'default' : 'pointer';
+        
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-slider-track-bg';
+        
+        const fill = document.createElement('div');
+        fill.className = 'sl-slider-track-fill';
+        
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slider-thumb';
+        thumb.style.cursor = disabled ? 'default' : 'pointer';
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        container.appendChild(track);
+        
+        function formatValue(v) {
+            if (valueFormat) return valueFormat(v);
+            if (isInt) return Math.round(v).toString();
+            return v.toFixed(step < 0.01 ? 3 : 2);
+        }
+        
+        function updateVisuals() {
+            const percent = ((currentValue - min) / (max - min)) * 100;
+            fill.style.width = `${percent}%`;
+            thumb.style.left = `${percent}%`;
+            valueEl.textContent = formatValue(currentValue);
+        }
+        
+        // Value display
+        const valueEl = document.createElement('span');
+        valueEl.className = 'sl-param-value';
+        valueEl.textContent = formatValue(currentValue);
+        container.appendChild(valueEl);
+        
+        // Optional incrementer
+        if (showIncrementer) {
+            const incrementer = document.createElement('div');
+            incrementer.className = 'sl-param-incrementer';
+            
+            const decBtn = document.createElement('button');
+            decBtn.className = 'sl-param-inc-btn';
+            decBtn.textContent = '−';
+            decBtn.addEventListener('click', () => {
+                if (disabled) return;
+                currentValue = Math.max(min, currentValue - currentStep);
+                if (isInt) currentValue = Math.round(currentValue);
+                updateVisuals();
+                if (onChange) onChange(currentValue);
+            });
+            
+            const incBtn = document.createElement('button');
+            incBtn.className = 'sl-param-inc-btn';
+            incBtn.textContent = '+';
+            incBtn.addEventListener('click', () => {
+                if (disabled) return;
+                currentValue = Math.min(max, currentValue + currentStep);
+                if (isInt) currentValue = Math.round(currentValue);
+                updateVisuals();
+                if (onChange) onChange(currentValue);
+            });
+            
+            incrementer.appendChild(decBtn);
+            incrementer.appendChild(incBtn);
+            container.appendChild(incrementer);
+        }
+        
+        // Track interaction
+        function handleTrackPointer(e) {
+            if (disabled) return;
+            const rect = trackBg.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            let newValue = min + percent * (max - min);
+            newValue = Math.round(newValue / currentStep) * currentStep;
+            if (isInt) newValue = Math.round(newValue);
+            currentValue = Math.max(min, Math.min(max, newValue));
+            updateVisuals();
+            if (onChange) onChange(currentValue);
+        }
+        
+        track.addEventListener('pointerdown', (e) => {
+            if (disabled) return;
+            e.preventDefault();
+            track.classList.add('dragging');
+            handleTrackPointer(e);
+            
+            const moveHandler = (e) => handleTrackPointer(e);
+            const upHandler = () => {
+                track.classList.remove('dragging');
+                document.removeEventListener('pointermove', moveHandler);
+                document.removeEventListener('pointerup', upHandler);
+            };
+            
+            document.addEventListener('pointermove', moveHandler);
+            document.addEventListener('pointerup', upHandler);
+        });
+        
+        updateVisuals();
+        
+        // Public API
+        container.getValue = () => currentValue;
+        container.setValue = (v) => {
+            currentValue = Math.max(min, Math.min(max, v));
+            if (isInt) currentValue = Math.round(currentValue);
+            updateVisuals();
+        };
+        container.setDisabled = (d) => {
+            container.classList.toggle('disabled', d);
+            track.style.cursor = d ? 'default' : 'pointer';
+            thumb.style.cursor = d ? 'default' : 'pointer';
+        };
+        container.setTitle = (t) => { titleEl.textContent = t; };
         
         return container;
     }
     
+    // ========================================
+    // ICON SLIDER - Icon + Slider
+    // ========================================
+    
+    function IconSlider(options = {}) {
+        const {
+            icon = '🔊',
+            min = 0,
+            max = 1,
+            value = 0.5,
+            step = 0.01,
+            isInt = false,
+            compact = false,
+            disabled = false,
+            onChange = null
+        } = options;
+        
+        let currentValue = Math.max(min, Math.min(max, value));
+        let currentStep = isInt ? Math.max(1, Math.round(step)) : step;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-icon-slider';
+        if (compact) container.classList.add('compact');
+        if (disabled) container.classList.add('disabled');
+        
+        // Icon
+        const iconEl = document.createElement('span');
+        iconEl.className = 'sl-icon-slider-icon';
+        iconEl.innerHTML = icon;
+        container.appendChild(iconEl);
+        
+        // Slider track
+        const track = document.createElement('div');
+        track.className = 'sl-slider-track';
+        track.style.cursor = disabled ? 'default' : 'pointer';
+        
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-slider-track-bg';
+        
+        const fill = document.createElement('div');
+        fill.className = 'sl-slider-track-fill';
+        
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slider-thumb';
+        thumb.style.cursor = disabled ? 'default' : 'pointer';
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        container.appendChild(track);
+        
+        function updateVisuals() {
+            const percent = ((currentValue - min) / (max - min)) * 100;
+            fill.style.width = `${percent}%`;
+            thumb.style.left = `${percent}%`;
+        }
+        
+        // Track interaction
+        function handleTrackPointer(e) {
+            if (disabled) return;
+            const rect = trackBg.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            let newValue = min + percent * (max - min);
+            newValue = Math.round(newValue / currentStep) * currentStep;
+            if (isInt) newValue = Math.round(newValue);
+            currentValue = Math.max(min, Math.min(max, newValue));
+            updateVisuals();
+            if (onChange) onChange(currentValue);
+        }
+        
+        track.addEventListener('pointerdown', (e) => {
+            if (disabled) return;
+            e.preventDefault();
+            track.classList.add('dragging');
+            handleTrackPointer(e);
+            
+            const moveHandler = (e) => handleTrackPointer(e);
+            const upHandler = () => {
+                track.classList.remove('dragging');
+                document.removeEventListener('pointermove', moveHandler);
+                document.removeEventListener('pointerup', upHandler);
+            };
+            
+            document.addEventListener('pointermove', moveHandler);
+            document.addEventListener('pointerup', upHandler);
+        });
+        
+        updateVisuals();
+        
+        // Public API
+        container.getValue = () => currentValue;
+        container.setValue = (v) => {
+            currentValue = Math.max(min, Math.min(max, v));
+            if (isInt) currentValue = Math.round(currentValue);
+            updateVisuals();
+        };
+        container.setIcon = (i) => { iconEl.innerHTML = i; };
+        container.setDisabled = (d) => {
+            container.classList.toggle('disabled', d);
+            track.style.cursor = d ? 'default' : 'pointer';
+            thumb.style.cursor = d ? 'default' : 'pointer';
+        };
+        
+        return container;
+    }
+    
+    // ========================================
+    // TIMELINE SLIDER - Time scrubber
+    // ========================================
+    
+    function TimelineSlider(options = {}) {
+        const {
+            duration = 60,  // Total duration in seconds
+            value = 0,      // Current time in seconds
+            onChange = null,
+            onSeekStart = null,
+            onSeekEnd = null
+        } = options;
+        
+        let currentTime = Math.max(0, Math.min(duration, value));
+        let currentDuration = duration;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-timeline-slider';
+        
+        // Track container (for positioning time tooltip)
+        const trackContainer = document.createElement('div');
+        trackContainer.className = 'sl-timeline-track-container';
+        
+        // Current time tooltip
+        const currentTimeEl = document.createElement('div');
+        currentTimeEl.className = 'sl-timeline-current';
+        currentTimeEl.textContent = formatTime(currentTime);
+        trackContainer.appendChild(currentTimeEl);
+        
+        // Slider track
+        const track = document.createElement('div');
+        track.className = 'sl-slider-track';
+        track.style.cursor = 'pointer';
+        
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-slider-track-bg';
+        
+        const fill = document.createElement('div');
+        fill.className = 'sl-slider-track-fill';
+        
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slider-thumb';
+        thumb.style.cursor = 'pointer';
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        trackContainer.appendChild(track);
+        container.appendChild(trackContainer);
+        
+        // Start/End times
+        const timesRow = document.createElement('div');
+        timesRow.className = 'sl-timeline-times';
+        
+        const startTimeEl = document.createElement('span');
+        startTimeEl.className = 'sl-timeline-start';
+        startTimeEl.textContent = formatTime(0);
+        
+        const endTimeEl = document.createElement('span');
+        endTimeEl.className = 'sl-timeline-end';
+        endTimeEl.textContent = formatTime(currentDuration);
+        
+        timesRow.appendChild(startTimeEl);
+        timesRow.appendChild(endTimeEl);
+        container.appendChild(timesRow);
+        
+        function formatTime(seconds) {
+            const s = Math.ceil(seconds);
+            const mins = Math.floor(s / 60);
+            const secs = s % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        function updateVisuals() {
+            const percent = currentDuration > 0 ? (currentTime / currentDuration) * 100 : 0;
+            fill.style.width = `${percent}%`;
+            thumb.style.left = `${percent}%`;
+            currentTimeEl.textContent = formatTime(currentTime);
+            currentTimeEl.style.left = `${percent}%`;
+        }
+        
+        // Track interaction
+        function handleTrackPointer(e) {
+            const rect = trackBg.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            currentTime = percent * currentDuration;
+            updateVisuals();
+            if (onChange) onChange(currentTime);
+        }
+        
+        track.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            container.classList.add('dragging');
+            track.classList.add('dragging');
+            if (onSeekStart) onSeekStart();
+            handleTrackPointer(e);
+            
+            const moveHandler = (e) => handleTrackPointer(e);
+            const upHandler = () => {
+                container.classList.remove('dragging');
+                track.classList.remove('dragging');
+                if (onSeekEnd) onSeekEnd();
+                document.removeEventListener('pointermove', moveHandler);
+                document.removeEventListener('pointerup', upHandler);
+            };
+            
+            document.addEventListener('pointermove', moveHandler);
+            document.addEventListener('pointerup', upHandler);
+        });
+        
+        updateVisuals();
+        
+        // Public API
+        container.getTime = () => currentTime;
+        container.setTime = (t) => {
+            currentTime = Math.max(0, Math.min(currentDuration, t));
+            updateVisuals();
+        };
+        container.getDuration = () => currentDuration;
+        container.setDuration = (d) => {
+            currentDuration = Math.max(0, d);
+            endTimeEl.textContent = formatTime(currentDuration);
+            currentTime = Math.min(currentTime, currentDuration);
+            updateVisuals();
+        };
+        
+        return container;
+    }
+
     // ========================================
     // TABS COMPONENT
     // ========================================
@@ -3214,6 +3600,9 @@ const SLUI = (function() {
         SliderGroup,
         UniformSlider,
         SliderStack,
+        ParameterSlider,
+        IconSlider,
+        TimelineSlider,
         Tabs,
 
         // State access

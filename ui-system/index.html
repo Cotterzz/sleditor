@@ -310,6 +310,106 @@
                 }
             });
             
+            // Controls panel - showcases Parameter, Icon, Timeline sliders
+            SLUI.registerPanel({
+                id: 'controls',
+                icon: '🎛️',
+                title: 'Controls',
+                createContent: () => {
+                    const div = document.createElement('div');
+                    div.style.padding = '12px';
+                    div.style.display = 'flex';
+                    div.style.flexDirection = 'column';
+                    div.style.gap = '16px';
+                    
+                    // Parameter Sliders section
+                    const paramSection = document.createElement('div');
+                    paramSection.innerHTML = '<div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Parameter Sliders</div>';
+                    
+                    const paramContainer = document.createElement('div');
+                    paramContainer.style.display = 'flex';
+                    paramContainer.style.flexDirection = 'column';
+                    paramContainer.style.gap = '6px';
+                    
+                    // Various parameter sliders
+                    paramContainer.appendChild(SLUI.ParameterSlider({
+                        title: 'Brightness',
+                        min: 0, max: 2, value: 1, step: 0.1,
+                        onChange: (v) => console.log('Brightness:', v)
+                    }));
+                    
+                    paramContainer.appendChild(SLUI.ParameterSlider({
+                        title: 'Contrast',
+                        min: 0, max: 2, value: 1, step: 0.1,
+                        onChange: (v) => console.log('Contrast:', v)
+                    }));
+                    
+                    paramContainer.appendChild(SLUI.ParameterSlider({
+                        title: 'Iterations',
+                        min: 1, max: 100, value: 32, step: 1, isInt: true,
+                        showIncrementer: false,
+                        onChange: (v) => console.log('Iterations:', v)
+                    }));
+                    
+                    paramContainer.appendChild(SLUI.ParameterSlider({
+                        title: 'Blur Radius',
+                        min: 0, max: 50, value: 5, step: 1, isInt: true,
+                        onChange: (v) => console.log('Blur Radius:', v)
+                    }));
+                    
+                    paramSection.appendChild(paramContainer);
+                    div.appendChild(paramSection);
+                    
+                    // Icon Sliders section
+                    const iconSection = document.createElement('div');
+                    iconSection.innerHTML = '<div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Icon Sliders</div>';
+                    
+                    const iconContainer = document.createElement('div');
+                    iconContainer.style.display = 'flex';
+                    iconContainer.style.flexDirection = 'column';
+                    iconContainer.style.gap = '8px';
+                    
+                    iconContainer.appendChild(SLUI.IconSlider({
+                        icon: '🔊',
+                        min: 0, max: 1, value: 0.7, step: 0.01,
+                        onChange: (v) => console.log('Volume:', v)
+                    }));
+                    
+                    iconContainer.appendChild(SLUI.IconSlider({
+                        icon: '🔆',
+                        min: 0, max: 100, value: 80, step: 1, isInt: true,
+                        onChange: (v) => console.log('Brightness:', v)
+                    }));
+                    
+                    iconContainer.appendChild(SLUI.IconSlider({
+                        icon: '📐',
+                        min: 1, max: 4, value: 1, step: 1, isInt: true,
+                        compact: true,
+                        onChange: (v) => console.log('Pixel Size:', v)
+                    }));
+                    
+                    iconSection.appendChild(iconContainer);
+                    div.appendChild(iconSection);
+                    
+                    // Timeline Slider section
+                    const timelineSection = document.createElement('div');
+                    timelineSection.innerHTML = '<div style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;">Timeline Slider</div>';
+                    
+                    const timeline = SLUI.TimelineSlider({
+                        duration: 180,  // 3 minutes
+                        value: 45,
+                        onChange: (t) => console.log('Time:', t),
+                        onSeekStart: () => console.log('Seek started'),
+                        onSeekEnd: () => console.log('Seek ended')
+                    });
+                    
+                    timelineSection.appendChild(timeline);
+                    div.appendChild(timelineSection);
+                    
+                    return div;
+                }
+            });
+            
             // Editor panel
             SLUI.registerPanel({
                 id: 'editor',
