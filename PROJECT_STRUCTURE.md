@@ -1,5 +1,5 @@
 # SLEditor - Project Structure & Module Guide
-
+(This document is somewhat out of date, though much of it might still apply)
 ## Overview
 SLEditor is a browser-based shader and audio editor supporting GLSL, WGSL, AudioWorklet, and JavaScript. This document outlines the purpose of each module and guidelines for maintaining clean architecture.
 

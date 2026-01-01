@@ -2271,6 +2271,892 @@ const SLUI = (function() {
     }
     
     // ========================================
+    // SLIDER COMPONENTS
+    // ========================================
+    
+    function Slider(options = {}) {
+        const {
+            min = 0,
+            max = 100,
+            value = 50,
+            step = 1,
+            disabled = false,
+            showValue = true,
+            valueFormat = (v) => v.toFixed(step < 1 ? 2 : 0),
+            onChange = null,
+            onInput = null,
+            className = ''
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = `sl-slider ${className}`.trim();
+        
+        const track = document.createElement('div');
+        track.className = 'sl-slider-track';
+        if (disabled) track.classList.add('disabled');
+        
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-slider-track-bg';
+        
+        const fill = document.createElement('div');
+        fill.className = 'sl-slider-track-fill';
+        
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slider-thumb';
+        thumb.tabIndex = disabled ? -1 : 0;
+        
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.min = min;
+        input.max = max;
+        input.step = step;
+        input.value = value;
+        input.disabled = disabled;
+        input.className = 'sl-slider-input';
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        track.appendChild(input);
+        container.appendChild(track);
+        
+        let valueDisplay = null;
+        if (showValue) {
+            valueDisplay = document.createElement('span');
+            valueDisplay.className = 'sl-slider-value';
+            valueDisplay.textContent = valueFormat(value);
+            container.appendChild(valueDisplay);
+        }
+        
+        function updateVisuals() {
+            const percent = ((input.value - min) / (max - min)) * 100;
+            fill.style.width = `${percent}%`;
+            thumb.style.left = `${percent}%`;
+        }
+        
+        input.addEventListener('input', (e) => {
+            updateVisuals();
+            if (valueDisplay) valueDisplay.textContent = valueFormat(parseFloat(input.value));
+            if (onInput) onInput(parseFloat(input.value), e);
+        });
+        
+        input.addEventListener('change', (e) => {
+            if (onChange) onChange(parseFloat(input.value), e);
+        });
+        
+        trackBg.addEventListener('click', (e) => {
+            if (disabled) return;
+            const rect = trackBg.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const newValue = min + percent * (max - min);
+            const stepped = Math.round(newValue / step) * step;
+            input.value = Math.max(min, Math.min(max, stepped));
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        
+        updateVisuals();
+        
+        container.getValue = () => parseFloat(input.value);
+        container.setValue = (v) => {
+            input.value = Math.max(min, Math.min(max, v));
+            updateVisuals();
+            if (valueDisplay) valueDisplay.textContent = valueFormat(v);
+        };
+        container.setDisabled = (d) => {
+            input.disabled = d;
+            track.classList.toggle('disabled', d);
+        };
+        
+        return container;
+    }
+    
+    function LabeledSlider(options = {}) {
+        const {
+            min = 0,
+            max = 100,
+            value = 50,
+            step = 1,
+            disabled = false,
+            showValue = true,
+            showMinMax = true,
+            minLabel = null,
+            maxLabel = null,
+            valueFormat = (v) => v.toFixed(step < 1 ? 2 : 0),
+            onChange = null,
+            onInput = null,
+            className = ''
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = `sl-labeled-slider ${className}`.trim();
+        
+        const slider = Slider({ min, max, value, step, disabled, showValue, valueFormat, onChange, onInput });
+        container.appendChild(slider);
+        
+        if (showMinMax) {
+            const labels = document.createElement('div');
+            labels.className = 'sl-slider-labels';
+            labels.innerHTML = `
+                <span class="sl-slider-label-min">${minLabel !== null ? minLabel : valueFormat(min)}</span>
+                <span class="sl-slider-label-max">${maxLabel !== null ? maxLabel : valueFormat(max)}</span>
+            `;
+            container.appendChild(labels);
+        }
+        
+        container.getValue = () => slider.getValue();
+        container.setValue = (v) => slider.setValue(v);
+        container.setDisabled = (d) => slider.setDisabled(d);
+        
+        return container;
+    }
+    
+    function SliderGroup(options = {}) {
+        const {
+            label = 'Value',
+            min = 0,
+            max = 100,
+            value = 50,
+            step = 1,
+            disabled = false,
+            showInput = true,
+            showMinMax = false,
+            valueFormat = (v) => v.toFixed(step < 1 ? 2 : 0),
+            onChange = null,
+            onInput = null,
+            className = ''
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = `sl-slider-group ${className}`.trim();
+        if (disabled) container.classList.add('disabled');
+        
+        const labelEl = document.createElement('label');
+        labelEl.className = 'sl-slider-group-label';
+        labelEl.textContent = label;
+        
+        const row = document.createElement('div');
+        row.className = 'sl-slider-group-row';
+        
+        const slider = LabeledSlider({
+            min, max, value, step, disabled,
+            showValue: !showInput,
+            showMinMax,
+            valueFormat,
+            onInput: (v, e) => {
+                if (numberInput) numberInput.value = valueFormat(v);
+                if (onInput) onInput(v, e);
+            },
+            onChange
+        });
+        row.appendChild(slider);
+        
+        let numberInput = null;
+        if (showInput) {
+            numberInput = document.createElement('input');
+            numberInput.type = 'number';
+            numberInput.className = 'sl-slider-group-input';
+            numberInput.min = min;
+            numberInput.max = max;
+            numberInput.step = step;
+            numberInput.value = valueFormat(value);
+            numberInput.disabled = disabled;
+            
+            numberInput.addEventListener('change', () => {
+                let v = parseFloat(numberInput.value);
+                if (isNaN(v)) v = min;
+                v = Math.max(min, Math.min(max, v));
+                slider.setValue(v);
+                numberInput.value = valueFormat(v);
+                if (onChange) onChange(v);
+            });
+            
+            row.appendChild(numberInput);
+        }
+        
+        container.appendChild(labelEl);
+        container.appendChild(row);
+        
+        container.getValue = () => slider.getValue();
+        container.setValue = (v) => {
+            slider.setValue(v);
+            if (numberInput) numberInput.value = valueFormat(v);
+        };
+        container.setDisabled = (d) => {
+            slider.setDisabled(d);
+            if (numberInput) numberInput.disabled = d;
+            container.classList.toggle('disabled', d);
+        };
+        container.setLabel = (l) => { labelEl.textContent = l; };
+        
+        return container;
+    }
+    
+    // ========================================
+    // UNIFORM SLIDER - Expandable uniform control
+    // ========================================
+    
+    function UniformSlider(options = {}) {
+        const {
+            name = 'u_custom0',
+            min = 0,
+            max = 1,
+            value = 0.5,
+            step = 0.01,
+            isInt = false,
+            locked = false,
+            expanded = false,
+            onChange = null,
+            onNameChange = null,
+            onRangeChange = null,
+            onExpand = null,
+            onCollapse = null,
+            onRemove = null
+        } = options;
+        
+        const decimals = 4;
+        const stepDecimals = isInt ? 0 : 4; // Int sliders show integer step
+        let currentName = name;
+        let currentMin = min;
+        let currentMax = max;
+        let currentValue = Math.max(min, Math.min(max, value));
+        let currentStep = isInt ? 1 : step;
+        let isLocked = locked;
+        let isExpanded = expanded;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-uniform-slider';
+        if (isExpanded) container.classList.add('expanded');
+        
+        // Toggle button (used in both top row when expanded, middle row when minimized)
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'sl-uniform-toggle';
+        toggleBtn.textContent = '▼';
+        toggleBtn.title = 'Expand';
+        toggleBtn.style.cursor = 'pointer';
+        
+        // Top row: Start | Value | End | Toggle(▲)
+        const topRow = document.createElement('div');
+        topRow.className = 'sl-uniform-row sl-uniform-row-top';
+        
+        const startInput = createEditableNum(currentMin, (v) => {
+            currentMin = v;
+            if (currentMin > currentMax) { currentMax = currentMin; endInput.setValue(currentMax); }
+            if (currentValue < currentMin) {
+                currentValue = currentMin;
+                valueInput.setValue(currentValue);
+                updateTrackVisuals();
+            }
+            if (onRangeChange) onRangeChange(currentMin, currentMax);
+        }, isInt, decimals);
+        startInput.classList.add('sl-uniform-start');
+        
+        const valueInput = createEditableNum(currentValue, (v) => {
+            currentValue = Math.max(currentMin, Math.min(currentMax, v));
+            valueInput.setValue(currentValue);
+            updateTrackVisuals();
+            if (onChange) onChange(currentValue, currentName);
+        }, isInt, decimals);
+        valueInput.classList.add('sl-uniform-value');
+        
+        const endInput = createEditableNum(currentMax, (v) => {
+            currentMax = v;
+            if (currentMax < currentMin) { currentMin = currentMax; startInput.setValue(currentMin); }
+            if (currentValue > currentMax) {
+                currentValue = currentMax;
+                valueInput.setValue(currentValue);
+                updateTrackVisuals();
+            }
+            if (onRangeChange) onRangeChange(currentMin, currentMax);
+        }, isInt, decimals);
+        endInput.classList.add('sl-uniform-end');
+        
+        // Toggle button clone for top row (minimize button)
+        const topToggleBtn = document.createElement('button');
+        topToggleBtn.className = 'sl-uniform-toggle';
+        topToggleBtn.textContent = '▲';
+        topToggleBtn.title = 'Collapse';
+        topToggleBtn.style.cursor = 'pointer';
+        
+        topRow.appendChild(startInput);
+        topRow.appendChild(valueInput);
+        topRow.appendChild(endInput);
+        topRow.appendChild(topToggleBtn);
+        
+        // Middle row: Label | Slider Track | Toggle(▼) (toggle only when minimized)
+        const middleRow = document.createElement('div');
+        middleRow.className = 'sl-uniform-row sl-uniform-row-middle';
+        
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.className = 'sl-uniform-label';
+        labelInput.value = currentName;
+        labelInput.readOnly = true;
+        labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
+        labelInput.addEventListener('blur', () => { 
+            labelInput.readOnly = true;
+            currentName = labelInput.value || 'u_custom';
+            if (onNameChange) onNameChange(currentName);
+        });
+        
+        // Slider track
+        const track = document.createElement('div');
+        track.className = 'sl-slider-track';
+        track.style.cursor = 'pointer';
+        
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-slider-track-bg';
+        
+        const fill = document.createElement('div');
+        fill.className = 'sl-slider-track-fill';
+        
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slider-thumb';
+        thumb.style.cursor = 'pointer';
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        
+        function updateTrackVisuals() {
+            const percent = ((currentValue - currentMin) / (currentMax - currentMin)) * 100;
+            fill.style.width = `${percent}%`;
+            thumb.style.left = `${percent}%`;
+        }
+        
+        // Track interaction
+        function handleTrackPointer(e) {
+            if (isLocked) return;
+            const rect = trackBg.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            let newValue = currentMin + percent * (currentMax - currentMin);
+            newValue = Math.round(newValue / currentStep) * currentStep;
+            currentValue = Math.max(currentMin, Math.min(currentMax, newValue));
+            updateTrackVisuals();
+            valueInput.setValue(currentValue);
+            if (onChange) onChange(currentValue, currentName);
+        }
+        
+        track.addEventListener('pointerdown', (e) => {
+            if (isLocked) return;
+            e.preventDefault();
+            track.classList.add('dragging');
+            handleTrackPointer(e);
+            
+            const moveHandler = (e) => handleTrackPointer(e);
+            const upHandler = () => {
+                track.classList.remove('dragging');
+                document.removeEventListener('pointermove', moveHandler);
+                document.removeEventListener('pointerup', upHandler);
+            };
+            
+            document.addEventListener('pointermove', moveHandler);
+            document.addEventListener('pointerup', upHandler);
+        });
+        
+        middleRow.appendChild(labelInput);
+        middleRow.appendChild(track);
+        middleRow.appendChild(toggleBtn);
+        
+        // Bottom row: Lock | Step | Incrementer | Close
+        const bottomRow = document.createElement('div');
+        bottomRow.className = 'sl-uniform-row sl-uniform-row-bottom';
+        
+        const lockBtn = document.createElement('button');
+        lockBtn.className = 'sl-uniform-lock';
+        lockBtn.textContent = isLocked ? '🔒' : '🔓';
+        lockBtn.title = 'Lock value';
+        lockBtn.style.cursor = 'pointer';
+        lockBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isLocked = !isLocked;
+            lockBtn.textContent = isLocked ? '🔒' : '🔓';
+            container.classList.toggle('locked', isLocked);
+        });
+        
+        // Step input (aligned with End)
+        const stepInput = createEditableNum(currentStep, (v) => {
+            currentStep = Math.max(isInt ? 1 : 0.0001, v);
+            if (isInt) currentStep = Math.round(currentStep);
+            stepInput.setValue(currentStep);
+        }, isInt, stepDecimals);
+        stepInput.classList.add('sl-uniform-step');
+        
+        // Incrementer (aligned with Value)
+        const incrementer = document.createElement('div');
+        incrementer.className = 'sl-uniform-incrementer';
+        
+        const decBtn = document.createElement('button');
+        decBtn.className = 'sl-uniform-inc-btn';
+        decBtn.textContent = '<';
+        decBtn.style.cursor = 'pointer';
+        decBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isLocked) return;
+            currentValue = Math.max(currentMin, currentValue - currentStep);
+            updateTrackVisuals();
+            valueInput.setValue(currentValue);
+            if (onChange) onChange(currentValue, currentName);
+        });
+        
+        const incBtn = document.createElement('button');
+        incBtn.className = 'sl-uniform-inc-btn';
+        incBtn.textContent = '>';
+        incBtn.style.cursor = 'pointer';
+        incBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isLocked) return;
+            currentValue = Math.min(currentMax, currentValue + currentStep);
+            updateTrackVisuals();
+            valueInput.setValue(currentValue);
+            if (onChange) onChange(currentValue, currentName);
+        });
+        
+        incrementer.appendChild(decBtn);
+        incrementer.appendChild(incBtn);
+        
+        // Close button (aligned with Toggle position)
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'sl-uniform-close';
+        closeBtn.textContent = '×';
+        closeBtn.title = 'Remove';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (onRemove) onRemove(container);
+        });
+        
+        bottomRow.appendChild(lockBtn);
+        bottomRow.appendChild(stepInput);
+        bottomRow.appendChild(incrementer);
+        bottomRow.appendChild(closeBtn);
+        
+        // Assemble
+        container.appendChild(topRow);
+        container.appendChild(middleRow);
+        container.appendChild(bottomRow);
+        
+        updateTrackVisuals();
+        
+        // Expand/Collapse functions
+        function expand() {
+            if (isExpanded) return;
+            isExpanded = true;
+            container.classList.add('expanded');
+            toggleBtn.textContent = '▲';
+            toggleBtn.title = 'Collapse';
+            if (onExpand) onExpand(container);
+        }
+        
+        function collapse() {
+            if (!isExpanded) return;
+            isExpanded = false;
+            container.classList.remove('expanded');
+            toggleBtn.textContent = '▼';
+            toggleBtn.title = 'Expand';
+            if (onCollapse) onCollapse(container);
+        }
+        
+        function toggle() {
+            if (isExpanded) collapse();
+            else expand();
+        }
+        
+        toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggle();
+        });
+        
+        topToggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            collapse();
+        });
+        
+        // Public API
+        container.expand = expand;
+        container.collapse = collapse;
+        container.isExpanded = () => isExpanded;
+        container.getValue = () => currentValue;
+        container.setValue = (v) => {
+            currentValue = Math.max(currentMin, Math.min(currentMax, v));
+            updateTrackVisuals();
+            valueInput.setValue(currentValue);
+        };
+        container.getName = () => currentName;
+        container.setName = (n) => { currentName = n; labelInput.value = n; };
+        container.getRange = () => ({ min: currentMin, max: currentMax });
+        container.setRange = (newMin, newMax) => {
+            currentMin = newMin;
+            currentMax = newMax;
+            startInput.setValue(currentMin);
+            endInput.setValue(currentMax);
+        };
+        container.isLocked = () => isLocked;
+        container.setLocked = (l) => {
+            isLocked = l;
+            lockBtn.textContent = isLocked ? '🔒' : '🔓';
+            container.classList.toggle('locked', isLocked);
+        };
+        container.getData = () => ({
+            name: currentName,
+            value: currentValue,
+            min: currentMin,
+            max: currentMax,
+            step: currentStep,
+            locked: isLocked
+        });
+        
+        return container;
+    }
+    
+    function createEditableNum(value, onChange, isInt = false, decimals = 2) {
+        const container = document.createElement('div');
+        container.className = 'sl-editable-number';
+        
+        const display = document.createElement('span');
+        display.className = 'sl-editable-number-display';
+        display.textContent = isInt ? Math.round(value).toString() : value.toFixed(decimals);
+        
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'sl-editable-number-input';
+        input.value = value;
+        input.step = isInt ? 1 : Math.pow(10, -decimals);
+        
+        container.appendChild(display);
+        container.appendChild(input);
+        
+        let isEditing = false;
+        let currentValue = value;
+        
+        display.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isEditing = true;
+            container.classList.add('editing');
+            input.value = currentValue;
+            input.focus();
+            input.select();
+        });
+        
+        input.addEventListener('blur', () => {
+            isEditing = false;
+            container.classList.remove('editing');
+            let v = parseFloat(input.value);
+            if (isNaN(v)) v = currentValue;
+            if (isInt) v = Math.round(v);
+            currentValue = v;
+            display.textContent = isInt ? Math.round(currentValue).toString() : currentValue.toFixed(decimals);
+            if (onChange) onChange(currentValue);
+        });
+        
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') input.blur();
+            else if (e.key === 'Escape') { input.value = currentValue; input.blur(); }
+        });
+        
+        input.addEventListener('click', (e) => e.stopPropagation());
+        
+        container.getValue = () => currentValue;
+        container.setValue = (v) => {
+            currentValue = v;
+            display.textContent = isInt ? Math.round(currentValue).toString() : currentValue.toFixed(decimals);
+            if (!isEditing) input.value = v;
+        };
+        
+        return container;
+    }
+    
+    // ========================================
+    // SLIDER STACK - Container for uniforms
+    // ========================================
+    
+    function SliderStack(options = {}) {
+        const {
+            sliders = [],
+            addable = true,
+            removable = true,
+            onChange = null,
+            onAdd = null,
+            onRemove = null
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-slider-stack';
+        
+        const slidersContainer = document.createElement('div');
+        slidersContainer.className = 'sl-slider-stack-sliders';
+        container.appendChild(slidersContainer);
+        
+        let addBtn = null;
+        if (addable) {
+            addBtn = document.createElement('button');
+            addBtn.className = 'sl-slider-stack-add';
+            addBtn.textContent = '+ Add';
+            addBtn.style.cursor = 'pointer';
+            addBtn.addEventListener('click', () => {
+                const newSlider = addSlider({
+                    name: `u_custom${sliderElements.length}`,
+                    value: 0.5,
+                    min: 0,
+                    max: 1
+                });
+                if (onAdd) onAdd(newSlider.getData());
+            });
+            container.appendChild(addBtn);
+        }
+        
+        const sliderElements = [];
+        
+        function addSlider(config) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'sl-slider-stack-item';
+
+            const slider = UniformSlider({
+                ...config,
+                onChange: (value, name) => {
+                    if (onChange) onChange(value, name, sliderElements.indexOf(wrapper));
+                },
+                onRemove: removable ? () => {
+                    removeSlider(sliderElements.indexOf(wrapper));
+                } : null
+            });
+
+            wrapper.appendChild(slider);
+
+            sliderElements.push(wrapper);
+            slidersContainer.appendChild(wrapper);
+
+            wrapper.sliderAPI = slider;
+            return slider;
+        }
+        
+        function removeSlider(index) {
+            if (index < 0 || index >= sliderElements.length) return;
+            
+            const wrapper = sliderElements[index];
+            const data = wrapper.sliderAPI.getData();
+            
+            wrapper.remove();
+            sliderElements.splice(index, 1);
+            
+            if (onRemove) onRemove(data, index);
+        }
+        
+        sliders.forEach(config => addSlider(config));
+        
+        container.addSlider = addSlider;
+        container.removeSlider = removeSlider;
+        container.getSliders = () => sliderElements.map(w => w.sliderAPI);
+        container.getData = () => sliderElements.map(w => w.sliderAPI.getData());
+        container.setData = (data) => {
+            while (sliderElements.length > 0) removeSlider(0);
+            data.forEach(config => addSlider(config));
+        };
+        container.collapseAll = () => {
+            if (expandedIndex >= 0) {
+                sliderElements[expandedIndex].sliderAPI.collapse();
+            }
+        };
+        
+        return container;
+    }
+    
+    // ========================================
+    // TABS COMPONENT
+    // ========================================
+    
+    function Tabs(options = {}) {
+        const {
+            tabs = [],
+            activeTab = null,
+            position = 'top',
+            variant = 'default',
+            closable = false,
+            addable = false,
+            onTabChange = null,
+            onTabClose = null,
+            onTabAdd = null,
+            className = ''
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = `sl-tabs ${position} ${variant} ${className}`.trim();
+        
+        const tabBar = document.createElement('div');
+        tabBar.className = 'sl-tabs-bar';
+        tabBar.setAttribute('role', 'tablist');
+        
+        const tabContent = document.createElement('div');
+        tabContent.className = 'sl-tabs-content';
+        
+        let currentTabs = [...tabs];
+        let activeId = activeTab || (tabs.length > 0 ? tabs[0].id : null);
+        
+        function renderTabBar() {
+            tabBar.innerHTML = '';
+            
+            currentTabs.forEach((tab) => {
+                const tabEl = document.createElement('button');
+                tabEl.className = 'sl-tab';
+                tabEl.setAttribute('role', 'tab');
+                tabEl.setAttribute('aria-selected', tab.id === activeId);
+                tabEl.dataset.tabId = tab.id;
+                
+                if (tab.id === activeId) tabEl.classList.add('active');
+                
+                if (tab.icon) {
+                    const iconEl = document.createElement('span');
+                    iconEl.className = 'sl-tab-icon';
+                    iconEl.textContent = tab.icon;
+                    tabEl.appendChild(iconEl);
+                }
+                
+                const labelEl = document.createElement('span');
+                labelEl.className = 'sl-tab-label';
+                labelEl.textContent = tab.label;
+                tabEl.appendChild(labelEl);
+                
+                if (tab.closable !== false && closable) {
+                    const closeBtn = document.createElement('button');
+                    closeBtn.className = 'sl-tab-close';
+                    closeBtn.innerHTML = '×';
+                    closeBtn.title = 'Close tab';
+                    closeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        closeTab(tab.id);
+                    });
+                    tabEl.appendChild(closeBtn);
+                }
+                
+                tabEl.addEventListener('click', () => setActiveTab(tab.id));
+                tabBar.appendChild(tabEl);
+            });
+            
+            if (addable) {
+                const addBtn = document.createElement('button');
+                addBtn.className = 'sl-tab-add';
+                addBtn.innerHTML = '+';
+                addBtn.title = 'Add tab';
+                addBtn.addEventListener('click', () => {
+                    if (onTabAdd) {
+                        const newTab = onTabAdd();
+                        if (newTab) addTab(newTab);
+                    }
+                });
+                tabBar.appendChild(addBtn);
+            }
+        }
+        
+        function renderContent() {
+            tabContent.innerHTML = '';
+            const activeTabData = currentTabs.find(t => t.id === activeId);
+            if (activeTabData) {
+                const panel = document.createElement('div');
+                panel.className = 'sl-tab-panel';
+                panel.setAttribute('role', 'tabpanel');
+                panel.dataset.tabId = activeTabData.id;
+                
+                if (activeTabData.content) {
+                    if (typeof activeTabData.content === 'function') {
+                        const content = activeTabData.content();
+                        if (typeof content === 'string') {
+                            panel.innerHTML = content;
+                        } else {
+                            panel.appendChild(content);
+                        }
+                    } else if (typeof activeTabData.content === 'string') {
+                        panel.innerHTML = activeTabData.content;
+                    } else {
+                        panel.appendChild(activeTabData.content);
+                    }
+                }
+                
+                tabContent.appendChild(panel);
+            }
+        }
+        
+        function setActiveTab(id) {
+            if (!currentTabs.find(t => t.id === id)) return;
+            const prevId = activeId;
+            activeId = id;
+            
+            tabBar.querySelectorAll('.sl-tab').forEach(tab => {
+                const isActive = tab.dataset.tabId === id;
+                tab.classList.toggle('active', isActive);
+                tab.setAttribute('aria-selected', isActive);
+            });
+            
+            renderContent();
+            if (onTabChange && prevId !== id) onTabChange(id, prevId);
+        }
+        
+        function addTab(tab) {
+            currentTabs.push(tab);
+            renderTabBar();
+            setActiveTab(tab.id);
+        }
+        
+        function closeTab(id) {
+            const index = currentTabs.findIndex(t => t.id === id);
+            if (index === -1) return;
+            
+            if (onTabClose) {
+                const result = onTabClose(id);
+                if (result === false) return;
+            }
+            
+            currentTabs.splice(index, 1);
+            
+            if (activeId === id && currentTabs.length > 0) {
+                const newIndex = Math.min(index, currentTabs.length - 1);
+                activeId = currentTabs[newIndex].id;
+            } else if (currentTabs.length === 0) {
+                activeId = null;
+            }
+            
+            renderTabBar();
+            renderContent();
+        }
+        
+        function updateTab(id, updates) {
+            const tab = currentTabs.find(t => t.id === id);
+            if (tab) {
+                Object.assign(tab, updates);
+                renderTabBar();
+                if (id === activeId) renderContent();
+            }
+        }
+        
+        if (position === 'bottom' || position === 'right') {
+            container.appendChild(tabContent);
+            container.appendChild(tabBar);
+        } else {
+            container.appendChild(tabBar);
+            container.appendChild(tabContent);
+        }
+        
+        renderTabBar();
+        renderContent();
+        
+        container.setActiveTab = setActiveTab;
+        container.addTab = addTab;
+        container.closeTab = closeTab;
+        container.updateTab = updateTab;
+        container.getTabs = () => [...currentTabs];
+        container.getActiveTab = () => activeId;
+        container.setTabs = (newTabs) => {
+            currentTabs = [...newTabs];
+            if (!currentTabs.find(t => t.id === activeId) && currentTabs.length > 0) {
+                activeId = currentTabs[0].id;
+            }
+            renderTabBar();
+            renderContent();
+        };
+        
+        return container;
+    }
+    
+    // ========================================
     // PUBLIC API
     // ========================================
     
@@ -2322,6 +3208,14 @@ const SLUI = (function() {
         setForceMode,
         isMobileDevice,
         
+        // Components
+        Slider,
+        LabeledSlider,
+        SliderGroup,
+        UniformSlider,
+        SliderStack,
+        Tabs,
+
         // State access
         get state() { return state; }
     };

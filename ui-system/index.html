@@ -57,24 +57,40 @@
             font-weight: 600;
         }
         
-        .demo-nodes {
+        .demo-section {
+            margin-bottom: 24px;
+        }
+        
+        .demo-section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .demo-row {
             display: flex;
+            gap: 16px;
             flex-wrap: wrap;
-            gap: 8px;
+            margin-bottom: 16px;
         }
         
-        .demo-node {
-            padding: 8px 16px;
+        .demo-box {
+            flex: 1;
+            min-width: 200px;
+            padding: 16px;
             background: var(--bg-secondary);
-            border: 1px solid var(--border);
             border-radius: var(--border-radius);
-            color: var(--text-primary);
-            font-size: 0.8rem;
+            border: 1px solid var(--border);
         }
         
-        .demo-node.selected {
-            border-color: var(--accent);
-            background: var(--bg-active);
+        .demo-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-bottom: 8px;
         }
     </style>
 </head>
@@ -92,13 +108,207 @@
     
     <!-- Demo Application -->
     <script>
-        // Keep title static (remove dynamic timestamps)
+        // Keep title static
         document.title = `SL Editor - UI System Prototype`;
         
         // Initialize UI system
         SLUI.init().then(() => {
             
-            // Register demo panels
+            // ========================================
+            // COMPONENTS SHOWCASE PANEL
+            // ========================================
+            
+            SLUI.registerPanel({
+                id: 'components',
+                icon: '🧩',
+                title: 'Components',
+                createContent: () => {
+                    const div = document.createElement('div');
+                    div.className = 'demo-content';
+                    
+                    // SLIDERS SECTION
+                    const slidersSection = document.createElement('div');
+                    slidersSection.className = 'demo-section';
+                    slidersSection.innerHTML = '<div class="demo-section-title">Sliders</div>';
+                    
+                    // Basic Slider
+                    const sliderBox1 = document.createElement('div');
+                    sliderBox1.className = 'demo-box';
+                    sliderBox1.innerHTML = '<div class="demo-label">Basic Slider</div>';
+                    const basicSlider = SLUI.Slider({ 
+                        min: 0, max: 100, value: 50,
+                        onInput: (v) => console.log('Slider value:', v)
+                    });
+                    sliderBox1.appendChild(basicSlider);
+                    
+                    // Labeled Slider
+                    const sliderBox2 = document.createElement('div');
+                    sliderBox2.className = 'demo-box';
+                    sliderBox2.innerHTML = '<div class="demo-label">Labeled Slider (with min/max)</div>';
+                    const labeledSlider = SLUI.LabeledSlider({ 
+                        min: 0, max: 1, value: 0.5, step: 0.01,
+                        valueFormat: v => v.toFixed(2)
+                    });
+                    sliderBox2.appendChild(labeledSlider);
+                    
+                    // Slider Group
+                    const sliderBox3 = document.createElement('div');
+                    sliderBox3.className = 'demo-box';
+                    sliderBox3.innerHTML = '<div class="demo-label">Slider Group (with input)</div>';
+                    const sliderGroup = SLUI.SliderGroup({ 
+                        label: 'Opacity', 
+                        min: 0, max: 100, value: 75,
+                        onChange: (v) => console.log('Opacity:', v)
+                    });
+                    sliderBox3.appendChild(sliderGroup);
+                    
+                    // Decimal Slider Group
+                    const sliderBox4 = document.createElement('div');
+                    sliderBox4.className = 'demo-box';
+                    sliderBox4.innerHTML = '<div class="demo-label">Decimal Slider Group</div>';
+                    const decimalSlider = SLUI.SliderGroup({ 
+                        label: 'Scale', 
+                        min: 0.1, max: 2.0, value: 1.0, step: 0.1,
+                        valueFormat: v => v.toFixed(1)
+                    });
+                    sliderBox4.appendChild(decimalSlider);
+                    
+                    const sliderRow = document.createElement('div');
+                    sliderRow.className = 'demo-row';
+                    sliderRow.appendChild(sliderBox1);
+                    sliderRow.appendChild(sliderBox2);
+                    slidersSection.appendChild(sliderRow);
+                    
+                    const sliderRow2 = document.createElement('div');
+                    sliderRow2.className = 'demo-row';
+                    sliderRow2.appendChild(sliderBox3);
+                    sliderRow2.appendChild(sliderBox4);
+                    slidersSection.appendChild(sliderRow2);
+                    
+                    div.appendChild(slidersSection);
+                    
+                    // TABS SECTION
+                    const tabsSection = document.createElement('div');
+                    tabsSection.className = 'demo-section';
+                    tabsSection.innerHTML = '<div class="demo-section-title">Tabs</div>';
+                    
+                    // Default Tabs
+                    const tabsBox1 = document.createElement('div');
+                    tabsBox1.className = 'demo-box';
+                    tabsBox1.innerHTML = '<div class="demo-label">Default Tabs</div>';
+                    const defaultTabs = SLUI.Tabs({
+                        tabs: [
+                            { id: 'main', label: 'Main', icon: '📄', content: '<p style="color: var(--text-secondary);">Main shader code goes here.</p>' },
+                            { id: 'bufferA', label: 'Buffer A', icon: '🅰️', content: '<p style="color: var(--text-secondary);">Buffer A code for multi-pass rendering.</p>' },
+                            { id: 'bufferB', label: 'Buffer B', icon: '🅱️', content: '<p style="color: var(--text-secondary);">Buffer B for additional passes.</p>' }
+                        ],
+                        onTabChange: (id) => console.log('Tab changed:', id)
+                    });
+                    tabsBox1.appendChild(defaultTabs);
+                    
+                    // Pills Tabs
+                    const tabsBox2 = document.createElement('div');
+                    tabsBox2.className = 'demo-box';
+                    tabsBox2.innerHTML = '<div class="demo-label">Pills Variant</div>';
+                    const pillsTabs = SLUI.Tabs({
+                        tabs: [
+                            { id: 'glsl', label: 'GLSL', content: '<p style="color: var(--text-secondary);">OpenGL Shading Language</p>' },
+                            { id: 'wgsl', label: 'WGSL', content: '<p style="color: var(--text-secondary);">WebGPU Shading Language</p>' },
+                            { id: 'hlsl', label: 'HLSL', content: '<p style="color: var(--text-secondary);">DirectX Shading Language</p>' }
+                        ],
+                        variant: 'pills'
+                    });
+                    tabsBox2.appendChild(pillsTabs);
+                    
+                    // Underline Tabs
+                    const tabsBox3 = document.createElement('div');
+                    tabsBox3.className = 'demo-box';
+                    tabsBox3.innerHTML = '<div class="demo-label">Underline Variant</div>';
+                    const underlineTabs = SLUI.Tabs({
+                        tabs: [
+                            { id: 'code', label: 'Code', content: '<p style="color: var(--text-secondary);">Shader source code editor.</p>' },
+                            { id: 'uniforms', label: 'Uniforms', content: '<p style="color: var(--text-secondary);">Uniform variables and controls.</p>' },
+                            { id: 'channels', label: 'Channels', content: '<p style="color: var(--text-secondary);">Input channels: textures, audio, video.</p>' }
+                        ],
+                        variant: 'underline'
+                    });
+                    tabsBox3.appendChild(underlineTabs);
+                    
+                    // Closable Tabs
+                    const tabsBox4 = document.createElement('div');
+                    tabsBox4.className = 'demo-box';
+                    tabsBox4.innerHTML = '<div class="demo-label">Closable + Addable</div>';
+                    let tabCounter = 3;
+                    const closableTabs = SLUI.Tabs({
+                        tabs: [
+                            { id: 'tab1', label: 'Tab 1', content: '<p style="color: var(--text-secondary);">First tab content</p>' },
+                            { id: 'tab2', label: 'Tab 2', content: '<p style="color: var(--text-secondary);">Second tab content</p>' }
+                        ],
+                        closable: true,
+                        addable: true,
+                        onTabAdd: () => ({ 
+                            id: 'tab' + (++tabCounter), 
+                            label: 'Tab ' + tabCounter, 
+                            content: '<p style="color: var(--text-secondary);">New tab content</p>' 
+                        }),
+                        onTabClose: (id) => console.log('Closing tab:', id)
+                    });
+                    tabsBox4.appendChild(closableTabs);
+                    
+                    const tabsRow = document.createElement('div');
+                    tabsRow.className = 'demo-row';
+                    tabsRow.appendChild(tabsBox1);
+                    tabsRow.appendChild(tabsBox2);
+                    tabsSection.appendChild(tabsRow);
+                    
+                    const tabsRow2 = document.createElement('div');
+                    tabsRow2.className = 'demo-row';
+                    tabsRow2.appendChild(tabsBox3);
+                    tabsRow2.appendChild(tabsBox4);
+                    tabsSection.appendChild(tabsRow2);
+                    
+                    div.appendChild(tabsSection);
+                    
+                    return div;
+                }
+            });
+            
+            // ========================================
+            // ORIGINAL DEMO PANELS
+            // ========================================
+            
+            // Uniforms panel - showcases SliderStack
+            SLUI.registerPanel({
+                id: 'uniforms',
+                icon: '🎚️',
+                title: 'Uniforms',
+                createContent: () => {
+                    const div = document.createElement('div');
+                    div.style.padding = '8px';
+                    
+                    const title = document.createElement('div');
+                    title.style.cssText = 'font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;';
+                    title.textContent = 'Custom Uniforms';
+                    div.appendChild(title);
+                    
+                    const stack = SLUI.SliderStack({
+                        sliders: [
+                            { name: 'u_speed', min: 0.1, max: 5.0, value: 1.0, step: 0.1 },
+                            { name: 'u_scale', min: 0.1, max: 10.0, value: 1.0, step: 0.1 },
+                            { name: 'u_intensity', min: 0, max: 1, value: 0.7, step: 0.01 },
+                            { name: 'u_offset_x', min: -2, max: 2, value: 0, step: 0.01 },
+                            { name: 'u_offset_y', min: -2, max: 2, value: 0, step: 0.01 },
+                            { name: 'u_iterations', min: 1, max: 50, value: 16, step: 1, isInt: true }
+                        ],
+                        onChange: (value, name, index) => {
+                            console.log(`Uniform changed: ${name} = ${value}`);
+                        }
+                    });
+                    div.appendChild(stack);
+                    
+                    return div;
+                }
+            });
             
             // Editor panel
             SLUI.registerPanel({
@@ -109,13 +319,13 @@
                     const div = document.createElement('div');
                     div.className = 'demo-content';
                     div.innerHTML = `
-                        <h3 class="sl-text-ui" data-i18n="panels.editor.codeTitle">${SLUI.t('panels.editor.codeTitle')}</h3>
+                        <h3 class="sl-text-ui">${SLUI.t('panels.editor.codeTitle')}</h3>
                         <div class="demo-code">void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = fragCoord / iResolution.xy;
     vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx + vec3(0, 2, 4));
     fragColor = vec4(col, 1.0);
 }</div>
-                        <p style="margin-top: 12px;" class="sl-text-content" data-i18n="panels.editor.codeHint">
+                        <p style="margin-top: 12px;" class="sl-text-content">
                             ${SLUI.t('panels.editor.codeHint')}
                         </p>
                     `;
@@ -132,11 +342,11 @@
                     const div = document.createElement('div');
                     div.className = 'demo-content';
                     div.innerHTML = `
-                        <h3 class="sl-text-ui" data-i18n="panels.preview.liveTitle">${SLUI.t('panels.preview.liveTitle')}</h3>
-                        <div class="demo-preview" data-i18n="panels.preview.canvasPlaceholder">
+                        <h3 class="sl-text-ui">${SLUI.t('panels.preview.liveTitle')}</h3>
+                        <div class="demo-preview">
                             ${SLUI.t('panels.preview.canvasPlaceholder')}
                         </div>
-                        <p style="margin-top: 12px;" class="sl-text-content" data-i18n="panels.preview.hint">
+                        <p style="margin-top: 12px;" class="sl-text-content">
                             ${SLUI.t('panels.preview.hint')}
                         </p>
                     `;
@@ -144,33 +354,7 @@
                 }
             });
             
-            // Nodes panel
-            SLUI.registerPanel({
-                id: 'nodes',
-                icon: '🔗',
-                title: 'Nodes',
-                createContent: () => {
-                    const div = document.createElement('div');
-                    div.className = 'demo-content';
-                    div.innerHTML = `
-                        <h3 class="sl-text-ui" data-i18n="panels.nodes.editorTitle">${SLUI.t('panels.nodes.editorTitle')}</h3>
-                        <div class="demo-nodes">
-                            <div class="demo-node selected" data-i18n="panels.nodes.types.sphere">${SLUI.t('panels.nodes.types.sphere')}</div>
-                            <div class="demo-node" data-i18n="panels.nodes.types.box">${SLUI.t('panels.nodes.types.box')}</div>
-                            <div class="demo-node" data-i18n="panels.nodes.types.smoothUnion">${SLUI.t('panels.nodes.types.smoothUnion')}</div>
-                            <div class="demo-node" data-i18n="panels.nodes.types.transform">${SLUI.t('panels.nodes.types.transform')}</div>
-                            <div class="demo-node" data-i18n="panels.nodes.types.material">${SLUI.t('panels.nodes.types.material')}</div>
-                            <div class="demo-node" data-i18n="panels.nodes.types.output">${SLUI.t('panels.nodes.types.output')}</div>
-                        </div>
-                        <p style="margin-top: 16px;" class="sl-text-content" data-i18n="panels.nodes.hint">
-                            ${SLUI.t('panels.nodes.hint')}
-                        </p>
-                    `;
-                    return div;
-                }
-            });
-            
-            // Inspector panel
+            // Inspector panel with Sliders
             SLUI.registerPanel({
                 id: 'inspector',
                 icon: '🔍',
@@ -178,23 +362,34 @@
                 createContent: () => {
                     const div = document.createElement('div');
                     div.className = 'demo-content';
-                    div.innerHTML = `
-                        <h3 class="sl-text-ui" data-i18n="panels.inspector.propertiesTitle">${SLUI.t('panels.inspector.propertiesTitle')}</h3>
-                        <div style="display: flex; flex-direction: column; gap: 12px;">
-                            <div>
-                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;" data-i18n="panels.inspector.radius">${SLUI.t('panels.inspector.radius')}</label>
-                                <input type="range" style="width: 100%;" value="50">
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;" data-i18n="panels.inspector.smoothness">${SLUI.t('panels.inspector.smoothness')}</label>
-                                <input type="range" style="width: 100%;" value="30">
-                            </div>
-                            <div>
-                                <label style="display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 0.75rem;" data-i18n="panels.inspector.color">${SLUI.t('panels.inspector.color')}</label>
-                                <input type="color" value="#e94560" style="width: 100%; height: 32px; border: none; cursor: pointer;">
-                            </div>
-                        </div>
+                    
+                    const title = document.createElement('h3');
+                    title.className = 'sl-text-ui';
+                    title.textContent = SLUI.t('panels.inspector.propertiesTitle');
+                    div.appendChild(title);
+                    
+                    // Add slider controls
+                    const radiusSlider = SLUI.SliderGroup({
+                        label: SLUI.t('panels.inspector.radius'),
+                        min: 0, max: 100, value: 50
+                    });
+                    div.appendChild(radiusSlider);
+                    
+                    const smoothSlider = SLUI.SliderGroup({
+                        label: SLUI.t('panels.inspector.smoothness'),
+                        min: 0, max: 100, value: 30
+                    });
+                    div.appendChild(smoothSlider);
+                    
+                    // Color picker
+                    const colorGroup = document.createElement('div');
+                    colorGroup.className = 'sl-slider-group';
+                    colorGroup.innerHTML = `
+                        <label class="sl-slider-group-label">${SLUI.t('panels.inspector.color')}</label>
+                        <input type="color" value="#e94560" style="width: 100%; height: 32px; border: none; cursor: pointer; border-radius: var(--border-radius);">
                     `;
+                    div.appendChild(colorGroup);
+                    
                     return div;
                 }
             });
@@ -209,13 +404,13 @@
                     div.className = 'demo-content';
                     const items = ['raymarching', 'fractalNoise', 'pbrLighting', 'postProcessing', 'volumetricFog'];
                     div.innerHTML = `
-                        <h3 class="sl-text-ui" data-i18n="panels.library.title">${SLUI.t('panels.library.title')}</h3>
-                        <input type="text" class="sl-input" data-i18n-placeholder="panels.library.searchPlaceholder" placeholder="${SLUI.t('panels.library.searchPlaceholder')}" style="width: 100%; margin-bottom: 12px;">
+                        <h3 class="sl-text-ui">${SLUI.t('panels.library.title')}</h3>
+                        <input type="text" class="sl-input" placeholder="${SLUI.t('panels.library.searchPlaceholder')}" style="width: 100%; margin-bottom: 12px;">
                         <div style="display: flex; flex-direction: column; gap: 8px;">
                             ${items.map(key => `
                                 <div style="padding: 8px 12px; background: var(--bg-secondary); border-radius: var(--border-radius); cursor: pointer; transition: background var(--transition);" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-secondary)'">
-                                    <div style="font-weight: 500;" data-i18n="panels.library.items.${key}">${SLUI.t('panels.library.items.' + key)}</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-muted);" data-i18n="panels.library.templateLabel">${SLUI.t('panels.library.templateLabel')}</div>
+                                    <div style="font-weight: 500;">${SLUI.t('panels.library.items.' + key)}</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">${SLUI.t('panels.library.templateLabel')}</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -233,29 +428,29 @@
                     const div = document.createElement('div');
                     div.className = 'demo-content';
                     div.innerHTML = `
-                        <h3 class="sl-text-ui" data-i18n="panels.console.outputTitle">${SLUI.t('panels.console.outputTitle')}</h3>
+                        <h3 class="sl-text-ui">${SLUI.t('panels.console.outputTitle')}</h3>
                         <div style="font-family: var(--font-code); font-size: 0.8rem; background: var(--bg-primary); padding: 12px; border-radius: var(--border-radius); border: 1px solid var(--border); height: 200px; overflow: auto;">
-                            <div style="color: var(--success);">[INFO] <span data-i18n="panels.console.messages.compiled">${SLUI.t('panels.console.messages.compiled')}</span></div>
-                            <div style="color: var(--text-muted);">[DEBUG] <span data-i18n="panels.console.messages.frameTime">${SLUI.t('panels.console.messages.frameTime')}</span></div>
-                            <div style="color: var(--warning);">[WARN] <span data-i18n="panels.console.messages.unusedUniform">${SLUI.t('panels.console.messages.unusedUniform')}</span></div>
-                            <div style="color: var(--text-muted);">[DEBUG] <span data-i18n="panels.console.messages.resolution">${SLUI.t('panels.console.messages.resolution')}</span></div>
-                            <div style="color: var(--success);">[INFO] <span data-i18n="panels.console.messages.previewUpdated">${SLUI.t('panels.console.messages.previewUpdated')}</span></div>
+                            <div style="color: var(--success);">[INFO] ${SLUI.t('panels.console.messages.compiled')}</div>
+                            <div style="color: var(--text-muted);">[DEBUG] ${SLUI.t('panels.console.messages.frameTime')}</div>
+                            <div style="color: var(--warning);">[WARN] ${SLUI.t('panels.console.messages.unusedUniform')}</div>
+                            <div style="color: var(--text-muted);">[DEBUG] ${SLUI.t('panels.console.messages.resolution')}</div>
+                            <div style="color: var(--success);">[INFO] ${SLUI.t('panels.console.messages.previewUpdated')}</div>
                         </div>
                     `;
                     return div;
                 }
             });
             
-            // Profile panel (opened from user menu)
+            // Profile panel (hidden from toolbar)
             SLUI.registerPanel({
                 id: 'profile',
                 icon: '👤',
                 title: 'Profile',
                 createContent: SLUI.createProfileContent,
-                showInToolbar: false  // Not in main toolbar, accessed via user menu
+                showInToolbar: false
             });
             
-            // Settings panel (registered like any other panel)
+            // Settings panel
             SLUI.registerPanel({
                 id: 'settings',
                 icon: '⚙',
@@ -263,17 +458,13 @@
                 createContent: SLUI.createSettingsContent
             });
             
-            // Open a couple of demo panels by default (desktop only)
+            // Open components panel by default on desktop
             if (SLUI.state.deviceMode !== 'mobile') {
                 setTimeout(() => {
-                    document.querySelector('[data-panel-id="editor"]')?.click();
-                    setTimeout(() => {
-                        document.querySelector('[data-panel-id="preview"]')?.click();
-                    }, 200);
+                    document.querySelector('[data-panel-id="uniforms"]')?.click();
                 }, 300);
             }
             
-            // Log device info
             console.log('Device mode:', SLUI.state.deviceMode);
             console.log('Is mobile device:', SLUI.isMobileDevice());
             
@@ -281,4 +472,3 @@
     </script>
 </body>
 </html>
-
