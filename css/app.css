@@ -672,8 +672,19 @@ button.paused:hover {
     min-width: 60px;
     min-height: 20px;
 }
+#reloadBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 108px;
+    height: 28px;
+    padding: 0;
+    min-width: unset;
+    line-height: 1;
+    font-size: 16px;
+}
+
 /* Consistent styling for toolbar buttons */
-#reloadBtn,
 #saveShaderBtn,
 #forkShaderBtn,
 #newShaderBtn {
