@@ -894,8 +894,15 @@ function attachPointerListeners(canvas) {
 let activeCanvas = null; // Store reference for mobile drag reliability
 
 function handlePointerDown(event) {
-    if (!event.isPrimary) return;
-    if (event.button !== undefined && event.button !== 0) return;
+    // For mouse, only accept primary button (left click)
+    // For touch, accept first touch (or any if isPrimary isn't reliable)
+    if (event.pointerType === 'mouse') {
+        if (!event.isPrimary) return;
+        if (event.button !== undefined && event.button !== 0) return;
+    } else {
+        // Touch/pen: accept if primary OR if we don't have an active pointer yet
+        if (!event.isPrimary && state.activePointerId !== null) return;
+    }
     
     const canvas = event.currentTarget;
     const pos = getPointerPosition(canvas, event);
@@ -924,7 +931,10 @@ function handlePointerDown(event) {
 }
 
 function handlePointerMove(event) {
-    if (!event.isPrimary && state.activePointerId !== event.pointerId) return;
+    // Accept if it's the tracked pointer, or if it's primary when idle
+    const isTrackedPointer = state.activePointerId === event.pointerId;
+    if (!isTrackedPointer && !event.isPrimary) return;
+    
     // Use stored canvas for reliability during mobile drags
     const canvas = event.currentTarget || activeCanvas;
     const pos = getPointerPosition(canvas, event);
@@ -937,7 +947,8 @@ function handlePointerMove(event) {
     
     updateHoverState(pos);
     
-    if (state.activePointerId === event.pointerId && state.mouseIsDown) {
+    // Update drag position if this is our active drag
+    if (isTrackedPointer && state.mouseIsDown) {
         state.mouseDragX = pos.pixelX;
         state.mouseDragY = pos.pixelY;
         state.mouseLastDownX = pos.pixelX;
@@ -946,7 +957,10 @@ function handlePointerMove(event) {
 }
 
 function handlePointerUp(event) {
-    if (state.activePointerId !== event.pointerId) return;
+    // Accept if it's our tracked pointer OR if we're in a down state and this is primary
+    const isTrackedPointer = state.activePointerId === event.pointerId;
+    if (!isTrackedPointer && !(state.mouseIsDown && event.isPrimary)) return;
+    
     // Use stored canvas for reliability during mobile drags
     const canvas = event.currentTarget || activeCanvas;
     if (canvas && canvas.releasePointerCapture) {
