@@ -752,3 +752,564 @@ export function TimelineSlider(options = {}) {
     
     return container;
 }
+
+// ========================================
+// CHECKBOX - Standard tick box
+// ========================================
+
+export function Checkbox(options = {}) {
+    const { label = '', checked = false, disabled = false, onChange = null } = options;
+    let isChecked = checked;
+    
+    const container = document.createElement('label');
+    container.className = 'sl-checkbox';
+    if (isChecked) container.classList.add('checked');
+    if (disabled) container.classList.add('disabled');
+    
+    const box = document.createElement('span');
+    box.className = 'sl-checkbox-box';
+    const check = document.createElement('span');
+    check.className = 'sl-checkbox-check';
+    check.textContent = '✓';
+    box.appendChild(check);
+    container.appendChild(box);
+    
+    if (label) { const l = document.createElement('span'); l.className = 'sl-checkbox-label'; l.textContent = label; container.appendChild(l); }
+    
+    container.addEventListener('click', (e) => { if (disabled) return; e.preventDefault(); isChecked = !isChecked; container.classList.toggle('checked', isChecked); if (onChange) onChange(isChecked); });
+    
+    container.isChecked = () => isChecked;
+    container.setChecked = (c) => { isChecked = c; container.classList.toggle('checked', isChecked); };
+    container.setDisabled = (d) => { container.classList.toggle('disabled', d); };
+    
+    return container;
+}
+
+// ========================================
+// UNIFORM BOOL - Checkbox with editable title
+// ========================================
+
+export function UniformBool(options = {}) {
+    const { name = 'u_bool0', checked = false, onChange = null, onNameChange = null, onRemove = null } = options;
+    let isChecked = checked;
+    let currentName = name;
+    
+    const container = document.createElement('div');
+    container.className = 'sl-uniform-bool';
+    if (isChecked) container.classList.add('checked');
+    
+    const box = document.createElement('span');
+    box.className = 'sl-checkbox-box';
+    const check = document.createElement('span');
+    check.className = 'sl-checkbox-check';
+    check.textContent = '✓';
+    box.appendChild(check);
+    container.appendChild(box);
+    
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'sl-uniform-bool-label';
+    labelInput.value = currentName;
+    labelInput.readOnly = true;
+    labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
+    labelInput.addEventListener('blur', () => { labelInput.readOnly = true; currentName = labelInput.value || 'u_bool'; if (onNameChange) onNameChange(currentName); });
+    labelInput.addEventListener('click', (e) => e.stopPropagation());
+    container.appendChild(labelInput);
+    
+    container.addEventListener('click', (e) => { if (e.target === labelInput) return; isChecked = !isChecked; container.classList.toggle('checked', isChecked); if (onChange) onChange(isChecked, currentName); });
+    
+    container.isChecked = () => isChecked;
+    container.setChecked = (c) => { isChecked = c; container.classList.toggle('checked', isChecked); };
+    container.getName = () => currentName;
+    container.setName = (n) => { currentName = n; labelInput.value = n; };
+    container.getData = () => ({ name: currentName, value: isChecked });
+    container.triggerRemove = () => { if (onRemove) onRemove(container); };
+    
+    return container;
+}
+
+// ========================================
+// BOOL STACK - Fluid row container
+// ========================================
+
+export function BoolStack(options = {}) {
+    const { bools = [], addable = true, removable = true, onChange = null, onAdd = null, onRemove = null } = options;
+    
+    const container = document.createElement('div');
+    container.className = 'sl-bool-stack';
+    
+    const itemsContainer = document.createElement('div');
+    itemsContainer.className = 'sl-bool-stack-items';
+    container.appendChild(itemsContainer);
+    
+    const boolElements = [];
+    
+    function addBool(config) {
+        const bool = UniformBool({ ...config, onChange: (checked, name) => { if (onChange) onChange(checked, name, boolElements.indexOf(bool)); }, onRemove: removable ? () => { removeBool(boolElements.indexOf(bool)); } : null });
+        if (removable) { bool.addEventListener('contextmenu', (e) => { e.preventDefault(); if (confirm(`Remove ${bool.getName()}?`)) removeBool(boolElements.indexOf(bool)); }); }
+        boolElements.push(bool);
+        itemsContainer.appendChild(bool);
+        return bool;
+    }
+    
+    function removeBool(index) { if (index < 0 || index >= boolElements.length) return; const b = boolElements[index]; const d = b.getData(); b.remove(); boolElements.splice(index, 1); if (onRemove) onRemove(d, index); }
+    
+    if (addable) { const addBtn = document.createElement('button'); addBtn.className = 'sl-bool-stack-add'; addBtn.textContent = '+ Add Bool'; addBtn.style.cursor = 'pointer'; addBtn.addEventListener('click', () => { const n = addBool({ name: `u_bool${boolElements.length}`, checked: false }); if (onAdd) onAdd(n.getData()); }); container.appendChild(addBtn); }
+    
+    bools.forEach(config => addBool(config));
+    
+    container.addBool = addBool;
+    container.removeBool = removeBool;
+    container.getBools = () => boolElements;
+    container.getData = () => boolElements.map(b => b.getData());
+    container.setData = (data) => { while (boolElements.length > 0) removeBool(0); data.forEach(c => addBool(c)); };
+    container.randomize = () => {};
+    
+    return container;
+}
+
+// ========================================
+// FLOAT STACK - Slider stack for floats
+// ========================================
+
+export function FloatStack(options = {}) {
+    const { sliders = [], addable = true, removable = true, onChange = null, onAdd = null, onRemove = null } = options;
+    const stack = SliderStack({ sliders: sliders.map(s => ({ ...s, isInt: false })), addable, removable, onChange, onAdd, onRemove });
+    const orig = stack.addSlider;
+    stack.addSlider = (c) => orig({ ...c, isInt: false });
+    stack.randomize = () => { stack.getSliders().forEach(s => { if (!s.isLocked()) { const r = s.getRange(); s.setValue(r.min + Math.random() * (r.max - r.min)); } }); };
+    return stack;
+}
+
+// ========================================
+// INT STACK - Slider stack for ints
+// ========================================
+
+export function IntStack(options = {}) {
+    const { sliders = [], addable = true, removable = true, onChange = null, onAdd = null, onRemove = null } = options;
+    const stack = SliderStack({ sliders: sliders.map(s => ({ ...s, isInt: true, step: 1 })), addable, removable, onChange, onAdd, onRemove });
+    const orig = stack.addSlider;
+    stack.addSlider = (c) => orig({ ...c, isInt: true, step: 1 });
+    stack.randomize = () => { stack.getSliders().forEach(s => { if (!s.isLocked()) { const r = s.getRange(); s.setValue(Math.floor(r.min + Math.random() * (r.max - r.min + 1))); } }); };
+    return stack;
+}
+
+// ========================================
+// UNIFORM PANEL - Complete uniform editor
+// ========================================
+
+export function UniformPanel(options = {}) {
+    const { floats = [], ints = [], bools = [], onFloatChange = null, onIntChange = null, onBoolChange = null, onRandomize = null, onPresetSave = null } = options;
+    
+    const container = document.createElement('div');
+    container.className = 'sl-uniform-panel';
+    
+    // Float section
+    const floatSection = document.createElement('div');
+    floatSection.className = 'sl-uniform-section';
+    floatSection.innerHTML = '<div class="sl-uniform-section-title">Float Uniforms</div>';
+    const floatStack = FloatStack({ sliders: floats, onChange: (v, n, i) => { if (onFloatChange) onFloatChange(v, n, i); } });
+    floatSection.appendChild(floatStack);
+    container.appendChild(floatSection);
+    
+    // Int section
+    const intSection = document.createElement('div');
+    intSection.className = 'sl-uniform-section';
+    intSection.innerHTML = '<div class="sl-uniform-section-title">Int Uniforms</div>';
+    const intStack = IntStack({ sliders: ints, onChange: (v, n, i) => { if (onIntChange) onIntChange(v, n, i); } });
+    intSection.appendChild(intStack);
+    container.appendChild(intSection);
+    
+    // Bool section
+    const boolSection = document.createElement('div');
+    boolSection.className = 'sl-uniform-section';
+    boolSection.innerHTML = '<div class="sl-uniform-section-title">Bool Uniforms</div>';
+    const boolStack = BoolStack({ bools, onChange: (c, n, i) => { if (onBoolChange) onBoolChange(c, n, i); } });
+    boolSection.appendChild(boolStack);
+    container.appendChild(boolSection);
+    
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'sl-uniform-panel-actions';
+    
+    const randomizeBtn = document.createElement('button');
+    randomizeBtn.className = 'sl-uniform-randomize';
+    randomizeBtn.innerHTML = '🎲 Randomize';
+    randomizeBtn.style.cursor = 'pointer';
+    randomizeBtn.addEventListener('click', () => { floatStack.randomize(); intStack.randomize(); if (onRandomize) onRandomize(container.getData()); });
+    actions.appendChild(randomizeBtn);
+    
+    const presetBtn = document.createElement('button');
+    presetBtn.className = 'sl-uniform-preset';
+    presetBtn.innerHTML = '💾 Preset';
+    presetBtn.style.cursor = 'pointer';
+    presetBtn.addEventListener('click', () => { if (onPresetSave) onPresetSave(container.getData()); });
+    actions.appendChild(presetBtn);
+    
+    container.appendChild(actions);
+    
+    container.getFloatStack = () => floatStack;
+    container.getIntStack = () => intStack;
+    container.getBoolStack = () => boolStack;
+    container.getData = () => ({ floats: floatStack.getData(), ints: intStack.getData(), bools: boolStack.getData() });
+    container.setData = (d) => { if (d.floats) floatStack.setData(d.floats); if (d.ints) intStack.setData(d.ints); if (d.bools) boolStack.setData(d.bools); };
+    container.randomize = () => { floatStack.randomize(); intStack.randomize(); };
+    
+    return container;
+}
+
+// ========================================
+// COLOR PICKER - RGB + HSV with gradient sliders
+// ========================================
+
+function rgbToHsv(r, g, b) {
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    let h = 0;
+    const s = max === 0 ? 0 : d / max, v = max;
+    if (d !== 0) {
+        if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        else if (max === g) h = ((b - r) / d + 2) / 6;
+        else h = ((r - g) / d + 4) / 6;
+    }
+    return { h, s, v };
+}
+
+function hsvToRgb(h, s, v) {
+    let r, g, b;
+    const i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+    switch (i % 6) {
+        case 0: r = v; g = t; b = p; break;
+        case 1: r = q; g = v; b = p; break;
+        case 2: r = p; g = v; b = t; break;
+        case 3: r = p; g = q; b = v; break;
+        case 4: r = t; g = p; b = v; break;
+        case 5: r = v; g = p; b = q; break;
+    }
+    return { r, g, b };
+}
+
+export function ColorPicker(options = {}) {
+    const { name = 'u_color', r = 1.0, g = 0.5, b = 0.2, onChange = null, onNameChange = null, onRemove = null } = options;
+    let currentName = name;
+    let rgb = { r, g, b };
+    let hsv = rgbToHsv(r, g, b);
+    let isExpanded = false;
+    
+    const container = document.createElement('div');
+    container.className = 'sl-color-picker';
+    
+    const header = document.createElement('div');
+    header.className = 'sl-color-picker-header';
+    
+    const swatch = document.createElement('div');
+    swatch.className = 'sl-color-picker-swatch';
+    swatch.addEventListener('click', () => { isExpanded = !isExpanded; container.classList.toggle('expanded', isExpanded); toggleBtn.textContent = isExpanded ? '▲' : '▼'; });
+    header.appendChild(swatch);
+    
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'sl-color-picker-label';
+    labelInput.value = currentName;
+    labelInput.readOnly = true;
+    labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
+    labelInput.addEventListener('blur', () => { labelInput.readOnly = true; currentName = labelInput.value || 'u_color'; if (onNameChange) onNameChange(currentName); });
+    header.appendChild(labelInput);
+    
+    const hexInput = document.createElement('input');
+    hexInput.type = 'text';
+    hexInput.className = 'sl-color-picker-hex';
+    hexInput.addEventListener('change', () => { const hex = hexInput.value.replace('#', ''); if (hex.length === 6) { rgb.r = parseInt(hex.substr(0,2),16)/255; rgb.g = parseInt(hex.substr(2,2),16)/255; rgb.b = parseInt(hex.substr(4,2),16)/255; hsv = rgbToHsv(rgb.r, rgb.g, rgb.b); updateAllVisuals(); if (onChange) onChange({...rgb}, currentName); } });
+    header.appendChild(hexInput);
+    
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'sl-color-picker-toggle';
+    toggleBtn.textContent = '▼';
+    toggleBtn.style.cursor = 'pointer';
+    toggleBtn.addEventListener('click', () => { isExpanded = !isExpanded; container.classList.toggle('expanded', isExpanded); toggleBtn.textContent = isExpanded ? '▲' : '▼'; });
+    header.appendChild(toggleBtn);
+    container.appendChild(header);
+    
+    const sliders = document.createElement('div');
+    sliders.className = 'sl-color-picker-sliders';
+    
+    const channels = {};
+    function toHex(v) { return Math.round(v * 255).toString(16).padStart(2, '0'); }
+    function rgbToCss(r, g, b) { return '#' + toHex(r) + toHex(g) + toHex(b); }
+    
+    function createChannel(label, labelColor, getValue, setValue, getGradient) {
+        const row = document.createElement('div');
+        row.className = 'sl-color-channel';
+        const lbl = document.createElement('span');
+        lbl.className = 'sl-color-channel-label';
+        lbl.textContent = label;
+        lbl.style.color = labelColor;
+        row.appendChild(lbl);
+        const track = document.createElement('div');
+        track.className = 'sl-slider-track sl-color-gradient-track';
+        track.style.cursor = 'pointer';
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-slider-track-bg sl-color-gradient-bg';
+        trackBg.style.borderRadius = '3px';
+        trackBg.style.overflow = 'hidden';
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slider-thumb';
+        thumb.style.cursor = 'pointer';
+        thumb.style.border = '2px solid white';
+        thumb.style.boxShadow = '0 0 2px rgba(0,0,0,0.5)';
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        row.appendChild(track);
+        const valInput = document.createElement('input');
+        valInput.type = 'text';
+        valInput.className = 'sl-color-channel-value';
+        row.appendChild(valInput);
+        function update() { const val = getValue(); thumb.style.left = (val * 100) + '%'; valInput.value = val.toFixed(2); trackBg.style.background = getGradient(); }
+        function handlePointer(e) { const rect = trackBg.getBoundingClientRect(); const val = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)); setValue(val); updateAllVisuals(); if (onChange) onChange({...rgb}, currentName); }
+        track.addEventListener('pointerdown', (e) => { e.preventDefault(); handlePointer(e); const move = (ev) => handlePointer(ev); const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); }; document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); });
+        valInput.addEventListener('change', () => { const v = parseFloat(valInput.value); if (!isNaN(v)) { setValue(Math.max(0, Math.min(1, v))); updateAllVisuals(); if (onChange) onChange({...rgb}, currentName); } });
+        sliders.appendChild(row);
+        return { update };
+    }
+    
+    channels.r = createChannel('R', '#e74c3c', () => rgb.r, (v) => { rgb.r = v; hsv = rgbToHsv(rgb.r, rgb.g, rgb.b); }, () => `linear-gradient(to right, ${rgbToCss(0, rgb.g, rgb.b)}, ${rgbToCss(1, rgb.g, rgb.b)})`);
+    channels.g = createChannel('G', '#2ecc71', () => rgb.g, (v) => { rgb.g = v; hsv = rgbToHsv(rgb.r, rgb.g, rgb.b); }, () => `linear-gradient(to right, ${rgbToCss(rgb.r, 0, rgb.b)}, ${rgbToCss(rgb.r, 1, rgb.b)})`);
+    channels.b = createChannel('B', '#3498db', () => rgb.b, (v) => { rgb.b = v; hsv = rgbToHsv(rgb.r, rgb.g, rgb.b); }, () => `linear-gradient(to right, ${rgbToCss(rgb.r, rgb.g, 0)}, ${rgbToCss(rgb.r, rgb.g, 1)})`);
+    
+    const sep = document.createElement('div');
+    sep.style.height = '4px';
+    sliders.appendChild(sep);
+    
+    channels.h = createChannel('H', '#9b59b6', () => hsv.h, (v) => { hsv.h = v; const c = hsvToRgb(hsv.h, hsv.s, hsv.v); rgb.r = c.r; rgb.g = c.g; rgb.b = c.b; }, () => { const stops = []; for (let i = 0; i <= 6; i++) { const c = hsvToRgb(i/6, hsv.s, hsv.v); stops.push(rgbToCss(c.r, c.g, c.b)); } return `linear-gradient(to right, ${stops.join(', ')})`; });
+    channels.s = createChannel('S', '#f39c12', () => hsv.s, (v) => { hsv.s = v; const c = hsvToRgb(hsv.h, hsv.s, hsv.v); rgb.r = c.r; rgb.g = c.g; rgb.b = c.b; }, () => { const c0 = hsvToRgb(hsv.h, 0, hsv.v); const c1 = hsvToRgb(hsv.h, 1, hsv.v); return `linear-gradient(to right, ${rgbToCss(c0.r, c0.g, c0.b)}, ${rgbToCss(c1.r, c1.g, c1.b)})`; });
+    channels.v = createChannel('V', '#95a5a6', () => hsv.v, (v) => { hsv.v = v; const c = hsvToRgb(hsv.h, hsv.s, hsv.v); rgb.r = c.r; rgb.g = c.g; rgb.b = c.b; }, () => { const c0 = hsvToRgb(hsv.h, hsv.s, 0); const c1 = hsvToRgb(hsv.h, hsv.s, 1); return `linear-gradient(to right, ${rgbToCss(c0.r, c0.g, c0.b)}, ${rgbToCss(c1.r, c1.g, c1.b)})`; });
+    
+    container.appendChild(sliders);
+    
+    function updateAllVisuals() { const hex = rgbToCss(rgb.r, rgb.g, rgb.b); swatch.style.background = hex; hexInput.value = hex; channels.r.update(); channels.g.update(); channels.b.update(); channels.h.update(); channels.s.update(); channels.v.update(); }
+    updateAllVisuals();
+    
+    container.getColor = () => ({...rgb});
+    container.setColor = (c) => { rgb = {...c}; hsv = rgbToHsv(rgb.r, rgb.g, rgb.b); updateAllVisuals(); };
+    container.getName = () => currentName;
+    container.setName = (n) => { currentName = n; labelInput.value = n; };
+    container.getData = () => ({ name: currentName, r: rgb.r, g: rgb.g, b: rgb.b });
+    container.triggerRemove = () => { if (onRemove) onRemove(container); };
+    return container;
+}
+
+// ========================================
+// VEC3 PICKER - 3D Position/Normal
+// ========================================
+
+export function Vec3Picker(options = {}) {
+    const { name = 'u_position', x = 0, y = 0, z = 0, min = -1, max = 1, normalize = false, onChange = null, onNameChange = null, onRemove = null } = options;
+    let currentName = name;
+    let vec = { x, y, z };
+    let isNormalized = normalize;
+    let isExpanded = false;
+    const range = { min, max };
+    
+    const container = document.createElement('div');
+    container.className = 'sl-vec3-picker';
+    
+    const header = document.createElement('div');
+    header.className = 'sl-vec3-picker-header';
+    
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.className = 'sl-vec3-picker-label';
+    labelInput.value = currentName;
+    labelInput.readOnly = true;
+    labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
+    labelInput.addEventListener('blur', () => { labelInput.readOnly = true; currentName = labelInput.value || 'u_position'; if (onNameChange) onNameChange(currentName); });
+    header.appendChild(labelInput);
+    
+    const values = document.createElement('div');
+    values.className = 'sl-vec3-picker-values';
+    function createValueInput(key, cls) { const input = document.createElement('input'); input.type = 'text'; input.className = 'sl-vec3-picker-value ' + cls; input.addEventListener('change', () => { const v = parseFloat(input.value); if (!isNaN(v)) { vec[key] = Math.max(range.min, Math.min(range.max, v)); if (isNormalized) normalizeVec(); updateVisuals(); if (onChange) onChange({...vec}, currentName); } }); values.appendChild(input); return input; }
+    const xInput = createValueInput('x', 'x');
+    const yInput = createValueInput('y', 'y');
+    const zInput = createValueInput('z', 'z');
+    header.appendChild(values);
+    
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'sl-vec3-picker-toggle';
+    toggleBtn.textContent = '▼';
+    toggleBtn.style.cursor = 'pointer';
+    toggleBtn.addEventListener('click', () => { isExpanded = !isExpanded; container.classList.toggle('expanded', isExpanded); toggleBtn.textContent = isExpanded ? '▲' : '▼'; });
+    header.appendChild(toggleBtn);
+    container.appendChild(header);
+    
+    const canvasContainer = document.createElement('div');
+    canvasContainer.className = 'sl-vec3-picker-canvas-container';
+    const canvas = document.createElement('canvas');
+    canvas.className = 'sl-vec3-picker-canvas';
+    canvas.width = 200;
+    canvas.height = 120;
+    canvasContainer.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    
+    const zRow = document.createElement('div');
+    zRow.className = 'sl-vec3-picker-z-row';
+    const zLabel = document.createElement('span');
+    zLabel.className = 'sl-vec3-picker-z-label';
+    zLabel.textContent = 'Z';
+    zRow.appendChild(zLabel);
+    const zTrack = document.createElement('div');
+    zTrack.className = 'sl-slider-track sl-vec3-picker-z-slider';
+    zTrack.style.cursor = 'pointer';
+    const zTrackBg = document.createElement('div');
+    zTrackBg.className = 'sl-slider-track-bg';
+    const zFill = document.createElement('div');
+    zFill.className = 'sl-slider-track-fill';
+    zFill.style.background = '#3498db';
+    const zThumb = document.createElement('div');
+    zThumb.className = 'sl-slider-thumb';
+    zThumb.style.cursor = 'pointer';
+    zTrackBg.appendChild(zFill);
+    zTrackBg.appendChild(zThumb);
+    zTrack.appendChild(zTrackBg);
+    zRow.appendChild(zTrack);
+    
+    const normalizeBtn = document.createElement('button');
+    normalizeBtn.className = 'sl-vec3-picker-normalize';
+    normalizeBtn.textContent = 'Normalize';
+    normalizeBtn.style.cursor = 'pointer';
+    if (isNormalized) normalizeBtn.classList.add('active');
+    normalizeBtn.addEventListener('click', () => { isNormalized = !isNormalized; normalizeBtn.classList.toggle('active', isNormalized); if (isNormalized) normalizeVec(); updateVisuals(); if (onChange) onChange({...vec}, currentName); });
+    zRow.appendChild(normalizeBtn);
+    canvasContainer.appendChild(zRow);
+    container.appendChild(canvasContainer);
+    
+    function normalizeVec() { const len = Math.sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z); if (len > 0.0001) { vec.x /= len; vec.y /= len; vec.z /= len; } }
+    function vecToCanvas(v) { const w = canvas.width; const h = canvas.height; const cx = w/2; const cy = h/2; const scale = Math.min(w,h)/2 - 10; return { x: cx + (v.x/(range.max-range.min))*scale*2, y: cy - (v.y/(range.max-range.min))*scale*2 }; }
+    function canvasToVec(px, py) { const w = canvas.width; const h = canvas.height; const cx = w/2; const cy = h/2; const scale = Math.min(w,h)/2 - 10; return { x: ((px-cx)/(scale*2))*(range.max-range.min), y: -((py-cy)/(scale*2))*(range.max-range.min) }; }
+    function drawCanvas() { const w = canvas.width; const h = canvas.height; ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,w,h); ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(w/2,0); ctx.lineTo(w/2,h); ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke(); const pt = vecToCanvas(vec); ctx.beginPath(); ctx.arc(pt.x, pt.y, 6, 0, Math.PI*2); ctx.fillStyle = '#3498db'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); }
+    function updateVisuals() { xInput.value = vec.x.toFixed(3); yInput.value = vec.y.toFixed(3); zInput.value = vec.z.toFixed(3); const zPct = ((vec.z - range.min)/(range.max - range.min))*100; zFill.style.width = zPct + '%'; zThumb.style.left = zPct + '%'; drawCanvas(); }
+    
+    canvas.addEventListener('pointerdown', (e) => { e.preventDefault(); const rect = canvas.getBoundingClientRect(); const scaleX = canvas.width/rect.width; const scaleY = canvas.height/rect.height; function handlePointer(e) { const px = (e.clientX - rect.left)*scaleX; const py = (e.clientY - rect.top)*scaleY; const v = canvasToVec(px, py); vec.x = Math.max(range.min, Math.min(range.max, v.x)); vec.y = Math.max(range.min, Math.min(range.max, v.y)); if (isNormalized) normalizeVec(); updateVisuals(); if (onChange) onChange({...vec}, currentName); } handlePointer(e); const move = (e) => handlePointer(e); const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); }; document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); });
+    zTrack.addEventListener('pointerdown', (e) => { e.preventDefault(); function handleZ(e) { const rect = zTrackBg.getBoundingClientRect(); const pct = Math.max(0, Math.min(1, (e.clientX - rect.left)/rect.width)); vec.z = range.min + pct*(range.max - range.min); if (isNormalized) normalizeVec(); updateVisuals(); if (onChange) onChange({...vec}, currentName); } handleZ(e); const move = (e) => handleZ(e); const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); }; document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); });
+    
+    const resizeObs = new ResizeObserver(() => { canvas.width = canvas.offsetWidth || 200; canvas.height = canvas.offsetHeight || 120; drawCanvas(); });
+    resizeObs.observe(canvas);
+    updateVisuals();
+    
+    container.getVec = () => ({...vec});
+    container.setVec = (v) => { vec = {...v}; updateVisuals(); };
+    container.getName = () => currentName;
+    container.setName = (n) => { currentName = n; labelInput.value = n; };
+    container.getData = () => ({ name: currentName, x: vec.x, y: vec.y, z: vec.z, normalize: isNormalized });
+    container.triggerRemove = () => { if (onRemove) onRemove(container); };
+    container.isNormalized = () => isNormalized;
+    container.setNormalized = (n) => { isNormalized = n; normalizeBtn.classList.toggle('active', n); if (n) normalizeVec(); updateVisuals(); };
+    return container;
+}
+
+// ========================================
+// COLOR STACK - Container for color pickers
+// ========================================
+
+export function ColorStack(options = {}) {
+    const { colors = [], addable = true, removable = true, onChange = null, onAdd = null, onRemove = null } = options;
+    const container = document.createElement('div');
+    container.className = 'sl-color-stack';
+    const colorElements = [];
+    let addBtn = null;
+    
+    function addColor(config) { const picker = ColorPicker({ ...config, onChange: (color, name) => { if (onChange) onChange(color, name, colorElements.indexOf(picker)); } }); if (removable) { picker.addEventListener('contextmenu', (e) => { e.preventDefault(); if (confirm(`Remove ${picker.getName()}?`)) removeColor(colorElements.indexOf(picker)); }); } colorElements.push(picker); container.insertBefore(picker, addBtn); return picker; }
+    function removeColor(index) { if (index < 0 || index >= colorElements.length) return; const p = colorElements[index]; const d = p.getData(); p.remove(); colorElements.splice(index, 1); if (onRemove) onRemove(d, index); }
+    
+    if (addable) { addBtn = document.createElement('button'); addBtn.className = 'sl-color-stack-add'; addBtn.textContent = '+ Add Color'; addBtn.style.cursor = 'pointer'; addBtn.addEventListener('click', () => { const n = addColor({ name: `u_color${colorElements.length}`, r: Math.random(), g: Math.random(), b: Math.random() }); if (onAdd) onAdd(n.getData()); }); container.appendChild(addBtn); }
+    colors.forEach(c => addColor(c));
+    
+    container.addColor = addColor;
+    container.removeColor = removeColor;
+    container.getColors = () => colorElements;
+    container.getData = () => colorElements.map(c => c.getData());
+    container.setData = (data) => { while (colorElements.length > 0) removeColor(0); data.forEach(c => addColor(c)); };
+    container.randomize = () => { colorElements.forEach(c => c.setColor({ r: Math.random(), g: Math.random(), b: Math.random() })); };
+    return container;
+}
+
+// ========================================
+// VEC3 STACK - Container for vec3 pickers
+// ========================================
+
+export function Vec3Stack(options = {}) {
+    const { vecs = [], addable = true, removable = true, min = -1, max = 1, onChange = null, onAdd = null, onRemove = null } = options;
+    const container = document.createElement('div');
+    container.className = 'sl-vec3-stack';
+    const vecElements = [];
+    let addBtn = null;
+    
+    function addVec(config) { const picker = Vec3Picker({ min, max, ...config, onChange: (vec, name) => { if (onChange) onChange(vec, name, vecElements.indexOf(picker)); } }); if (removable) { picker.addEventListener('contextmenu', (e) => { e.preventDefault(); if (confirm(`Remove ${picker.getName()}?`)) removeVec(vecElements.indexOf(picker)); }); } vecElements.push(picker); container.insertBefore(picker, addBtn); return picker; }
+    function removeVec(index) { if (index < 0 || index >= vecElements.length) return; const p = vecElements[index]; const d = p.getData(); p.remove(); vecElements.splice(index, 1); if (onRemove) onRemove(d, index); }
+    
+    if (addable) { addBtn = document.createElement('button'); addBtn.className = 'sl-vec3-stack-add'; addBtn.textContent = '+ Add Vec3'; addBtn.style.cursor = 'pointer'; addBtn.addEventListener('click', () => { const n = addVec({ name: `u_vec${vecElements.length}`, x: 0, y: 0, z: 0 }); if (onAdd) onAdd(n.getData()); }); container.appendChild(addBtn); }
+    vecs.forEach(v => addVec(v));
+    
+    container.addVec = addVec;
+    container.removeVec = removeVec;
+    container.getVecs = () => vecElements;
+    container.getData = () => vecElements.map(v => v.getData());
+    container.setData = (data) => { while (vecElements.length > 0) removeVec(0); data.forEach(v => addVec(v)); };
+    container.randomize = () => { vecElements.forEach(v => { if (!v.isNormalized()) { v.setVec({ x: min + Math.random()*(max-min), y: min + Math.random()*(max-min), z: min + Math.random()*(max-min) }); } else { const rx = Math.random()*2-1; const ry = Math.random()*2-1; const rz = Math.random()*2-1; const len = Math.sqrt(rx*rx+ry*ry+rz*rz)||1; v.setVec({ x: rx/len, y: ry/len, z: rz/len }); } }); };
+    return container;
+}
+
+// ========================================
+// PRESET MANAGER - Save/Load presets
+// ========================================
+
+export function PresetManager(options = {}) {
+    const { defaultPreset = null, onLoad = null, onSave = null, onDelete = null } = options;
+    const presets = new Map();
+    let presetCounter = 1;
+    
+    const container = document.createElement('div');
+    container.className = 'sl-preset-controls';
+    
+    const loadRow = document.createElement('div');
+    loadRow.className = 'sl-preset-row';
+    const select = document.createElement('select');
+    select.className = 'sl-preset-select';
+    loadRow.appendChild(select);
+    const loadBtn = document.createElement('button');
+    loadBtn.className = 'sl-preset-load';
+    loadBtn.textContent = 'Load';
+    loadBtn.style.cursor = 'pointer';
+    loadBtn.addEventListener('click', () => { const presetName = select.value; if (presetName && presets.has(presetName)) { if (onLoad) onLoad(presets.get(presetName), presetName); } });
+    loadRow.appendChild(loadBtn);
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'sl-preset-delete';
+    deleteBtn.textContent = '×';
+    deleteBtn.style.cursor = 'pointer';
+    deleteBtn.addEventListener('click', () => { const presetName = select.value; if (presetName && presetName !== 'Default' && presets.has(presetName)) { presets.delete(presetName); updateSelect(); if (onDelete) onDelete(presetName); } });
+    loadRow.appendChild(deleteBtn);
+    container.appendChild(loadRow);
+    
+    const saveRow = document.createElement('div');
+    saveRow.className = 'sl-preset-row';
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'sl-preset-name';
+    nameInput.placeholder = 'Preset name...';
+    nameInput.value = `preset${presetCounter}`;
+    saveRow.appendChild(nameInput);
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'sl-preset-save';
+    saveBtn.textContent = '💾 Save';
+    saveBtn.style.cursor = 'pointer';
+    saveBtn.addEventListener('click', () => { const name = nameInput.value.trim() || `preset${presetCounter}`; if (onSave) { const data = onSave(name); if (data) { presets.set(name, JSON.parse(JSON.stringify(data))); updateSelect(); presetCounter++; nameInput.value = `preset${presetCounter}`; select.value = name; } } });
+    saveRow.appendChild(saveBtn);
+    container.appendChild(saveRow);
+    
+    function updateSelect() { select.innerHTML = ''; for (const [name] of presets) { const opt = document.createElement('option'); opt.value = name; opt.textContent = name; select.appendChild(opt); } }
+    if (defaultPreset) { presets.set('Default', JSON.parse(JSON.stringify(defaultPreset))); updateSelect(); select.value = 'Default'; }
+    
+    container.getPresets = () => presets;
+    container.addPreset = (name, data) => { presets.set(name, JSON.parse(JSON.stringify(data))); updateSelect(); };
+    container.removePreset = (name) => { presets.delete(name); updateSelect(); };
+    container.setDefaultPreset = (data) => { presets.set('Default', JSON.parse(JSON.stringify(data))); updateSelect(); };
+    return container;
+}

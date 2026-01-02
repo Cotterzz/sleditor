@@ -277,7 +277,7 @@
             // ORIGINAL DEMO PANELS
             // ========================================
             
-            // Uniforms panel - showcases SliderStack
+            // Uniforms panel - Full uniform editor with all types and presets
             SLUI.registerPanel({
                 id: 'uniforms',
                 icon: '🎚️',
@@ -285,27 +285,137 @@
                 createContent: () => {
                     const div = document.createElement('div');
                     div.style.padding = '8px';
-                    
-                    const title = document.createElement('div');
-                    title.style.cssText = 'font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;';
-                    title.textContent = 'Custom Uniforms';
-                    div.appendChild(title);
-                    
-                    const stack = SLUI.SliderStack({
+                    div.style.display = 'flex';
+                    div.style.flexDirection = 'column';
+                    div.style.gap = '12px';
+
+                    // Float section
+                    const floatSection = document.createElement('div');
+                    floatSection.className = 'sl-uniform-section';
+                    floatSection.innerHTML = '<div class="sl-uniform-section-title">Float Uniforms</div>';
+                    const floatStack = SLUI.FloatStack({
                         sliders: [
                             { name: 'u_speed', min: 0.1, max: 5.0, value: 1.0, step: 0.1 },
                             { name: 'u_scale', min: 0.1, max: 10.0, value: 1.0, step: 0.1 },
-                            { name: 'u_intensity', min: 0, max: 1, value: 0.7, step: 0.01 },
-                            { name: 'u_offset_x', min: -2, max: 2, value: 0, step: 0.01 },
-                            { name: 'u_offset_y', min: -2, max: 2, value: 0, step: 0.01 },
-                            { name: 'u_iterations', min: 1, max: 50, value: 16, step: 1, isInt: true }
+                            { name: 'u_intensity', min: 0, max: 1, value: 0.7, step: 0.01 }
                         ],
-                        onChange: (value, name, index) => {
-                            console.log(`Uniform changed: ${name} = ${value}`);
+                        onChange: (v, n) => console.log(`Float ${n}: ${v}`)
+                    });
+                    floatSection.appendChild(floatStack);
+                    div.appendChild(floatSection);
+
+                    // Int section
+                    const intSection = document.createElement('div');
+                    intSection.className = 'sl-uniform-section';
+                    intSection.innerHTML = '<div class="sl-uniform-section-title">Int Uniforms</div>';
+                    const intStack = SLUI.IntStack({
+                        sliders: [
+                            { name: 'u_iterations', min: 1, max: 100, value: 32 },
+                            { name: 'u_samples', min: 1, max: 16, value: 4 }
+                        ],
+                        onChange: (v, n) => console.log(`Int ${n}: ${v}`)
+                    });
+                    intSection.appendChild(intStack);
+                    div.appendChild(intSection);
+
+                    // Bool section
+                    const boolSection = document.createElement('div');
+                    boolSection.className = 'sl-uniform-section';
+                    boolSection.innerHTML = '<div class="sl-uniform-section-title">Bool Uniforms</div>';
+                    const boolStack = SLUI.BoolStack({
+                        bools: [
+                            { name: 'u_flip_x', checked: false },
+                            { name: 'u_flip_y', checked: false },
+                            { name: 'u_glow', checked: true }
+                        ],
+                        onChange: (c, n) => console.log(`Bool ${n}: ${c}`)
+                    });
+                    boolSection.appendChild(boolStack);
+                    div.appendChild(boolSection);
+
+                    // Color section
+                    const colorSection = document.createElement('div');
+                    colorSection.className = 'sl-uniform-section';
+                    colorSection.innerHTML = '<div class="sl-uniform-section-title">Color Uniforms</div>';
+                    const colorStack = SLUI.ColorStack({
+                        colors: [
+                            { name: 'u_color1', r: 1.0, g: 0.3, b: 0.1 },
+                            { name: 'u_color2', r: 0.2, g: 0.6, b: 0.9 }
+                        ],
+                        onChange: (c, n) => console.log(`Color ${n}:`, c)
+                    });
+                    colorSection.appendChild(colorStack);
+                    div.appendChild(colorSection);
+
+                    // Vec3 section
+                    const vecSection = document.createElement('div');
+                    vecSection.className = 'sl-uniform-section';
+                    vecSection.innerHTML = '<div class="sl-uniform-section-title">Vec3 Uniforms</div>';
+                    const vecStack = SLUI.Vec3Stack({
+                        vecs: [
+                            { name: 'u_lightDir', x: 0.5, y: 0.7, z: 0.5, normalize: true },
+                            { name: 'u_offset', x: 0, y: 0, z: 0, normalize: false }
+                        ],
+                        onChange: (v, n) => console.log(`Vec3 ${n}:`, v)
+                    });
+                    vecSection.appendChild(vecStack);
+                    div.appendChild(vecSection);
+
+                    // Actions row
+                    const actions = document.createElement('div');
+                    actions.className = 'sl-uniform-panel-actions';
+                    
+                    const randomizeBtn = document.createElement('button');
+                    randomizeBtn.className = 'sl-uniform-randomize';
+                    randomizeBtn.innerHTML = '🎲 Randomize';
+                    randomizeBtn.style.cursor = 'pointer';
+                    randomizeBtn.addEventListener('click', () => {
+                        floatStack.randomize();
+                        intStack.randomize();
+                        colorStack.randomize();
+                        vecStack.randomize();
+                        console.log('Randomized all uniforms');
+                    });
+                    actions.appendChild(randomizeBtn);
+                    div.appendChild(actions);
+
+                    // Collect all data
+                    function getAllData() {
+                        return {
+                            floats: floatStack.getData(),
+                            ints: intStack.getData(),
+                            bools: boolStack.getData(),
+                            colors: colorStack.getData(),
+                            vecs: vecStack.getData()
+                        };
+                    }
+
+                    function setAllData(data) {
+                        if (data.floats) floatStack.setData(data.floats);
+                        if (data.ints) intStack.setData(data.ints);
+                        if (data.bools) boolStack.setData(data.bools);
+                        if (data.colors) colorStack.setData(data.colors);
+                        if (data.vecs) vecStack.setData(data.vecs);
+                    }
+
+                    // Preset manager
+                    const presetManager = SLUI.PresetManager({
+                        defaultPreset: getAllData(),
+                        onLoad: (data, name) => {
+                            console.log(`Loading preset: ${name}`);
+                            setAllData(data);
+                        },
+                        onSave: (name) => {
+                            const data = getAllData();
+                            console.log(`Saving preset: ${name}`, data);
+                            return data;
+                        },
+                        onDelete: (name) => {
+                            console.log(`Deleted preset: ${name}`);
                         }
                     });
-                    div.appendChild(stack);
-                    
+                    div.appendChild(presetManager);
+
                     return div;
                 }
             });

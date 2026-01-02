@@ -2180,6 +2180,658 @@ body {
 }
 
 /* ========================================
+   CHECKBOX - Standard tick box
+   ======================================== */
+
+.sl-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sl-checkbox.disabled {
+    opacity: 0.5;
+    cursor: default;
+    pointer-events: none;
+}
+
+.sl-checkbox-box {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.sl-checkbox:hover .sl-checkbox-box {
+    border-color: var(--accent);
+}
+
+.sl-checkbox.checked .sl-checkbox-box {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.sl-checkbox-check {
+    width: 10px;
+    height: 10px;
+    opacity: 0;
+    color: var(--bg-primary);
+    font-size: 10px;
+    line-height: 1;
+    transition: opacity 0.1s ease;
+}
+
+.sl-checkbox.checked .sl-checkbox-check {
+    opacity: 1;
+}
+
+.sl-checkbox-label {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+/* ========================================
+   UNIFORM BOOL - Checkbox with editable title
+   ======================================== */
+
+.sl-uniform-bool {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 5px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+}
+
+.sl-uniform-bool:hover {
+    border-color: var(--border-focus);
+}
+
+.sl-uniform-bool .sl-checkbox-box {
+    width: 14px;
+    height: 14px;
+}
+
+.sl-uniform-bool .sl-checkbox-check {
+    width: 8px;
+    height: 8px;
+    font-size: 8px;
+}
+
+.sl-uniform-bool-label {
+    padding: 1px 2px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text-secondary);
+    font-family: var(--font-code);
+    font-size: 0.65rem;
+    cursor: default;
+    min-width: 35px;
+    width: 55px;
+}
+
+.sl-uniform-bool-label:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: text;
+}
+
+/* ========================================
+   BOOL STACK - Fluid row container
+   ======================================== */
+
+.sl-bool-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+}
+
+.sl-bool-stack-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.sl-bool-stack-add {
+    align-self: flex-start;
+    padding: 3px 8px;
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-bool-stack-add:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* ========================================
+   UNIFORM PANEL - Complete uniform editor
+   ======================================== */
+
+.sl-uniform-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sl-uniform-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sl-uniform-section-title {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sl-uniform-panel-actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.sl-uniform-randomize {
+    flex: 1;
+    padding: 6px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.sl-uniform-randomize:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.sl-uniform-preset {
+    padding: 6px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sl-uniform-preset:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--bg-hover);
+}
+
+/* ========================================
+   PRESET SYSTEM
+   ======================================== */
+
+.sl-preset-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.sl-preset-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.sl-preset-select {
+    flex: 1;
+    padding: 4px 6px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-primary);
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+
+.sl-preset-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sl-preset-load {
+    padding: 4px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-preset-load:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.sl-preset-name {
+    flex: 1;
+    padding: 4px 6px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-primary);
+    font-size: 0.7rem;
+}
+
+.sl-preset-name:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sl-preset-save {
+    padding: 4px 8px;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--bg-primary);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-preset-save:hover {
+    filter: brightness(1.1);
+}
+
+.sl-preset-delete {
+    padding: 4px 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-preset-delete:hover {
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+/* ========================================
+   COLOR PICKER
+   ======================================== */
+
+.sl-color-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+}
+
+.sl-color-picker-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sl-color-picker-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.sl-color-picker-swatch:hover {
+    transform: scale(1.1);
+}
+
+.sl-color-picker-label {
+    flex: 1;
+    padding: 2px 4px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text-secondary);
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    cursor: default;
+}
+
+.sl-color-picker-label:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--bg-primary);
+    cursor: text;
+}
+
+.sl-color-picker-hex {
+    width: 65px;
+    padding: 2px 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-primary);
+    font-family: var(--font-code);
+    font-size: 0.65rem;
+    text-align: center;
+}
+
+.sl-color-picker-hex:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sl-color-picker-sliders {
+    display: none;
+    flex-direction: column;
+    gap: 3px;
+    padding-top: 4px;
+}
+
+.sl-color-picker.expanded .sl-color-picker-sliders {
+    display: flex;
+}
+
+.sl-color-channel {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sl-color-channel-label {
+    width: 12px;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.sl-color-channel .sl-slider-track {
+    flex: 1;
+    height: 16px;
+}
+
+.sl-color-channel .sl-slider-track-bg {
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.3);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Hide the fill element for color gradient tracks */
+.sl-color-channel .sl-slider-track-fill {
+    display: none;
+}
+
+.sl-color-channel .sl-slider-thumb {
+    width: 8px;
+    height: 16px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.3);
+    border: 2px solid white;
+    box-shadow: 0 0 3px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,0,0,0.2);
+    margin-top: 0;
+}
+
+/* Override ALL theme effects for color picker - need true colors */
+.sl-color-channel .sl-slider-track-bg,
+[data-theme] .sl-color-channel .sl-slider-track-bg,
+[data-theme="designer"] .sl-color-channel .sl-slider-track-bg,
+[data-theme="midnight"] .sl-color-channel .sl-slider-track-bg,
+[data-theme="forest"] .sl-color-channel .sl-slider-track-bg {
+    box-shadow: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+    border: 1px solid rgba(0,0,0,0.4) !important;
+}
+
+.sl-color-channel .sl-slider-thumb,
+[data-theme] .sl-color-channel .sl-slider-thumb,
+[data-theme="designer"] .sl-color-channel .sl-slider-thumb {
+    box-shadow: 0 0 3px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,0,0,0.2) !important;
+}
+
+.sl-color-channel-value {
+    width: 32px;
+    padding: 1px 2px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-primary);
+    font-family: var(--font-code);
+    font-size: 0.6rem;
+    text-align: center;
+}
+
+.sl-color-channel-value:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sl-color-picker-toggle {
+    padding: 2px 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.6rem;
+    cursor: pointer;
+}
+
+.sl-color-picker-toggle:hover {
+    color: var(--accent);
+}
+
+/* ========================================
+   VEC3 PICKER - 3D Position/Normal
+   ======================================== */
+
+.sl-vec3-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+}
+
+.sl-vec3-picker-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sl-vec3-picker-label {
+    flex: 1;
+    padding: 2px 4px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text-secondary);
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    cursor: default;
+}
+
+.sl-vec3-picker-label:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--bg-primary);
+    cursor: text;
+}
+
+.sl-vec3-picker-values {
+    display: flex;
+    gap: 2px;
+    font-family: var(--font-code);
+    font-size: 0.6rem;
+    color: var(--text-muted);
+}
+
+.sl-vec3-picker-value {
+    width: 40px;
+    padding: 2px 3px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-primary);
+    font-family: var(--font-code);
+    font-size: 0.6rem;
+    text-align: center;
+}
+
+.sl-vec3-picker-value:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sl-vec3-picker-value.x { border-left: 2px solid #e74c3c; }
+.sl-vec3-picker-value.y { border-left: 2px solid #2ecc71; }
+.sl-vec3-picker-value.z { border-left: 2px solid #3498db; }
+
+.sl-vec3-picker-canvas-container {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 4px;
+}
+
+.sl-vec3-picker.expanded .sl-vec3-picker-canvas-container {
+    display: flex;
+}
+
+.sl-vec3-picker-canvas {
+    width: 100%;
+    height: 120px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: crosshair;
+}
+
+.sl-vec3-picker-z-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sl-vec3-picker-z-label {
+    font-size: 0.6rem;
+    color: #3498db;
+    width: 12px;
+}
+
+.sl-vec3-picker-z-slider {
+    flex: 1;
+}
+
+.sl-vec3-picker-toggle {
+    padding: 2px 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.6rem;
+    cursor: pointer;
+}
+
+.sl-vec3-picker-toggle:hover {
+    color: var(--accent);
+}
+
+.sl-vec3-picker-normalize {
+    padding: 2px 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-muted);
+    font-size: 0.55rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-vec3-picker-normalize:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.sl-vec3-picker-normalize.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}
+
+/* ========================================
+   COLOR/VEC3 STACKS
+   ======================================== */
+
+.sl-color-stack,
+.sl-vec3-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sl-color-stack-add,
+.sl-vec3-stack-add {
+    align-self: flex-start;
+    padding: 3px 8px;
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-color-stack-add:hover,
+.sl-vec3-stack-add:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* ========================================
    TABS COMPONENT
    ======================================== */
 
