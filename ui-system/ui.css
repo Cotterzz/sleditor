@@ -1403,6 +1403,7 @@ body {
     height: 24px;
     min-width: 100px;
     cursor: pointer;
+    touch-action: none; /* Prevent browser scroll/zoom on touch */
 }
 
 .sl-slider-track.vertical {
@@ -2208,6 +2209,8 @@ body {
     align-items: center;
     justify-content: center;
     transition: all 0.15s ease;
+    cursor: pointer;
+    touch-action: manipulation; /* Faster tap response on mobile */
 }
 
 .sl-checkbox:hover .sl-checkbox-box {
@@ -2269,6 +2272,16 @@ body {
     width: 8px;
     height: 8px;
     font-size: 8px;
+}
+
+/* Checked state for uniform bool */
+.sl-uniform-bool.checked .sl-checkbox-box {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.sl-uniform-bool.checked .sl-checkbox-check {
+    opacity: 1;
 }
 
 .sl-uniform-bool-label {
@@ -2748,6 +2761,7 @@ body {
     border: 1px solid var(--border);
     border-radius: 4px;
     cursor: crosshair;
+    touch-action: none; /* Prevent scroll on touch */
 }
 
 .sl-vec3-picker-z-row {

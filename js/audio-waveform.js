@@ -466,9 +466,26 @@ export function setupCanvas(canvas) {
         canvas.style.cursor = 'grabbing';
     });
     
+    // Touch support for waveform drag
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        isDragging = true;
+        dragStartX = e.touches[0].clientX;
+        dragStartOffset = waveformOffset;
+    }, { passive: false });
+    
     const onMouseMove = (e) => {
         if (!isDragging) return;
         const dx = e.clientX - dragStartX;
+        const timePerPixel = waveformZoom / canvas.width;
+        waveformOffset = Math.max(0, dragStartOffset - dx * timePerPixel);
+        requestWaveformUpdate();
+    };
+    
+    const onTouchMove = (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        const dx = e.touches[0].clientX - dragStartX;
         const timePerPixel = waveformZoom / canvas.width;
         waveformOffset = Math.max(0, dragStartOffset - dx * timePerPixel);
         requestWaveformUpdate();
@@ -479,8 +496,15 @@ export function setupCanvas(canvas) {
         if (canvas) canvas.style.cursor = 'grab';
     };
     
+    const onTouchEnd = () => {
+        isDragging = false;
+    };
+    
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
     
     canvas.style.cursor = 'grab';
     
@@ -488,6 +512,9 @@ export function setupCanvas(canvas) {
     canvas._waveformCleanup = () => {
         window.removeEventListener('mousemove', onMouseMove);
         window.removeEventListener('mouseup', onMouseUp);
+        window.removeEventListener('touchmove', onTouchMove);
+        window.removeEventListener('touchend', onTouchEnd);
+        window.removeEventListener('touchcancel', onTouchEnd);
     };
     
     requestWaveformUpdate();

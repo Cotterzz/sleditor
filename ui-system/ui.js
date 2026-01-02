@@ -69,7 +69,13 @@ const SLUI = (function() {
             state.deviceMode = isMobileDevice() ? 'mobile' : 'desktop';
         }
         
-        state.mobileOrientation = detectOrientation();
+        const newOrientation = detectOrientation();
+        
+        // Skip if nothing meaningful changed (prevents keyboard-triggered redraws)
+        const modeChanged = prevMode !== state.deviceMode;
+        const orientationChanged = prevOrientation !== newOrientation;
+        
+        state.mobileOrientation = newOrientation;
         
         const app = document.querySelector('.sl-app');
         if (app) {
@@ -82,10 +88,10 @@ const SLUI = (function() {
             }
         }
         
-        // Rebuild mobile zones if needed
-        if (state.deviceMode === 'mobile') {
+        // Only rebuild mobile zones if mode or orientation actually changed
+        if (state.deviceMode === 'mobile' && (modeChanged || orientationChanged)) {
             // If orientation changed, remap existing zone assignments
-            if (prevMode === 'mobile' && prevOrientation && prevOrientation !== state.mobileOrientation) {
+            if (prevMode === 'mobile' && orientationChanged) {
                 remapMobileZones(prevOrientation, state.mobileOrientation);
             }
             renderMobileZones();
@@ -2273,7 +2279,30 @@ const SLUI = (function() {
     // ========================================
     // SLIDER COMPONENTS
     // ========================================
-    
+
+    // Helper for drag interactions (reduces duplication)
+    function setupDrag(element, onMove, onStart, onEnd) {
+        element.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            element.setPointerCapture(e.pointerId);
+            if (onStart) onStart(e);
+            onMove(e);
+            
+            const moveHandler = (e) => onMove(e);
+            const upHandler = (e) => {
+                element.releasePointerCapture(e.pointerId);
+                element.removeEventListener('pointermove', moveHandler);
+                element.removeEventListener('pointerup', upHandler);
+                element.removeEventListener('pointercancel', upHandler);
+                if (onEnd) onEnd(e);
+            };
+            
+            element.addEventListener('pointermove', moveHandler);
+            element.addEventListener('pointerup', upHandler);
+            element.addEventListener('pointercancel', upHandler);
+        });
+    }
+
     function Slider(options = {}) {
         const {
             min = 0,
@@ -2591,13 +2620,13 @@ const SLUI = (function() {
         labelInput.type = 'text';
         labelInput.className = 'sl-uniform-label';
         labelInput.value = currentName;
-        labelInput.readOnly = true;
-        labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
-        labelInput.addEventListener('blur', () => { 
-            labelInput.readOnly = true;
+        // Don't use readOnly toggle - causes mobile keyboard issues
+        labelInput.addEventListener('blur', () => {
             currentName = labelInput.value || 'u_custom';
             if (onNameChange) onNameChange(currentName);
         });
+        labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+        labelInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
         
         // Slider track
         const track = document.createElement('div');
@@ -2640,18 +2669,22 @@ const SLUI = (function() {
         track.addEventListener('pointerdown', (e) => {
             if (isLocked) return;
             e.preventDefault();
+            track.setPointerCapture(e.pointerId); // Capture for reliable mobile tracking
             track.classList.add('dragging');
             handleTrackPointer(e);
-            
+
             const moveHandler = (e) => handleTrackPointer(e);
-            const upHandler = () => {
+            const upHandler = (e) => {
+                track.releasePointerCapture(e.pointerId);
                 track.classList.remove('dragging');
-                document.removeEventListener('pointermove', moveHandler);
-                document.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointermove', moveHandler);
+                track.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointercancel', upHandler);
             };
-            
-            document.addEventListener('pointermove', moveHandler);
-            document.addEventListener('pointerup', upHandler);
+
+            track.addEventListener('pointermove', moveHandler);
+            track.addEventListener('pointerup', upHandler);
+            track.addEventListener('pointercancel', upHandler);
         });
         
         middleRow.appendChild(labelInput);
@@ -2822,31 +2855,52 @@ const SLUI = (function() {
         input.className = 'sl-editable-number-input';
         input.value = value;
         input.step = isInt ? 1 : Math.pow(10, -decimals);
+        input.inputMode = isInt ? 'numeric' : 'decimal'; // Mobile keyboard hint
         
         container.appendChild(display);
         container.appendChild(input);
         
         let isEditing = false;
         let currentValue = value;
+        let focusTimeout = null;
         
-        display.addEventListener('click', (e) => {
+        function startEditing(e) {
             e.stopPropagation();
+            e.preventDefault();
+            if (isEditing) return;
+            
             isEditing = true;
             container.classList.add('editing');
             input.value = currentValue;
-            input.focus();
-            input.select();
-        });
+            
+            // Delay focus slightly for mobile to settle
+            focusTimeout = setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 50);
+        }
+        
+        display.addEventListener('click', startEditing);
+        display.addEventListener('touchend', startEditing);
+        
+        // Prevent pointer events from bubbling to slider handlers
+        container.addEventListener('pointerdown', (e) => e.stopPropagation());
+        container.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
         
         input.addEventListener('blur', () => {
-            isEditing = false;
-            container.classList.remove('editing');
-            let v = parseFloat(input.value);
-            if (isNaN(v)) v = currentValue;
-            if (isInt) v = Math.round(v);
-            currentValue = v;
-            display.textContent = isInt ? Math.round(currentValue).toString() : currentValue.toFixed(decimals);
-            if (onChange) onChange(currentValue);
+            if (focusTimeout) clearTimeout(focusTimeout);
+            // Small delay to ensure we're not in a focus-blur loop
+            setTimeout(() => {
+                if (document.activeElement === input) return; // Still focused
+                isEditing = false;
+                container.classList.remove('editing');
+                let v = parseFloat(input.value);
+                if (isNaN(v)) v = currentValue;
+                if (isInt) v = Math.round(v);
+                currentValue = v;
+                display.textContent = isInt ? Math.round(currentValue).toString() : currentValue.toFixed(decimals);
+                if (onChange) onChange(currentValue);
+            }, 10);
         });
         
         input.addEventListener('keydown', (e) => {
@@ -2855,6 +2909,7 @@ const SLUI = (function() {
         });
         
         input.addEventListener('click', (e) => e.stopPropagation());
+        input.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
         
         container.getValue = () => currentValue;
         container.setValue = (v) => {
@@ -3079,18 +3134,22 @@ const SLUI = (function() {
         track.addEventListener('pointerdown', (e) => {
             if (disabled) return;
             e.preventDefault();
+            track.setPointerCapture(e.pointerId);
             track.classList.add('dragging');
             handleTrackPointer(e);
             
             const moveHandler = (e) => handleTrackPointer(e);
-            const upHandler = () => {
+            const upHandler = (e) => {
+                track.releasePointerCapture(e.pointerId);
                 track.classList.remove('dragging');
-                document.removeEventListener('pointermove', moveHandler);
-                document.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointermove', moveHandler);
+                track.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointercancel', upHandler);
             };
             
-            document.addEventListener('pointermove', moveHandler);
-            document.addEventListener('pointerup', upHandler);
+            track.addEventListener('pointermove', moveHandler);
+            track.addEventListener('pointerup', upHandler);
+            track.addEventListener('pointercancel', upHandler);
         });
         
         updateVisuals();
@@ -3185,18 +3244,22 @@ const SLUI = (function() {
         track.addEventListener('pointerdown', (e) => {
             if (disabled) return;
             e.preventDefault();
+            track.setPointerCapture(e.pointerId);
             track.classList.add('dragging');
             handleTrackPointer(e);
             
             const moveHandler = (e) => handleTrackPointer(e);
-            const upHandler = () => {
+            const upHandler = (e) => {
+                track.releasePointerCapture(e.pointerId);
                 track.classList.remove('dragging');
-                document.removeEventListener('pointermove', moveHandler);
-                document.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointermove', moveHandler);
+                track.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointercancel', upHandler);
             };
             
-            document.addEventListener('pointermove', moveHandler);
-            document.addEventListener('pointerup', upHandler);
+            track.addEventListener('pointermove', moveHandler);
+            track.addEventListener('pointerup', upHandler);
+            track.addEventListener('pointercancel', upHandler);
         });
         
         updateVisuals();
@@ -3310,22 +3373,26 @@ const SLUI = (function() {
         
         track.addEventListener('pointerdown', (e) => {
             e.preventDefault();
+            track.setPointerCapture(e.pointerId);
             container.classList.add('dragging');
             track.classList.add('dragging');
             if (onSeekStart) onSeekStart();
             handleTrackPointer(e);
             
             const moveHandler = (e) => handleTrackPointer(e);
-            const upHandler = () => {
+            const upHandler = (e) => {
+                track.releasePointerCapture(e.pointerId);
                 container.classList.remove('dragging');
                 track.classList.remove('dragging');
                 if (onSeekEnd) onSeekEnd();
-                document.removeEventListener('pointermove', moveHandler);
-                document.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointermove', moveHandler);
+                track.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointercancel', upHandler);
             };
             
-            document.addEventListener('pointermove', moveHandler);
-            document.addEventListener('pointerup', upHandler);
+            track.addEventListener('pointermove', moveHandler);
+            track.addEventListener('pointerup', upHandler);
+            track.addEventListener('pointercancel', upHandler);
         });
         
         updateVisuals();
@@ -3360,11 +3427,12 @@ const SLUI = (function() {
         } = options;
         
         let isChecked = checked;
+        let isDisabled = disabled;
         
-        const container = document.createElement('label');
+        const container = document.createElement('div');
         container.className = 'sl-checkbox';
         if (isChecked) container.classList.add('checked');
-        if (disabled) container.classList.add('disabled');
+        if (isDisabled) container.classList.add('disabled');
         
         const box = document.createElement('span');
         box.className = 'sl-checkbox-box';
@@ -3383,13 +3451,15 @@ const SLUI = (function() {
             container.appendChild(labelEl);
         }
         
-        container.addEventListener('click', (e) => {
-            if (disabled) return;
-            e.preventDefault();
+        function toggle() {
+            if (isDisabled) return;
             isChecked = !isChecked;
             container.classList.toggle('checked', isChecked);
             if (onChange) onChange(isChecked);
-        });
+        }
+        
+        // Simple click handler works on both desktop and mobile
+        container.addEventListener('click', toggle);
         
         // Public API
         container.isChecked = () => isChecked;
@@ -3398,6 +3468,7 @@ const SLUI = (function() {
             container.classList.toggle('checked', isChecked);
         };
         container.setDisabled = (d) => {
+            isDisabled = d;
             container.classList.toggle('disabled', d);
         };
         
@@ -3438,24 +3509,24 @@ const SLUI = (function() {
         labelInput.type = 'text';
         labelInput.className = 'sl-uniform-bool-label';
         labelInput.value = currentName;
-        labelInput.readOnly = true;
-        
-        labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
+
         labelInput.addEventListener('blur', () => {
-            labelInput.readOnly = true;
             currentName = labelInput.value || 'u_bool';
             if (onNameChange) onNameChange(currentName);
         });
-        labelInput.addEventListener('click', (e) => e.stopPropagation());
         
         container.appendChild(labelInput);
         
-        // Click on container (not label) toggles checkbox
-        container.addEventListener('click', (e) => {
-            if (e.target === labelInput) return;
+        function toggle() {
             isChecked = !isChecked;
             container.classList.toggle('checked', isChecked);
             if (onChange) onChange(isChecked, currentName);
+        }
+        
+        // Click on box to toggle
+        box.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggle();
         });
         
         // Public API
@@ -3848,13 +3919,12 @@ const SLUI = (function() {
         labelInput.type = 'text';
         labelInput.className = 'sl-color-picker-label';
         labelInput.value = currentName;
-        labelInput.readOnly = true;
-        labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
         labelInput.addEventListener('blur', () => {
-            labelInput.readOnly = true;
             currentName = labelInput.value || 'u_color';
             if (onNameChange) onNameChange(currentName);
         });
+        labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+        labelInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
         header.appendChild(labelInput);
         
         const hexInput = document.createElement('input');
@@ -3946,11 +4016,18 @@ const SLUI = (function() {
             
             track.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
+                track.setPointerCapture(e.pointerId);
                 handlePointer(e);
                 const move = (ev) => handlePointer(ev);
-                const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
-                document.addEventListener('pointermove', move);
-                document.addEventListener('pointerup', up);
+                const up = (ev) => { 
+                    track.releasePointerCapture(ev.pointerId);
+                    track.removeEventListener('pointermove', move); 
+                    track.removeEventListener('pointerup', up);
+                    track.removeEventListener('pointercancel', up);
+                };
+                track.addEventListener('pointermove', move);
+                track.addEventListener('pointerup', up);
+                track.addEventListener('pointercancel', up);
             });
             
             valInput.addEventListener('change', () => {
@@ -4083,13 +4160,12 @@ const SLUI = (function() {
         labelInput.type = 'text';
         labelInput.className = 'sl-vec3-picker-label';
         labelInput.value = currentName;
-        labelInput.readOnly = true;
-        labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
         labelInput.addEventListener('blur', () => {
-            labelInput.readOnly = true;
             currentName = labelInput.value || 'u_position';
             if (onNameChange) onNameChange(currentName);
         });
+        labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+        labelInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
         header.appendChild(labelInput);
         
         const values = document.createElement('div');
@@ -4261,6 +4337,7 @@ const SLUI = (function() {
         
         canvas.addEventListener('pointerdown', (e) => {
             e.preventDefault();
+            canvas.setPointerCapture(e.pointerId);
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
@@ -4278,13 +4355,20 @@ const SLUI = (function() {
             
             handlePointer(e);
             const move = (e) => handlePointer(e);
-            const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
-            document.addEventListener('pointermove', move);
-            document.addEventListener('pointerup', up);
+            const up = (e) => { 
+                canvas.releasePointerCapture(e.pointerId);
+                canvas.removeEventListener('pointermove', move); 
+                canvas.removeEventListener('pointerup', up);
+                canvas.removeEventListener('pointercancel', up);
+            };
+            canvas.addEventListener('pointermove', move);
+            canvas.addEventListener('pointerup', up);
+            canvas.addEventListener('pointercancel', up);
         });
         
         zTrack.addEventListener('pointerdown', (e) => {
             e.preventDefault();
+            zTrack.setPointerCapture(e.pointerId);
             
             function handleZ(e) {
                 const rect = zTrackBg.getBoundingClientRect();
@@ -4297,9 +4381,15 @@ const SLUI = (function() {
             
             handleZ(e);
             const move = (e) => handleZ(e);
-            const up = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); };
-            document.addEventListener('pointermove', move);
-            document.addEventListener('pointerup', up);
+            const up = (e) => { 
+                zTrack.releasePointerCapture(e.pointerId);
+                zTrack.removeEventListener('pointermove', move); 
+                zTrack.removeEventListener('pointerup', up);
+                zTrack.removeEventListener('pointercancel', up);
+            };
+            zTrack.addEventListener('pointermove', move);
+            zTrack.addEventListener('pointerup', up);
+            zTrack.addEventListener('pointercancel', up);
         });
         
         // Resize observer

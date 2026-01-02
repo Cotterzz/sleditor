@@ -570,6 +570,7 @@ body {
     width: 100%;
     height: 6px;
     background: var(--border-color);
+    touch-action: none; /* Prevent scroll interference on mobile */
     border-radius: 3px;
     outline: none;
     cursor: pointer;
@@ -647,6 +648,12 @@ button.paused:hover {
     height: 80px;
     padding: 0;
     margin: 0;
+    touch-action: none; /* Prevent scroll interference on mobile */
+}
+
+/* Ensure all range inputs work on mobile */
+input[type="range"] {
+    touch-action: none;
 }
 
 .sliderContainer {

@@ -307,9 +307,12 @@ function setupUI() {
     ui.setupCanvasResizeObserver();
     ui.initTimeline();
     
-    // Setup help drag listeners
+    // Setup help drag listeners (mouse and touch)
     document.addEventListener('mousemove', ui.doHelpDrag);
     document.addEventListener('mouseup', ui.stopHelpDrag);
+    document.addEventListener('touchmove', ui.doHelpDrag, { passive: false });
+    document.addEventListener('touchend', ui.stopHelpDrag);
+    document.addEventListener('touchcancel', ui.stopHelpDrag);
     
     // Global keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -330,9 +333,10 @@ function setupUI() {
     // Performance monitor button removed
     // document.getElementById('perfMonitorBtn').addEventListener('click', () => perfMonitor.togglePanel());
     document.getElementById('uniformControlsBtn').addEventListener('click', () => uniformControls.toggle());
-    // Help button - draggable divider
+    // Help button - draggable divider (mouse and touch)
     const helpToggleBtn = document.getElementById('helpToggleBtn');
     helpToggleBtn.addEventListener('mousedown', (e) => ui.startHelpDrag(e));
+    helpToggleBtn.addEventListener('touchstart', (e) => ui.startHelpDrag(e), { passive: false });
     helpToggleBtn.style.cursor = 'ns-resize';
     
     // Auth buttons

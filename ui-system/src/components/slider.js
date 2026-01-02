@@ -198,9 +198,9 @@ export function UniformSlider(options = {}) {
     labelInput.type = 'text';
     labelInput.className = 'sl-uniform-label';
     labelInput.value = currentName;
-    labelInput.readOnly = true;
-    labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
-    labelInput.addEventListener('blur', () => { labelInput.readOnly = true; currentName = labelInput.value || 'u_custom'; if (onNameChange) onNameChange(currentName); });
+    labelInput.addEventListener('blur', () => { currentName = labelInput.value || 'u_custom'; if (onNameChange) onNameChange(currentName); });
+    labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+    labelInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     
     const track = document.createElement('div');
     track.className = 'sl-slider-track';
@@ -760,12 +760,13 @@ export function TimelineSlider(options = {}) {
 export function Checkbox(options = {}) {
     const { label = '', checked = false, disabled = false, onChange = null } = options;
     let isChecked = checked;
-    
-    const container = document.createElement('label');
+    let isDisabled = disabled;
+
+    const container = document.createElement('div');
     container.className = 'sl-checkbox';
     if (isChecked) container.classList.add('checked');
-    if (disabled) container.classList.add('disabled');
-    
+    if (isDisabled) container.classList.add('disabled');
+
     const box = document.createElement('span');
     box.className = 'sl-checkbox-box';
     const check = document.createElement('span');
@@ -773,15 +774,16 @@ export function Checkbox(options = {}) {
     check.textContent = '✓';
     box.appendChild(check);
     container.appendChild(box);
-    
+
     if (label) { const l = document.createElement('span'); l.className = 'sl-checkbox-label'; l.textContent = label; container.appendChild(l); }
-    
-    container.addEventListener('click', (e) => { if (disabled) return; e.preventDefault(); isChecked = !isChecked; container.classList.toggle('checked', isChecked); if (onChange) onChange(isChecked); });
-    
+
+    function toggle() { if (isDisabled) return; isChecked = !isChecked; container.classList.toggle('checked', isChecked); if (onChange) onChange(isChecked); }
+    container.addEventListener('click', toggle);
+
     container.isChecked = () => isChecked;
     container.setChecked = (c) => { isChecked = c; container.classList.toggle('checked', isChecked); };
-    container.setDisabled = (d) => { container.classList.toggle('disabled', d); };
-    
+    container.setDisabled = (d) => { isDisabled = d; container.classList.toggle('disabled', d); };
+
     return container;
 }
 
@@ -793,11 +795,11 @@ export function UniformBool(options = {}) {
     const { name = 'u_bool0', checked = false, onChange = null, onNameChange = null, onRemove = null } = options;
     let isChecked = checked;
     let currentName = name;
-    
+
     const container = document.createElement('div');
     container.className = 'sl-uniform-bool';
     if (isChecked) container.classList.add('checked');
-    
+
     const box = document.createElement('span');
     box.className = 'sl-checkbox-box';
     const check = document.createElement('span');
@@ -805,18 +807,16 @@ export function UniformBool(options = {}) {
     check.textContent = '✓';
     box.appendChild(check);
     container.appendChild(box);
-    
+
     const labelInput = document.createElement('input');
     labelInput.type = 'text';
     labelInput.className = 'sl-uniform-bool-label';
     labelInput.value = currentName;
-    labelInput.readOnly = true;
-    labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
-    labelInput.addEventListener('blur', () => { labelInput.readOnly = true; currentName = labelInput.value || 'u_bool'; if (onNameChange) onNameChange(currentName); });
-    labelInput.addEventListener('click', (e) => e.stopPropagation());
+    labelInput.addEventListener('blur', () => { currentName = labelInput.value || 'u_bool'; if (onNameChange) onNameChange(currentName); });
     container.appendChild(labelInput);
-    
-    container.addEventListener('click', (e) => { if (e.target === labelInput) return; isChecked = !isChecked; container.classList.toggle('checked', isChecked); if (onChange) onChange(isChecked, currentName); });
+
+    function toggle() { isChecked = !isChecked; container.classList.toggle('checked', isChecked); if (onChange) onChange(isChecked, currentName); }
+    box.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
     
     container.isChecked = () => isChecked;
     container.setChecked = (c) => { isChecked = c; container.classList.toggle('checked', isChecked); };
@@ -1010,9 +1010,9 @@ export function ColorPicker(options = {}) {
     labelInput.type = 'text';
     labelInput.className = 'sl-color-picker-label';
     labelInput.value = currentName;
-    labelInput.readOnly = true;
-    labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
-    labelInput.addEventListener('blur', () => { labelInput.readOnly = true; currentName = labelInput.value || 'u_color'; if (onNameChange) onNameChange(currentName); });
+    labelInput.addEventListener('blur', () => { currentName = labelInput.value || 'u_color'; if (onNameChange) onNameChange(currentName); });
+    labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+    labelInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     header.appendChild(labelInput);
     
     const hexInput = document.createElement('input');
@@ -1119,9 +1119,9 @@ export function Vec3Picker(options = {}) {
     labelInput.type = 'text';
     labelInput.className = 'sl-vec3-picker-label';
     labelInput.value = currentName;
-    labelInput.readOnly = true;
-    labelInput.addEventListener('focus', () => { labelInput.readOnly = false; });
-    labelInput.addEventListener('blur', () => { labelInput.readOnly = true; currentName = labelInput.value || 'u_position'; if (onNameChange) onNameChange(currentName); });
+    labelInput.addEventListener('blur', () => { currentName = labelInput.value || 'u_position'; if (onNameChange) onNameChange(currentName); });
+    labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+    labelInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     header.appendChild(labelInput);
     
     const values = document.createElement('div');

@@ -196,8 +196,9 @@ function createPanel() {
     // Close button
     document.getElementById('uniformControlsClose').onclick = toggle;
     
-    // Make header draggable
+    // Make header draggable (mouse and touch)
     header.addEventListener('mousedown', startDrag);
+    header.addEventListener('touchstart', startDragTouch, { passive: false });
 }
 
 /**
@@ -684,6 +685,10 @@ function setAllToHalfway() {
 function setupDragListeners() {
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
+    // Touch support
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd);
+    document.addEventListener('touchcancel', onTouchEnd);
 }
 
 function startDrag(e) {
@@ -692,6 +697,15 @@ function startDrag(e) {
     dragOffsetX = e.clientX - rect.left;
     dragOffsetY = e.clientY - rect.top;
     panel.style.cursor = 'grabbing';
+}
+
+function startDragTouch(e) {
+    e.preventDefault();
+    isDragging = true;
+    const touch = e.touches[0];
+    const rect = panel.getBoundingClientRect();
+    dragOffsetX = touch.clientX - rect.left;
+    dragOffsetY = touch.clientY - rect.top;
 }
 
 function onMouseMove(e) {
@@ -705,9 +719,28 @@ function onMouseMove(e) {
     panel.style.right = 'auto';
 }
 
+function onTouchMove(e) {
+    if (!isDragging) return;
+    e.preventDefault();
+    
+    const touch = e.touches[0];
+    const x = touch.clientX - dragOffsetX;
+    const y = touch.clientY - dragOffsetY;
+    
+    panel.style.left = x + 'px';
+    panel.style.top = y + 'px';
+    panel.style.right = 'auto';
+}
+
 function onMouseUp() {
     if (isDragging) {
         isDragging = false;
         panel.style.cursor = 'default';
+    }
+}
+
+function onTouchEnd() {
+    if (isDragging) {
+        isDragging = false;
     }
 }

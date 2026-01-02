@@ -521,21 +521,24 @@ export function startHelpDrag(e) {
     // If panel is open, prepare for potential drag
     isHelpDragging = true;
     helpHasMoved = false;
-    helpDragStartY = e.clientY;
+    // Handle both mouse and touch
+    helpDragStartY = e.touches ? e.touches[0].clientY : e.clientY;
     helpDragStartHeight = helpPanelHeight;
-    
+
     if (isHelpPanelOpen) {
         document.body.style.cursor = 'ns-resize';
     }
     document.body.style.userSelect = 'none';
-    
+
     e.preventDefault();
 }
 
 export function doHelpDrag(e) {
     if (!isHelpDragging || !isHelpPanelOpen) return; // Only drag when open
-    
-    const deltaY = e.clientY - helpDragStartY;
+
+    // Handle both mouse and touch
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const deltaY = clientY - helpDragStartY;
     const viewportHeight = window.innerHeight;
     const deltaPercent = (deltaY / viewportHeight) * 100;
     
