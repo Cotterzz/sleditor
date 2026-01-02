@@ -742,12 +742,14 @@ html:not([data-theme="dark"]) .success {
     /*border: 1px solid var(--border-color);*/
     background: var(--bg-tertiary);
     overflow: hidden;
+    touch-action: none; /* Prevent scroll/zoom interference on mobile */
 }
 
 /* Both WebGL and WebGPU canvases */
 #canvasWebGPU,
 #canvasWebGL {
     display: block;
+    touch-action: none; /* Prevent scroll/zoom interference on mobile */
     /* Width and height set dynamically via JS to quantized values */
     /* This ensures pixel-perfect rendering without stretching artifacts */
 }
@@ -757,6 +759,7 @@ html:not([data-theme="dark"]) .success {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    touch-action: none; /* Prevent scroll/zoom interference on mobile */
     /* image-rendering set dynamically via JS */
 }
 

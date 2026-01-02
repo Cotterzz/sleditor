@@ -891,6 +891,8 @@ function attachPointerListeners(canvas) {
     canvas.addEventListener('pointerleave', handlePointerLeave, options);
 }
 
+let activeCanvas = null; // Store reference for mobile drag reliability
+
 function handlePointerDown(event) {
     if (!event.isPrimary) return;
     if (event.button !== undefined && event.button !== 0) return;
@@ -901,6 +903,7 @@ function handlePointerDown(event) {
     event.preventDefault();
     
     state.activePointerId = event.pointerId;
+    activeCanvas = canvas; // Store canvas reference for mobile
     if (canvas.setPointerCapture) {
         try {
             canvas.setPointerCapture(event.pointerId);
@@ -922,9 +925,15 @@ function handlePointerDown(event) {
 
 function handlePointerMove(event) {
     if (!event.isPrimary && state.activePointerId !== event.pointerId) return;
-    const canvas = event.currentTarget;
+    // Use stored canvas for reliability during mobile drags
+    const canvas = event.currentTarget || activeCanvas;
     const pos = getPointerPosition(canvas, event);
     if (!pos) return;
+    
+    // Prevent default during drag to avoid scroll/pan on mobile
+    if (state.mouseIsDown) {
+        event.preventDefault();
+    }
     
     updateHoverState(pos);
     
@@ -938,8 +947,9 @@ function handlePointerMove(event) {
 
 function handlePointerUp(event) {
     if (state.activePointerId !== event.pointerId) return;
-    const canvas = event.currentTarget;
-    if (canvas.releasePointerCapture) {
+    // Use stored canvas for reliability during mobile drags
+    const canvas = event.currentTarget || activeCanvas;
+    if (canvas && canvas.releasePointerCapture) {
         try {
             canvas.releasePointerCapture(event.pointerId);
         } catch (err) {
@@ -953,6 +963,7 @@ function handlePointerUp(event) {
     }
     
     state.activePointerId = null;
+    activeCanvas = null; // Clear stored canvas
     state.mouseIsDown = false;
     state.mouseClickPhase = 'released';
 }
