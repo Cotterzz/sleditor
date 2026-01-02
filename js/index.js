@@ -883,109 +883,70 @@ function setupPointerEvents() {
 
 function attachPointerListeners(canvas) {
     if (!canvas) return;
-    const options = { passive: false };
-    canvas.addEventListener('pointerdown', handlePointerDown, options);
-    canvas.addEventListener('pointermove', handlePointerMove, options);
-    canvas.addEventListener('pointerup', handlePointerUp, options);
-    canvas.addEventListener('pointercancel', handlePointerUp, options);
-    canvas.addEventListener('pointerleave', handlePointerLeave, options);
-}
-
-let activeCanvas = null; // Store reference for mobile drag reliability
-
-function handlePointerDown(event) {
-    // For mouse, only accept primary button (left click)
-    // For touch, accept first touch (or any if isPrimary isn't reliable)
-    if (event.pointerType === 'mouse') {
-        if (!event.isPrimary) return;
-        if (event.button !== undefined && event.button !== 0) return;
-    } else {
-        // Touch/pen: accept if primary OR if we don't have an active pointer yet
-        if (!event.isPrimary && state.activePointerId !== null) return;
-    }
     
-    const canvas = event.currentTarget;
-    const pos = getPointerPosition(canvas, event);
-    if (!pos) return;
-    event.preventDefault();
-    
-    state.activePointerId = event.pointerId;
-    activeCanvas = canvas; // Store canvas reference for mobile
-    if (canvas.setPointerCapture) {
-        try {
-            canvas.setPointerCapture(event.pointerId);
-        } catch (err) {
-            // Ignore capture errors
+    // Only attach pointerdown - other listeners added dynamically during drag
+    // This pattern matches the working UI system sliders
+    canvas.addEventListener('pointerdown', (event) => {
+        // For mouse, only accept primary button (left click)
+        if (event.pointerType === 'mouse') {
+            if (event.button !== undefined && event.button !== 0) return;
         }
-    }
-    
-    state.mouseIsDown = true;
-    state.mouseDragX = pos.pixelX;
-    state.mouseDragY = pos.pixelY;
-    state.mouseLastDownX = pos.pixelX;
-    state.mouseLastDownY = pos.pixelY;
-    state.mouseClickX = pos.pixelX;
-    state.mouseClickY = pos.pixelY;
-    state.mouseClickPhase = 'pressed';
-    updateHoverState(pos);
-}
-
-function handlePointerMove(event) {
-    // Accept if it's the tracked pointer, or if it's primary when idle
-    const isTrackedPointer = state.activePointerId === event.pointerId;
-    if (!isTrackedPointer && !event.isPrimary) return;
-    
-    // Use stored canvas for reliability during mobile drags
-    const canvas = event.currentTarget || activeCanvas;
-    const pos = getPointerPosition(canvas, event);
-    if (!pos) return;
-    
-    // Prevent default during drag to avoid scroll/pan on mobile
-    if (state.mouseIsDown) {
+        
+        const pos = getPointerPosition(canvas, event);
+        if (!pos) return;
         event.preventDefault();
-    }
-    
-    updateHoverState(pos);
-    
-    // Update drag position if this is our active drag
-    if (isTrackedPointer && state.mouseIsDown) {
+        
+        // Capture pointer on the element for reliable mobile tracking
+        canvas.setPointerCapture(event.pointerId);
+        
+        // Set initial state
+        state.activePointerId = event.pointerId;
+        state.mouseIsDown = true;
         state.mouseDragX = pos.pixelX;
         state.mouseDragY = pos.pixelY;
         state.mouseLastDownX = pos.pixelX;
         state.mouseLastDownY = pos.pixelY;
-    }
-}
-
-function handlePointerUp(event) {
-    // Accept if it's our tracked pointer OR if we're in a down state and this is primary
-    const isTrackedPointer = state.activePointerId === event.pointerId;
-    if (!isTrackedPointer && !(state.mouseIsDown && event.isPrimary)) return;
-    
-    // Use stored canvas for reliability during mobile drags
-    const canvas = event.currentTarget || activeCanvas;
-    if (canvas && canvas.releasePointerCapture) {
-        try {
-            canvas.releasePointerCapture(event.pointerId);
-        } catch (err) {
-            // Ignore release errors
-        }
-    }
-    
-    const pos = getPointerPosition(canvas, event);
-    if (pos) {
+        state.mouseClickX = pos.pixelX;
+        state.mouseClickY = pos.pixelY;
+        state.mouseClickPhase = 'pressed';
         updateHoverState(pos);
-    }
-    
-    state.activePointerId = null;
-    activeCanvas = null; // Clear stored canvas
-    state.mouseIsDown = false;
-    state.mouseClickPhase = 'released';
-}
-
-function handlePointerLeave(event) {
-    if (state.mouseIsDown && state.activePointerId === event.pointerId) {
-        return;
-    }
+        
+        // Move handler - attached to element, not document
+        const handleMove = (e) => {
+            const movePos = getPointerPosition(canvas, e);
+            if (!movePos) return;
+            e.preventDefault();
+            
+            updateHoverState(movePos);
+            state.mouseDragX = movePos.pixelX;
+            state.mouseDragY = movePos.pixelY;
+            state.mouseLastDownX = movePos.pixelX;
+            state.mouseLastDownY = movePos.pixelY;
+        };
+        
+        // Up/cancel handler - clean up
+        const handleUp = (e) => {
+            canvas.releasePointerCapture(e.pointerId);
+            canvas.removeEventListener('pointermove', handleMove);
+            canvas.removeEventListener('pointerup', handleUp);
+            canvas.removeEventListener('pointercancel', handleUp);
+            
+            const upPos = getPointerPosition(canvas, e);
+            if (upPos) {
+                updateHoverState(upPos);
+            }
+            
+            state.activePointerId = null;
+            state.mouseIsDown = false;
+            state.mouseClickPhase = 'released';
+        };
+        
+        // Attach move/up/cancel to the element itself
+        canvas.addEventListener('pointermove', handleMove);
+        canvas.addEventListener('pointerup', handleUp);
+        canvas.addEventListener('pointercancel', handleUp);
+        
+    }, { passive: false });
 }
 
 function getPointerPosition(canvas, event) {
