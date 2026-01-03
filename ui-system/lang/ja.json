@@ -176,6 +176,17 @@
   
   "mobile": {
     "tapToLoad": "パネルアイコンをタップ"
+  },
+  
+  "transport": {
+    "play": "再生",
+    "pause": "一時停止",
+    "stop": "停止",
+    "record": "録音",
+    "mute": "ミュート",
+    "unmute": "ミュート解除",
+    "loop": "ループ",
+    "loopOff": "ループ解除"
   }
 }
 

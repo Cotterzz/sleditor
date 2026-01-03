@@ -268,11 +268,300 @@
                     tabsSection.appendChild(tabsRow2);
                     
                     div.appendChild(tabsSection);
+
+                    // TABPANE SECTION - Advanced draggable tabs
+                    const tabPaneSection = document.createElement('div');
+                    tabPaneSection.className = 'demo-section';
+                    tabPaneSection.innerHTML = '<div class="demo-section-title">TabPane (Draggable)</div>';
+
+                    const tabPaneRow = document.createElement('div');
+                    tabPaneRow.className = 'demo-row';
+                    tabPaneRow.style.minHeight = '200px';
+
+                    // TabPane 1 - Code group
+                    const paneBox1 = document.createElement('div');
+                    paneBox1.className = 'demo-box';
+                    paneBox1.style.display = 'flex';
+                    paneBox1.style.flexDirection = 'column';
+                    paneBox1.innerHTML = '<div class="demo-label">TabPane 1 (code group) - Drag tabs!</div>';
                     
+                    const tabPane1 = SLUI.TabPane({
+                        id: 'pane1',
+                        group: 'code',
+                        tabs: [
+                            { id: 'main', label: 'main.glsl', icon: '📄', content: '<div style="padding: 12px; color: var(--text-secondary); font-family: var(--font-code);">// Main shader code<br>void mainImage(...) { }</div>' },
+                            { id: 'bufferA', label: 'bufferA.glsl', icon: '🅰️', content: '<div style="padding: 12px; color: var(--text-secondary); font-family: var(--font-code);">// Buffer A code</div>' },
+                            { id: 'common', label: 'common.glsl', icon: '📦', content: '<div style="padding: 12px; color: var(--text-secondary); font-family: var(--font-code);">// Shared functions</div>' }
+                        ],
+                        onTabChange: (id) => console.log('Pane1 tab changed:', id),
+                        onTabClose: (id) => console.log('Pane1 tab closed:', id),
+                        // No onTabDragOut = tabs won't be removed when dragged outside
+                        onEmpty: () => console.log('Pane1 is empty!')
+                    });
+                    paneBox1.appendChild(tabPane1);
+
+                    // TabPane 2 - Code group (same group, can exchange tabs)
+                    const paneBox2 = document.createElement('div');
+                    paneBox2.className = 'demo-box';
+                    paneBox2.style.display = 'flex';
+                    paneBox2.style.flexDirection = 'column';
+                    paneBox2.innerHTML = '<div class="demo-label">TabPane 2 (code group) - Same group!</div>';
+                    
+                    const tabPane2 = SLUI.TabPane({
+                        id: 'pane2',
+                        group: 'code',
+                        tabs: [
+                            { id: 'audio', label: 'audio.glsl', icon: '🔊', content: '<div style="padding: 12px; color: var(--text-secondary); font-family: var(--font-code);">// Audio shader</div>' },
+                            { id: 'post', label: 'post.glsl', icon: '🎨', content: '<div style="padding: 12px; color: var(--text-secondary); font-family: var(--font-code);">// Post-processing</div>' }
+                        ],
+                        onTabChange: (id) => console.log('Pane2 tab changed:', id)
+                    });
+                    paneBox2.appendChild(tabPane2);
+
+                    tabPaneRow.appendChild(paneBox1);
+                    tabPaneRow.appendChild(paneBox2);
+                    tabPaneSection.appendChild(tabPaneRow);
+
+                    // TabPane 3 - Different group (cannot exchange with code group)
+                    const tabPaneRow2 = document.createElement('div');
+                    tabPaneRow2.className = 'demo-row';
+                    tabPaneRow2.style.minHeight = '150px';
+
+                    const paneBox3 = document.createElement('div');
+                    paneBox3.className = 'demo-box';
+                    paneBox3.style.display = 'flex';
+                    paneBox3.style.flexDirection = 'column';
+                    paneBox3.innerHTML = '<div class="demo-label">TabPane 3 (gallery group) - Different group, no mixing!</div>';
+                    
+                    const tabPane3 = SLUI.TabPane({
+                        id: 'pane3',
+                        group: 'gallery',
+                        tabs: [
+                            { id: 'shaders', label: 'Shaders', icon: '🎬', content: '<div style="padding: 12px; color: var(--text-secondary);">Shader gallery...</div>' },
+                            { id: 'textures', label: 'Textures', icon: '🖼️', content: '<div style="padding: 12px; color: var(--text-secondary);">Texture library...</div>' },
+                            { id: 'audio', label: 'Audio', icon: '🎵', content: '<div style="padding: 12px; color: var(--text-secondary);">Audio samples...</div>' }
+                        ]
+                    });
+                    paneBox3.appendChild(tabPane3);
+
+                    tabPaneRow2.appendChild(paneBox3);
+                    tabPaneSection.appendChild(tabPaneRow2);
+
+                    div.appendChild(tabPaneSection);
+
+                    // BUTTONS SECTION
+                    const buttonsSection = document.createElement('div');
+                    buttonsSection.className = 'demo-section';
+                    buttonsSection.innerHTML = '<div class="demo-section-title">Buttons</div>';
+
+                    // Row 1: Basic button variants
+                    const btnRow1 = document.createElement('div');
+                    btnRow1.className = 'demo-row';
+                    btnRow1.style.gap = '12px';
+                    btnRow1.style.flexWrap = 'wrap';
+
+                    // Label only
+                    const btn1 = SLUI.Button({ label: 'Default', onClick: () => console.log('Default clicked') });
+                    const btn2 = SLUI.Button({ label: 'Primary', variant: 'primary', onClick: () => console.log('Primary clicked') });
+                    const btn3 = SLUI.Button({ label: 'Danger', variant: 'danger', onClick: () => console.log('Danger clicked') });
+                    const btn4 = SLUI.Button({ label: 'Ghost', variant: 'ghost', onClick: () => console.log('Ghost clicked') });
+                    const btn5 = SLUI.Button({ label: 'Disabled', disabled: true });
+
+                    btnRow1.appendChild(btn1);
+                    btnRow1.appendChild(btn2);
+                    btnRow1.appendChild(btn3);
+                    btnRow1.appendChild(btn4);
+                    btnRow1.appendChild(btn5);
+                    buttonsSection.appendChild(btnRow1);
+
+                    // Row 2: Icon buttons
+                    const btnRow2 = document.createElement('div');
+                    btnRow2.className = 'demo-row';
+                    btnRow2.style.gap = '12px';
+                    btnRow2.style.flexWrap = 'wrap';
+                    btnRow2.style.marginTop = '12px';
+
+                    const iconBtn1 = SLUI.Button({ icon: '▶', tooltip: 'Play' });
+                    const iconBtn2 = SLUI.Button({ icon: '⏸', tooltip: 'Pause' });
+                    const iconBtn3 = SLUI.Button({ icon: '⏹', tooltip: 'Stop' });
+                    const iconBtn4 = SLUI.Button({ icon: '🔁', tooltip: 'Loop' });
+                    const iconBtn5 = SLUI.Button({ icon: '➕', variant: 'primary', tooltip: 'Add' });
+                    const iconBtn6 = SLUI.Button({ icon: '🗑', variant: 'danger', tooltip: 'Delete' });
+
+                    // Attach tooltips
+                    SLUI.Tooltip(iconBtn1, 'Play');
+                    SLUI.Tooltip(iconBtn2, 'Pause');
+                    SLUI.Tooltip(iconBtn3, 'Stop');
+                    SLUI.Tooltip(iconBtn4, 'Loop');
+                    SLUI.Tooltip(iconBtn5, 'Add Keyframe');
+                    SLUI.Tooltip(iconBtn6, 'Delete');
+
+                    btnRow2.appendChild(iconBtn1);
+                    btnRow2.appendChild(iconBtn2);
+                    btnRow2.appendChild(iconBtn3);
+                    btnRow2.appendChild(iconBtn4);
+                    btnRow2.appendChild(iconBtn5);
+                    btnRow2.appendChild(iconBtn6);
+                    buttonsSection.appendChild(btnRow2);
+
+                    // Row 3: Icon + Label
+                    const btnRow3 = document.createElement('div');
+                    btnRow3.className = 'demo-row';
+                    btnRow3.style.gap = '12px';
+                    btnRow3.style.flexWrap = 'wrap';
+                    btnRow3.style.marginTop = '12px';
+
+                    const comboBtn1 = SLUI.Button({ icon: '💾', label: 'Save', variant: 'primary' });
+                    const comboBtn2 = SLUI.Button({ icon: '📂', label: 'Open' });
+                    const comboBtn3 = SLUI.Button({ icon: '⚙️', label: 'Settings' });
+                    const comboBtn4 = SLUI.Button({ icon: '🔧', label: 'Compile', size: 'large' });
+
+                    btnRow3.appendChild(comboBtn1);
+                    btnRow3.appendChild(comboBtn2);
+                    btnRow3.appendChild(comboBtn3);
+                    btnRow3.appendChild(comboBtn4);
+                    buttonsSection.appendChild(btnRow3);
+
+                    // Row 4: Toggle buttons
+                    const btnRow4 = document.createElement('div');
+                    btnRow4.className = 'demo-row';
+                    btnRow4.style.gap = '12px';
+                    btnRow4.style.flexWrap = 'wrap';
+                    btnRow4.style.marginTop = '12px';
+
+                    // Play/Pause using i18n keys - labels auto-update on language change
+                    const playPauseBtn = SLUI.ToggleButton({
+                        iconOff: '▶',
+                        iconOn: '⏸',
+                        labelOffKey: 'transport.play',
+                        labelOnKey: 'transport.pause',
+                        onToggle: (pressed) => console.log('Play/Pause:', pressed ? 'playing' : 'paused')
+                    });
+
+                    // Mute using i18n keys for tooltips
+                    const muteBtn = SLUI.ToggleButton({
+                        iconOff: '🔊',
+                        iconOn: '🔇',
+                        tooltipOffKey: 'transport.mute',
+                        tooltipOnKey: 'transport.unmute',
+                        onToggle: (pressed) => console.log('Mute:', pressed)
+                    });
+
+                    // Loop using i18n keys
+                    const loopBtn = SLUI.ToggleButton({
+                        iconOff: '🔁',
+                        iconOn: '🔁',
+                        tooltipOffKey: 'transport.loop',
+                        tooltipOnKey: 'transport.loopOff',
+                        onToggle: (pressed) => console.log('Loop:', pressed)
+                    });
+
+                    btnRow4.appendChild(playPauseBtn);
+                    btnRow4.appendChild(muteBtn);
+                    btnRow4.appendChild(loopBtn);
+                    buttonsSection.appendChild(btnRow4);
+
+                    // Row 5: Button sizes
+                    const btnRow5 = document.createElement('div');
+                    btnRow5.className = 'demo-row';
+                    btnRow5.style.gap = '12px';
+                    btnRow5.style.alignItems = 'center';
+                    btnRow5.style.marginTop = '12px';
+
+                    const smallBtn = SLUI.Button({ label: 'Small', size: 'small' });
+                    const mediumBtn = SLUI.Button({ label: 'Medium', size: 'medium' });
+                    const largeBtn = SLUI.Button({ label: 'Large', size: 'large' });
+
+                    btnRow5.appendChild(smallBtn);
+                    btnRow5.appendChild(mediumBtn);
+                    btnRow5.appendChild(largeBtn);
+                    buttonsSection.appendChild(btnRow5);
+
+                    div.appendChild(buttonsSection);
+
+                    // COLOR INPUT SECTION
+                    const colorSection = document.createElement('div');
+                    colorSection.className = 'demo-section';
+                    colorSection.innerHTML = '<div class="demo-section-title">Color Input (SL/OS Toggle)</div>';
+
+                    // Row 1: Basic ColorInput with toggle
+                    const colorRow1 = document.createElement('div');
+                    colorRow1.className = 'demo-row';
+                    colorRow1.style.gap = '16px';
+                    colorRow1.style.alignItems = 'center';
+
+                    const colorLabel1 = document.createElement('span');
+                    colorLabel1.textContent = 'With Toggle:';
+                    colorLabel1.style.color = 'var(--text-secondary)';
+                    colorLabel1.style.fontSize = '0.75rem';
+
+                    const colorInput1 = SLUI.ColorInput({
+                        r: 0.9, g: 0.27, b: 0.38,
+                        showToggle: true,
+                        onChange: (c) => console.log('Color 1:', c)
+                    });
+
+                    colorRow1.appendChild(colorLabel1);
+                    colorRow1.appendChild(colorInput1);
+                    colorSection.appendChild(colorRow1);
+
+                    // Row 2: ColorInput without toggle (SL only)
+                    const colorRow2 = document.createElement('div');
+                    colorRow2.className = 'demo-row';
+                    colorRow2.style.gap = '16px';
+                    colorRow2.style.alignItems = 'center';
+                    colorRow2.style.marginTop = '8px';
+
+                    const colorLabel2 = document.createElement('span');
+                    colorLabel2.textContent = 'SL Only:';
+                    colorLabel2.style.color = 'var(--text-secondary)';
+                    colorLabel2.style.fontSize = '0.75rem';
+
+                    const colorInput2 = SLUI.ColorInput({
+                        r: 0.2, g: 0.6, b: 0.9,
+                        showToggle: false,
+                        onChange: (c) => console.log('Color 2:', c)
+                    });
+
+                    colorRow2.appendChild(colorLabel2);
+                    colorRow2.appendChild(colorInput2);
+                    colorSection.appendChild(colorRow2);
+
+                    // Row 3: SlideToggle demos
+                    const colorRow3 = document.createElement('div');
+                    colorRow3.className = 'demo-row';
+                    colorRow3.style.gap = '24px';
+                    colorRow3.style.alignItems = 'center';
+                    colorRow3.style.marginTop = '12px';
+
+                    const slideLabel = document.createElement('span');
+                    slideLabel.textContent = 'SlideToggle:';
+                    slideLabel.style.color = 'var(--text-secondary)';
+                    slideLabel.style.fontSize = '0.75rem';
+
+                    const toggle1 = SLUI.SlideToggle({
+                        labelLeft: 'Off',
+                        labelRight: 'On',
+                        size: 'small'
+                    });
+
+                    const toggle2 = SLUI.SlideToggle({
+                        labelLeft: 'Light',
+                        labelRight: 'Dark',
+                        value: true
+                    });
+
+                    colorRow3.appendChild(slideLabel);
+                    colorRow3.appendChild(toggle1);
+                    colorRow3.appendChild(toggle2);
+                    colorSection.appendChild(colorRow3);
+
+                    div.appendChild(colorSection);
+
                     return div;
                 }
             });
-            
+
             // ========================================
             // ORIGINAL DEMO PANELS
             // ========================================
@@ -520,27 +809,59 @@
                 }
             });
             
-            // Editor panel - Testing SVG icon
+            // Editor panel - Tabbed window with multiple code files
             SLUI.registerPanel({
                 id: 'editor',
                 icon: '<img src="icons/code32.png" srcset="icons/code64.png 2x" width="24" height="24" alt="Code">',
                 title: 'Editor',
-                createContent: () => {
-                    const div = document.createElement('div');
-                    div.className = 'demo-content';
-                    div.innerHTML = `
-                        <h3 class="sl-text-ui">${SLUI.t('panels.editor.codeTitle')}</h3>
-                        <div class="demo-code">void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+                tabbed: true,
+                tabGroup: 'code',
+                tabs: () => [
+                    { 
+                        id: 'main', 
+                        label: 'main.glsl', 
+                        icon: '📄',
+                        content: `<div class="demo-content" style="padding: 12px;">
+                            <div class="demo-code" style="font-size: 13px;">void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = fragCoord / iResolution.xy;
     vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx + vec3(0, 2, 4));
     fragColor = vec4(col, 1.0);
 }</div>
-                        <p style="margin-top: 12px;" class="sl-text-content">
-                            ${SLUI.t('panels.editor.codeHint')}
-                        </p>
-                    `;
-                    return div;
-                }
+                        </div>`
+                    },
+                    { 
+                        id: 'common', 
+                        label: 'common.glsl', 
+                        icon: '📦',
+                        content: `<div class="demo-content" style="padding: 12px;">
+                            <div class="demo-code" style="font-size: 13px;">// Shared functions and constants
+#define PI 3.14159265359
+#define TAU 6.28318530718
+
+float sdSphere(vec3 p, float r) {
+    return length(p) - r;
+}
+
+mat2 rot2D(float a) {
+    float c = cos(a), s = sin(a);
+    return mat2(c, -s, s, c);
+}</div>
+                        </div>`
+                    },
+                    { 
+                        id: 'bufferA', 
+                        label: 'Buffer A', 
+                        icon: '🅰️',
+                        content: `<div class="demo-content" style="padding: 12px;">
+                            <div class="demo-code" style="font-size: 13px;">// Buffer A - Feedback/simulation pass
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / iResolution.xy;
+    vec4 prev = texture(iChannel0, uv);
+    fragColor = prev * 0.99;
+}</div>
+                        </div>`
+                    }
+                ]
             });
             
             // Preview panel - Testing SVG icon (shader)
@@ -677,6 +998,57 @@
             
             console.log('Device mode:', SLUI.state.deviceMode);
             console.log('Is mobile device:', SLUI.isMobileDevice());
+            
+            // ========================================
+            // TABBED WINDOWS DEMO
+            // Press 'T' to spawn demo tabbed windows
+            // ========================================
+            
+            let tabbedWindowCounter = 0;
+            
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 't' || e.key === 'T') {
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                    
+                    tabbedWindowCounter++;
+                    const floatLayer = document.getElementById('sl-float-layer');
+                    
+                    // Create a code tabbed window
+                    const codeWin = SLUI.createTabbedWindow({
+                        id: `code-win-${tabbedWindowCounter}`,
+                        group: 'code',
+                        x: 150 + tabbedWindowCounter * 40,
+                        y: 100 + tabbedWindowCounter * 30,
+                        width: 500,
+                        height: 400,
+                        tabs: [
+                            { id: `main-${tabbedWindowCounter}`, label: 'main.glsl', icon: '📄', 
+                              content: '<div style="padding: 12px; font-family: var(--font-code); color: var(--text-secondary);">// Main shader<br>void mainImage(out vec4 c, in vec2 p) {<br>&nbsp;&nbsp;c = vec4(p/iResolution.xy, 0.5, 1.0);<br>}</div>' },
+                            { id: `common-${tabbedWindowCounter}`, label: 'common.glsl', icon: '📦', 
+                              content: '<div style="padding: 12px; font-family: var(--font-code); color: var(--text-secondary);">// Common functions<br>#define PI 3.14159265</div>' }
+                        ]
+                    });
+                    
+                    if (codeWin && floatLayer) {
+                        floatLayer.appendChild(codeWin);
+                        console.log('Created tabbed window:', codeWin.dataset.windowId);
+                        console.log('Press T again to create another window.');
+                        console.log('Drag tabs between windows of the same group!');
+                    }
+                }
+            });
+            
+            // Add visual hint for the tabbed window demo
+            if (SLUI.state.deviceMode !== 'mobile') {
+                const hint = document.createElement('div');
+                hint.style.cssText = 'position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); background: var(--bg-tertiary); border: 1px solid var(--border); padding: 8px 16px; border-radius: 6px; font-size: 12px; color: var(--text-muted); z-index: 9999; pointer-events: none;';
+                hint.textContent = 'Click Editor icon to open a Tabbed Window - drag tabs to reorder or drag out!';
+                document.body.appendChild(hint);
+                setTimeout(() => hint.remove(), 8000);
+            }
+            
+            console.log('Click the Editor icon (code) to open a Tabbed Window demo.');
+            console.log('Press T to create additional code windows for testing tab drag between windows.');
             
         });
     </script>

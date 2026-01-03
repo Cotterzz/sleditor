@@ -176,6 +176,17 @@
   
   "mobile": {
     "tapToLoad": "Toca un icono de panel"
+  },
+  
+  "transport": {
+    "play": "Reproducir",
+    "pause": "Pausar",
+    "stop": "Detener",
+    "record": "Grabar",
+    "mute": "Silenciar",
+    "unmute": "Activar sonido",
+    "loop": "Repetir",
+    "loopOff": "Sin repetir"
   }
 }
 
