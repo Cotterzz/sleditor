@@ -69,7 +69,13 @@ const SLUI = (function() {
             state.deviceMode = isMobileDevice() ? 'mobile' : 'desktop';
         }
         
-        state.mobileOrientation = detectOrientation();
+        const newOrientation = detectOrientation();
+        
+        // Skip if nothing meaningful changed (prevents keyboard-triggered redraws)
+        const modeChanged = prevMode !== state.deviceMode;
+        const orientationChanged = prevOrientation !== newOrientation;
+        
+        state.mobileOrientation = newOrientation;
         
         const app = document.querySelector('.sl-app');
         if (app) {
@@ -82,10 +88,10 @@ const SLUI = (function() {
             }
         }
         
-        // Rebuild mobile zones if needed
-        if (state.deviceMode === 'mobile') {
+        // Only rebuild mobile zones if mode or orientation actually changed
+        if (state.deviceMode === 'mobile' && (modeChanged || orientationChanged)) {
             // If orientation changed, remap existing zone assignments
-            if (prevMode === 'mobile' && prevOrientation && prevOrientation !== state.mobileOrientation) {
+            if (prevMode === 'mobile' && orientationChanged) {
                 remapMobileZones(prevOrientation, state.mobileOrientation);
             }
             renderMobileZones();
@@ -2271,6 +2277,2599 @@ const SLUI = (function() {
     }
     
     // ========================================
+    // SLIDER COMPONENTS
+    // ========================================
+
+    // Helper for drag interactions (reduces duplication)
+    function setupDrag(element, onMove, onStart, onEnd) {
+        element.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            element.setPointerCapture(e.pointerId);
+            if (onStart) onStart(e);
+            onMove(e);
+            
+            const moveHandler = (e) => onMove(e);
+            const upHandler = (e) => {
+                element.releasePointerCapture(e.pointerId);
+                element.removeEventListener('pointermove', moveHandler);
+                element.removeEventListener('pointerup', upHandler);
+                element.removeEventListener('pointercancel', upHandler);
+                if (onEnd) onEnd(e);
+            };
+            
+            element.addEventListener('pointermove', moveHandler);
+            element.addEventListener('pointerup', upHandler);
+            element.addEventListener('pointercancel', upHandler);
+        });
+    }
+
+    function Slider(options = {}) {
+        const {
+            min = 0,
+            max = 100,
+            value = 50,
+            step = 1,
+            disabled = false,
+            showValue = true,
+            valueFormat = (v) => v.toFixed(step < 1 ? 2 : 0),
+            onChange = null,
+            onInput = null,
+            className = ''
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = `sl-slider ${className}`.trim();
+        
+        const track = document.createElement('div');
+        track.className = 'sl-slider-track';
+        if (disabled) track.classList.add('disabled');
+        
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-slider-track-bg';
+        
+        const fill = document.createElement('div');
+        fill.className = 'sl-slider-track-fill';
+        
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slider-thumb';
+        thumb.tabIndex = disabled ? -1 : 0;
+        
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.min = min;
+        input.max = max;
+        input.step = step;
+        input.value = value;
+        input.disabled = disabled;
+        input.className = 'sl-slider-input';
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        track.appendChild(input);
+        container.appendChild(track);
+        
+        let valueDisplay = null;
+        if (showValue) {
+            valueDisplay = document.createElement('span');
+            valueDisplay.className = 'sl-slider-value';
+            valueDisplay.textContent = valueFormat(value);
+            container.appendChild(valueDisplay);
+        }
+        
+        function updateVisuals() {
+            const percent = ((input.value - min) / (max - min)) * 100;
+            fill.style.width = `${percent}%`;
+            thumb.style.left = `${percent}%`;
+        }
+        
+        input.addEventListener('input', (e) => {
+            updateVisuals();
+            if (valueDisplay) valueDisplay.textContent = valueFormat(parseFloat(input.value));
+            if (onInput) onInput(parseFloat(input.value), e);
+        });
+        
+        input.addEventListener('change', (e) => {
+            if (onChange) onChange(parseFloat(input.value), e);
+        });
+        
+        trackBg.addEventListener('click', (e) => {
+            if (disabled) return;
+            const rect = trackBg.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const newValue = min + percent * (max - min);
+            const stepped = Math.round(newValue / step) * step;
+            input.value = Math.max(min, Math.min(max, stepped));
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        
+        updateVisuals();
+        
+        container.getValue = () => parseFloat(input.value);
+        container.setValue = (v) => {
+            input.value = Math.max(min, Math.min(max, v));
+            updateVisuals();
+            if (valueDisplay) valueDisplay.textContent = valueFormat(v);
+        };
+        container.setDisabled = (d) => {
+            input.disabled = d;
+            track.classList.toggle('disabled', d);
+        };
+        
+        return container;
+    }
+    
+    function LabeledSlider(options = {}) {
+        const {
+            min = 0,
+            max = 100,
+            value = 50,
+            step = 1,
+            disabled = false,
+            showValue = true,
+            showMinMax = true,
+            minLabel = null,
+            maxLabel = null,
+            valueFormat = (v) => v.toFixed(step < 1 ? 2 : 0),
+            onChange = null,
+            onInput = null,
+            className = ''
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = `sl-labeled-slider ${className}`.trim();
+        
+        const slider = Slider({ min, max, value, step, disabled, showValue, valueFormat, onChange, onInput });
+        container.appendChild(slider);
+        
+        if (showMinMax) {
+            const labels = document.createElement('div');
+            labels.className = 'sl-slider-labels';
+            labels.innerHTML = `
+                <span class="sl-slider-label-min">${minLabel !== null ? minLabel : valueFormat(min)}</span>
+                <span class="sl-slider-label-max">${maxLabel !== null ? maxLabel : valueFormat(max)}</span>
+            `;
+            container.appendChild(labels);
+        }
+        
+        container.getValue = () => slider.getValue();
+        container.setValue = (v) => slider.setValue(v);
+        container.setDisabled = (d) => slider.setDisabled(d);
+        
+        return container;
+    }
+    
+    function SliderGroup(options = {}) {
+        const {
+            label = 'Value',
+            min = 0,
+            max = 100,
+            value = 50,
+            step = 1,
+            disabled = false,
+            showInput = true,
+            showMinMax = false,
+            valueFormat = (v) => v.toFixed(step < 1 ? 2 : 0),
+            onChange = null,
+            onInput = null,
+            className = ''
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = `sl-slider-group ${className}`.trim();
+        if (disabled) container.classList.add('disabled');
+        
+        const labelEl = document.createElement('label');
+        labelEl.className = 'sl-slider-group-label';
+        labelEl.textContent = label;
+        
+        const row = document.createElement('div');
+        row.className = 'sl-slider-group-row';
+        
+        const slider = LabeledSlider({
+            min, max, value, step, disabled,
+            showValue: !showInput,
+            showMinMax,
+            valueFormat,
+            onInput: (v, e) => {
+                if (numberInput) numberInput.value = valueFormat(v);
+                if (onInput) onInput(v, e);
+            },
+            onChange
+        });
+        row.appendChild(slider);
+        
+        let numberInput = null;
+        if (showInput) {
+            numberInput = document.createElement('input');
+            numberInput.type = 'number';
+            numberInput.className = 'sl-slider-group-input';
+            numberInput.min = min;
+            numberInput.max = max;
+            numberInput.step = step;
+            numberInput.value = valueFormat(value);
+            numberInput.disabled = disabled;
+            
+            numberInput.addEventListener('change', () => {
+                let v = parseFloat(numberInput.value);
+                if (isNaN(v)) v = min;
+                v = Math.max(min, Math.min(max, v));
+                slider.setValue(v);
+                numberInput.value = valueFormat(v);
+                if (onChange) onChange(v);
+            });
+            
+            row.appendChild(numberInput);
+        }
+        
+        container.appendChild(labelEl);
+        container.appendChild(row);
+        
+        container.getValue = () => slider.getValue();
+        container.setValue = (v) => {
+            slider.setValue(v);
+            if (numberInput) numberInput.value = valueFormat(v);
+        };
+        container.setDisabled = (d) => {
+            slider.setDisabled(d);
+            if (numberInput) numberInput.disabled = d;
+            container.classList.toggle('disabled', d);
+        };
+        container.setLabel = (l) => { labelEl.textContent = l; };
+        
+        return container;
+    }
+    
+    // ========================================
+    // UNIFORM SLIDER - Expandable uniform control
+    // ========================================
+    
+    function UniformSlider(options = {}) {
+        const {
+            name = 'u_custom0',
+            min = 0,
+            max = 1,
+            value = 0.5,
+            step = 0.01,
+            isInt = false,
+            locked = false,
+            expanded = false,
+            onChange = null,
+            onNameChange = null,
+            onRangeChange = null,
+            onExpand = null,
+            onCollapse = null,
+            onRemove = null
+        } = options;
+        
+        const decimals = 4;
+        const stepDecimals = isInt ? 0 : 4; // Int sliders show integer step
+        let currentName = name;
+        let currentMin = min;
+        let currentMax = max;
+        let currentValue = Math.max(min, Math.min(max, value));
+        let currentStep = isInt ? 1 : step;
+        let isLocked = locked;
+        let isExpanded = expanded;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-uniform-slider';
+        if (isExpanded) container.classList.add('expanded');
+        
+        // Toggle button (used in both top row when expanded, middle row when minimized)
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'sl-uniform-toggle';
+        toggleBtn.textContent = '▼';
+        toggleBtn.title = 'Expand';
+        toggleBtn.style.cursor = 'pointer';
+        
+        // Top row: Start | Value | End | Toggle(▲)
+        const topRow = document.createElement('div');
+        topRow.className = 'sl-uniform-row sl-uniform-row-top';
+        
+        const startInput = createEditableNum(currentMin, (v) => {
+            currentMin = v;
+            if (currentMin > currentMax) { currentMax = currentMin; endInput.setValue(currentMax); }
+            if (currentValue < currentMin) {
+                currentValue = currentMin;
+                valueInput.setValue(currentValue);
+                updateTrackVisuals();
+            }
+            if (onRangeChange) onRangeChange(currentMin, currentMax);
+        }, isInt, decimals);
+        startInput.classList.add('sl-uniform-start');
+        
+        const valueInput = createEditableNum(currentValue, (v) => {
+            currentValue = Math.max(currentMin, Math.min(currentMax, v));
+            valueInput.setValue(currentValue);
+            updateTrackVisuals();
+            if (onChange) onChange(currentValue, currentName);
+        }, isInt, decimals);
+        valueInput.classList.add('sl-uniform-value');
+        
+        const endInput = createEditableNum(currentMax, (v) => {
+            currentMax = v;
+            if (currentMax < currentMin) { currentMin = currentMax; startInput.setValue(currentMin); }
+            if (currentValue > currentMax) {
+                currentValue = currentMax;
+                valueInput.setValue(currentValue);
+                updateTrackVisuals();
+            }
+            if (onRangeChange) onRangeChange(currentMin, currentMax);
+        }, isInt, decimals);
+        endInput.classList.add('sl-uniform-end');
+        
+        // Toggle button clone for top row (minimize button)
+        const topToggleBtn = document.createElement('button');
+        topToggleBtn.className = 'sl-uniform-toggle';
+        topToggleBtn.textContent = '▲';
+        topToggleBtn.title = 'Collapse';
+        topToggleBtn.style.cursor = 'pointer';
+        
+        topRow.appendChild(startInput);
+        topRow.appendChild(valueInput);
+        topRow.appendChild(endInput);
+        topRow.appendChild(topToggleBtn);
+        
+        // Middle row: Label | Slider Track | Toggle(▼) (toggle only when minimized)
+        const middleRow = document.createElement('div');
+        middleRow.className = 'sl-uniform-row sl-uniform-row-middle';
+        
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.className = 'sl-uniform-label';
+        labelInput.value = currentName;
+        // Don't use readOnly toggle - causes mobile keyboard issues
+        labelInput.addEventListener('blur', () => {
+            currentName = labelInput.value || 'u_custom';
+            if (onNameChange) onNameChange(currentName);
+        });
+        labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+        labelInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+        
+        // Slider track
+        const track = document.createElement('div');
+        track.className = 'sl-slider-track';
+        track.style.cursor = 'pointer';
+        
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-slider-track-bg';
+        
+        const fill = document.createElement('div');
+        fill.className = 'sl-slider-track-fill';
+        
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slider-thumb';
+        thumb.style.cursor = 'pointer';
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        
+        function updateTrackVisuals() {
+            const percent = ((currentValue - currentMin) / (currentMax - currentMin)) * 100;
+            fill.style.width = `${percent}%`;
+            thumb.style.left = `${percent}%`;
+        }
+        
+        // Track interaction
+        function handleTrackPointer(e) {
+            if (isLocked) return;
+            const rect = trackBg.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            let newValue = currentMin + percent * (currentMax - currentMin);
+            newValue = Math.round(newValue / currentStep) * currentStep;
+            currentValue = Math.max(currentMin, Math.min(currentMax, newValue));
+            updateTrackVisuals();
+            valueInput.setValue(currentValue);
+            if (onChange) onChange(currentValue, currentName);
+        }
+        
+        track.addEventListener('pointerdown', (e) => {
+            if (isLocked) return;
+            e.preventDefault();
+            track.setPointerCapture(e.pointerId); // Capture for reliable mobile tracking
+            track.classList.add('dragging');
+            handleTrackPointer(e);
+
+            const moveHandler = (e) => handleTrackPointer(e);
+            const upHandler = (e) => {
+                track.releasePointerCapture(e.pointerId);
+                track.classList.remove('dragging');
+                track.removeEventListener('pointermove', moveHandler);
+                track.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointercancel', upHandler);
+            };
+
+            track.addEventListener('pointermove', moveHandler);
+            track.addEventListener('pointerup', upHandler);
+            track.addEventListener('pointercancel', upHandler);
+        });
+        
+        middleRow.appendChild(labelInput);
+        middleRow.appendChild(track);
+        middleRow.appendChild(toggleBtn);
+        
+        // Bottom row: Lock | Step | Incrementer | Close
+        const bottomRow = document.createElement('div');
+        bottomRow.className = 'sl-uniform-row sl-uniform-row-bottom';
+        
+        const lockBtn = document.createElement('button');
+        lockBtn.className = 'sl-uniform-lock';
+        lockBtn.textContent = isLocked ? '🔒' : '🔓';
+        lockBtn.title = 'Lock value';
+        lockBtn.style.cursor = 'pointer';
+        lockBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isLocked = !isLocked;
+            lockBtn.textContent = isLocked ? '🔒' : '🔓';
+            container.classList.toggle('locked', isLocked);
+        });
+        
+        // Step input (aligned with End)
+        const stepInput = createEditableNum(currentStep, (v) => {
+            currentStep = Math.max(isInt ? 1 : 0.0001, v);
+            if (isInt) currentStep = Math.round(currentStep);
+            stepInput.setValue(currentStep);
+        }, isInt, stepDecimals);
+        stepInput.classList.add('sl-uniform-step');
+        
+        // Incrementer (aligned with Value)
+        const incrementer = document.createElement('div');
+        incrementer.className = 'sl-uniform-incrementer';
+        
+        const decBtn = document.createElement('button');
+        decBtn.className = 'sl-uniform-inc-btn';
+        decBtn.textContent = '<';
+        decBtn.style.cursor = 'pointer';
+        decBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isLocked) return;
+            currentValue = Math.max(currentMin, currentValue - currentStep);
+            updateTrackVisuals();
+            valueInput.setValue(currentValue);
+            if (onChange) onChange(currentValue, currentName);
+        });
+        
+        const incBtn = document.createElement('button');
+        incBtn.className = 'sl-uniform-inc-btn';
+        incBtn.textContent = '>';
+        incBtn.style.cursor = 'pointer';
+        incBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isLocked) return;
+            currentValue = Math.min(currentMax, currentValue + currentStep);
+            updateTrackVisuals();
+            valueInput.setValue(currentValue);
+            if (onChange) onChange(currentValue, currentName);
+        });
+        
+        incrementer.appendChild(decBtn);
+        incrementer.appendChild(incBtn);
+        
+        // Close button (aligned with Toggle position)
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'sl-uniform-close';
+        closeBtn.textContent = '×';
+        closeBtn.title = 'Remove';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (onRemove) onRemove(container);
+        });
+        
+        bottomRow.appendChild(lockBtn);
+        bottomRow.appendChild(stepInput);
+        bottomRow.appendChild(incrementer);
+        bottomRow.appendChild(closeBtn);
+        
+        // Assemble
+        container.appendChild(topRow);
+        container.appendChild(middleRow);
+        container.appendChild(bottomRow);
+        
+        updateTrackVisuals();
+        
+        // Expand/Collapse functions
+        function expand() {
+            if (isExpanded) return;
+            isExpanded = true;
+            container.classList.add('expanded');
+            toggleBtn.textContent = '▲';
+            toggleBtn.title = 'Collapse';
+            if (onExpand) onExpand(container);
+        }
+        
+        function collapse() {
+            if (!isExpanded) return;
+            isExpanded = false;
+            container.classList.remove('expanded');
+            toggleBtn.textContent = '▼';
+            toggleBtn.title = 'Expand';
+            if (onCollapse) onCollapse(container);
+        }
+        
+        function toggle() {
+            if (isExpanded) collapse();
+            else expand();
+        }
+        
+        toggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggle();
+        });
+        
+        topToggleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            collapse();
+        });
+        
+        // Public API
+        container.expand = expand;
+        container.collapse = collapse;
+        container.isExpanded = () => isExpanded;
+        container.getValue = () => currentValue;
+        container.setValue = (v) => {
+            currentValue = Math.max(currentMin, Math.min(currentMax, v));
+            updateTrackVisuals();
+            valueInput.setValue(currentValue);
+        };
+        container.getName = () => currentName;
+        container.setName = (n) => { currentName = n; labelInput.value = n; };
+        container.getRange = () => ({ min: currentMin, max: currentMax });
+        container.setRange = (newMin, newMax) => {
+            currentMin = newMin;
+            currentMax = newMax;
+            startInput.setValue(currentMin);
+            endInput.setValue(currentMax);
+        };
+        container.isLocked = () => isLocked;
+        container.setLocked = (l) => {
+            isLocked = l;
+            lockBtn.textContent = isLocked ? '🔒' : '🔓';
+            container.classList.toggle('locked', isLocked);
+        };
+        container.getData = () => ({
+            name: currentName,
+            value: currentValue,
+            min: currentMin,
+            max: currentMax,
+            step: currentStep,
+            locked: isLocked
+        });
+        
+        return container;
+    }
+    
+    function createEditableNum(value, onChange, isInt = false, decimals = 2) {
+        const container = document.createElement('div');
+        container.className = 'sl-editable-number';
+        
+        const display = document.createElement('span');
+        display.className = 'sl-editable-number-display';
+        display.textContent = isInt ? Math.round(value).toString() : value.toFixed(decimals);
+        
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'sl-editable-number-input';
+        input.value = value;
+        input.step = isInt ? 1 : Math.pow(10, -decimals);
+        input.inputMode = isInt ? 'numeric' : 'decimal'; // Mobile keyboard hint
+        
+        container.appendChild(display);
+        container.appendChild(input);
+        
+        let isEditing = false;
+        let currentValue = value;
+        let focusTimeout = null;
+        
+        function startEditing(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            if (isEditing) return;
+            
+            isEditing = true;
+            container.classList.add('editing');
+            input.value = currentValue;
+            
+            // Delay focus slightly for mobile to settle
+            focusTimeout = setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 50);
+        }
+        
+        display.addEventListener('click', startEditing);
+        display.addEventListener('touchend', startEditing);
+        
+        // Prevent pointer events from bubbling to slider handlers
+        container.addEventListener('pointerdown', (e) => e.stopPropagation());
+        container.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+        
+        input.addEventListener('blur', () => {
+            if (focusTimeout) clearTimeout(focusTimeout);
+            // Small delay to ensure we're not in a focus-blur loop
+            setTimeout(() => {
+                if (document.activeElement === input) return; // Still focused
+                isEditing = false;
+                container.classList.remove('editing');
+                let v = parseFloat(input.value);
+                if (isNaN(v)) v = currentValue;
+                if (isInt) v = Math.round(v);
+                currentValue = v;
+                display.textContent = isInt ? Math.round(currentValue).toString() : currentValue.toFixed(decimals);
+                if (onChange) onChange(currentValue);
+            }, 10);
+        });
+        
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') input.blur();
+            else if (e.key === 'Escape') { input.value = currentValue; input.blur(); }
+        });
+        
+        input.addEventListener('click', (e) => e.stopPropagation());
+        input.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+        
+        container.getValue = () => currentValue;
+        container.setValue = (v) => {
+            currentValue = v;
+            display.textContent = isInt ? Math.round(currentValue).toString() : currentValue.toFixed(decimals);
+            if (!isEditing) input.value = v;
+        };
+        
+        return container;
+    }
+    
+    // ========================================
+    // SLIDER STACK - Container for uniforms
+    // ========================================
+    
+    function SliderStack(options = {}) {
+        const {
+            sliders = [],
+            addable = true,
+            removable = true,
+            onChange = null,
+            onAdd = null,
+            onRemove = null
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-slider-stack';
+        
+        const slidersContainer = document.createElement('div');
+        slidersContainer.className = 'sl-slider-stack-sliders';
+        container.appendChild(slidersContainer);
+        
+        let addBtn = null;
+        if (addable) {
+            addBtn = document.createElement('button');
+            addBtn.className = 'sl-slider-stack-add';
+            addBtn.textContent = '+ Add';
+            addBtn.style.cursor = 'pointer';
+            addBtn.addEventListener('click', () => {
+                const newSlider = addSlider({
+                    name: `u_custom${sliderElements.length}`,
+                    value: 0.5,
+                    min: 0,
+                    max: 1
+                });
+                if (onAdd) onAdd(newSlider.getData());
+            });
+            container.appendChild(addBtn);
+        }
+        
+        const sliderElements = [];
+        
+        function addSlider(config) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'sl-slider-stack-item';
+
+            const slider = UniformSlider({
+                ...config,
+                onChange: (value, name) => {
+                    if (onChange) onChange(value, name, sliderElements.indexOf(wrapper));
+                },
+                onRemove: removable ? () => {
+                    removeSlider(sliderElements.indexOf(wrapper));
+                } : null
+            });
+
+            wrapper.appendChild(slider);
+
+            sliderElements.push(wrapper);
+            slidersContainer.appendChild(wrapper);
+
+            wrapper.sliderAPI = slider;
+            return slider;
+        }
+        
+        function removeSlider(index) {
+            if (index < 0 || index >= sliderElements.length) return;
+            
+            const wrapper = sliderElements[index];
+            const data = wrapper.sliderAPI.getData();
+            
+            wrapper.remove();
+            sliderElements.splice(index, 1);
+            
+            if (onRemove) onRemove(data, index);
+        }
+        
+        sliders.forEach(config => addSlider(config));
+        
+        container.addSlider = addSlider;
+        container.removeSlider = removeSlider;
+        container.getSliders = () => sliderElements.map(w => w.sliderAPI);
+        container.getData = () => sliderElements.map(w => w.sliderAPI.getData());
+        container.setData = (data) => {
+            while (sliderElements.length > 0) removeSlider(0);
+            data.forEach(config => addSlider(config));
+        };
+        container.collapseAll = () => {
+            if (expandedIndex >= 0) {
+                sliderElements[expandedIndex].sliderAPI.collapse();
+            }
+        };
+
+        return container;
+    }
+
+    // ========================================
+    // PARAMETER SLIDER - Title + Slider + Value + Incrementer
+    // ========================================
+    
+    function ParameterSlider(options = {}) {
+        const {
+            title = 'Parameter',
+            min = 0,
+            max = 1,
+            value = 0.5,
+            step = 0.01,
+            isInt = false,
+            showIncrementer = true,
+            valueFormat = null,
+            disabled = false,
+            onChange = null
+        } = options;
+        
+        let currentValue = Math.max(min, Math.min(max, value));
+        let currentStep = isInt ? Math.max(1, Math.round(step)) : step;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-param-slider';
+        if (disabled) container.classList.add('disabled');
+        
+        // Title
+        const titleEl = document.createElement('span');
+        titleEl.className = 'sl-param-title';
+        titleEl.textContent = title;
+        container.appendChild(titleEl);
+        
+        // Slider track
+        const track = document.createElement('div');
+        track.className = 'sl-slider-track';
+        track.style.cursor = disabled ? 'default' : 'pointer';
+        
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-slider-track-bg';
+        
+        const fill = document.createElement('div');
+        fill.className = 'sl-slider-track-fill';
+        
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slider-thumb';
+        thumb.style.cursor = disabled ? 'default' : 'pointer';
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        container.appendChild(track);
+        
+        function formatValue(v) {
+            if (valueFormat) return valueFormat(v);
+            if (isInt) return Math.round(v).toString();
+            return v.toFixed(step < 0.01 ? 3 : 2);
+        }
+        
+        function updateVisuals() {
+            const percent = ((currentValue - min) / (max - min)) * 100;
+            fill.style.width = `${percent}%`;
+            thumb.style.left = `${percent}%`;
+            valueEl.textContent = formatValue(currentValue);
+        }
+        
+        // Value display
+        const valueEl = document.createElement('span');
+        valueEl.className = 'sl-param-value';
+        valueEl.textContent = formatValue(currentValue);
+        container.appendChild(valueEl);
+        
+        // Optional incrementer
+        if (showIncrementer) {
+            const incrementer = document.createElement('div');
+            incrementer.className = 'sl-param-incrementer';
+            
+            const decBtn = document.createElement('button');
+            decBtn.className = 'sl-param-inc-btn';
+            decBtn.textContent = '−';
+            decBtn.addEventListener('click', () => {
+                if (disabled) return;
+                currentValue = Math.max(min, currentValue - currentStep);
+                if (isInt) currentValue = Math.round(currentValue);
+                updateVisuals();
+                if (onChange) onChange(currentValue);
+            });
+            
+            const incBtn = document.createElement('button');
+            incBtn.className = 'sl-param-inc-btn';
+            incBtn.textContent = '+';
+            incBtn.addEventListener('click', () => {
+                if (disabled) return;
+                currentValue = Math.min(max, currentValue + currentStep);
+                if (isInt) currentValue = Math.round(currentValue);
+                updateVisuals();
+                if (onChange) onChange(currentValue);
+            });
+            
+            incrementer.appendChild(decBtn);
+            incrementer.appendChild(incBtn);
+            container.appendChild(incrementer);
+        }
+        
+        // Track interaction
+        function handleTrackPointer(e) {
+            if (disabled) return;
+            const rect = trackBg.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            let newValue = min + percent * (max - min);
+            newValue = Math.round(newValue / currentStep) * currentStep;
+            if (isInt) newValue = Math.round(newValue);
+            currentValue = Math.max(min, Math.min(max, newValue));
+            updateVisuals();
+            if (onChange) onChange(currentValue);
+        }
+        
+        track.addEventListener('pointerdown', (e) => {
+            if (disabled) return;
+            e.preventDefault();
+            track.setPointerCapture(e.pointerId);
+            track.classList.add('dragging');
+            handleTrackPointer(e);
+            
+            const moveHandler = (e) => handleTrackPointer(e);
+            const upHandler = (e) => {
+                track.releasePointerCapture(e.pointerId);
+                track.classList.remove('dragging');
+                track.removeEventListener('pointermove', moveHandler);
+                track.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointercancel', upHandler);
+            };
+            
+            track.addEventListener('pointermove', moveHandler);
+            track.addEventListener('pointerup', upHandler);
+            track.addEventListener('pointercancel', upHandler);
+        });
+        
+        updateVisuals();
+        
+        // Public API
+        container.getValue = () => currentValue;
+        container.setValue = (v) => {
+            currentValue = Math.max(min, Math.min(max, v));
+            if (isInt) currentValue = Math.round(currentValue);
+            updateVisuals();
+        };
+        container.setDisabled = (d) => {
+            container.classList.toggle('disabled', d);
+            track.style.cursor = d ? 'default' : 'pointer';
+            thumb.style.cursor = d ? 'default' : 'pointer';
+        };
+        container.setTitle = (t) => { titleEl.textContent = t; };
+        
+        return container;
+    }
+    
+    // ========================================
+    // ICON SLIDER - Icon + Slider
+    // ========================================
+    
+    function IconSlider(options = {}) {
+        const {
+            icon = '🔊',
+            min = 0,
+            max = 1,
+            value = 0.5,
+            step = 0.01,
+            isInt = false,
+            compact = false,
+            disabled = false,
+            onChange = null
+        } = options;
+        
+        let currentValue = Math.max(min, Math.min(max, value));
+        let currentStep = isInt ? Math.max(1, Math.round(step)) : step;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-icon-slider';
+        if (compact) container.classList.add('compact');
+        if (disabled) container.classList.add('disabled');
+        
+        // Icon
+        const iconEl = document.createElement('span');
+        iconEl.className = 'sl-icon-slider-icon';
+        iconEl.innerHTML = icon;
+        container.appendChild(iconEl);
+        
+        // Slider track
+        const track = document.createElement('div');
+        track.className = 'sl-slider-track';
+        track.style.cursor = disabled ? 'default' : 'pointer';
+        
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-slider-track-bg';
+        
+        const fill = document.createElement('div');
+        fill.className = 'sl-slider-track-fill';
+        
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slider-thumb';
+        thumb.style.cursor = disabled ? 'default' : 'pointer';
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        container.appendChild(track);
+        
+        function updateVisuals() {
+            const percent = ((currentValue - min) / (max - min)) * 100;
+            fill.style.width = `${percent}%`;
+            thumb.style.left = `${percent}%`;
+        }
+        
+        // Track interaction
+        function handleTrackPointer(e) {
+            if (disabled) return;
+            const rect = trackBg.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            let newValue = min + percent * (max - min);
+            newValue = Math.round(newValue / currentStep) * currentStep;
+            if (isInt) newValue = Math.round(newValue);
+            currentValue = Math.max(min, Math.min(max, newValue));
+            updateVisuals();
+            if (onChange) onChange(currentValue);
+        }
+        
+        track.addEventListener('pointerdown', (e) => {
+            if (disabled) return;
+            e.preventDefault();
+            track.setPointerCapture(e.pointerId);
+            track.classList.add('dragging');
+            handleTrackPointer(e);
+            
+            const moveHandler = (e) => handleTrackPointer(e);
+            const upHandler = (e) => {
+                track.releasePointerCapture(e.pointerId);
+                track.classList.remove('dragging');
+                track.removeEventListener('pointermove', moveHandler);
+                track.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointercancel', upHandler);
+            };
+            
+            track.addEventListener('pointermove', moveHandler);
+            track.addEventListener('pointerup', upHandler);
+            track.addEventListener('pointercancel', upHandler);
+        });
+        
+        updateVisuals();
+        
+        // Public API
+        container.getValue = () => currentValue;
+        container.setValue = (v) => {
+            currentValue = Math.max(min, Math.min(max, v));
+            if (isInt) currentValue = Math.round(currentValue);
+            updateVisuals();
+        };
+        container.setIcon = (i) => { iconEl.innerHTML = i; };
+        container.setDisabled = (d) => {
+            container.classList.toggle('disabled', d);
+            track.style.cursor = d ? 'default' : 'pointer';
+            thumb.style.cursor = d ? 'default' : 'pointer';
+        };
+        
+        return container;
+    }
+    
+    // ========================================
+    // TIMELINE SLIDER - Time scrubber
+    // ========================================
+    
+    function TimelineSlider(options = {}) {
+        const {
+            duration = 60,  // Total duration in seconds
+            value = 0,      // Current time in seconds
+            onChange = null,
+            onSeekStart = null,
+            onSeekEnd = null
+        } = options;
+        
+        let currentTime = Math.max(0, Math.min(duration, value));
+        let currentDuration = duration;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-timeline-slider';
+        
+        // Track container (for positioning time tooltip)
+        const trackContainer = document.createElement('div');
+        trackContainer.className = 'sl-timeline-track-container';
+        
+        // Current time tooltip
+        const currentTimeEl = document.createElement('div');
+        currentTimeEl.className = 'sl-timeline-current';
+        currentTimeEl.textContent = formatTime(currentTime);
+        trackContainer.appendChild(currentTimeEl);
+        
+        // Slider track
+        const track = document.createElement('div');
+        track.className = 'sl-slider-track';
+        track.style.cursor = 'pointer';
+        
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-slider-track-bg';
+        
+        const fill = document.createElement('div');
+        fill.className = 'sl-slider-track-fill';
+        
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slider-thumb';
+        thumb.style.cursor = 'pointer';
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        trackContainer.appendChild(track);
+        container.appendChild(trackContainer);
+        
+        // Start/End times
+        const timesRow = document.createElement('div');
+        timesRow.className = 'sl-timeline-times';
+        
+        const startTimeEl = document.createElement('span');
+        startTimeEl.className = 'sl-timeline-start';
+        startTimeEl.textContent = formatTime(0);
+        
+        const endTimeEl = document.createElement('span');
+        endTimeEl.className = 'sl-timeline-end';
+        endTimeEl.textContent = formatTime(currentDuration);
+        
+        timesRow.appendChild(startTimeEl);
+        timesRow.appendChild(endTimeEl);
+        container.appendChild(timesRow);
+        
+        function formatTime(seconds) {
+            const s = Math.ceil(seconds);
+            const mins = Math.floor(s / 60);
+            const secs = s % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        function updateVisuals() {
+            const percent = currentDuration > 0 ? (currentTime / currentDuration) * 100 : 0;
+            fill.style.width = `${percent}%`;
+            thumb.style.left = `${percent}%`;
+            currentTimeEl.textContent = formatTime(currentTime);
+            currentTimeEl.style.left = `${percent}%`;
+        }
+        
+        // Track interaction
+        function handleTrackPointer(e) {
+            const rect = trackBg.getBoundingClientRect();
+            const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            currentTime = percent * currentDuration;
+            updateVisuals();
+            if (onChange) onChange(currentTime);
+        }
+        
+        track.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            track.setPointerCapture(e.pointerId);
+            container.classList.add('dragging');
+            track.classList.add('dragging');
+            if (onSeekStart) onSeekStart();
+            handleTrackPointer(e);
+            
+            const moveHandler = (e) => handleTrackPointer(e);
+            const upHandler = (e) => {
+                track.releasePointerCapture(e.pointerId);
+                container.classList.remove('dragging');
+                track.classList.remove('dragging');
+                if (onSeekEnd) onSeekEnd();
+                track.removeEventListener('pointermove', moveHandler);
+                track.removeEventListener('pointerup', upHandler);
+                track.removeEventListener('pointercancel', upHandler);
+            };
+            
+            track.addEventListener('pointermove', moveHandler);
+            track.addEventListener('pointerup', upHandler);
+            track.addEventListener('pointercancel', upHandler);
+        });
+        
+        updateVisuals();
+        
+        // Public API
+        container.getTime = () => currentTime;
+        container.setTime = (t) => {
+            currentTime = Math.max(0, Math.min(currentDuration, t));
+            updateVisuals();
+        };
+        container.getDuration = () => currentDuration;
+        container.setDuration = (d) => {
+            currentDuration = Math.max(0, d);
+            endTimeEl.textContent = formatTime(currentDuration);
+            currentTime = Math.min(currentTime, currentDuration);
+            updateVisuals();
+        };
+
+        return container;
+    }
+
+    // ========================================
+    // CHECKBOX - Standard tick box
+    // ========================================
+    
+    function Checkbox(options = {}) {
+        const {
+            label = '',
+            checked = false,
+            disabled = false,
+            onChange = null
+        } = options;
+        
+        let isChecked = checked;
+        let isDisabled = disabled;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-checkbox';
+        if (isChecked) container.classList.add('checked');
+        if (isDisabled) container.classList.add('disabled');
+        
+        const box = document.createElement('span');
+        box.className = 'sl-checkbox-box';
+        
+        const check = document.createElement('span');
+        check.className = 'sl-checkbox-check';
+        check.textContent = '✓';
+        box.appendChild(check);
+        
+        container.appendChild(box);
+        
+        if (label) {
+            const labelEl = document.createElement('span');
+            labelEl.className = 'sl-checkbox-label';
+            labelEl.textContent = label;
+            container.appendChild(labelEl);
+        }
+        
+        function toggle() {
+            if (isDisabled) return;
+            isChecked = !isChecked;
+            container.classList.toggle('checked', isChecked);
+            if (onChange) onChange(isChecked);
+        }
+        
+        // Simple click handler works on both desktop and mobile
+        container.addEventListener('click', toggle);
+        
+        // Public API
+        container.isChecked = () => isChecked;
+        container.setChecked = (c) => {
+            isChecked = c;
+            container.classList.toggle('checked', isChecked);
+        };
+        container.setDisabled = (d) => {
+            isDisabled = d;
+            container.classList.toggle('disabled', d);
+        };
+        
+        return container;
+    }
+
+    // ========================================
+    // UNIFORM BOOL - Checkbox with editable title
+    // ========================================
+    
+    function UniformBool(options = {}) {
+        const {
+            name = 'u_bool0',
+            checked = false,
+            onChange = null,
+            onNameChange = null,
+            onRemove = null
+        } = options;
+        
+        let isChecked = checked;
+        let currentName = name;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-uniform-bool';
+        if (isChecked) container.classList.add('checked');
+        
+        const box = document.createElement('span');
+        box.className = 'sl-checkbox-box';
+        
+        const check = document.createElement('span');
+        check.className = 'sl-checkbox-check';
+        check.textContent = '✓';
+        box.appendChild(check);
+        
+        container.appendChild(box);
+        
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.className = 'sl-uniform-bool-label';
+        labelInput.value = currentName;
+
+        labelInput.addEventListener('blur', () => {
+            currentName = labelInput.value || 'u_bool';
+            if (onNameChange) onNameChange(currentName);
+        });
+        
+        container.appendChild(labelInput);
+        
+        function toggle() {
+            isChecked = !isChecked;
+            container.classList.toggle('checked', isChecked);
+            if (onChange) onChange(isChecked, currentName);
+        }
+        
+        // Click on box to toggle
+        box.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggle();
+        });
+        
+        // Public API
+        container.isChecked = () => isChecked;
+        container.setChecked = (c) => {
+            isChecked = c;
+            container.classList.toggle('checked', isChecked);
+        };
+        container.getName = () => currentName;
+        container.setName = (n) => { currentName = n; labelInput.value = n; };
+        container.getData = () => ({ name: currentName, value: isChecked });
+        container.triggerRemove = () => { if (onRemove) onRemove(container); };
+        
+        return container;
+    }
+
+    // ========================================
+    // BOOL STACK - Fluid row container
+    // ========================================
+    
+    function BoolStack(options = {}) {
+        const {
+            bools = [],
+            addable = true,
+            removable = true,
+            onChange = null,
+            onAdd = null,
+            onRemove = null
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-bool-stack';
+        
+        const itemsContainer = document.createElement('div');
+        itemsContainer.className = 'sl-bool-stack-items';
+        container.appendChild(itemsContainer);
+        
+        let addBtn = null;
+        if (addable) {
+            addBtn = document.createElement('button');
+            addBtn.className = 'sl-bool-stack-add';
+            addBtn.textContent = '+ Add Bool';
+            addBtn.style.cursor = 'pointer';
+            addBtn.addEventListener('click', () => {
+                const newBool = addBool({ name: `u_bool${boolElements.length}`, checked: false });
+                if (onAdd) onAdd(newBool.getData());
+            });
+            container.appendChild(addBtn);
+        }
+        
+        const boolElements = [];
+        
+        function addBool(config) {
+            const bool = UniformBool({
+                ...config,
+                onChange: (checked, name) => {
+                    if (onChange) onChange(checked, name, boolElements.indexOf(bool));
+                },
+                onRemove: removable ? () => {
+                    removeBool(boolElements.indexOf(bool));
+                } : null
+            });
+            
+            // Add context menu for removal
+            if (removable) {
+                bool.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    if (confirm(`Remove ${bool.getName()}?`)) {
+                        removeBool(boolElements.indexOf(bool));
+                    }
+                });
+            }
+            
+            boolElements.push(bool);
+            itemsContainer.appendChild(bool);
+            
+            return bool;
+        }
+        
+        function removeBool(index) {
+            if (index < 0 || index >= boolElements.length) return;
+            const bool = boolElements[index];
+            const data = bool.getData();
+            bool.remove();
+            boolElements.splice(index, 1);
+            if (onRemove) onRemove(data, index);
+        }
+        
+        // Initialize
+        bools.forEach(config => addBool(config));
+        
+        // Public API
+        container.addBool = addBool;
+        container.removeBool = removeBool;
+        container.getBools = () => boolElements;
+        container.getData = () => boolElements.map(b => b.getData());
+        container.setData = (data) => {
+            while (boolElements.length > 0) removeBool(0);
+            data.forEach(config => addBool(config));
+        };
+        container.randomize = () => {
+            // Booleans are excluded from randomization per spec
+        };
+        
+        return container;
+    }
+
+    // ========================================
+    // FLOAT STACK - Slider stack for floats only
+    // ========================================
+    
+    function FloatStack(options = {}) {
+        const {
+            sliders = [],
+            addable = true,
+            removable = true,
+            onChange = null,
+            onAdd = null,
+            onRemove = null
+        } = options;
+        
+        // Use existing SliderStack but enforce float
+        const stack = SliderStack({
+            sliders: sliders.map(s => ({ ...s, isInt: false })),
+            addable,
+            removable,
+            onChange,
+            onAdd,
+            onRemove
+        });
+        
+        // Override addSlider to enforce float
+        const originalAddSlider = stack.addSlider;
+        stack.addSlider = (config) => {
+            return originalAddSlider({ ...config, isInt: false });
+        };
+        
+        // Add randomize method
+        stack.randomize = () => {
+            stack.getSliders().forEach(slider => {
+                if (!slider.isLocked()) {
+                    const range = slider.getRange();
+                    const randomValue = range.min + Math.random() * (range.max - range.min);
+                    slider.setValue(randomValue);
+                }
+            });
+        };
+        
+        return stack;
+    }
+
+    // ========================================
+    // INT STACK - Slider stack for ints only
+    // ========================================
+    
+    function IntStack(options = {}) {
+        const {
+            sliders = [],
+            addable = true,
+            removable = true,
+            onChange = null,
+            onAdd = null,
+            onRemove = null
+        } = options;
+        
+        // Use existing SliderStack but enforce int
+        const stack = SliderStack({
+            sliders: sliders.map(s => ({ ...s, isInt: true, step: 1 })),
+            addable,
+            removable,
+            onChange,
+            onAdd,
+            onRemove
+        });
+        
+        // Override addSlider to enforce int
+        const originalAddSlider = stack.addSlider;
+        stack.addSlider = (config) => {
+            return originalAddSlider({ ...config, isInt: true, step: 1 });
+        };
+        
+        // Add randomize method
+        stack.randomize = () => {
+            stack.getSliders().forEach(slider => {
+                if (!slider.isLocked()) {
+                    const range = slider.getRange();
+                    const randomValue = Math.floor(range.min + Math.random() * (range.max - range.min + 1));
+                    slider.setValue(Math.min(randomValue, range.max));
+                }
+            });
+        };
+        
+        return stack;
+    }
+
+    // ========================================
+    // UNIFORM PANEL - Complete uniform editor
+    // ========================================
+    
+    function UniformPanel(options = {}) {
+        const {
+            floats = [],
+            ints = [],
+            bools = [],
+            onFloatChange = null,
+            onIntChange = null,
+            onBoolChange = null,
+            onRandomize = null,
+            onPresetSave = null,
+            onPresetLoad = null
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-uniform-panel';
+        
+        // Float section
+        const floatSection = document.createElement('div');
+        floatSection.className = 'sl-uniform-section';
+        
+        const floatTitle = document.createElement('div');
+        floatTitle.className = 'sl-uniform-section-title';
+        floatTitle.textContent = 'Float Uniforms';
+        floatSection.appendChild(floatTitle);
+        
+        const floatStack = FloatStack({
+            sliders: floats,
+            onChange: (value, name, index) => {
+                if (onFloatChange) onFloatChange(value, name, index);
+            }
+        });
+        floatSection.appendChild(floatStack);
+        container.appendChild(floatSection);
+        
+        // Int section
+        const intSection = document.createElement('div');
+        intSection.className = 'sl-uniform-section';
+        
+        const intTitle = document.createElement('div');
+        intTitle.className = 'sl-uniform-section-title';
+        intTitle.textContent = 'Int Uniforms';
+        intSection.appendChild(intTitle);
+        
+        const intStack = IntStack({
+            sliders: ints,
+            onChange: (value, name, index) => {
+                if (onIntChange) onIntChange(value, name, index);
+            }
+        });
+        intSection.appendChild(intStack);
+        container.appendChild(intSection);
+        
+        // Bool section
+        const boolSection = document.createElement('div');
+        boolSection.className = 'sl-uniform-section';
+        
+        const boolTitle = document.createElement('div');
+        boolTitle.className = 'sl-uniform-section-title';
+        boolTitle.textContent = 'Bool Uniforms';
+        boolSection.appendChild(boolTitle);
+        
+        const boolStack = BoolStack({
+            bools,
+            onChange: (checked, name, index) => {
+                if (onBoolChange) onBoolChange(checked, name, index);
+            }
+        });
+        boolSection.appendChild(boolStack);
+        container.appendChild(boolSection);
+        
+        // Actions row
+        const actions = document.createElement('div');
+        actions.className = 'sl-uniform-panel-actions';
+        
+        const randomizeBtn = document.createElement('button');
+        randomizeBtn.className = 'sl-uniform-randomize';
+        randomizeBtn.innerHTML = '🎲 Randomize';
+        randomizeBtn.style.cursor = 'pointer';
+        randomizeBtn.addEventListener('click', () => {
+            floatStack.randomize();
+            intStack.randomize();
+            // Bools excluded per spec
+            if (onRandomize) onRandomize(container.getData());
+        });
+        actions.appendChild(randomizeBtn);
+        
+        const presetBtn = document.createElement('button');
+        presetBtn.className = 'sl-uniform-preset';
+        presetBtn.innerHTML = '💾 Preset';
+        presetBtn.style.cursor = 'pointer';
+        presetBtn.addEventListener('click', () => {
+            if (onPresetSave) onPresetSave(container.getData());
+        });
+        actions.appendChild(presetBtn);
+        
+        container.appendChild(actions);
+        
+        // Public API
+        container.getFloatStack = () => floatStack;
+        container.getIntStack = () => intStack;
+        container.getBoolStack = () => boolStack;
+        container.getData = () => ({
+            floats: floatStack.getData(),
+            ints: intStack.getData(),
+            bools: boolStack.getData()
+        });
+        container.setData = (data) => {
+            if (data.floats) floatStack.setData(data.floats);
+            if (data.ints) intStack.setData(data.ints);
+            if (data.bools) boolStack.setData(data.bools);
+        };
+        container.randomize = () => {
+            floatStack.randomize();
+            intStack.randomize();
+        };
+        
+        return container;
+    }
+
+    // ========================================
+    // COLOR PICKER - RGB + HSV with gradient sliders
+    // ========================================
+    
+    // Color conversion utilities
+    function rgbToHsv(r, g, b) {
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const d = max - min;
+        let h = 0;
+        const s = max === 0 ? 0 : d / max;
+        const v = max;
+        if (d !== 0) {
+            if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+            else if (max === g) h = ((b - r) / d + 2) / 6;
+            else h = ((r - g) / d + 4) / 6;
+        }
+        return { h, s, v };
+    }
+    
+    function hsvToRgb(h, s, v) {
+        let r, g, b;
+        const i = Math.floor(h * 6);
+        const f = h * 6 - i;
+        const p = v * (1 - s);
+        const q = v * (1 - f * s);
+        const t = v * (1 - (1 - f) * s);
+        switch (i % 6) {
+            case 0: r = v; g = t; b = p; break;
+            case 1: r = q; g = v; b = p; break;
+            case 2: r = p; g = v; b = t; break;
+            case 3: r = p; g = q; b = v; break;
+            case 4: r = t; g = p; b = v; break;
+            case 5: r = v; g = p; b = q; break;
+        }
+        return { r, g, b };
+    }
+    
+    function ColorPicker(options = {}) {
+        const {
+            name = 'u_color',
+            r = 1.0,
+            g = 0.5,
+            b = 0.2,
+            onChange = null,
+            onNameChange = null,
+            onRemove = null
+        } = options;
+        
+        let currentName = name;
+        let rgb = { r, g, b };
+        let hsv = rgbToHsv(r, g, b);
+        let isExpanded = false;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-color-picker';
+        
+        // Header row
+        const header = document.createElement('div');
+        header.className = 'sl-color-picker-header';
+        
+        const swatch = document.createElement('div');
+        swatch.className = 'sl-color-picker-swatch';
+        swatch.addEventListener('click', () => {
+            isExpanded = !isExpanded;
+            container.classList.toggle('expanded', isExpanded);
+            toggleBtn.textContent = isExpanded ? '▲' : '▼';
+        });
+        header.appendChild(swatch);
+        
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.className = 'sl-color-picker-label';
+        labelInput.value = currentName;
+        labelInput.addEventListener('blur', () => {
+            currentName = labelInput.value || 'u_color';
+            if (onNameChange) onNameChange(currentName);
+        });
+        labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+        labelInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+        header.appendChild(labelInput);
+        
+        const hexInput = document.createElement('input');
+        hexInput.type = 'text';
+        hexInput.className = 'sl-color-picker-hex';
+        hexInput.addEventListener('change', () => {
+            const hex = hexInput.value.replace('#', '');
+            if (hex.length === 6) {
+                rgb.r = parseInt(hex.substr(0, 2), 16) / 255;
+                rgb.g = parseInt(hex.substr(2, 2), 16) / 255;
+                rgb.b = parseInt(hex.substr(4, 2), 16) / 255;
+                hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+                updateAllVisuals();
+                if (onChange) onChange({ ...rgb }, currentName);
+            }
+        });
+        header.appendChild(hexInput);
+        
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'sl-color-picker-toggle';
+        toggleBtn.textContent = '▼';
+        toggleBtn.style.cursor = 'pointer';
+        toggleBtn.addEventListener('click', () => {
+            isExpanded = !isExpanded;
+            container.classList.toggle('expanded', isExpanded);
+            toggleBtn.textContent = isExpanded ? '▲' : '▼';
+        });
+        header.appendChild(toggleBtn);
+        
+        container.appendChild(header);
+        
+        // Sliders container
+        const sliders = document.createElement('div');
+        sliders.className = 'sl-color-picker-sliders';
+        
+        const channels = {};
+        
+        function toHex(v) { return Math.round(v * 255).toString(16).padStart(2, '0'); }
+        function rgbToCss(r, g, b) { return '#' + toHex(r) + toHex(g) + toHex(b); }
+        
+        function createChannel(label, labelColor, getValue, setValue, getGradient) {
+            const row = document.createElement('div');
+            row.className = 'sl-color-channel';
+            
+            const lbl = document.createElement('span');
+            lbl.className = 'sl-color-channel-label';
+            lbl.textContent = label;
+            lbl.style.color = labelColor;
+            row.appendChild(lbl);
+            
+            const track = document.createElement('div');
+            track.className = 'sl-slider-track sl-color-gradient-track';
+            track.style.cursor = 'pointer';
+            
+            const trackBg = document.createElement('div');
+            trackBg.className = 'sl-slider-track-bg sl-color-gradient-bg';
+            trackBg.style.borderRadius = '3px';
+            trackBg.style.overflow = 'hidden';
+            
+            const thumb = document.createElement('div');
+            thumb.className = 'sl-slider-thumb';
+            thumb.style.cursor = 'pointer';
+            thumb.style.border = '2px solid white';
+            thumb.style.boxShadow = '0 0 2px rgba(0,0,0,0.5)';
+            
+            trackBg.appendChild(thumb);
+            track.appendChild(trackBg);
+            row.appendChild(track);
+            
+            const valInput = document.createElement('input');
+            valInput.type = 'text';
+            valInput.className = 'sl-color-channel-value';
+            row.appendChild(valInput);
+            
+            function update() {
+                const val = getValue();
+                thumb.style.left = (val * 100) + '%';
+                valInput.value = val.toFixed(2);
+                trackBg.style.background = getGradient();
+            }
+            
+            function handlePointer(e) {
+                const rect = trackBg.getBoundingClientRect();
+                const val = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                setValue(val);
+                updateAllVisuals();
+                if (onChange) onChange({ ...rgb }, currentName);
+            }
+            
+            track.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                track.setPointerCapture(e.pointerId);
+                handlePointer(e);
+                const move = (ev) => handlePointer(ev);
+                const up = (ev) => { 
+                    track.releasePointerCapture(ev.pointerId);
+                    track.removeEventListener('pointermove', move); 
+                    track.removeEventListener('pointerup', up);
+                    track.removeEventListener('pointercancel', up);
+                };
+                track.addEventListener('pointermove', move);
+                track.addEventListener('pointerup', up);
+                track.addEventListener('pointercancel', up);
+            });
+            
+            valInput.addEventListener('change', () => {
+                const v = parseFloat(valInput.value);
+                if (!isNaN(v)) {
+                    setValue(Math.max(0, Math.min(1, v)));
+                    updateAllVisuals();
+                    if (onChange) onChange({ ...rgb }, currentName);
+                }
+            });
+            
+            sliders.appendChild(row);
+            return { update };
+        }
+        
+        // RGB channels with dynamic gradients
+        channels.r = createChannel('R', '#e74c3c',
+            () => rgb.r,
+            (v) => { rgb.r = v; hsv = rgbToHsv(rgb.r, rgb.g, rgb.b); },
+            () => `linear-gradient(to right, ${rgbToCss(0, rgb.g, rgb.b)}, ${rgbToCss(1, rgb.g, rgb.b)})`
+        );
+        channels.g = createChannel('G', '#2ecc71',
+            () => rgb.g,
+            (v) => { rgb.g = v; hsv = rgbToHsv(rgb.r, rgb.g, rgb.b); },
+            () => `linear-gradient(to right, ${rgbToCss(rgb.r, 0, rgb.b)}, ${rgbToCss(rgb.r, 1, rgb.b)})`
+        );
+        channels.b = createChannel('B', '#3498db',
+            () => rgb.b,
+            (v) => { rgb.b = v; hsv = rgbToHsv(rgb.r, rgb.g, rgb.b); },
+            () => `linear-gradient(to right, ${rgbToCss(rgb.r, rgb.g, 0)}, ${rgbToCss(rgb.r, rgb.g, 1)})`
+        );
+        
+        // Separator
+        const sep = document.createElement('div');
+        sep.style.height = '4px';
+        sliders.appendChild(sep);
+        
+        // HSV channels with dynamic gradients
+        channels.h = createChannel('H', '#9b59b6',
+            () => hsv.h,
+            (v) => { hsv.h = v; const c = hsvToRgb(hsv.h, hsv.s, hsv.v); rgb.r = c.r; rgb.g = c.g; rgb.b = c.b; },
+            () => {
+                // Hue rainbow gradient at current S and V
+                const stops = [];
+                for (let i = 0; i <= 6; i++) {
+                    const c = hsvToRgb(i / 6, hsv.s, hsv.v);
+                    stops.push(rgbToCss(c.r, c.g, c.b));
+                }
+                return `linear-gradient(to right, ${stops.join(', ')})`;
+            }
+        );
+        channels.s = createChannel('S', '#f39c12',
+            () => hsv.s,
+            (v) => { hsv.s = v; const c = hsvToRgb(hsv.h, hsv.s, hsv.v); rgb.r = c.r; rgb.g = c.g; rgb.b = c.b; },
+            () => {
+                const c0 = hsvToRgb(hsv.h, 0, hsv.v);
+                const c1 = hsvToRgb(hsv.h, 1, hsv.v);
+                return `linear-gradient(to right, ${rgbToCss(c0.r, c0.g, c0.b)}, ${rgbToCss(c1.r, c1.g, c1.b)})`;
+            }
+        );
+        channels.v = createChannel('V', '#95a5a6',
+            () => hsv.v,
+            (v) => { hsv.v = v; const c = hsvToRgb(hsv.h, hsv.s, hsv.v); rgb.r = c.r; rgb.g = c.g; rgb.b = c.b; },
+            () => {
+                const c0 = hsvToRgb(hsv.h, hsv.s, 0);
+                const c1 = hsvToRgb(hsv.h, hsv.s, 1);
+                return `linear-gradient(to right, ${rgbToCss(c0.r, c0.g, c0.b)}, ${rgbToCss(c1.r, c1.g, c1.b)})`;
+            }
+        );
+        
+        container.appendChild(sliders);
+        
+        function updateAllVisuals() {
+            const hex = rgbToCss(rgb.r, rgb.g, rgb.b);
+            swatch.style.background = hex;
+            hexInput.value = hex;
+            channels.r.update();
+            channels.g.update();
+            channels.b.update();
+            channels.h.update();
+            channels.s.update();
+            channels.v.update();
+        }
+        
+        updateAllVisuals();
+        
+        // Public API
+        container.getColor = () => ({ ...rgb });
+        container.setColor = (c) => { rgb = { ...c }; hsv = rgbToHsv(rgb.r, rgb.g, rgb.b); updateAllVisuals(); };
+        container.getName = () => currentName;
+        container.setName = (n) => { currentName = n; labelInput.value = n; };
+        container.getData = () => ({ name: currentName, r: rgb.r, g: rgb.g, b: rgb.b });
+        container.triggerRemove = () => { if (onRemove) onRemove(container); };
+        
+        return container;
+    }
+
+    // ========================================
+    // VEC3 PICKER - 3D Position/Normal
+    // ========================================
+    
+    function Vec3Picker(options = {}) {
+        const {
+            name = 'u_position',
+            x = 0,
+            y = 0,
+            z = 0,
+            min = -1,
+            max = 1,
+            normalize = false,
+            onChange = null,
+            onNameChange = null,
+            onRemove = null
+        } = options;
+        
+        let currentName = name;
+        let vec = { x, y, z };
+        let isNormalized = normalize;
+        let isExpanded = false;
+        const range = { min, max };
+        
+        const container = document.createElement('div');
+        container.className = 'sl-vec3-picker';
+        
+        // Header row
+        const header = document.createElement('div');
+        header.className = 'sl-vec3-picker-header';
+        
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.className = 'sl-vec3-picker-label';
+        labelInput.value = currentName;
+        labelInput.addEventListener('blur', () => {
+            currentName = labelInput.value || 'u_position';
+            if (onNameChange) onNameChange(currentName);
+        });
+        labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+        labelInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+        header.appendChild(labelInput);
+        
+        const values = document.createElement('div');
+        values.className = 'sl-vec3-picker-values';
+        
+        function createValueInput(key, cls) {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'sl-vec3-picker-value ' + cls;
+            input.addEventListener('change', () => {
+                const v = parseFloat(input.value);
+                if (!isNaN(v)) {
+                    vec[key] = Math.max(range.min, Math.min(range.max, v));
+                    if (isNormalized) normalizeVec();
+                    updateVisuals();
+                    if (onChange) onChange({ ...vec }, currentName);
+                }
+            });
+            values.appendChild(input);
+            return input;
+        }
+        
+        const xInput = createValueInput('x', 'x');
+        const yInput = createValueInput('y', 'y');
+        const zInput = createValueInput('z', 'z');
+        
+        header.appendChild(values);
+        
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'sl-vec3-picker-toggle';
+        toggleBtn.textContent = '▼';
+        toggleBtn.style.cursor = 'pointer';
+        toggleBtn.addEventListener('click', () => {
+            isExpanded = !isExpanded;
+            container.classList.toggle('expanded', isExpanded);
+            toggleBtn.textContent = isExpanded ? '▲' : '▼';
+        });
+        header.appendChild(toggleBtn);
+        
+        container.appendChild(header);
+        
+        // Canvas container
+        const canvasContainer = document.createElement('div');
+        canvasContainer.className = 'sl-vec3-picker-canvas-container';
+        
+        const canvas = document.createElement('canvas');
+        canvas.className = 'sl-vec3-picker-canvas';
+        canvas.width = 200;
+        canvas.height = 120;
+        canvasContainer.appendChild(canvas);
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Z slider row
+        const zRow = document.createElement('div');
+        zRow.className = 'sl-vec3-picker-z-row';
+        
+        const zLabel = document.createElement('span');
+        zLabel.className = 'sl-vec3-picker-z-label';
+        zLabel.textContent = 'Z';
+        zRow.appendChild(zLabel);
+        
+        const zTrack = document.createElement('div');
+        zTrack.className = 'sl-slider-track sl-vec3-picker-z-slider';
+        zTrack.style.cursor = 'pointer';
+        
+        const zTrackBg = document.createElement('div');
+        zTrackBg.className = 'sl-slider-track-bg';
+        const zFill = document.createElement('div');
+        zFill.className = 'sl-slider-track-fill';
+        zFill.style.background = '#3498db';
+        const zThumb = document.createElement('div');
+        zThumb.className = 'sl-slider-thumb';
+        zThumb.style.cursor = 'pointer';
+        
+        zTrackBg.appendChild(zFill);
+        zTrackBg.appendChild(zThumb);
+        zTrack.appendChild(zTrackBg);
+        zRow.appendChild(zTrack);
+        
+        const normalizeBtn = document.createElement('button');
+        normalizeBtn.className = 'sl-vec3-picker-normalize';
+        normalizeBtn.textContent = 'Normalize';
+        normalizeBtn.style.cursor = 'pointer';
+        if (isNormalized) normalizeBtn.classList.add('active');
+        normalizeBtn.addEventListener('click', () => {
+            isNormalized = !isNormalized;
+            normalizeBtn.classList.toggle('active', isNormalized);
+            if (isNormalized) normalizeVec();
+            updateVisuals();
+            if (onChange) onChange({ ...vec }, currentName);
+        });
+        zRow.appendChild(normalizeBtn);
+        
+        canvasContainer.appendChild(zRow);
+        container.appendChild(canvasContainer);
+        
+        function normalizeVec() {
+            const len = Math.sqrt(vec.x * vec.x + vec.y * vec.y + vec.z * vec.z);
+            if (len > 0.0001) {
+                vec.x /= len;
+                vec.y /= len;
+                vec.z /= len;
+            }
+        }
+        
+        function vecToCanvas(v) {
+            const w = canvas.width;
+            const h = canvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+            const scale = Math.min(w, h) / 2 - 10;
+            return {
+                x: cx + (v.x / (range.max - range.min)) * scale * 2,
+                y: cy - (v.y / (range.max - range.min)) * scale * 2
+            };
+        }
+        
+        function canvasToVec(px, py) {
+            const w = canvas.width;
+            const h = canvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+            const scale = Math.min(w, h) / 2 - 10;
+            return {
+                x: ((px - cx) / (scale * 2)) * (range.max - range.min),
+                y: -((py - cy) / (scale * 2)) * (range.max - range.min)
+            };
+        }
+        
+        function drawCanvas() {
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-primary') || '#1a1a1a';
+            ctx.fillRect(0, 0, w, h);
+            
+            // Grid
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(w / 2, 0);
+            ctx.lineTo(w / 2, h);
+            ctx.moveTo(0, h / 2);
+            ctx.lineTo(w, h / 2);
+            ctx.stroke();
+            
+            // Point
+            const pt = vecToCanvas(vec);
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#3498db';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        function updateVisuals() {
+            xInput.value = vec.x.toFixed(3);
+            yInput.value = vec.y.toFixed(3);
+            zInput.value = vec.z.toFixed(3);
+            
+            const zPct = ((vec.z - range.min) / (range.max - range.min)) * 100;
+            zFill.style.width = zPct + '%';
+            zThumb.style.left = zPct + '%';
+            
+            drawCanvas();
+        }
+        
+        canvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            canvas.setPointerCapture(e.pointerId);
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            function handlePointer(e) {
+                const px = (e.clientX - rect.left) * scaleX;
+                const py = (e.clientY - rect.top) * scaleY;
+                const v = canvasToVec(px, py);
+                vec.x = Math.max(range.min, Math.min(range.max, v.x));
+                vec.y = Math.max(range.min, Math.min(range.max, v.y));
+                if (isNormalized) normalizeVec();
+                updateVisuals();
+                if (onChange) onChange({ ...vec }, currentName);
+            }
+            
+            handlePointer(e);
+            const move = (e) => handlePointer(e);
+            const up = (e) => { 
+                canvas.releasePointerCapture(e.pointerId);
+                canvas.removeEventListener('pointermove', move); 
+                canvas.removeEventListener('pointerup', up);
+                canvas.removeEventListener('pointercancel', up);
+            };
+            canvas.addEventListener('pointermove', move);
+            canvas.addEventListener('pointerup', up);
+            canvas.addEventListener('pointercancel', up);
+        });
+        
+        zTrack.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            zTrack.setPointerCapture(e.pointerId);
+            
+            function handleZ(e) {
+                const rect = zTrackBg.getBoundingClientRect();
+                const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                vec.z = range.min + pct * (range.max - range.min);
+                if (isNormalized) normalizeVec();
+                updateVisuals();
+                if (onChange) onChange({ ...vec }, currentName);
+            }
+            
+            handleZ(e);
+            const move = (e) => handleZ(e);
+            const up = (e) => { 
+                zTrack.releasePointerCapture(e.pointerId);
+                zTrack.removeEventListener('pointermove', move); 
+                zTrack.removeEventListener('pointerup', up);
+                zTrack.removeEventListener('pointercancel', up);
+            };
+            zTrack.addEventListener('pointermove', move);
+            zTrack.addEventListener('pointerup', up);
+            zTrack.addEventListener('pointercancel', up);
+        });
+        
+        // Resize observer
+        const resizeObs = new ResizeObserver(() => {
+            canvas.width = canvas.offsetWidth || 200;
+            canvas.height = canvas.offsetHeight || 120;
+            drawCanvas();
+        });
+        resizeObs.observe(canvas);
+        
+        updateVisuals();
+        
+        // Public API
+        container.getVec = () => ({ ...vec });
+        container.setVec = (v) => { vec = { ...v }; updateVisuals(); };
+        container.getName = () => currentName;
+        container.setName = (n) => { currentName = n; labelInput.value = n; };
+        container.getData = () => ({ name: currentName, x: vec.x, y: vec.y, z: vec.z, normalize: isNormalized });
+        container.triggerRemove = () => { if (onRemove) onRemove(container); };
+        container.isNormalized = () => isNormalized;
+        container.setNormalized = (n) => { isNormalized = n; normalizeBtn.classList.toggle('active', n); if (n) normalizeVec(); updateVisuals(); };
+        
+        return container;
+    }
+
+    // ========================================
+    // COLOR STACK - Container for color pickers
+    // ========================================
+    
+    function ColorStack(options = {}) {
+        const { colors = [], addable = true, removable = true, onChange = null, onAdd = null, onRemove = null } = options;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-color-stack';
+        
+        const colorElements = [];
+        
+        function addColor(config) {
+            const picker = ColorPicker({
+                ...config,
+                onChange: (color, name) => {
+                    if (onChange) onChange(color, name, colorElements.indexOf(picker));
+                }
+            });
+            
+            if (removable) {
+                picker.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    if (confirm(`Remove ${picker.getName()}?`)) removeColor(colorElements.indexOf(picker));
+                });
+            }
+            
+            colorElements.push(picker);
+            container.insertBefore(picker, addBtn);
+            return picker;
+        }
+        
+        function removeColor(index) {
+            if (index < 0 || index >= colorElements.length) return;
+            const p = colorElements[index];
+            const d = p.getData();
+            p.remove();
+            colorElements.splice(index, 1);
+            if (onRemove) onRemove(d, index);
+        }
+        
+        let addBtn = null;
+        if (addable) {
+            addBtn = document.createElement('button');
+            addBtn.className = 'sl-color-stack-add';
+            addBtn.textContent = '+ Add Color';
+            addBtn.style.cursor = 'pointer';
+            addBtn.addEventListener('click', () => {
+                const n = addColor({ name: `u_color${colorElements.length}`, r: Math.random(), g: Math.random(), b: Math.random() });
+                if (onAdd) onAdd(n.getData());
+            });
+            container.appendChild(addBtn);
+        }
+        
+        colors.forEach(c => addColor(c));
+        
+        container.addColor = addColor;
+        container.removeColor = removeColor;
+        container.getColors = () => colorElements;
+        container.getData = () => colorElements.map(c => c.getData());
+        container.setData = (data) => { while (colorElements.length > 0) removeColor(0); data.forEach(c => addColor(c)); };
+        container.randomize = () => { colorElements.forEach(c => c.setColor({ r: Math.random(), g: Math.random(), b: Math.random() })); };
+        
+        return container;
+    }
+
+    // ========================================
+    // VEC3 STACK - Container for vec3 pickers
+    // ========================================
+    
+    function Vec3Stack(options = {}) {
+        const { vecs = [], addable = true, removable = true, min = -1, max = 1, onChange = null, onAdd = null, onRemove = null } = options;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-vec3-stack';
+        
+        const vecElements = [];
+        
+        function addVec(config) {
+            const picker = Vec3Picker({
+                min,
+                max,
+                ...config,
+                onChange: (vec, name) => {
+                    if (onChange) onChange(vec, name, vecElements.indexOf(picker));
+                }
+            });
+            
+            if (removable) {
+                picker.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    if (confirm(`Remove ${picker.getName()}?`)) removeVec(vecElements.indexOf(picker));
+                });
+            }
+            
+            vecElements.push(picker);
+            container.insertBefore(picker, addBtn);
+            return picker;
+        }
+        
+        function removeVec(index) {
+            if (index < 0 || index >= vecElements.length) return;
+            const p = vecElements[index];
+            const d = p.getData();
+            p.remove();
+            vecElements.splice(index, 1);
+            if (onRemove) onRemove(d, index);
+        }
+        
+        let addBtn = null;
+        if (addable) {
+            addBtn = document.createElement('button');
+            addBtn.className = 'sl-vec3-stack-add';
+            addBtn.textContent = '+ Add Vec3';
+            addBtn.style.cursor = 'pointer';
+            addBtn.addEventListener('click', () => {
+                const n = addVec({ name: `u_vec${vecElements.length}`, x: 0, y: 0, z: 0 });
+                if (onAdd) onAdd(n.getData());
+            });
+            container.appendChild(addBtn);
+        }
+        
+        vecs.forEach(v => addVec(v));
+        
+        container.addVec = addVec;
+        container.removeVec = removeVec;
+        container.getVecs = () => vecElements;
+        container.getData = () => vecElements.map(v => v.getData());
+        container.setData = (data) => { while (vecElements.length > 0) removeVec(0); data.forEach(v => addVec(v)); };
+        container.randomize = () => {
+            vecElements.forEach(v => {
+                if (!v.isNormalized()) {
+                    v.setVec({ x: min + Math.random() * (max - min), y: min + Math.random() * (max - min), z: min + Math.random() * (max - min) });
+                } else {
+                    // Random normalized
+                    const rx = Math.random() * 2 - 1;
+                    const ry = Math.random() * 2 - 1;
+                    const rz = Math.random() * 2 - 1;
+                    const len = Math.sqrt(rx * rx + ry * ry + rz * rz) || 1;
+                    v.setVec({ x: rx / len, y: ry / len, z: rz / len });
+                }
+            });
+        };
+        
+        return container;
+    }
+
+    // ========================================
+    // PRESET MANAGER - Save/Load presets
+    // ========================================
+    
+    function PresetManager(options = {}) {
+        const {
+            defaultPreset = null,
+            onLoad = null,
+            onSave = null,
+            onDelete = null
+        } = options;
+        
+        const presets = new Map();
+        let presetCounter = 1;
+        
+        const container = document.createElement('div');
+        container.className = 'sl-preset-controls';
+        
+        // Load row
+        const loadRow = document.createElement('div');
+        loadRow.className = 'sl-preset-row';
+        
+        const select = document.createElement('select');
+        select.className = 'sl-preset-select';
+        loadRow.appendChild(select);
+        
+        const loadBtn = document.createElement('button');
+        loadBtn.className = 'sl-preset-load';
+        loadBtn.textContent = 'Load';
+        loadBtn.style.cursor = 'pointer';
+        loadBtn.addEventListener('click', () => {
+            const presetName = select.value;
+            if (presetName && presets.has(presetName)) {
+                if (onLoad) onLoad(presets.get(presetName), presetName);
+            }
+        });
+        loadRow.appendChild(loadBtn);
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'sl-preset-delete';
+        deleteBtn.textContent = '×';
+        deleteBtn.style.cursor = 'pointer';
+        deleteBtn.addEventListener('click', () => {
+            const presetName = select.value;
+            if (presetName && presetName !== 'Default' && presets.has(presetName)) {
+                presets.delete(presetName);
+                updateSelect();
+                if (onDelete) onDelete(presetName);
+            }
+        });
+        loadRow.appendChild(deleteBtn);
+        
+        container.appendChild(loadRow);
+        
+        // Save row
+        const saveRow = document.createElement('div');
+        saveRow.className = 'sl-preset-row';
+        
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'sl-preset-name';
+        nameInput.placeholder = 'Preset name...';
+        nameInput.value = `preset${presetCounter}`;
+        saveRow.appendChild(nameInput);
+        
+        const saveBtn = document.createElement('button');
+        saveBtn.className = 'sl-preset-save';
+        saveBtn.textContent = '💾 Save';
+        saveBtn.style.cursor = 'pointer';
+        saveBtn.addEventListener('click', () => {
+            const name = nameInput.value.trim() || `preset${presetCounter}`;
+            if (onSave) {
+                const data = onSave(name);
+                if (data) {
+                    presets.set(name, JSON.parse(JSON.stringify(data)));
+                    updateSelect();
+                    presetCounter++;
+                    nameInput.value = `preset${presetCounter}`;
+                    select.value = name;
+                }
+            }
+        });
+        saveRow.appendChild(saveBtn);
+        
+        container.appendChild(saveRow);
+        
+        function updateSelect() {
+            select.innerHTML = '';
+            for (const [name] of presets) {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                select.appendChild(opt);
+            }
+        }
+        
+        // Initialize with default
+        if (defaultPreset) {
+            presets.set('Default', JSON.parse(JSON.stringify(defaultPreset)));
+            updateSelect();
+            select.value = 'Default';
+        }
+        
+        // Public API
+        container.getPresets = () => presets;
+        container.addPreset = (name, data) => { presets.set(name, JSON.parse(JSON.stringify(data))); updateSelect(); };
+        container.removePreset = (name) => { presets.delete(name); updateSelect(); };
+        container.setDefaultPreset = (data) => { presets.set('Default', JSON.parse(JSON.stringify(data))); updateSelect(); };
+        
+        return container;
+    }
+
+    // ========================================
+    // TABS COMPONENT
+    // ========================================
+    
+    function Tabs(options = {}) {
+        const {
+            tabs = [],
+            activeTab = null,
+            position = 'top',
+            variant = 'default',
+            closable = false,
+            addable = false,
+            onTabChange = null,
+            onTabClose = null,
+            onTabAdd = null,
+            className = ''
+        } = options;
+        
+        const container = document.createElement('div');
+        container.className = `sl-tabs ${position} ${variant} ${className}`.trim();
+        
+        const tabBar = document.createElement('div');
+        tabBar.className = 'sl-tabs-bar';
+        tabBar.setAttribute('role', 'tablist');
+        
+        const tabContent = document.createElement('div');
+        tabContent.className = 'sl-tabs-content';
+        
+        let currentTabs = [...tabs];
+        let activeId = activeTab || (tabs.length > 0 ? tabs[0].id : null);
+        
+        function renderTabBar() {
+            tabBar.innerHTML = '';
+            
+            currentTabs.forEach((tab) => {
+                const tabEl = document.createElement('button');
+                tabEl.className = 'sl-tab';
+                tabEl.setAttribute('role', 'tab');
+                tabEl.setAttribute('aria-selected', tab.id === activeId);
+                tabEl.dataset.tabId = tab.id;
+                
+                if (tab.id === activeId) tabEl.classList.add('active');
+                
+                if (tab.icon) {
+                    const iconEl = document.createElement('span');
+                    iconEl.className = 'sl-tab-icon';
+                    iconEl.textContent = tab.icon;
+                    tabEl.appendChild(iconEl);
+                }
+                
+                const labelEl = document.createElement('span');
+                labelEl.className = 'sl-tab-label';
+                labelEl.textContent = tab.label;
+                tabEl.appendChild(labelEl);
+                
+                if (tab.closable !== false && closable) {
+                    const closeBtn = document.createElement('button');
+                    closeBtn.className = 'sl-tab-close';
+                    closeBtn.innerHTML = '×';
+                    closeBtn.title = 'Close tab';
+                    closeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        closeTab(tab.id);
+                    });
+                    tabEl.appendChild(closeBtn);
+                }
+                
+                tabEl.addEventListener('click', () => setActiveTab(tab.id));
+                tabBar.appendChild(tabEl);
+            });
+            
+            if (addable) {
+                const addBtn = document.createElement('button');
+                addBtn.className = 'sl-tab-add';
+                addBtn.innerHTML = '+';
+                addBtn.title = 'Add tab';
+                addBtn.addEventListener('click', () => {
+                    if (onTabAdd) {
+                        const newTab = onTabAdd();
+                        if (newTab) addTab(newTab);
+                    }
+                });
+                tabBar.appendChild(addBtn);
+            }
+        }
+        
+        function renderContent() {
+            tabContent.innerHTML = '';
+            const activeTabData = currentTabs.find(t => t.id === activeId);
+            if (activeTabData) {
+                const panel = document.createElement('div');
+                panel.className = 'sl-tab-panel';
+                panel.setAttribute('role', 'tabpanel');
+                panel.dataset.tabId = activeTabData.id;
+                
+                if (activeTabData.content) {
+                    if (typeof activeTabData.content === 'function') {
+                        const content = activeTabData.content();
+                        if (typeof content === 'string') {
+                            panel.innerHTML = content;
+                        } else {
+                            panel.appendChild(content);
+                        }
+                    } else if (typeof activeTabData.content === 'string') {
+                        panel.innerHTML = activeTabData.content;
+                    } else {
+                        panel.appendChild(activeTabData.content);
+                    }
+                }
+                
+                tabContent.appendChild(panel);
+            }
+        }
+        
+        function setActiveTab(id) {
+            if (!currentTabs.find(t => t.id === id)) return;
+            const prevId = activeId;
+            activeId = id;
+            
+            tabBar.querySelectorAll('.sl-tab').forEach(tab => {
+                const isActive = tab.dataset.tabId === id;
+                tab.classList.toggle('active', isActive);
+                tab.setAttribute('aria-selected', isActive);
+            });
+            
+            renderContent();
+            if (onTabChange && prevId !== id) onTabChange(id, prevId);
+        }
+        
+        function addTab(tab) {
+            currentTabs.push(tab);
+            renderTabBar();
+            setActiveTab(tab.id);
+        }
+        
+        function closeTab(id) {
+            const index = currentTabs.findIndex(t => t.id === id);
+            if (index === -1) return;
+            
+            if (onTabClose) {
+                const result = onTabClose(id);
+                if (result === false) return;
+            }
+            
+            currentTabs.splice(index, 1);
+            
+            if (activeId === id && currentTabs.length > 0) {
+                const newIndex = Math.min(index, currentTabs.length - 1);
+                activeId = currentTabs[newIndex].id;
+            } else if (currentTabs.length === 0) {
+                activeId = null;
+            }
+            
+            renderTabBar();
+            renderContent();
+        }
+        
+        function updateTab(id, updates) {
+            const tab = currentTabs.find(t => t.id === id);
+            if (tab) {
+                Object.assign(tab, updates);
+                renderTabBar();
+                if (id === activeId) renderContent();
+            }
+        }
+        
+        if (position === 'bottom' || position === 'right') {
+            container.appendChild(tabContent);
+            container.appendChild(tabBar);
+        } else {
+            container.appendChild(tabBar);
+            container.appendChild(tabContent);
+        }
+        
+        renderTabBar();
+        renderContent();
+        
+        container.setActiveTab = setActiveTab;
+        container.addTab = addTab;
+        container.closeTab = closeTab;
+        container.updateTab = updateTab;
+        container.getTabs = () => [...currentTabs];
+        container.getActiveTab = () => activeId;
+        container.setTabs = (newTabs) => {
+            currentTabs = [...newTabs];
+            if (!currentTabs.find(t => t.id === activeId) && currentTabs.length > 0) {
+                activeId = currentTabs[0].id;
+            }
+            renderTabBar();
+            renderContent();
+        };
+        
+        return container;
+    }
+    
+    // ========================================
     // PUBLIC API
     // ========================================
     
@@ -2322,6 +4921,28 @@ const SLUI = (function() {
         setForceMode,
         isMobileDevice,
         
+        // Components
+        Slider,
+        LabeledSlider,
+        SliderGroup,
+        UniformSlider,
+        SliderStack,
+        ParameterSlider,
+        IconSlider,
+        TimelineSlider,
+        Checkbox,
+        UniformBool,
+        BoolStack,
+        FloatStack,
+        IntStack,
+        UniformPanel,
+        ColorPicker,
+        ColorStack,
+        Vec3Picker,
+        Vec3Stack,
+        PresetManager,
+        Tabs,
+
         // State access
         get state() { return state; }
     };

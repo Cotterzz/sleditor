@@ -1393,3 +1393,1693 @@ body {
     border: none;
 }
 
+/* ========================================
+   SLIDER COMPONENTS
+   ======================================== */
+
+/* Slider Track (base) */
+.sl-slider-track {
+    position: relative;
+    height: 24px;
+    min-width: 100px;
+    cursor: pointer;
+    touch-action: none; /* Prevent browser scroll/zoom on touch */
+}
+
+.sl-slider-track.vertical {
+    width: 24px;
+    height: 100px;
+    min-width: auto;
+    min-height: 100px;
+}
+
+.sl-slider-track.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.sl-slider-track-bg {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 6px;
+    background: var(--bg-primary);
+    border-radius: 3px;
+    border: 1px solid var(--border);
+}
+
+.sl-slider-track.vertical .sl-slider-track-bg {
+    left: 50%;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: 6px;
+    height: auto;
+}
+
+.sl-slider-track-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: none;
+}
+
+.sl-slider-track.vertical .sl-slider-track-fill {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: auto;
+    height: 0%;
+}
+
+.sl-slider-thumb {
+    position: absolute;
+    left: 0%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 18px;
+    height: 18px;
+    background: var(--accent);
+    border: 2px solid var(--bg-panel);
+    border-radius: 50%;
+    box-shadow: 0 2px 6px var(--shadow);
+    cursor: grab;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.sl-slider-track.vertical .sl-slider-thumb {
+    left: 50%;
+    top: auto;
+    bottom: 0%;
+    transform: translate(-50%, 50%);
+}
+
+.sl-slider-thumb:hover {
+    transform: translate(-50%, -50%) scale(1.1);
+    box-shadow: 0 4px 12px var(--shadow);
+}
+
+.sl-slider-track.vertical .sl-slider-thumb:hover {
+    transform: translate(-50%, 50%) scale(1.1);
+}
+
+.sl-slider-thumb:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(var(--accent), 0.3), 0 2px 6px var(--shadow);
+}
+
+.sl-slider-thumb:active {
+    cursor: grabbing;
+}
+
+.sl-slider-input {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.sl-slider-track.disabled .sl-slider-thumb {
+    cursor: not-allowed;
+}
+
+/* Slider (with value) */
+.sl-slider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sl-slider.vertical {
+    flex-direction: column;
+}
+
+.sl-slider .sl-slider-track {
+    flex: 1;
+}
+
+.sl-slider-value {
+    min-width: 40px;
+    padding: 4px 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    font-family: var(--font-code);
+    font-size: 0.75rem;
+    text-align: center;
+    color: var(--text-primary);
+}
+
+/* Labeled Slider */
+.sl-labeled-slider {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sl-slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    padding: 0 2px;
+}
+
+/* Slider Group */
+.sl-slider-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sl-slider-group.disabled {
+    opacity: 0.6;
+}
+
+.sl-slider-group-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.sl-slider-group-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.sl-slider-group-row .sl-labeled-slider {
+    flex: 1;
+}
+
+.sl-slider-group-input {
+    width: 70px;
+    padding: 6px 8px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-primary);
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.sl-slider-group-input:focus {
+    outline: none;
+    border-color: var(--border-focus);
+}
+
+/* Range Slider */
+.sl-range-slider {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sl-range-slider.disabled {
+    opacity: 0.5;
+}
+
+.sl-range-slider-track {
+    position: relative;
+    height: 24px;
+    cursor: pointer;
+}
+
+.sl-range-slider-track::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 6px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+}
+
+.sl-range-slider-fill {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 6px;
+    background: var(--accent);
+    border-radius: 3px;
+}
+
+.sl-range-slider-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 18px;
+    height: 18px;
+    background: var(--accent);
+    border: 2px solid var(--bg-panel);
+    border-radius: 50%;
+    box-shadow: 0 2px 6px var(--shadow);
+    cursor: grab;
+    transition: transform 0.1s ease;
+    z-index: 1;
+}
+
+.sl-range-slider-thumb:hover {
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.sl-range-slider-thumb:active {
+    cursor: grabbing;
+}
+
+.sl-range-slider-values {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* ========================================
+   UNIFORM SLIDER - Expandable slider
+   ======================================== */
+
+.sl-uniform-slider {
+    --uniform-row-height: 22px;
+    --uniform-label-width: 100px;
+    position: relative;
+}
+
+/* Rows */
+.sl-uniform-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: var(--uniform-row-height);
+}
+
+.sl-uniform-row-top,
+.sl-uniform-row-bottom {
+    display: none;
+}
+
+.sl-uniform-slider.expanded .sl-uniform-row-top,
+.sl-uniform-slider.expanded .sl-uniform-row-bottom {
+    display: flex;
+}
+
+/* Top row - Start | Value | End | Toggle(▲) */
+.sl-uniform-row-top {
+    padding-left: calc(var(--uniform-label-width) + 4px);
+}
+
+.sl-uniform-row-top .sl-editable-number {
+    flex: 1;
+    text-align: center;
+}
+
+/* Middle row - Label | Slider (full width) */
+.sl-uniform-row-middle {
+    gap: 4px;
+}
+
+/* When minimized, show toggle at end */
+.sl-uniform-slider:not(.expanded) .sl-uniform-row-middle .sl-uniform-toggle {
+    display: flex;
+}
+
+/* When expanded, hide toggle from middle row */
+.sl-uniform-slider.expanded .sl-uniform-row-middle .sl-uniform-toggle {
+    display: none;
+}
+
+.sl-uniform-label {
+    width: var(--uniform-label-width);
+    flex-shrink: 0;
+    padding: 2px 4px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--text-secondary);
+    font-family: var(--font-code);
+    font-size: 0.75rem;
+    cursor: default;
+}
+
+.sl-uniform-label:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: text;
+}
+
+.sl-uniform-row-middle .sl-slider-track {
+    flex: 1;
+    height: 18px;
+}
+
+/* Expand/Collapse toggle button */
+.sl-uniform-toggle {
+    width: 20px;
+    height: 18px;
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-uniform-toggle:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.sl-uniform-slider.expanded .sl-uniform-toggle {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}
+
+/* Bottom row - Lock | Step | Incrementer | Close */
+.sl-uniform-row-bottom {
+    padding-left: calc(var(--uniform-label-width) + 4px);
+}
+
+.sl-uniform-lock {
+    width: 24px;
+    height: 18px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+
+.sl-uniform-lock:hover {
+    border-color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.sl-uniform-slider.locked .sl-uniform-lock {
+    background: var(--warning);
+    border-color: var(--warning);
+}
+
+.sl-uniform-step {
+    flex: 1;
+    text-align: center;
+}
+
+.sl-uniform-incrementer {
+    display: flex;
+    gap: 2px;
+    flex: 1;
+    justify-content: center;
+}
+
+.sl-uniform-inc-btn {
+    width: 22px;
+    height: 18px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-uniform-inc-btn:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.sl-uniform-inc-btn:active {
+    background: var(--bg-active);
+}
+
+/* Close button in bottom row */
+.sl-uniform-close {
+    width: 20px;
+    height: 18px;
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-uniform-close:hover {
+    background: var(--error);
+    border-color: var(--error);
+    color: white;
+}
+
+/* Editable number - wider with 4 decimal support */
+.sl-editable-number {
+    position: relative;
+    min-width: 60px;
+}
+
+.sl-editable-number-display {
+    display: block;
+    padding: 2px 4px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-editable-number-display:hover {
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+.sl-editable-number-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 2px 2px;
+    background: var(--bg-primary);
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    -moz-appearance: textfield;
+}
+
+/* Hide number input spinners */
+.sl-editable-number-input::-webkit-outer-spin-button,
+.sl-editable-number-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.sl-editable-number.editing .sl-editable-number-display {
+    opacity: 0;
+}
+
+.sl-editable-number.editing .sl-editable-number-input {
+    opacity: 1;
+    pointer-events: auto;
+    cursor: text;
+}
+
+.sl-editable-number-input:focus {
+    outline: none;
+}
+
+/* Specific editable fields */
+.sl-uniform-start,
+.sl-uniform-end,
+.sl-uniform-value {
+    min-width: 60px;
+}
+
+.sl-uniform-value .sl-editable-number-display {
+    color: var(--accent);
+    font-weight: 500;
+}
+
+/* ========================================
+   SLIDER STACK - Container for uniforms
+   ======================================== */
+
+.sl-slider-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+}
+
+.sl-slider-stack-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.sl-slider-stack-item {
+    position: relative;
+    padding: 3px 4px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+}
+
+.sl-slider-stack-item:hover {
+    border-color: var(--border-focus);
+}
+
+/* Add button */
+.sl-slider-stack-add {
+    margin-top: 2px;
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-slider-stack-add:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--bg-hover);
+}
+
+/* ========================================
+   PARAMETER SLIDER - Title + Slider + Value
+   ======================================== */
+
+.sl-param-slider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+}
+
+.sl-param-slider.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.sl-param-title {
+    flex-shrink: 0;
+    min-width: 80px;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sl-param-slider .sl-slider-track {
+    flex: 1;
+    height: 16px;
+}
+
+.sl-param-value {
+    flex-shrink: 0;
+    min-width: 45px;
+    text-align: right;
+    color: var(--text-primary);
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+}
+
+.sl-param-incrementer {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.sl-param-inc-btn {
+    width: 18px;
+    height: 18px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-param-inc-btn:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.sl-param-inc-btn:active {
+    background: var(--bg-active);
+}
+
+/* ========================================
+   ICON SLIDER - Icon + Slider
+   ======================================== */
+
+.sl-icon-slider {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+}
+
+.sl-icon-slider.disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.sl-icon-slider-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 14px;
+}
+
+.sl-icon-slider .sl-slider-track {
+    flex: 1;
+    height: 14px;
+    min-width: 60px;
+}
+
+/* Compact version */
+.sl-icon-slider.compact {
+    gap: 4px;
+}
+
+.sl-icon-slider.compact .sl-icon-slider-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 12px;
+}
+
+.sl-icon-slider.compact .sl-slider-track {
+    height: 10px;
+}
+
+/* ========================================
+   TIMELINE SLIDER - Time scrubber
+   ======================================== */
+
+.sl-timeline-slider {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 0;
+}
+
+.sl-timeline-track-container {
+    position: relative;
+    height: 20px;
+}
+
+.sl-timeline-slider .sl-slider-track {
+    height: 20px;
+}
+
+.sl-timeline-times {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 2px;
+}
+
+.sl-timeline-start,
+.sl-timeline-end {
+    color: var(--text-muted);
+    font-family: var(--font-code);
+    font-size: 0.65rem;
+}
+
+.sl-timeline-current {
+    position: absolute;
+    bottom: 100%;
+    transform: translateX(-50%);
+    padding: 2px 6px;
+    background: var(--accent);
+    border-radius: 3px;
+    color: var(--bg-primary);
+    font-family: var(--font-code);
+    font-size: 0.65rem;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    margin-bottom: 4px;
+}
+
+.sl-timeline-current::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 4px solid transparent;
+    border-top-color: var(--accent);
+}
+
+.sl-timeline-slider:hover .sl-timeline-current,
+.sl-timeline-slider.dragging .sl-timeline-current {
+    opacity: 1;
+}
+
+/* ========================================
+   CHECKBOX - Standard tick box
+   ======================================== */
+
+.sl-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sl-checkbox.disabled {
+    opacity: 0.5;
+    cursor: default;
+    pointer-events: none;
+}
+
+.sl-checkbox-box {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    touch-action: manipulation; /* Faster tap response on mobile */
+}
+
+.sl-checkbox:hover .sl-checkbox-box {
+    border-color: var(--accent);
+}
+
+.sl-checkbox.checked .sl-checkbox-box {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.sl-checkbox-check {
+    width: 10px;
+    height: 10px;
+    opacity: 0;
+    color: var(--bg-primary);
+    font-size: 10px;
+    line-height: 1;
+    transition: opacity 0.1s ease;
+}
+
+.sl-checkbox.checked .sl-checkbox-check {
+    opacity: 1;
+}
+
+.sl-checkbox-label {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+/* ========================================
+   UNIFORM BOOL - Checkbox with editable title
+   ======================================== */
+
+.sl-uniform-bool {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 5px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+}
+
+.sl-uniform-bool:hover {
+    border-color: var(--border-focus);
+}
+
+.sl-uniform-bool .sl-checkbox-box {
+    width: 14px;
+    height: 14px;
+}
+
+.sl-uniform-bool .sl-checkbox-check {
+    width: 8px;
+    height: 8px;
+    font-size: 8px;
+}
+
+/* Checked state for uniform bool */
+.sl-uniform-bool.checked .sl-checkbox-box {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.sl-uniform-bool.checked .sl-checkbox-check {
+    opacity: 1;
+}
+
+.sl-uniform-bool-label {
+    padding: 1px 2px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text-secondary);
+    font-family: var(--font-code);
+    font-size: 0.65rem;
+    cursor: default;
+    min-width: 35px;
+    width: 55px;
+}
+
+.sl-uniform-bool-label:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: text;
+}
+
+/* ========================================
+   BOOL STACK - Fluid row container
+   ======================================== */
+
+.sl-bool-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+}
+
+.sl-bool-stack-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.sl-bool-stack-add {
+    align-self: flex-start;
+    padding: 3px 8px;
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-bool-stack-add:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* ========================================
+   UNIFORM PANEL - Complete uniform editor
+   ======================================== */
+
+.sl-uniform-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sl-uniform-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sl-uniform-section-title {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sl-uniform-panel-actions {
+    display: flex;
+    gap: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.sl-uniform-randomize {
+    flex: 1;
+    padding: 6px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.sl-uniform-randomize:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--bg-hover);
+}
+
+.sl-uniform-preset {
+    padding: 6px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sl-uniform-preset:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--bg-hover);
+}
+
+/* ========================================
+   PRESET SYSTEM
+   ======================================== */
+
+.sl-preset-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.sl-preset-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.sl-preset-select {
+    flex: 1;
+    padding: 4px 6px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-primary);
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+
+.sl-preset-select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sl-preset-load {
+    padding: 4px 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-preset-load:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.sl-preset-name {
+    flex: 1;
+    padding: 4px 6px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-primary);
+    font-size: 0.7rem;
+}
+
+.sl-preset-name:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sl-preset-save {
+    padding: 4px 8px;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--bg-primary);
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-preset-save:hover {
+    filter: brightness(1.1);
+}
+
+.sl-preset-delete {
+    padding: 4px 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-preset-delete:hover {
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+/* ========================================
+   COLOR PICKER
+   ======================================== */
+
+.sl-color-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+}
+
+.sl-color-picker-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sl-color-picker-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: transform 0.1s ease;
+}
+
+.sl-color-picker-swatch:hover {
+    transform: scale(1.1);
+}
+
+.sl-color-picker-label {
+    flex: 1;
+    padding: 2px 4px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text-secondary);
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    cursor: default;
+}
+
+.sl-color-picker-label:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--bg-primary);
+    cursor: text;
+}
+
+.sl-color-picker-hex {
+    width: 65px;
+    padding: 2px 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-primary);
+    font-family: var(--font-code);
+    font-size: 0.65rem;
+    text-align: center;
+}
+
+.sl-color-picker-hex:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sl-color-picker-sliders {
+    display: none;
+    flex-direction: column;
+    gap: 3px;
+    padding-top: 4px;
+}
+
+.sl-color-picker.expanded .sl-color-picker-sliders {
+    display: flex;
+}
+
+.sl-color-channel {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sl-color-channel-label {
+    width: 12px;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.sl-color-channel .sl-slider-track {
+    flex: 1;
+    height: 16px;
+}
+
+.sl-color-channel .sl-slider-track-bg {
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.3);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* Hide the fill element for color gradient tracks */
+.sl-color-channel .sl-slider-track-fill {
+    display: none;
+}
+
+.sl-color-channel .sl-slider-thumb {
+    width: 8px;
+    height: 16px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.3);
+    border: 2px solid white;
+    box-shadow: 0 0 3px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,0,0,0.2);
+    margin-top: 0;
+}
+
+/* Override ALL theme effects for color picker - need true colors */
+.sl-color-channel .sl-slider-track-bg,
+[data-theme] .sl-color-channel .sl-slider-track-bg,
+[data-theme="designer"] .sl-color-channel .sl-slider-track-bg,
+[data-theme="midnight"] .sl-color-channel .sl-slider-track-bg,
+[data-theme="forest"] .sl-color-channel .sl-slider-track-bg {
+    box-shadow: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+    border: 1px solid rgba(0,0,0,0.4) !important;
+}
+
+.sl-color-channel .sl-slider-thumb,
+[data-theme] .sl-color-channel .sl-slider-thumb,
+[data-theme="designer"] .sl-color-channel .sl-slider-thumb {
+    box-shadow: 0 0 3px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,0,0,0.2) !important;
+}
+
+.sl-color-channel-value {
+    width: 32px;
+    padding: 1px 2px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-primary);
+    font-family: var(--font-code);
+    font-size: 0.6rem;
+    text-align: center;
+}
+
+.sl-color-channel-value:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sl-color-picker-toggle {
+    padding: 2px 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.6rem;
+    cursor: pointer;
+}
+
+.sl-color-picker-toggle:hover {
+    color: var(--accent);
+}
+
+/* ========================================
+   VEC3 PICKER - 3D Position/Normal
+   ======================================== */
+
+.sl-vec3-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+}
+
+.sl-vec3-picker-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sl-vec3-picker-label {
+    flex: 1;
+    padding: 2px 4px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text-secondary);
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    cursor: default;
+}
+
+.sl-vec3-picker-label:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--bg-primary);
+    cursor: text;
+}
+
+.sl-vec3-picker-values {
+    display: flex;
+    gap: 2px;
+    font-family: var(--font-code);
+    font-size: 0.6rem;
+    color: var(--text-muted);
+}
+
+.sl-vec3-picker-value {
+    width: 40px;
+    padding: 2px 3px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-primary);
+    font-family: var(--font-code);
+    font-size: 0.6rem;
+    text-align: center;
+}
+
+.sl-vec3-picker-value:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sl-vec3-picker-value.x { border-left: 2px solid #e74c3c; }
+.sl-vec3-picker-value.y { border-left: 2px solid #2ecc71; }
+.sl-vec3-picker-value.z { border-left: 2px solid #3498db; }
+
+.sl-vec3-picker-canvas-container {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 4px;
+}
+
+.sl-vec3-picker.expanded .sl-vec3-picker-canvas-container {
+    display: flex;
+}
+
+.sl-vec3-picker-canvas {
+    width: 100%;
+    height: 120px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: crosshair;
+    touch-action: none; /* Prevent scroll on touch */
+}
+
+.sl-vec3-picker-z-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sl-vec3-picker-z-label {
+    font-size: 0.6rem;
+    color: #3498db;
+    width: 12px;
+}
+
+.sl-vec3-picker-z-slider {
+    flex: 1;
+}
+
+.sl-vec3-picker-toggle {
+    padding: 2px 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.6rem;
+    cursor: pointer;
+}
+
+.sl-vec3-picker-toggle:hover {
+    color: var(--accent);
+}
+
+.sl-vec3-picker-normalize {
+    padding: 2px 6px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-muted);
+    font-size: 0.55rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-vec3-picker-normalize:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.sl-vec3-picker-normalize.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg-primary);
+}
+
+/* ========================================
+   COLOR/VEC3 STACKS
+   ======================================== */
+
+.sl-color-stack,
+.sl-vec3-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sl-color-stack-add,
+.sl-vec3-stack-add {
+    align-self: flex-start;
+    padding: 3px 8px;
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sl-color-stack-add:hover,
+.sl-vec3-stack-add:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* ========================================
+   TABS COMPONENT
+   ======================================== */
+
+.sl-tabs {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.sl-tabs.bottom {
+    flex-direction: column-reverse;
+}
+
+.sl-tabs.left {
+    flex-direction: row;
+}
+
+.sl-tabs.right {
+    flex-direction: row-reverse;
+}
+
+/* Tab Bar */
+.sl-tabs-bar {
+    display: flex;
+    gap: 2px;
+    background: var(--bg-secondary);
+    padding: 4px;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.sl-tabs.bottom .sl-tabs-bar {
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+}
+
+.sl-tabs.left .sl-tabs-bar,
+.sl-tabs.right .sl-tabs-bar {
+    flex-direction: column;
+    overflow-x: visible;
+    overflow-y: auto;
+}
+
+.sl-tabs.left .sl-tabs-bar {
+    border-radius: var(--border-radius) 0 0 var(--border-radius);
+}
+
+.sl-tabs.right .sl-tabs-bar {
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+}
+
+/* Tab Button */
+.sl-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-muted);
+    font-family: var(--font-ui);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+}
+
+.sl-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.sl-tab.active {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px var(--shadow);
+}
+
+.sl-tab-icon {
+    font-size: 1rem;
+}
+
+.sl-tab-label {
+    font-weight: 500;
+}
+
+.sl-tab-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    margin-left: 4px;
+    margin-right: -4px;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all var(--transition);
+}
+
+.sl-tab:hover .sl-tab-close {
+    opacity: 1;
+}
+
+.sl-tab-close:hover {
+    background: var(--error);
+    color: white;
+}
+
+.sl-tab-add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.sl-tab-add:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Tab dragging */
+.sl-tab.dragging {
+    opacity: 0.5;
+}
+
+.sl-tab.drag-over {
+    background: var(--bg-active);
+}
+
+/* Tab Content */
+.sl-tabs-content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    background: var(--bg-panel);
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+}
+
+.sl-tabs.bottom .sl-tabs-content {
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+}
+
+.sl-tabs.left .sl-tabs-content {
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+}
+
+.sl-tabs.right .sl-tabs-content {
+    border-radius: var(--border-radius) 0 0 var(--border-radius);
+}
+
+.sl-tab-panel {
+    padding: 12px;
+}
+
+/* Tabs Variants */
+
+/* Pills variant */
+.sl-tabs.pills .sl-tabs-bar {
+    background: transparent;
+    gap: 4px;
+}
+
+.sl-tabs.pills .sl-tab {
+    border-radius: 999px;
+}
+
+.sl-tabs.pills .sl-tab.active {
+    background: var(--accent);
+    color: var(--text-inverse);
+}
+
+/* Underline variant */
+.sl-tabs.underline .sl-tabs-bar {
+    background: transparent;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    padding-bottom: 0;
+}
+
+.sl-tabs.underline .sl-tab {
+    border-radius: 0;
+    padding-bottom: 12px;
+    margin-bottom: -1px;
+    border-bottom: 2px solid transparent;
+}
+
+.sl-tabs.underline .sl-tab.active {
+    background: transparent;
+    box-shadow: none;
+    border-bottom-color: var(--accent);
+    color: var(--accent);
+}
+
+.sl-tabs.underline .sl-tabs-content {
+    border-radius: 0;
+}
+
+/* Theme-specific styles */
+[data-theme="hacker"] .sl-slider-thumb,
+[data-theme="hacker"] .sl-range-slider-thumb {
+    filter: drop-shadow(var(--glow));
+}
+
+[data-theme="hacker"] .sl-tab.active {
+    text-shadow: var(--glow);
+}
+
+[data-theme="designer"] .sl-slider-track-bg,
+[data-theme="designer"] .sl-range-slider-track::before {
+    box-shadow: var(--neumorphic-inset);
+    border: none;
+}
+
+[data-theme="designer"] .sl-slider-thumb,
+[data-theme="designer"] .sl-range-slider-thumb {
+    box-shadow: var(--neumorphic-raised);
+}
+
+[data-theme="designer"] .sl-tab.active {
+    box-shadow: var(--neumorphic-raised);
+}
+

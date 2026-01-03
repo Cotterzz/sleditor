@@ -570,6 +570,7 @@ body {
     width: 100%;
     height: 6px;
     background: var(--border-color);
+    touch-action: none; /* Prevent scroll interference on mobile */
     border-radius: 3px;
     outline: none;
     cursor: pointer;
@@ -647,6 +648,12 @@ button.paused:hover {
     height: 80px;
     padding: 0;
     margin: 0;
+    touch-action: none; /* Prevent scroll interference on mobile */
+}
+
+/* Ensure all range inputs work on mobile */
+input[type="range"] {
+    touch-action: none;
 }
 
 .sliderContainer {
@@ -672,8 +679,19 @@ button.paused:hover {
     min-width: 60px;
     min-height: 20px;
 }
+#reloadBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 108px;
+    height: 28px;
+    padding: 0;
+    min-width: unset;
+    line-height: 1;
+    font-size: 16px;
+}
+
 /* Consistent styling for toolbar buttons */
-#reloadBtn,
 #saveShaderBtn,
 #forkShaderBtn,
 #newShaderBtn {
@@ -724,12 +742,14 @@ html:not([data-theme="dark"]) .success {
     /*border: 1px solid var(--border-color);*/
     background: var(--bg-tertiary);
     overflow: hidden;
+    touch-action: none; /* Prevent scroll/zoom interference on mobile */
 }
 
 /* Both WebGL and WebGPU canvases */
 #canvasWebGPU,
 #canvasWebGL {
     display: block;
+    touch-action: none; /* Prevent scroll/zoom interference on mobile */
     /* Width and height set dynamically via JS to quantized values */
     /* This ensures pixel-perfect rendering without stretching artifacts */
 }
@@ -739,6 +759,7 @@ html:not([data-theme="dark"]) .success {
     width: 100%;
     height: 100%;
     object-fit: contain;
+    touch-action: none; /* Prevent scroll/zoom interference on mobile */
     /* image-rendering set dynamically via JS */
 }
 

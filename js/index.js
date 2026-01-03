@@ -307,9 +307,12 @@ function setupUI() {
     ui.setupCanvasResizeObserver();
     ui.initTimeline();
     
-    // Setup help drag listeners
+    // Setup help drag listeners (mouse and touch)
     document.addEventListener('mousemove', ui.doHelpDrag);
     document.addEventListener('mouseup', ui.stopHelpDrag);
+    document.addEventListener('touchmove', ui.doHelpDrag, { passive: false });
+    document.addEventListener('touchend', ui.stopHelpDrag);
+    document.addEventListener('touchcancel', ui.stopHelpDrag);
     
     // Global keyboard shortcuts
     document.addEventListener('keydown', (e) => {
@@ -330,9 +333,10 @@ function setupUI() {
     // Performance monitor button removed
     // document.getElementById('perfMonitorBtn').addEventListener('click', () => perfMonitor.togglePanel());
     document.getElementById('uniformControlsBtn').addEventListener('click', () => uniformControls.toggle());
-    // Help button - draggable divider
+    // Help button - draggable divider (mouse and touch)
     const helpToggleBtn = document.getElementById('helpToggleBtn');
     helpToggleBtn.addEventListener('mousedown', (e) => ui.startHelpDrag(e));
+    helpToggleBtn.addEventListener('touchstart', (e) => ui.startHelpDrag(e), { passive: false });
     helpToggleBtn.style.cursor = 'ns-resize';
     
     // Auth buttons
@@ -879,84 +883,70 @@ function setupPointerEvents() {
 
 function attachPointerListeners(canvas) {
     if (!canvas) return;
-    const options = { passive: false };
-    canvas.addEventListener('pointerdown', handlePointerDown, options);
-    canvas.addEventListener('pointermove', handlePointerMove, options);
-    canvas.addEventListener('pointerup', handlePointerUp, options);
-    canvas.addEventListener('pointercancel', handlePointerUp, options);
-    canvas.addEventListener('pointerleave', handlePointerLeave, options);
-}
-
-function handlePointerDown(event) {
-    if (!event.isPrimary) return;
-    if (event.button !== undefined && event.button !== 0) return;
     
-    const canvas = event.currentTarget;
-    const pos = getPointerPosition(canvas, event);
-    if (!pos) return;
-    event.preventDefault();
-    
-    state.activePointerId = event.pointerId;
-    if (canvas.setPointerCapture) {
-        try {
-            canvas.setPointerCapture(event.pointerId);
-        } catch (err) {
-            // Ignore capture errors
+    // Only attach pointerdown - other listeners added dynamically during drag
+    // This pattern matches the working UI system sliders
+    canvas.addEventListener('pointerdown', (event) => {
+        // For mouse, only accept primary button (left click)
+        if (event.pointerType === 'mouse') {
+            if (event.button !== undefined && event.button !== 0) return;
         }
-    }
-    
-    state.mouseIsDown = true;
-    state.mouseDragX = pos.pixelX;
-    state.mouseDragY = pos.pixelY;
-    state.mouseLastDownX = pos.pixelX;
-    state.mouseLastDownY = pos.pixelY;
-    state.mouseClickX = pos.pixelX;
-    state.mouseClickY = pos.pixelY;
-    state.mouseClickPhase = 'pressed';
-    updateHoverState(pos);
-}
-
-function handlePointerMove(event) {
-    if (!event.isPrimary && state.activePointerId !== event.pointerId) return;
-    const canvas = event.currentTarget;
-    const pos = getPointerPosition(canvas, event);
-    if (!pos) return;
-    
-    updateHoverState(pos);
-    
-    if (state.activePointerId === event.pointerId && state.mouseIsDown) {
+        
+        const pos = getPointerPosition(canvas, event);
+        if (!pos) return;
+        event.preventDefault();
+        
+        // Capture pointer on the element for reliable mobile tracking
+        canvas.setPointerCapture(event.pointerId);
+        
+        // Set initial state
+        state.activePointerId = event.pointerId;
+        state.mouseIsDown = true;
         state.mouseDragX = pos.pixelX;
         state.mouseDragY = pos.pixelY;
         state.mouseLastDownX = pos.pixelX;
         state.mouseLastDownY = pos.pixelY;
-    }
-}
-
-function handlePointerUp(event) {
-    if (state.activePointerId !== event.pointerId) return;
-    const canvas = event.currentTarget;
-    if (canvas.releasePointerCapture) {
-        try {
-            canvas.releasePointerCapture(event.pointerId);
-        } catch (err) {
-            // Ignore release errors
-        }
-    }
-    
-    const pos = getPointerPosition(canvas, event);
-    if (pos) {
+        state.mouseClickX = pos.pixelX;
+        state.mouseClickY = pos.pixelY;
+        state.mouseClickPhase = 'pressed';
         updateHoverState(pos);
-    }
-    
-    state.activePointerId = null;
-    state.mouseIsDown = false;
-    state.mouseClickPhase = 'released';
-}
-
-function handlePointerLeave(event) {
-    if (state.mouseIsDown && state.activePointerId === event.pointerId) {
-        return;
-    }
+        
+        // Move handler - attached to element, not document
+        const handleMove = (e) => {
+            const movePos = getPointerPosition(canvas, e);
+            if (!movePos) return;
+            e.preventDefault();
+            
+            updateHoverState(movePos);
+            state.mouseDragX = movePos.pixelX;
+            state.mouseDragY = movePos.pixelY;
+            state.mouseLastDownX = movePos.pixelX;
+            state.mouseLastDownY = movePos.pixelY;
+        };
+        
+        // Up/cancel handler - clean up
+        const handleUp = (e) => {
+            canvas.releasePointerCapture(e.pointerId);
+            canvas.removeEventListener('pointermove', handleMove);
+            canvas.removeEventListener('pointerup', handleUp);
+            canvas.removeEventListener('pointercancel', handleUp);
+            
+            const upPos = getPointerPosition(canvas, e);
+            if (upPos) {
+                updateHoverState(upPos);
+            }
+            
+            state.activePointerId = null;
+            state.mouseIsDown = false;
+            state.mouseClickPhase = 'released';
+        };
+        
+        // Attach move/up/cancel to the element itself
+        canvas.addEventListener('pointermove', handleMove);
+        canvas.addEventListener('pointerup', handleUp);
+        canvas.addEventListener('pointercancel', handleUp);
+        
+    }, { passive: false });
 }
 
 function getPointerPosition(canvas, event) {
