@@ -656,6 +656,51 @@ export async function loadPublicShaders(limit = 20, offset = 0) {
 }
 
 /**
+ * Load Genuary shaders (published shaders with "genuary" in title)
+ * @param {number} limit - Number of shaders to fetch (default 50)
+ * @returns {Object} { success, shaders, error }
+ */
+export async function loadGenuaryShaders(limit = 50) {
+    if (!supabase) {
+        return { success: false, error: 'Supabase not initialized' };
+    }
+
+    try {
+        const result = await supabase
+            .from('shaders')
+            .select('*')
+            .eq('visibility', 'published')
+            .ilike('title', '%genuary%')
+            .order('created_at', { ascending: false })
+            .limit(limit);
+
+        if (result.error) throw result.error;
+        
+        // Track bandwidth
+        const estimatedBytes = JSON.stringify(result.data).length;
+        trackBandwidth('api', estimatedBytes);
+
+        // Filter out WebGPU shaders if WebGPU is not available
+        let shaders = result.data;
+        if (!state.hasWebGPU) {
+            shaders = shaders.filter(shader => {
+                const codeTypes = shader.code_types || [];
+                const hasGraphicsTab = codeTypes.includes('graphics');
+                const isWGSL = hasGraphicsTab && (shader.code?.wgsl_graphics || shader.code?.graphics) && !shader.code?.glsl_fragment;
+                const needsWebGPU = codeTypes.some(t => t === 'wgsl_graphics' || t === 'wgsl_audio' || t === 'audio_gpu') || isWGSL;
+                return !needsWebGPU;
+            });
+        }
+
+        return { success: true, shaders };
+
+    } catch (error) {
+        console.error('Load Genuary shaders error:', error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
  * Delete shader by ID
  * @param {string} shaderId - Shader ID to delete
  * @returns {Object} { success, error }

@@ -299,6 +299,23 @@ body {
     font-size: 1.25rem;
 }
 
+/* Toolbar icon images (SVG icons) */
+.sl-toolbar-item img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    opacity: 0.7;
+    transition: opacity var(--transition);
+}
+
+.sl-toolbar-item:hover img {
+    opacity: 1;
+}
+
+.sl-toolbar-item.active img {
+    opacity: 1;
+}
+
 .sl-toolbar-item:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
