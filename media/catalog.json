@@ -4,7 +4,7 @@
       "id": "organic0",
       "name": "Sandx100",
       "path": "media/textures/sandx100.jpg",
-      "thumb": "media/textures/sandx100.jpg",
+      "thumb": "media/thumbs/sandx100.jpg",
       "width": 1024,
       "height": 1024
     },
@@ -12,7 +12,7 @@
       "id": "organic1",
       "name": "Lichen",
       "path": "media/textures/lichen.jpg",
-      "thumb": "media/textures/lichen.jpg",
+      "thumb": "media/thumbs/lichen.jpg",
       "width": 1024,
       "height": 1024
     },
@@ -20,7 +20,7 @@
         "id": "organic2",
         "name": "Oak Tree",
         "path": "media/textures/oaktree.jpg",
-        "thumb": "media/textures/oaktree.jpg",
+        "thumb": "media/thumbs/oaktree.jpg",
         "width": 1024,
         "height": 1024
     },
@@ -100,7 +100,7 @@
         "id": "noise4",
         "name": "Blue Noise",
         "path": "media/textures/bluenoise.png",
-        "thumb": "media/textures/bluenoiseTN.jpg",
+        "thumb": "media/thumbs/bluenoise.jpg",
         "width": 1024,
         "height": 1024
     },
@@ -116,7 +116,7 @@
         "id": "thing",
         "name": "Nyanbat",
         "path": "media/textures/nyanbat.png",
-        "thumb": "media/textures/nyanbatTN.png",
+        "thumb": "media/thumbs/nyanbat.jpg",
         "width": 256,
         "height": 32
     },
@@ -140,7 +140,7 @@
         "id": "sky4",
         "name": "Stars purple",
         "path": "media/textures/Purple Nebula 1 - 512x512.png",
-        "thumb": "media/textures/Purple Nebula 1 - 512x512.png",
+        "thumb": "media/thumbs/Purple Nebula 1 - 512x512.jpg",
         "width": 512,
         "height": 512
     },
@@ -156,7 +156,7 @@
         "id": "wood1",
         "name": "Wood",
         "path": "media/textures/wood.jpg",
-        "thumb": "media/textures/wood.jpg",
+        "thumb": "media/thumbs/wood.jpg",
         "width": 1024,
         "height": 1024
     },
@@ -164,7 +164,7 @@
         "id": "metal1",
         "name": "Rusty Metal",
         "path": "media/textures/metal.jpg",
-        "thumb": "media/textures/metal.jpg",
+        "thumb": "media/thumbs/metal.jpg",
         "width": 1024,
         "height": 1024
     },
@@ -204,7 +204,7 @@
         "id": "font1",
         "name": "Font Ubuntu Mono",
         "path": "media/textures/font1.png",
-        "thumb": "media/textures/font1.png",
+        "thumb": "media/thumbs/font1.jpg",
         "width": 1024,
         "height": 1024
     },
@@ -212,7 +212,7 @@
         "id": "font2",
         "name": "Font Helvetica",
         "path": "media/textures/font2.png",
-        "thumb": "media/textures/font2.png",
+        "thumb": "media/thumbs/font2.jpg",
         "width": 1024,
         "height": 1024
     },
@@ -220,7 +220,7 @@
         "id": "font3",
         "name": "Font JetBrains",
         "path": "media/textures/font3.png",
-        "thumb": "media/textures/font3.png",
+        "thumb": "media/thumbs/font3.jpg",
         "width": 1024,
         "height": 1024
     },
@@ -228,7 +228,7 @@
         "id": "font4",
         "name": "Font QuickSand",
         "path": "media/textures/font4.png",
-        "thumb": "media/textures/font4.png",
+        "thumb": "media/thumbs/font4.jpg",
         "width": 1024,
         "height": 1024
     }
@@ -238,7 +238,7 @@
         "id": "video1",
         "name": "Woman presents greenscreen",
         "path": "media/video/woman.mp4",
-        "thumb": "media/video/woman.png",
+        "thumb": "media/thumbs/woman.jpg",
         "duration": 11,
         "width": 1920,
         "height": 1080
@@ -246,7 +246,7 @@
         "id": "video2",
         "name": "Jean-Claude Van Damme",
         "path": "media/video/vandamme.mp4",
-        "thumb": "media/video/vandamme.png",
+        "thumb": "media/thumbs/vandamme.jpg",
         "duration": 19,
         "width": 852,
         "height": 480
@@ -254,7 +254,7 @@
         "id": "video3",
         "name": "1961 Advert",
         "path": "media/video/ad1.mp4",
-        "thumb": "media/video/ad1.png",
+        "thumb": "media/thumbs/ad1.jpg",
         "duration": 29,
         "width": 400,
         "height": 300
@@ -262,7 +262,7 @@
         "id": "video4",
         "name": "Chrome Advert",
         "path": "media/video/ad2.mp4",
-        "thumb": "media/video/ad2.png",
+        "thumb": "media/thumbs/ad2.jpg",
         "duration": 34,
         "width": 640,
         "height": 360
@@ -271,7 +271,7 @@
         "id": "video5",
         "name": "Cats",
         "path": "media/video/cats.mp4",
-        "thumb": "media/video/cats.png",
+        "thumb": "media/thumbs/cats.jpg",
         "duration": 8,
         "width": 1280,
         "height": 720
