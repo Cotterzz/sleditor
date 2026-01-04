@@ -176,5 +176,16 @@
   
   "mobile": {
     "tapToLoad": "Tap a panel icon"
+  },
+  
+  "transport": {
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop",
+    "record": "Record",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "loop": "Loop",
+    "loopOff": "Loop Off"
   }
 }

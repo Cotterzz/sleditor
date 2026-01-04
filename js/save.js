@@ -32,10 +32,11 @@ export function captureThumbnail() {
 // ============================================================================
 
 let isPopulatingGallery = false;
-let currentGalleryTab = 'sotw'; // Track current tab (default to SOTW)
+let currentGalleryTab = 'genuary'; // Track current tab (default to Genuary)
 
 // Cache for each gallery tab
 let galleryCache = {
+    genuary: null,
     sotw: null,
     my: null,
     community: null,
@@ -114,8 +115,31 @@ export async function populateGallery(tab = currentGalleryTab, forceRefresh = fa
         
         galleryContent.innerHTML = '';
         
+        // ===== GENUARY TAB =====
+        if (tab === 'genuary') {
+            const result = await backend.loadGenuaryShaders();
+            if (result.success && result.shaders.length > 0) {
+                galleryCache.genuary = result.shaders;
+                result.shaders.forEach(shader => {
+                    const item = createGalleryItem(shader, false);
+                    if (item) galleryContent.appendChild(item);
+                });
+            } else {
+                galleryCache.genuary = [];
+                const noShaders = document.createElement('div');
+                noShaders.style.cssText = 'grid-column: 1 / -1; text-align: center; padding: 40px 20px; color: var(--text-secondary);';
+                noShaders.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 10px;">🎨</div>
+                    <div>No Genuary shaders found</div>
+                    <div style="font-size: 12px; margin-top: 5px;">Publish a shader with "Genuary" in the title to appear here!</div>
+                `;
+                galleryContent.appendChild(noShaders);
+            }
+            return;
+        }
+        
         // ===== SHADER OF THE WEEK =====
-        if (tab === 'sotw') {
+        else if (tab === 'sotw') {
             const result = await backend.loadSotwEntries();
             if (result.success && result.entries.length > 0) {
                 galleryCache.sotw = result.entries;
@@ -254,13 +278,26 @@ export async function populateGallery(tab = currentGalleryTab, forceRefresh = fa
 // Helper: Render gallery from cached data
 function renderGalleryFromCache(container, tab) {
     container.innerHTML = '';
-    
+
     const cached = galleryCache[tab];
     if (tab === 'sotw') {
         renderSotwGallery(container, cached || []);
         return;
     }
     
+    // Genuary tab - simple rendering like community
+    if (tab === 'genuary') {
+        if (!cached || cached.length === 0) {
+            populateGallery(tab, true);
+            return;
+        }
+        cached.forEach(shader => {
+            const item = createGalleryItem(shader, false);
+            if (item) container.appendChild(item);
+        });
+        return;
+    }
+
     if (!cached || cached.length === 0) {
         populateGallery(tab, true);
         return;

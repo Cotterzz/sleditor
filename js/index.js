@@ -1141,7 +1141,7 @@ async function init() {
     backend.init();
     
     // Populate default gallery tab (after backend init so Supabase is ready)
-    save.populateGallery('sotw');
+    save.populateGallery('genuary');
     
     // Performance monitor disabled - kept for future use
     // perfMonitor.init();

@@ -299,6 +299,23 @@ body {
     font-size: 1.25rem;
 }
 
+/* Toolbar icon images (SVG icons) */
+.sl-toolbar-item img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    opacity: 0.7;
+    transition: opacity var(--transition);
+}
+
+.sl-toolbar-item:hover img {
+    opacity: 1;
+}
+
+.sl-toolbar-item.active img {
+    opacity: 1;
+}
+
 .sl-toolbar-item:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
@@ -614,35 +631,49 @@ body {
     border: none;
 }
 
-/* Window frame - surrounds window, appears on hover from outside */
+/* Window frame - invisible hit area for move (corners excluded for resize) */
 .sl-window-frame {
     position: absolute;
     /* Inset from container edge, leaving space for the frame thickness */
     inset: calc(var(--window-frame-hover-zone) - var(--window-frame-size));
-    background: var(--window-header);
-    border: 1px solid var(--border);
-    border-radius: var(--window-frame-radius);
-    box-shadow: var(--glow);
+    background: transparent;
+    border: none;
     cursor: move;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.15s ease;
     z-index: -1;
+    /* Cut out corners (20px) so resize handles aren't blocked by frame */
+    --corner-size: 20px;
+    clip-path: polygon(
+        var(--corner-size) 0%, 
+        calc(100% - var(--corner-size)) 0%,
+        calc(100% - var(--corner-size)) var(--corner-size),
+        100% var(--corner-size),
+        100% calc(100% - var(--corner-size)),
+        calc(100% - var(--corner-size)) calc(100% - var(--corner-size)),
+        calc(100% - var(--corner-size)) 100%,
+        var(--corner-size) 100%,
+        var(--corner-size) calc(100% - var(--corner-size)),
+        0% calc(100% - var(--corner-size)),
+        0% var(--corner-size),
+        var(--corner-size) var(--corner-size),
+        var(--corner-size) 0%
+    );
 }
 
-/* Frame appears when hovering container but NOT inside window body */
+/* Frame becomes active (for hit-testing) when hovering container */
 .sl-window-container.frame-visible .sl-window-frame {
     opacity: 1;
     pointer-events: auto;
 }
 
-/* When frame is visible, hide window's own border/shadow */
+/* Visual feedback: outline on window body when in move/resize ready state */
 .sl-window-container.frame-visible .sl-window-body {
-    border-color: transparent;
-    box-shadow: none;
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
 }
 
-/* When dragging or resizing, keep frame visible */
+/* When dragging or resizing, keep frame active and show stronger outline */
 .sl-window-container.dragging .sl-window-frame,
 .sl-window-container.resizing .sl-window-frame {
     opacity: 1;
@@ -651,8 +682,9 @@ body {
 
 .sl-window-container.dragging .sl-window-body,
 .sl-window-container.resizing .sl-window-body {
-    border-color: transparent;
-    box-shadow: none;
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    box-shadow: 0 0 20px rgba(var(--accent-rgb, 100, 149, 237), 0.3);
 }
 
 /* Window content */
@@ -738,17 +770,19 @@ body {
     z-index: 10;
 }
 
-/* Edge handles - inside the window border */
-.sl-resize-handle.n { top: 0; left: 12px; right: 12px; height: 6px; cursor: n-resize; }
-.sl-resize-handle.s { bottom: 0; left: 12px; right: 12px; height: 6px; cursor: s-resize; }
-.sl-resize-handle.e { right: 0; top: 12px; bottom: 12px; width: 6px; cursor: e-resize; }
-.sl-resize-handle.w { left: 0; top: 12px; bottom: 12px; width: 6px; cursor: w-resize; }
+/* Edge handles - DISABLED (corner-only resize) */
+.sl-resize-handle.n,
+.sl-resize-handle.s,
+.sl-resize-handle.e,
+.sl-resize-handle.w { 
+    display: none; 
+}
 
-/* Corner handles */
-.sl-resize-handle.nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nw-resize; }
-.sl-resize-handle.ne { top: 0; right: 0; width: 12px; height: 12px; cursor: ne-resize; }
-.sl-resize-handle.sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: sw-resize; }
-.sl-resize-handle.se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: se-resize; }
+/* Corner handles - larger for easier grabbing */
+.sl-resize-handle.nw { top: -4px; left: -4px; width: 20px; height: 20px; cursor: nw-resize; }
+.sl-resize-handle.ne { top: -4px; right: -4px; width: 20px; height: 20px; cursor: ne-resize; }
+.sl-resize-handle.sw { bottom: -4px; left: -4px; width: 20px; height: 20px; cursor: sw-resize; }
+.sl-resize-handle.se { bottom: -4px; right: -4px; width: 20px; height: 20px; cursor: se-resize; }
 
 /* ========================================
    CONTEXT MENUS & DROPDOWNS
@@ -808,24 +842,506 @@ body {
     color: var(--text-primary);
     font-family: var(--font-ui);
     font-size: 0.875rem;
+    font-weight: 500;
     cursor: pointer;
     transition: all var(--transition);
+    white-space: nowrap;
 }
 
-.sl-btn:hover {
+.sl-btn:hover:not(:disabled) {
     background: var(--bg-hover);
     border-color: var(--border-focus);
 }
 
+.sl-btn:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.sl-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Button icon */
+.sl-btn-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+    line-height: 1;
+}
+
+.sl-btn-icon img {
+    width: 1em;
+    height: 1em;
+    object-fit: contain;
+}
+
+/* Icon-only button */
+.sl-btn-icon-only {
+    padding: 8px;
+    aspect-ratio: 1;
+}
+
+/* Button sizes */
+.sl-btn-small {
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    gap: 4px;
+}
+
+.sl-btn-small.sl-btn-icon-only {
+    padding: 4px;
+}
+
+.sl-btn-large {
+    padding: 12px 24px;
+    font-size: 1rem;
+    gap: 8px;
+}
+
+.sl-btn-large.sl-btn-icon-only {
+    padding: 12px;
+}
+
+/* Button variants */
+.sl-btn-default {
+    background: var(--bg-tertiary);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+.sl-btn-primary,
 .sl-btn.primary {
     background: var(--accent);
     border-color: var(--accent);
     color: var(--text-inverse);
 }
 
-.sl-btn.primary:hover {
+.sl-btn-primary:hover:not(:disabled),
+.sl-btn.primary:hover:not(:disabled) {
     background: var(--accent-hover);
     border-color: var(--accent-hover);
+}
+
+.sl-btn-danger {
+    background: var(--error);
+    border-color: var(--error);
+    color: white;
+}
+
+.sl-btn-danger:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.sl-btn-ghost {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-secondary);
+}
+
+.sl-btn-ghost:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+/* Toggle button states */
+.sl-toggle-btn.pressed {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--text-inverse);
+}
+
+.sl-toggle-btn.pressed:hover:not(:disabled) {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+}
+
+/* Button group */
+.sl-btn-group {
+    display: inline-flex;
+    gap: 0;
+}
+
+.sl-btn-group .sl-btn {
+    border-radius: 0;
+}
+
+.sl-btn-group .sl-btn:first-child {
+    border-radius: var(--border-radius) 0 0 var(--border-radius);
+}
+
+.sl-btn-group .sl-btn:last-child {
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+}
+
+.sl-btn-group .sl-btn:not(:last-child) {
+    border-right: none;
+}
+
+/* ========================================
+   SLIDE TOGGLE (iOS-style switch)
+   ======================================== */
+
+.sl-slide-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+}
+
+.sl-slide-toggle-label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.sl-slide-toggle-label.active {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.sl-slide-toggle-track {
+    position: relative;
+    width: 36px;
+    height: 18px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.sl-slide-toggle-track:hover {
+    border-color: var(--accent);
+}
+
+.sl-slide-toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    transition: left 0.2s ease, background 0.2s ease;
+}
+
+.sl-slide-toggle.active .sl-slide-toggle-track {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
+.sl-slide-toggle.active .sl-slide-toggle-thumb {
+    left: calc(100% - 14px);
+    background: white;
+}
+
+/* Size variations */
+.sl-slide-toggle-small .sl-slide-toggle-track {
+    width: 28px;
+    height: 14px;
+    border-radius: 7px;
+}
+
+.sl-slide-toggle-small .sl-slide-toggle-thumb {
+    width: 10px;
+    height: 10px;
+    top: 1px;
+    left: 1px;
+}
+
+.sl-slide-toggle-small.active .sl-slide-toggle-thumb {
+    left: calc(100% - 11px);
+}
+
+.sl-slide-toggle-small .sl-slide-toggle-label {
+    font-size: 0.6rem;
+}
+
+.sl-slide-toggle-large .sl-slide-toggle-track {
+    width: 48px;
+    height: 24px;
+    border-radius: 12px;
+}
+
+.sl-slide-toggle-large .sl-slide-toggle-thumb {
+    width: 18px;
+    height: 18px;
+    top: 2px;
+    left: 2px;
+}
+
+.sl-slide-toggle-large.active .sl-slide-toggle-thumb {
+    left: calc(100% - 20px);
+}
+
+/* ========================================
+   COLOR INPUT (with SL/OS toggle)
+   ======================================== */
+
+.sl-color-input {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sl-color-input-swatch {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--border-radius);
+    border: 2px solid var(--border);
+    cursor: pointer;
+    transition: transform 0.1s ease, border-color 0.15s ease;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+
+.sl-color-input-swatch:hover {
+    transform: scale(1.05);
+    border-color: var(--accent);
+}
+
+/* Native input - hidden in SL mode, visible in OS mode */
+.sl-color-input-native {
+    display: none;
+}
+
+.sl-color-input.native-mode .sl-color-input-native {
+    display: block;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 2px solid var(--border);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    background: none;
+}
+
+.sl-color-input.native-mode .sl-color-input-native::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.sl-color-input.native-mode .sl-color-input-native::-webkit-color-swatch {
+    border: none;
+    border-radius: calc(var(--border-radius) - 2px);
+}
+
+.sl-color-input.native-mode .sl-color-input-native::-moz-color-swatch {
+    border: none;
+    border-radius: calc(var(--border-radius) - 2px);
+}
+
+/* Hide swatch in native mode */
+.sl-color-input.native-mode .sl-color-input-swatch {
+    display: none;
+}
+
+.sl-color-input-hex {
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    min-width: 60px;
+}
+
+.sl-color-input-toggle {
+    margin-left: auto;
+}
+
+/* ========================================
+   COLOR PICKER POPUP (RGB + HSV Sliders)
+   ======================================== */
+
+.sl-color-popup {
+    position: fixed;
+    display: none;
+    flex-direction: column;
+    width: 280px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    box-shadow: 0 8px 24px var(--shadow);
+    z-index: 10000;
+    overflow: hidden;
+}
+
+.sl-color-popup-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+}
+
+.sl-color-popup-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.sl-color-popup-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 0;
+    line-height: 1;
+}
+
+.sl-color-popup-close:hover {
+    color: var(--text-primary);
+}
+
+.sl-color-popup-body {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sl-color-popup-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sl-color-popup-swatch {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--border-radius);
+    border: 2px solid var(--border);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+
+.sl-color-popup-hex {
+    flex: 1;
+    padding: 8px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-primary);
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+}
+
+.sl-color-popup-hex:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.sl-color-popup-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sl-color-popup-channel {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sl-color-popup-channel-label {
+    width: 14px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+.sl-color-popup-channel-track {
+    flex: 1;
+    height: 18px;
+    cursor: pointer;
+}
+
+.sl-color-popup-channel-bg {
+    position: relative;
+    height: 16px;
+    border-radius: 4px;
+    border: 1px solid rgba(0,0,0,0.3);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.sl-color-popup-channel-thumb {
+    position: absolute;
+    top: 0;
+    width: 8px;
+    height: 16px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.3);
+    border: 2px solid white;
+    box-shadow: 0 0 3px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,0,0,0.2);
+    transform: translateX(-50%);
+    cursor: pointer;
+}
+
+.sl-color-popup-channel-value {
+    width: 38px;
+    padding: 2px 4px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--text-primary);
+    font-family: var(--font-code);
+    font-size: 0.65rem;
+    text-align: center;
+}
+
+.sl-color-popup-channel-value:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* ========================================
+   TOOLTIPS
+   ======================================== */
+
+.sl-tooltip {
+    position: fixed;
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--border-radius) * 0.5);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10000;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    box-shadow: 0 4px 12px var(--shadow);
+}
+
+.sl-tooltip.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.sl-tooltip-top {
+    transform-origin: bottom center;
+}
+
+.sl-tooltip-bottom {
+    transform-origin: top center;
+}
+
+.sl-tooltip-left {
+    transform-origin: right center;
+}
+
+.sl-tooltip-right {
+    transform-origin: left center;
+}
+
+.sl-tooltip-top.visible,
+.sl-tooltip-bottom.visible,
+.sl-tooltip-left.visible,
+.sl-tooltip-right.visible {
+    transform: translate(0);
 }
 
 /* ========================================
@@ -1369,11 +1885,6 @@ body {
 
 /* Designer theme: neumorphic shadows */
 [data-theme="designer"] .sl-window-body {
-    box-shadow: var(--neumorphic-raised);
-    border: none;
-}
-
-[data-theme="designer"] .sl-window-frame {
     box-shadow: var(--neumorphic-raised);
     border: none;
 }
@@ -2816,11 +3327,112 @@ body {
 }
 
 /* ========================================
+   COLOR UNIFORM (new style - swatch + popup)
+   ======================================== */
+
+.sl-color-uniform {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+}
+
+.sl-color-uniform-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: transform 0.1s ease, border-color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.sl-color-uniform-swatch:hover {
+    transform: scale(1.1);
+    border-color: var(--accent);
+}
+
+.sl-color-uniform-native {
+    display: none;
+}
+
+.sl-color-uniform.native-mode .sl-color-uniform-native {
+    display: block;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    background: none;
+    flex-shrink: 0;
+}
+
+.sl-color-uniform.native-mode .sl-color-uniform-native::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.sl-color-uniform.native-mode .sl-color-uniform-native::-webkit-color-swatch {
+    border: none;
+    border-radius: 3px;
+}
+
+.sl-color-uniform.native-mode .sl-color-uniform-native::-moz-color-swatch {
+    border: none;
+    border-radius: 3px;
+}
+
+.sl-color-uniform.native-mode .sl-color-uniform-swatch {
+    display: none;
+}
+
+.sl-color-uniform-label {
+    flex: 1;
+    min-width: 60px;
+    padding: 2px 4px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    color: var(--text-secondary);
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    cursor: text;
+}
+
+.sl-color-uniform-label:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--bg-primary);
+}
+
+.sl-color-uniform-hex {
+    font-family: var(--font-code);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    width: 55px;
+    text-align: right;
+}
+
+/* ========================================
    COLOR/VEC3 STACKS
    ======================================== */
 
 .sl-color-stack,
 .sl-vec3-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sl-color-stack-header {
+    display: flex;
+    justify-content: flex-end;
+    padding-bottom: 4px;
+}
+
+.sl-color-stack-colors {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -3056,6 +3668,238 @@ body {
 
 .sl-tabs.underline .sl-tabs-content {
     border-radius: 0;
+}
+
+/* ========================================
+   TABPANE COMPONENT - Advanced draggable tabs
+   ======================================== */
+
+.sl-tabpane {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1;
+}
+
+.sl-tabpane-bar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 4px 0 4px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border);
+    min-height: 32px;
+    position: relative;
+    flex-wrap: wrap;
+}
+
+.sl-tabpane-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all var(--transition);
+    user-select: none;
+    white-space: nowrap;
+    max-width: 180px;
+}
+
+.sl-tabpane-tab:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.sl-tabpane-tab.active {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--bg-panel);
+    margin-bottom: -1px;
+}
+
+.sl-tabpane-tab-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.sl-tabpane-tab-icon img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+}
+
+.sl-tabpane-tab-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sl-tabpane-tab-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-left: 2px;
+    margin-right: -4px;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: all var(--transition);
+}
+
+.sl-tabpane-tab:hover .sl-tabpane-tab-close {
+    opacity: 0.7;
+}
+
+.sl-tabpane-tab-close:hover {
+    opacity: 1;
+    background: var(--error);
+    color: white;
+}
+
+.sl-tabpane-content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    background: var(--bg-panel);
+}
+
+.sl-tabpane-panel {
+    height: 100%;
+}
+
+/* Drag ghost */
+.sl-tabpane-drag-ghost {
+    position: fixed;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--accent);
+    border-radius: var(--border-radius);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+    z-index: 10000;
+    transform: translate(-50%, -100%);
+    opacity: 0.95;
+}
+
+/* Drop indicator */
+.sl-tabpane-drop-indicator {
+    position: absolute;
+    top: 4px;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent);
+    border-radius: 1px;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.sl-tabpane-drop-indicator.visible {
+    opacity: 1;
+}
+
+/* Pane states */
+.sl-tabpane.dragging-tab .sl-tabpane-tab {
+    pointer-events: none;
+}
+
+.sl-tabpane.drop-target .sl-tabpane-bar {
+    background: var(--bg-active);
+}
+
+/* Body state during tab drag */
+body.sl-tab-dragging {
+    cursor: grabbing !important;
+}
+
+body.sl-tab-dragging * {
+    cursor: grabbing !important;
+}
+
+/* Mobile adjustments */
+.sl-app[data-mode="mobile"] .sl-tabpane-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+}
+
+.sl-app[data-mode="mobile"] .sl-tabpane-tab {
+    padding: 8px 12px;
+}
+
+.sl-app[data-mode="mobile"] .sl-tabpane-tab-close {
+    opacity: 0.7;
+    width: 20px;
+    height: 20px;
+}
+
+/* ========================================
+   TABBED WINDOW - Window with integrated TabPane
+   ======================================== */
+
+.sl-tabbed-window {
+    /* Same as regular window, but content area is modified */
+}
+
+.sl-tabbed-window-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.sl-tabbed-window-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+.sl-tabbed-window-content .sl-tabpane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.sl-tabbed-window-content .sl-tabpane-bar {
+    border-radius: 0;
+    background: var(--bg-secondary);
+}
+
+.sl-tabbed-window-content .sl-tabpane-content {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Visual feedback when a tab can be dropped on this window */
+.sl-tabbed-window-body.tab-drop-ready {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.sl-tabbed-window-body.tab-drop-ready .sl-tabpane-bar {
+    background: var(--bg-active);
 }
 
 /* Theme-specific styles */

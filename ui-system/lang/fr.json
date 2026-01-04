@@ -176,6 +176,17 @@
   
   "mobile": {
     "tapToLoad": "Appuyez sur une icône"
+  },
+  
+  "transport": {
+    "play": "Lecture",
+    "pause": "Pause",
+    "stop": "Arrêt",
+    "record": "Enregistrer",
+    "mute": "Muet",
+    "unmute": "Son",
+    "loop": "Boucle",
+    "loopOff": "Boucle désactivée"
   }
 }
 

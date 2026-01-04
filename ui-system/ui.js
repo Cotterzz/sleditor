@@ -788,9 +788,9 @@ const SLUI = (function() {
         }
         body.appendChild(contentEl);
         
-        // Resize handles (inside body, at edges)
+        // Resize handles (corners only - edges are for move)
         if (resizable) {
-            ['n', 's', 'e', 'w', 'nw', 'ne', 'sw', 'se'].forEach(dir => {
+            ['nw', 'ne', 'sw', 'se'].forEach(dir => {
                 const handle = document.createElement('div');
                 handle.className = `sl-resize-handle ${dir}`;
                 handle.dataset.direction = dir;
@@ -1786,7 +1786,6 @@ const SLUI = (function() {
                         <option value="fr" ${state.lang === 'fr' ? 'selected' : ''}>Français</option>
                         <option value="it" ${state.lang === 'it' ? 'selected' : ''}>Italiano</option>
                         <option value="ja" ${state.lang === 'ja' ? 'selected' : ''}>日本語</option>
-                        <option value="vi" ${state.lang === 'vi' ? 'selected' : ''}>Tiếng Việt</option>
                     </select>
                 </div>
                 
@@ -2209,31 +2208,37 @@ const SLUI = (function() {
     const panels = new Map();
     
     function registerPanel(config, isReRegister = false) {
-        const { id, icon, title, createContent, showInToolbar = true } = config;
-        
+        const { 
+            id, icon, title, createContent, showInToolbar = true,
+            // Tabbed window options
+            tabbed = false,
+            tabGroup = 'default',
+            tabs = null  // Array of { id, label, icon, content } or function that returns it
+        } = config;
+
         // Store config for re-registration
         if (!isReRegister) {
             panelConfigs.push(config);
         }
-        
+
         panels.set(id, config);
-        
+
         // Skip toolbar for hidden panels
         if (!showInToolbar) return;
-        
+
         // Add to toolbar items container
         const itemsContainer = document.getElementById('sl-toolbar-items');
         if (itemsContainer) {
             const spacer = itemsContainer.querySelector('.sl-toolbar-spacer');
             const btn = createToolbarItem(icon, id, t(`panels.${id}.title`) || title);
-            
+
             btn.addEventListener('click', () => {
                 if (state.deviceMode === 'mobile') {
                     // Mobile: toggle panel in zone
                     const isLandscape = state.mobileOrientation === 'landscape';
                     const zone1Key = isLandscape ? 'left' : 'top';
                     const zone2Key = isLandscape ? 'right' : 'bottom';
-                    
+
                     if (state.mobileZones[zone1Key] === id || state.mobileZones[zone2Key] === id) {
                         closePanelInZone(id);
                     } else {
@@ -2241,30 +2246,63 @@ const SLUI = (function() {
                     }
                 } else {
                     // Desktop: window mode
-                    const winState = state.windows.get(id);
-                    if (winState) {
-                        toggleWindow(id);
-                    } else {
-                        // Create window
-                        const content = createContent ? createContent() : null;
-                        const win = createWindow({
-                            id,
-                            title: t(`panels.${id}.title`) || title,
-                            icon,
-                            x: 100 + panels.size * 30,
-                            y: 100 + panels.size * 30,
-                            width: 500,
-                            height: 400,
-                            content
-                        });
-                        // Add to float layer if available
-                        const floatLayer = document.getElementById('sl-float-layer');
-                        if (floatLayer) {
-                            floatLayer.appendChild(win);
+                    if (tabbed) {
+                        // For tabbed panels, toggle the entire tab group
+                        const groupWindows = getWindowsByTabGroup(tabGroup);
+                        
+                        if (groupWindows.length > 0) {
+                            // Close all windows in this group
+                            for (const winId of groupWindows) {
+                                closeTabbedWindow(winId);
+                            }
+                            updateToolbarItem(id, false, false, false);
                         } else {
-                            document.getElementById('sl-workspace').appendChild(win);
+                            // Open the main panel
+                            const tabsData = typeof tabs === 'function' ? tabs() : tabs;
+                            const win = createTabbedWindow({
+                                id,
+                                group: tabGroup,
+                                x: 100 + panels.size * 30,
+                                y: 100 + panels.size * 30,
+                                width: 500,
+                                height: 400,
+                                tabs: tabsData || []
+                            });
+                            
+                            const floatLayer = document.getElementById('sl-float-layer');
+                            if (floatLayer) {
+                                floatLayer.appendChild(win);
+                            } else {
+                                document.getElementById('sl-workspace').appendChild(win);
+                            }
+                            updateToolbarItem(id, true, true, false);
                         }
-                        updateToolbarItem(id, true, true, false);
+                    } else {
+                        // Regular window toggle
+                        const winState = state.windows.get(id);
+                        if (winState) {
+                            toggleWindow(id);
+                        } else {
+                            const content = createContent ? createContent() : null;
+                            const win = createWindow({
+                                id,
+                                title: t(`panels.${id}.title`) || title,
+                                icon,
+                                x: 100 + panels.size * 30,
+                                y: 100 + panels.size * 30,
+                                width: 500,
+                                height: 400,
+                                content
+                            });
+
+                            const floatLayer = document.getElementById('sl-float-layer');
+                            if (floatLayer) {
+                                floatLayer.appendChild(win);
+                            } else {
+                                document.getElementById('sl-workspace').appendChild(win);
+                            }
+                            updateToolbarItem(id, true, true, false);
+                        }
                     }
                 }
             });
@@ -2276,6 +2314,937 @@ const SLUI = (function() {
         }
     }
     
+    // ========================================
+    // BUTTON COMPONENTS
+    // ========================================
+
+    /**
+     * Button - versatile button with icon, label, or both
+     * @param {Object} options
+     * @param {string} [options.label] - Text label
+     * @param {string} [options.icon] - Icon (emoji, HTML, or img tag)
+     * @param {string} [options.variant='default'] - 'default', 'primary', 'danger', 'ghost'
+     * @param {string} [options.size='medium'] - 'small', 'medium', 'large'
+     * @param {boolean} [options.disabled=false]
+     * @param {string} [options.tooltip] - Tooltip text
+     * @param {Function} [options.onClick] - Click handler
+     * @param {string} [options.className] - Additional CSS classes
+     */
+    function Button(options = {}) {
+        const {
+            label = null,
+            labelKey = null,        // i18n: translation key for label
+            icon = null,
+            variant = 'default',
+            size = 'medium',
+            disabled = false,
+            tooltip = null,
+            tooltipKey = null,      // i18n: translation key for tooltip
+            onClick = null,
+            className = ''
+        } = options;
+
+        const btn = document.createElement('button');
+        btn.className = `sl-btn sl-btn-${variant} sl-btn-${size} ${className}`.trim();
+        btn.disabled = disabled;
+
+        // Store i18n keys for updates
+        let currentLabelKey = labelKey;
+        let currentTooltipKey = tooltipKey;
+
+        // Resolve label (key takes precedence)
+        const resolvedLabel = labelKey ? t(labelKey) : label;
+        const resolvedTooltip = tooltipKey ? t(tooltipKey) : tooltip;
+
+        if (resolvedTooltip) {
+            btn.title = resolvedTooltip;
+        }
+
+        // Icon only, label only, or both
+        if (icon && !resolvedLabel) {
+            btn.classList.add('sl-btn-icon-only');
+        }
+
+        if (icon) {
+            const iconEl = document.createElement('span');
+            iconEl.className = 'sl-btn-icon';
+            if (icon.startsWith('<')) {
+                iconEl.innerHTML = icon;
+            } else {
+                iconEl.textContent = icon;
+            }
+            btn.appendChild(iconEl);
+        }
+
+        if (resolvedLabel) {
+            const labelEl = document.createElement('span');
+            labelEl.className = 'sl-btn-label';
+            labelEl.textContent = resolvedLabel;
+            btn.appendChild(labelEl);
+        }
+
+        if (onClick) {
+            btn.addEventListener('click', (e) => {
+                if (!btn.disabled) {
+                    onClick(e);
+                }
+            });
+        }
+
+        // i18n: Listen for language changes
+        function onLangChange() {
+            if (currentLabelKey) {
+                btn.setLabel(t(currentLabelKey));
+            }
+            if (currentTooltipKey) {
+                btn.title = t(currentTooltipKey);
+            }
+        }
+
+        if (labelKey || tooltipKey) {
+            document.addEventListener('sl-lang-change', onLangChange);
+        }
+
+        // Public API
+        btn.setLabel = (newLabel) => {
+            let labelEl = btn.querySelector('.sl-btn-label');
+            if (newLabel) {
+                if (!labelEl) {
+                    labelEl = document.createElement('span');
+                    labelEl.className = 'sl-btn-label';
+                    btn.appendChild(labelEl);
+                }
+                labelEl.textContent = newLabel;
+                btn.classList.remove('sl-btn-icon-only');
+            } else if (labelEl) {
+                labelEl.remove();
+                if (btn.querySelector('.sl-btn-icon')) {
+                    btn.classList.add('sl-btn-icon-only');
+                }
+            }
+        };
+
+        btn.setLabelKey = (newKey) => {
+            currentLabelKey = newKey;
+            if (newKey) {
+                btn.setLabel(t(newKey));
+            }
+        };
+
+        btn.setIcon = (newIcon) => {
+            let iconEl = btn.querySelector('.sl-btn-icon');
+            if (newIcon) {
+                if (!iconEl) {
+                    iconEl = document.createElement('span');
+                    iconEl.className = 'sl-btn-icon';
+                    btn.insertBefore(iconEl, btn.firstChild);
+                }
+                if (newIcon.startsWith('<')) {
+                    iconEl.innerHTML = newIcon;
+                } else {
+                    iconEl.textContent = newIcon;
+                }
+            } else if (iconEl) {
+                iconEl.remove();
+                btn.classList.remove('sl-btn-icon-only');
+            }
+        };
+
+        btn.setDisabled = (isDisabled) => {
+            btn.disabled = isDisabled;
+        };
+
+        btn.setVariant = (newVariant) => {
+            btn.classList.remove('sl-btn-default', 'sl-btn-primary', 'sl-btn-danger', 'sl-btn-ghost');
+            btn.classList.add(`sl-btn-${newVariant}`);
+        };
+
+        btn.setTooltipKey = (newKey) => {
+            currentTooltipKey = newKey;
+            if (newKey) {
+                btn.title = t(newKey);
+            }
+        };
+
+        // Cleanup method to remove event listener
+        btn.destroy = () => {
+            document.removeEventListener('sl-lang-change', onLangChange);
+        };
+
+        return btn;
+    }
+
+    /**
+     * ToggleButton - two-state button (e.g., play/pause)
+     * @param {Object} options
+     * @param {boolean} [options.pressed=false] - Initial state
+     * @param {string} [options.iconOff] - Icon when not pressed
+     * @param {string} [options.iconOn] - Icon when pressed
+     * @param {string} [options.labelOff] - Label when not pressed
+     * @param {string} [options.labelOn] - Label when pressed
+     * @param {string} [options.tooltipOff] - Tooltip when not pressed
+     * @param {string} [options.tooltipOn] - Tooltip when pressed
+     * @param {string} [options.variant='default']
+     * @param {string} [options.size='medium']
+     * @param {Function} [options.onToggle] - Called with new state
+     * @param {string} [options.className]
+     */
+    function ToggleButton(options = {}) {
+        const {
+            pressed = false,
+            iconOff = null,
+            iconOn = null,
+            labelOff = null,
+            labelOn = null,
+            labelOffKey = null,     // i18n: translation key for off label
+            labelOnKey = null,      // i18n: translation key for on label
+            tooltipOff = null,
+            tooltipOn = null,
+            tooltipOffKey = null,   // i18n: translation key for off tooltip
+            tooltipOnKey = null,    // i18n: translation key for on tooltip
+            variant = 'default',
+            size = 'medium',
+            fixedWidth = true,      // Auto-size to fit both labels
+            onToggle = null,
+            className = ''
+        } = options;
+
+        let isPressed = pressed;
+
+        // Resolve labels from keys or use direct values
+        const getResolvedLabelOff = () => labelOffKey ? t(labelOffKey) : labelOff;
+        const getResolvedLabelOn = () => labelOnKey ? t(labelOnKey) : labelOn;
+        const getResolvedTooltipOff = () => tooltipOffKey ? t(tooltipOffKey) : tooltipOff;
+        const getResolvedTooltipOn = () => tooltipOnKey ? t(tooltipOnKey) : tooltipOn;
+
+        const btn = Button({
+            icon: isPressed ? iconOn : iconOff,
+            label: isPressed ? getResolvedLabelOn() : getResolvedLabelOff(),
+            tooltip: isPressed ? getResolvedTooltipOn() : getResolvedTooltipOff(),
+            variant,
+            size,
+            className: `sl-toggle-btn ${isPressed ? 'pressed' : ''} ${className}`.trim(),
+            onClick: () => {
+                isPressed = !isPressed;
+                updateState();
+                if (onToggle) {
+                    onToggle(isPressed);
+                }
+            }
+        });
+
+        // Check if we have labels (either direct or from keys)
+        const hasLabels = () => {
+            const offLabel = getResolvedLabelOff();
+            const onLabel = getResolvedLabelOn();
+            return offLabel && onLabel && offLabel !== onLabel;
+        };
+
+        // If both labels exist and fixedWidth is true, measure both and set min-width
+        function scheduleWidthMeasure() {
+            if (!fixedWidth || !hasLabels()) return;
+            
+            requestAnimationFrame(() => {
+                if (!btn.isConnected) {
+                    const observer = new MutationObserver(() => {
+                        if (btn.isConnected) {
+                            observer.disconnect();
+                            measureAndSetWidth();
+                        }
+                    });
+                    observer.observe(document.body, { childList: true, subtree: true });
+                } else {
+                    measureAndSetWidth();
+                }
+            });
+        }
+
+        scheduleWidthMeasure();
+
+        function measureAndSetWidth() {
+            const offLabel = getResolvedLabelOff();
+            const onLabel = getResolvedLabelOn();
+            
+            if (!offLabel || !onLabel) return;
+
+            const currentLabel = isPressed ? onLabel : offLabel;
+            const otherLabel = isPressed ? offLabel : onLabel;
+
+            const currentWidth = btn.offsetWidth;
+
+            btn.setLabel(otherLabel);
+            const otherWidth = btn.offsetWidth;
+
+            btn.setLabel(currentLabel);
+
+            const maxWidth = Math.max(currentWidth, otherWidth);
+            btn.style.minWidth = maxWidth + 'px';
+        }
+
+        function updateState() {
+            btn.classList.toggle('pressed', isPressed);
+
+            if (iconOn || iconOff) {
+                btn.setIcon(isPressed ? iconOn : iconOff);
+            }
+            
+            const labelToUse = isPressed ? getResolvedLabelOn() : getResolvedLabelOff();
+            if (labelToUse !== null) {
+                btn.setLabel(labelToUse);
+            }
+            
+            const tooltipToUse = isPressed ? getResolvedTooltipOn() : getResolvedTooltipOff();
+            if (tooltipToUse !== null) {
+                btn.title = tooltipToUse || '';
+            }
+        }
+
+        // i18n: Listen for language changes
+        function onLangChange() {
+            updateState();
+            // Re-measure width for new language
+            btn.style.minWidth = '';
+            scheduleWidthMeasure();
+        }
+
+        if (labelOffKey || labelOnKey || tooltipOffKey || tooltipOnKey) {
+            document.addEventListener('sl-lang-change', onLangChange);
+        }
+
+        // Public API
+        btn.isPressed = () => isPressed;
+
+        btn.setPressed = (newState, triggerCallback = false) => {
+            if (isPressed !== newState) {
+                isPressed = newState;
+                updateState();
+                if (triggerCallback && onToggle) {
+                    onToggle(isPressed);
+                }
+            }
+        };
+
+        btn.toggle = (triggerCallback = true) => {
+            isPressed = !isPressed;
+            updateState();
+            if (triggerCallback && onToggle) {
+                onToggle(isPressed);
+            }
+        };
+
+        // Override destroy to clean up our listener too
+        const originalDestroy = btn.destroy;
+        btn.destroy = () => {
+            document.removeEventListener('sl-lang-change', onLangChange);
+            if (originalDestroy) originalDestroy();
+        };
+
+        return btn;
+    }
+
+    /**
+     * SlideToggle - iOS-style slide switch with left/right labels
+     * @param {Object} options
+     * @param {string} [options.labelLeft='Off'] - Label for left (off) state
+     * @param {string} [options.labelRight='On'] - Label for right (on) state
+     * @param {boolean} [options.value=false] - Initial state (false=left, true=right)
+     * @param {Function} [options.onChange] - Called with new state
+     * @param {string} [options.size='medium'] - 'small', 'medium', 'large'
+     * @param {string} [options.className]
+     */
+    function SlideToggle(options = {}) {
+        const {
+            labelLeft = 'Off',
+            labelRight = 'On',
+            value = false,
+            onChange = null,
+            size = 'medium',
+            className = ''
+        } = options;
+
+        let isRight = value;
+
+        const container = document.createElement('div');
+        container.className = `sl-slide-toggle sl-slide-toggle-${size} ${className}`.trim();
+
+        const leftLabel = document.createElement('span');
+        leftLabel.className = 'sl-slide-toggle-label sl-slide-toggle-label-left';
+        leftLabel.textContent = labelLeft;
+
+        const track = document.createElement('div');
+        track.className = 'sl-slide-toggle-track';
+
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-slide-toggle-thumb';
+        track.appendChild(thumb);
+
+        const rightLabel = document.createElement('span');
+        rightLabel.className = 'sl-slide-toggle-label sl-slide-toggle-label-right';
+        rightLabel.textContent = labelRight;
+
+        container.appendChild(leftLabel);
+        container.appendChild(track);
+        container.appendChild(rightLabel);
+
+        function updateState() {
+            container.classList.toggle('active', isRight);
+            leftLabel.classList.toggle('active', !isRight);
+            rightLabel.classList.toggle('active', isRight);
+        }
+
+        updateState();
+
+        // Click handlers
+        track.addEventListener('click', () => {
+            isRight = !isRight;
+            updateState();
+            if (onChange) onChange(isRight);
+        });
+
+        leftLabel.addEventListener('click', () => {
+            if (isRight) {
+                isRight = false;
+                updateState();
+                if (onChange) onChange(isRight);
+            }
+        });
+
+        rightLabel.addEventListener('click', () => {
+            if (!isRight) {
+                isRight = true;
+                updateState();
+                if (onChange) onChange(isRight);
+            }
+        });
+
+        // Public API
+        container.getValue = () => isRight;
+        container.setValue = (newValue, triggerCallback = false) => {
+            if (isRight !== newValue) {
+                isRight = newValue;
+                updateState();
+                if (triggerCallback && onChange) onChange(isRight);
+            }
+        };
+
+        return container;
+    }
+
+    // ========================================
+    // COLOR INPUT WITH SL/OS TOGGLE
+    // ========================================
+
+    // Global color picker popup (shared, repositioned as needed)
+    let colorPickerPopup = null;
+    let activeColorInput = null;
+
+    function rgbToHex(r, g, b) {
+        const toHex = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0');
+        return '#' + toHex(r) + toHex(g) + toHex(b);
+    }
+
+    function rgbToCss(r, g, b) {
+        return '#' + Math.round(r * 255).toString(16).padStart(2, '0') +
+                     Math.round(g * 255).toString(16).padStart(2, '0') +
+                     Math.round(b * 255).toString(16).padStart(2, '0');
+    }
+
+    function ensureColorPickerPopup() {
+        if (colorPickerPopup) return colorPickerPopup;
+
+        colorPickerPopup = document.createElement('div');
+        colorPickerPopup.className = 'sl-color-popup';
+        colorPickerPopup.innerHTML = `
+            <div class="sl-color-popup-header">
+                <span class="sl-color-popup-title">Color Picker</span>
+                <button class="sl-color-popup-close">✕</button>
+            </div>
+            <div class="sl-color-popup-body">
+                <div class="sl-color-popup-preview-row">
+                    <div class="sl-color-popup-swatch"></div>
+                    <input type="text" class="sl-color-popup-hex" placeholder="#ffffff">
+                </div>
+                <div class="sl-color-popup-sliders"></div>
+            </div>
+        `;
+
+        document.body.appendChild(colorPickerPopup);
+
+        // Close button
+        colorPickerPopup.querySelector('.sl-color-popup-close').addEventListener('click', closeColorPickerPopup);
+
+        // Close on outside click
+        document.addEventListener('pointerdown', (e) => {
+            if (colorPickerPopup.style.display === 'flex' && 
+                !colorPickerPopup.contains(e.target) && 
+                activeColorInput && !activeColorInput.contains(e.target)) {
+                closeColorPickerPopup();
+            }
+        });
+
+        return colorPickerPopup;
+    }
+
+    function createColorSlider(label, labelColor, getValue, setValue, getGradient, onUpdate) {
+        const row = document.createElement('div');
+        row.className = 'sl-color-popup-channel';
+
+        const lbl = document.createElement('span');
+        lbl.className = 'sl-color-popup-channel-label';
+        lbl.textContent = label;
+        lbl.style.color = labelColor;
+        row.appendChild(lbl);
+
+        const track = document.createElement('div');
+        track.className = 'sl-color-popup-channel-track';
+
+        const trackBg = document.createElement('div');
+        trackBg.className = 'sl-color-popup-channel-bg';
+
+        const thumb = document.createElement('div');
+        thumb.className = 'sl-color-popup-channel-thumb';
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        row.appendChild(track);
+
+        const valInput = document.createElement('input');
+        valInput.type = 'text';
+        valInput.className = 'sl-color-popup-channel-value';
+        row.appendChild(valInput);
+
+        function update() {
+            const val = getValue();
+            thumb.style.left = (val * 100) + '%';
+            valInput.value = val.toFixed(2);
+            trackBg.style.background = getGradient();
+        }
+
+        function handlePointer(e) {
+            const rect = trackBg.getBoundingClientRect();
+            const val = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            setValue(val);
+            onUpdate();
+        }
+
+        track.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            handlePointer(e);
+            const move = (ev) => handlePointer(ev);
+            const up = () => {
+                document.removeEventListener('pointermove', move);
+                document.removeEventListener('pointerup', up);
+            };
+            document.addEventListener('pointermove', move);
+            document.addEventListener('pointerup', up);
+        });
+
+        valInput.addEventListener('change', () => {
+            const v = parseFloat(valInput.value);
+            if (!isNaN(v)) {
+                setValue(Math.max(0, Math.min(1, v)));
+                onUpdate();
+            }
+        });
+
+        return { element: row, update };
+    }
+
+    function openColorPickerPopup(colorInput, swatch, rgb) {
+        const popup = ensureColorPickerPopup();
+        activeColorInput = colorInput;
+
+        // Current state
+        let currentRgb = { ...rgb };
+        let currentHsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+
+        const previewSwatch = popup.querySelector('.sl-color-popup-swatch');
+        const hexInput = popup.querySelector('.sl-color-popup-hex');
+        const slidersContainer = popup.querySelector('.sl-color-popup-sliders');
+
+        // Clear previous sliders
+        slidersContainer.innerHTML = '';
+
+        function updateAllVisuals() {
+            const hex = rgbToHex(currentRgb.r, currentRgb.g, currentRgb.b);
+            previewSwatch.style.background = hex;
+            hexInput.value = hex;
+            swatch.style.background = hex;
+            
+            channels.r.update();
+            channels.g.update();
+            channels.b.update();
+            channels.h.update();
+            channels.s.update();
+            channels.v.update();
+            
+            // Notify color input
+            if (colorInput._onChange) {
+                colorInput._onChange({ ...currentRgb });
+            }
+        }
+
+        // Create RGB sliders
+        const channels = {};
+
+        channels.r = createColorSlider('R', '#e74c3c',
+            () => currentRgb.r,
+            (v) => { currentRgb.r = v; currentHsv = rgbToHsv(currentRgb.r, currentRgb.g, currentRgb.b); },
+            () => `linear-gradient(to right, ${rgbToCss(0, currentRgb.g, currentRgb.b)}, ${rgbToCss(1, currentRgb.g, currentRgb.b)})`,
+            updateAllVisuals
+        );
+
+        channels.g = createColorSlider('G', '#2ecc71',
+            () => currentRgb.g,
+            (v) => { currentRgb.g = v; currentHsv = rgbToHsv(currentRgb.r, currentRgb.g, currentRgb.b); },
+            () => `linear-gradient(to right, ${rgbToCss(currentRgb.r, 0, currentRgb.b)}, ${rgbToCss(currentRgb.r, 1, currentRgb.b)})`,
+            updateAllVisuals
+        );
+
+        channels.b = createColorSlider('B', '#3498db',
+            () => currentRgb.b,
+            (v) => { currentRgb.b = v; currentHsv = rgbToHsv(currentRgb.r, currentRgb.g, currentRgb.b); },
+            () => `linear-gradient(to right, ${rgbToCss(currentRgb.r, currentRgb.g, 0)}, ${rgbToCss(currentRgb.r, currentRgb.g, 1)})`,
+            updateAllVisuals
+        );
+
+        // Separator
+        const sep = document.createElement('div');
+        sep.style.height = '6px';
+
+        // Create HSV sliders
+        channels.h = createColorSlider('H', '#9b59b6',
+            () => currentHsv.h,
+            (v) => { currentHsv.h = v; const c = hsvToRgb(currentHsv.h, currentHsv.s, currentHsv.v); currentRgb = c; },
+            () => {
+                const stops = [];
+                for (let i = 0; i <= 6; i++) {
+                    const c = hsvToRgb(i / 6, currentHsv.s, currentHsv.v);
+                    stops.push(rgbToCss(c.r, c.g, c.b));
+                }
+                return `linear-gradient(to right, ${stops.join(', ')})`;
+            },
+            updateAllVisuals
+        );
+
+        channels.s = createColorSlider('S', '#f39c12',
+            () => currentHsv.s,
+            (v) => { currentHsv.s = v; const c = hsvToRgb(currentHsv.h, currentHsv.s, currentHsv.v); currentRgb = c; },
+            () => {
+                const c0 = hsvToRgb(currentHsv.h, 0, currentHsv.v);
+                const c1 = hsvToRgb(currentHsv.h, 1, currentHsv.v);
+                return `linear-gradient(to right, ${rgbToCss(c0.r, c0.g, c0.b)}, ${rgbToCss(c1.r, c1.g, c1.b)})`;
+            },
+            updateAllVisuals
+        );
+
+        channels.v = createColorSlider('V', '#95a5a6',
+            () => currentHsv.v,
+            (v) => { currentHsv.v = v; const c = hsvToRgb(currentHsv.h, currentHsv.s, currentHsv.v); currentRgb = c; },
+            () => {
+                const c0 = hsvToRgb(currentHsv.h, currentHsv.s, 0);
+                const c1 = hsvToRgb(currentHsv.h, currentHsv.s, 1);
+                return `linear-gradient(to right, ${rgbToCss(c0.r, c0.g, c0.b)}, ${rgbToCss(c1.r, c1.g, c1.b)})`;
+            },
+            updateAllVisuals
+        );
+
+        // Add to container
+        slidersContainer.appendChild(channels.r.element);
+        slidersContainer.appendChild(channels.g.element);
+        slidersContainer.appendChild(channels.b.element);
+        slidersContainer.appendChild(sep);
+        slidersContainer.appendChild(channels.h.element);
+        slidersContainer.appendChild(channels.s.element);
+        slidersContainer.appendChild(channels.v.element);
+
+        // Hex input handler
+        hexInput.onchange = () => {
+            const hex = hexInput.value.replace('#', '');
+            if (hex.length === 6) {
+                currentRgb = {
+                    r: parseInt(hex.substr(0, 2), 16) / 255,
+                    g: parseInt(hex.substr(2, 2), 16) / 255,
+                    b: parseInt(hex.substr(4, 2), 16) / 255
+                };
+                currentHsv = rgbToHsv(currentRgb.r, currentRgb.g, currentRgb.b);
+                updateAllVisuals();
+            }
+        };
+
+        // Initial update
+        updateAllVisuals();
+
+        // Position popup near swatch
+        const rect = swatch.getBoundingClientRect();
+        popup.style.display = 'flex';
+
+        // Position below swatch, or above if not enough space
+        let top = rect.bottom + 8;
+        let left = rect.left;
+
+        const popupHeight = 320;
+        const popupWidth = 260;
+
+        if (top + popupHeight > window.innerHeight) {
+            top = rect.top - popupHeight - 8;
+        }
+        if (left + popupWidth > window.innerWidth) {
+            left = window.innerWidth - popupWidth - 8;
+        }
+
+        popup.style.top = Math.max(8, top) + 'px';
+        popup.style.left = Math.max(8, left) + 'px';
+    }
+
+    function closeColorPickerPopup() {
+        if (colorPickerPopup) {
+            colorPickerPopup.style.display = 'none';
+        }
+        activeColorInput = null;
+    }
+
+    /**
+     * ColorInput - Color swatch with SL/OS toggle
+     * @param {Object} options
+     * @param {number} [options.r=1] - Red (0-1)
+     * @param {number} [options.g=0.5] - Green (0-1)
+     * @param {number} [options.b=0.2] - Blue (0-1)
+     * @param {boolean} [options.useNative=false] - Start with OS picker
+     * @param {boolean} [options.showToggle=true] - Show SL/OS toggle
+     * @param {Function} [options.onChange] - Called with { r, g, b }
+     * @param {string} [options.className]
+     */
+    function ColorInput(options = {}) {
+        const {
+            r = 1,
+            g = 0.5,
+            b = 0.2,
+            useNative = false,
+            showToggle = true,
+            onChange = null,
+            className = ''
+        } = options;
+
+        let currentRgb = { r, g, b };
+        let isNativeMode = useNative;
+
+        const container = document.createElement('div');
+        container.className = `sl-color-input ${className}`.trim();
+
+        // Color swatch (visible in SL mode)
+        const swatch = document.createElement('div');
+        swatch.className = 'sl-color-input-swatch';
+        swatch.style.background = rgbToHex(r, g, b);
+
+        // Native input (used in OS mode)
+        const nativeInput = document.createElement('input');
+        nativeInput.type = 'color';
+        nativeInput.className = 'sl-color-input-native';
+        nativeInput.value = rgbToHex(r, g, b);
+
+        // Hex display
+        const hexDisplay = document.createElement('span');
+        hexDisplay.className = 'sl-color-input-hex';
+        hexDisplay.textContent = rgbToHex(r, g, b);
+
+        container.appendChild(swatch);
+        container.appendChild(nativeInput);
+        container.appendChild(hexDisplay);
+
+        // Toggle switch
+        if (showToggle) {
+            const toggle = SlideToggle({
+                labelLeft: 'SL',
+                labelRight: 'OS',
+                value: isNativeMode,
+                size: 'small',
+                onChange: (useOS) => {
+                    isNativeMode = useOS;
+                    container.classList.toggle('native-mode', isNativeMode);
+                }
+            });
+            toggle.className += ' sl-color-input-toggle';
+            container.appendChild(toggle);
+            container._toggle = toggle;
+        }
+
+        container.classList.toggle('native-mode', isNativeMode);
+
+        // Store onChange for popup to access
+        container._onChange = (rgb) => {
+            currentRgb = rgb;
+            const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+            swatch.style.background = hex;
+            nativeInput.value = hex;
+            hexDisplay.textContent = hex;
+            if (onChange) onChange(rgb);
+        };
+
+        // Swatch click - open appropriate picker
+        swatch.addEventListener('click', () => {
+            if (isNativeMode) {
+                nativeInput.click();
+            } else {
+                openColorPickerPopup(container, swatch, currentRgb);
+            }
+        });
+
+        // Native input change
+        nativeInput.addEventListener('input', () => {
+            const hex = nativeInput.value;
+            currentRgb = {
+                r: parseInt(hex.substr(1, 2), 16) / 255,
+                g: parseInt(hex.substr(3, 2), 16) / 255,
+                b: parseInt(hex.substr(5, 2), 16) / 255
+            };
+            swatch.style.background = hex;
+            hexDisplay.textContent = hex;
+            if (onChange) onChange(currentRgb);
+        });
+
+        // Public API
+        container.getColor = () => ({ ...currentRgb });
+        container.setColor = (rgb) => {
+            currentRgb = { ...rgb };
+            const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+            swatch.style.background = hex;
+            nativeInput.value = hex;
+            hexDisplay.textContent = hex;
+        };
+        container.isNativeMode = () => isNativeMode;
+        container.setNativeMode = (native) => {
+            isNativeMode = native;
+            container.classList.toggle('native-mode', isNativeMode);
+            if (container._toggle) {
+                container._toggle.setValue(native);
+            }
+        };
+
+        return container;
+    }
+
+    // ========================================
+    // TOOLTIP COMPONENT
+    // ========================================
+
+    // Global tooltip element (shared, repositioned as needed)
+    let tooltipElement = null;
+    let tooltipTimeout = null;
+
+    function ensureTooltipElement() {
+        if (tooltipElement) return tooltipElement;
+        
+        tooltipElement = document.createElement('div');
+        tooltipElement.className = 'sl-tooltip';
+        tooltipElement.setAttribute('role', 'tooltip');
+        document.body.appendChild(tooltipElement);
+        
+        return tooltipElement;
+    }
+
+    /**
+     * Attach a tooltip to an element
+     * @param {HTMLElement} element - Element to attach tooltip to
+     * @param {string|Function} content - Tooltip text or function returning text
+     * @param {Object} [options]
+     * @param {string} [options.position='top'] - 'top', 'bottom', 'left', 'right'
+     * @param {number} [options.delay=400] - Show delay in ms
+     */
+    function Tooltip(element, content, options = {}) {
+        const {
+            position = 'top',
+            delay = 400
+        } = options;
+
+        let isShowing = false;
+
+        function show() {
+            const tooltip = ensureTooltipElement();
+            const text = typeof content === 'function' ? content() : content;
+            
+            if (!text) return;
+            
+            tooltip.textContent = text;
+            tooltip.className = `sl-tooltip sl-tooltip-${position} visible`;
+            
+            // Position the tooltip
+            const rect = element.getBoundingClientRect();
+            const tooltipRect = tooltip.getBoundingClientRect();
+            
+            let top, left;
+            
+            switch (position) {
+                case 'top':
+                    top = rect.top - tooltipRect.height - 8;
+                    left = rect.left + (rect.width - tooltipRect.width) / 2;
+                    break;
+                case 'bottom':
+                    top = rect.bottom + 8;
+                    left = rect.left + (rect.width - tooltipRect.width) / 2;
+                    break;
+                case 'left':
+                    top = rect.top + (rect.height - tooltipRect.height) / 2;
+                    left = rect.left - tooltipRect.width - 8;
+                    break;
+                case 'right':
+                    top = rect.top + (rect.height - tooltipRect.height) / 2;
+                    left = rect.right + 8;
+                    break;
+            }
+            
+            // Keep on screen
+            const margin = 8;
+            left = Math.max(margin, Math.min(left, window.innerWidth - tooltipRect.width - margin));
+            top = Math.max(margin, Math.min(top, window.innerHeight - tooltipRect.height - margin));
+            
+            tooltip.style.left = left + 'px';
+            tooltip.style.top = top + 'px';
+            
+            isShowing = true;
+        }
+
+        function hide() {
+            if (tooltipTimeout) {
+                clearTimeout(tooltipTimeout);
+                tooltipTimeout = null;
+            }
+            if (tooltipElement) {
+                tooltipElement.classList.remove('visible');
+            }
+            isShowing = false;
+        }
+
+        function onEnter() {
+            tooltipTimeout = setTimeout(show, delay);
+        }
+
+        function onLeave() {
+            hide();
+        }
+
+        element.addEventListener('mouseenter', onEnter);
+        element.addEventListener('mouseleave', onLeave);
+        element.addEventListener('focus', onEnter);
+        element.addEventListener('blur', onLeave);
+
+        // Return detach function
+        return {
+            update: (newContent) => {
+                content = newContent;
+                if (isShowing) {
+                    show();
+                }
+            },
+            destroy: () => {
+                hide();
+                element.removeEventListener('mouseenter', onEnter);
+                element.removeEventListener('mouseleave', onLeave);
+                element.removeEventListener('focus', onEnter);
+                element.removeEventListener('blur', onLeave);
+            }
+        };
+    }
+
     // ========================================
     // SLIDER COMPONENTS
     // ========================================
@@ -3883,6 +4852,118 @@ const SLUI = (function() {
         return { r, g, b };
     }
     
+    /**
+     * ColorUniform - Single color uniform row (swatch + name + hex)
+     * Click swatch to open picker (SL popup or OS native based on mode)
+     */
+    function ColorUniform(options = {}) {
+        const {
+            name = 'u_color',
+            r = 1.0,
+            g = 0.5,
+            b = 0.2,
+            useNative = false,
+            onChange = null,
+            onNameChange = null
+        } = options;
+
+        let currentName = name;
+        let rgb = { r, g, b };
+        let isNativeMode = useNative;
+
+        const container = document.createElement('div');
+        container.className = 'sl-color-uniform';
+
+        // Color swatch (SL mode)
+        const swatch = document.createElement('div');
+        swatch.className = 'sl-color-uniform-swatch';
+        swatch.style.background = rgbToHex(r, g, b);
+
+        // Native input (OS mode)
+        const nativeInput = document.createElement('input');
+        nativeInput.type = 'color';
+        nativeInput.className = 'sl-color-uniform-native';
+        nativeInput.value = rgbToHex(r, g, b);
+
+        // Name input
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.className = 'sl-color-uniform-label';
+        labelInput.value = currentName;
+        labelInput.addEventListener('blur', () => {
+            currentName = labelInput.value || 'u_color';
+            if (onNameChange) onNameChange(currentName);
+        });
+        labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+        // Hex display
+        const hexDisplay = document.createElement('span');
+        hexDisplay.className = 'sl-color-uniform-hex';
+        hexDisplay.textContent = rgbToHex(r, g, b);
+
+        container.appendChild(swatch);
+        container.appendChild(nativeInput);
+        container.appendChild(labelInput);
+        container.appendChild(hexDisplay);
+
+        // Update visuals
+        function updateVisuals() {
+            const hex = rgbToHex(rgb.r, rgb.g, rgb.b);
+            swatch.style.background = hex;
+            nativeInput.value = hex;
+            hexDisplay.textContent = hex;
+        }
+
+        // Store onChange for popup
+        container._onChange = (newRgb) => {
+            rgb = { ...newRgb };
+            updateVisuals();
+            if (onChange) onChange(rgb, currentName);
+        };
+
+        // Swatch click - open SL popup
+        swatch.addEventListener('click', () => {
+            if (!isNativeMode) {
+                openColorPickerPopup(container, swatch, rgb);
+            }
+        });
+
+        // Native input change
+        nativeInput.addEventListener('input', () => {
+            const hex = nativeInput.value;
+            rgb = {
+                r: parseInt(hex.substr(1, 2), 16) / 255,
+                g: parseInt(hex.substr(3, 2), 16) / 255,
+                b: parseInt(hex.substr(5, 2), 16) / 255
+            };
+            updateVisuals();
+            if (onChange) onChange(rgb, currentName);
+        });
+
+        // Mode control
+        container.setNativeMode = (native) => {
+            isNativeMode = native;
+            container.classList.toggle('native-mode', isNativeMode);
+        };
+        container.classList.toggle('native-mode', isNativeMode);
+
+        // Public API
+        container.getColor = () => ({ ...rgb });
+        container.setColor = (c) => {
+            rgb = { ...c };
+            updateVisuals();
+        };
+        container.getName = () => currentName;
+        container.setName = (n) => {
+            currentName = n;
+            labelInput.value = n;
+        };
+        container.getData = () => ({ name: currentName, r: rgb.r, g: rgb.g, b: rgb.b });
+
+        return container;
+    }
+
+    // Keep old ColorPicker for backwards compatibility (deprecated)
     function ColorPicker(options = {}) {
         const {
             name = 'u_color',
@@ -3893,19 +4974,19 @@ const SLUI = (function() {
             onNameChange = null,
             onRemove = null
         } = options;
-        
+
         let currentName = name;
         let rgb = { r, g, b };
         let hsv = rgbToHsv(r, g, b);
         let isExpanded = false;
-        
+
         const container = document.createElement('div');
         container.className = 'sl-color-picker';
-        
+
         // Header row
         const header = document.createElement('div');
         header.className = 'sl-color-picker-header';
-        
+
         const swatch = document.createElement('div');
         swatch.className = 'sl-color-picker-swatch';
         swatch.addEventListener('click', () => {
@@ -3914,7 +4995,7 @@ const SLUI = (function() {
             toggleBtn.textContent = isExpanded ? '▲' : '▼';
         });
         header.appendChild(swatch);
-        
+
         const labelInput = document.createElement('input');
         labelInput.type = 'text';
         labelInput.className = 'sl-color-picker-label';
@@ -3926,7 +5007,7 @@ const SLUI = (function() {
         labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
         labelInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
         header.appendChild(labelInput);
-        
+
         const hexInput = document.createElement('input');
         hexInput.type = 'text';
         hexInput.className = 'sl-color-picker-hex';
@@ -3942,7 +5023,7 @@ const SLUI = (function() {
             }
         });
         header.appendChild(hexInput);
-        
+
         const toggleBtn = document.createElement('button');
         toggleBtn.className = 'sl-color-picker-toggle';
         toggleBtn.textContent = '▼';
@@ -3953,15 +5034,15 @@ const SLUI = (function() {
             toggleBtn.textContent = isExpanded ? '▲' : '▼';
         });
         header.appendChild(toggleBtn);
-        
+
         container.appendChild(header);
-        
+
         // Sliders container
         const sliders = document.createElement('div');
         sliders.className = 'sl-color-picker-sliders';
-        
+
         const channels = {};
-        
+
         function toHex(v) { return Math.round(v * 255).toString(16).padStart(2, '0'); }
         function rgbToCss(r, g, b) { return '#' + toHex(r) + toHex(g) + toHex(b); }
         
@@ -4420,33 +5501,71 @@ const SLUI = (function() {
     // ========================================
     
     function ColorStack(options = {}) {
-        const { colors = [], addable = true, removable = true, onChange = null, onAdd = null, onRemove = null } = options;
-        
+        const { 
+            colors = [], 
+            addable = true, 
+            removable = true, 
+            useNative = false,
+            showModeToggle = true,
+            onChange = null, 
+            onAdd = null, 
+            onRemove = null 
+        } = options;
+
+        let isNativeMode = useNative;
+
         const container = document.createElement('div');
         container.className = 'sl-color-stack';
-        
-        const colorElements = [];
-        
-        function addColor(config) {
-            const picker = ColorPicker({
-                ...config,
-                onChange: (color, name) => {
-                    if (onChange) onChange(color, name, colorElements.indexOf(picker));
+
+        // Header with mode toggle
+        const header = document.createElement('div');
+        header.className = 'sl-color-stack-header';
+
+        if (showModeToggle) {
+            const modeToggle = SlideToggle({
+                labelLeft: 'SL',
+                labelRight: 'OS',
+                value: isNativeMode,
+                size: 'small',
+                onChange: (useOS) => {
+                    isNativeMode = useOS;
+                    colorElements.forEach(el => el.setNativeMode(useOS));
                 }
             });
-            
+            header.appendChild(modeToggle);
+            container._modeToggle = modeToggle;
+        }
+
+        container.appendChild(header);
+
+        // Colors container
+        const colorsContainer = document.createElement('div');
+        colorsContainer.className = 'sl-color-stack-colors';
+        container.appendChild(colorsContainer);
+
+        const colorElements = [];
+
+        function addColor(config) {
+            const uniform = ColorUniform({
+                ...config,
+                useNative: isNativeMode,
+                onChange: (color, name) => {
+                    if (onChange) onChange(color, name, colorElements.indexOf(uniform));
+                }
+            });
+
             if (removable) {
-                picker.addEventListener('contextmenu', (e) => {
+                uniform.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
-                    if (confirm(`Remove ${picker.getName()}?`)) removeColor(colorElements.indexOf(picker));
+                    if (confirm(`Remove ${uniform.getName()}?`)) removeColor(colorElements.indexOf(uniform));
                 });
             }
-            
-            colorElements.push(picker);
-            container.insertBefore(picker, addBtn);
-            return picker;
+
+            colorElements.push(uniform);
+            colorsContainer.insertBefore(uniform, addBtn);
+            return uniform;
         }
-        
+
         function removeColor(index) {
             if (index < 0 || index >= colorElements.length) return;
             const p = colorElements[index];
@@ -4455,7 +5574,7 @@ const SLUI = (function() {
             colorElements.splice(index, 1);
             if (onRemove) onRemove(d, index);
         }
-        
+
         let addBtn = null;
         if (addable) {
             addBtn = document.createElement('button');
@@ -4466,7 +5585,7 @@ const SLUI = (function() {
                 const n = addColor({ name: `u_color${colorElements.length}`, r: Math.random(), g: Math.random(), b: Math.random() });
                 if (onAdd) onAdd(n.getData());
             });
-            container.appendChild(addBtn);
+            colorsContainer.appendChild(addBtn);
         }
         
         colors.forEach(c => addColor(c));
@@ -4477,6 +5596,14 @@ const SLUI = (function() {
         container.getData = () => colorElements.map(c => c.getData());
         container.setData = (data) => { while (colorElements.length > 0) removeColor(0); data.forEach(c => addColor(c)); };
         container.randomize = () => { colorElements.forEach(c => c.setColor({ r: Math.random(), g: Math.random(), b: Math.random() })); };
+        container.setNativeMode = (native) => {
+            isNativeMode = native;
+            colorElements.forEach(el => el.setNativeMode(native));
+            if (container._modeToggle) {
+                container._modeToggle.setValue(native);
+            }
+        };
+        container.isNativeMode = () => isNativeMode;
         
         return container;
     }
@@ -4868,7 +5995,895 @@ const SLUI = (function() {
         
         return container;
     }
+
+    // ========================================
+    // TABPANE COMPONENT - Advanced draggable tabs
+    // ========================================
+
+    // Global drag state for tab dragging across panes
+    let tabDragState = null;
+
+    function TabPane(options = {}) {
+        const {
+            id = 'tabpane-' + Date.now(),
+            tabs = [],
+            activeTab = null,
+            group = 'default',           // Tab group - only tabs of same group can be combined
+            closable = true,
+            draggable = true,            // Allow tab reordering and drag-out
+            droppable = true,            // Accept tabs from other panes
+            onTabChange = null,
+            onTabClose = null,
+            onTabDragOut = null,         // Called when tab is dragged out (for creating new window)
+            onTabDrop = null,            // Called when tab is dropped from another pane
+            onEmpty = null,              // Called when last tab is closed
+            onSingleTabDrag = null,      // Called when only 1 tab and user drags it (for window dragging)
+            className = ''
+        } = options;
+
+        const container = document.createElement('div');
+        container.className = `sl-tabpane ${className}`.trim();
+        container.dataset.tabpaneId = id;
+        container.dataset.tabGroup = group;
+
+        const tabBar = document.createElement('div');
+        tabBar.className = 'sl-tabpane-bar';
+
+        const tabContent = document.createElement('div');
+        tabContent.className = 'sl-tabpane-content';
+
+        let currentTabs = [...tabs];
+        let activeId = activeTab || (tabs.length > 0 ? tabs[0].id : null);
+
+        // ---- Rendering ----
+
+        function render() {
+            renderTabBar();
+            renderContent();
+        }
+
+        function renderTabBar() {
+            tabBar.innerHTML = '';
+
+            currentTabs.forEach((tab, index) => {
+                const tabEl = document.createElement('div');
+                tabEl.className = 'sl-tabpane-tab';
+                tabEl.dataset.tabId = tab.id;
+                tabEl.dataset.tabIndex = index;
+                if (tab.id === activeId) tabEl.classList.add('active');
+
+                // Icon
+                if (tab.icon) {
+                    const iconEl = document.createElement('span');
+                    iconEl.className = 'sl-tabpane-tab-icon';
+                    if (tab.icon.startsWith('<')) {
+                        iconEl.innerHTML = tab.icon;
+                    } else {
+                        iconEl.textContent = tab.icon;
+                    }
+                    tabEl.appendChild(iconEl);
+                }
+
+                // Label
+                const labelEl = document.createElement('span');
+                labelEl.className = 'sl-tabpane-tab-label';
+                labelEl.textContent = tab.label || tab.id;
+                tabEl.appendChild(labelEl);
+
+                // Close button
+                if (closable && tab.closable !== false) {
+                    const closeBtn = document.createElement('button');
+                    closeBtn.className = 'sl-tabpane-tab-close';
+                    closeBtn.innerHTML = '×';
+                    closeBtn.title = 'Close tab';
+                    closeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        closeTab(tab.id);
+                    });
+                    tabEl.appendChild(closeBtn);
+                }
+
+                // Click to activate
+                tabEl.addEventListener('click', (e) => {
+                    if (!e.target.closest('.sl-tabpane-tab-close')) {
+                        setActiveTab(tab.id);
+                    }
+                });
+
+                // Drag support (desktop only)
+                if (draggable && state.deviceMode !== 'mobile') {
+                    setupTabDrag(tabEl, tab, index);
+                }
+
+                tabBar.appendChild(tabEl);
+            });
+
+            // Drop zone indicator (between tabs and at end)
+            if (droppable && state.deviceMode !== 'mobile') {
+                setupTabBarDrop();
+            }
+        }
+
+        function renderContent() {
+            tabContent.innerHTML = '';
+            const activeTabData = currentTabs.find(t => t.id === activeId);
+            
+            if (activeTabData) {
+                const panel = document.createElement('div');
+                panel.className = 'sl-tabpane-panel';
+                panel.dataset.tabId = activeTabData.id;
+
+                if (activeTabData.content) {
+                    if (typeof activeTabData.content === 'function') {
+                        const content = activeTabData.content();
+                        if (typeof content === 'string') {
+                            panel.innerHTML = content;
+                        } else if (content) {
+                            panel.appendChild(content);
+                        }
+                    } else if (typeof activeTabData.content === 'string') {
+                        panel.innerHTML = activeTabData.content;
+                    } else {
+                        panel.appendChild(activeTabData.content);
+                    }
+                }
+
+                tabContent.appendChild(panel);
+            }
+        }
+
+        // ---- Tab Drag & Drop ----
+
+        function setupTabDrag(tabEl, tab, index) {
+            let isDragging = false;
+            let startX, startY;
+            let dragThreshold = 5;
+            let hasMoved = false;
+            let handedOffToWindow = false;
+
+            tabEl.addEventListener('pointerdown', (e) => {
+                if (e.target.closest('.sl-tabpane-tab-close')) return;
+                if (e.button !== 0) return;
+
+                isDragging = true;
+                hasMoved = false;
+                handedOffToWindow = false;
+                startX = e.clientX;
+                startY = e.clientY;
+
+                tabEl.setPointerCapture(e.pointerId);
+                e.preventDefault();
+            });
+
+            tabEl.addEventListener('pointermove', (e) => {
+                if (!isDragging || handedOffToWindow) return;
+
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+
+                if (!hasMoved && (Math.abs(dx) > dragThreshold || Math.abs(dy) > dragThreshold)) {
+                    hasMoved = true;
+
+                    // If only 1 tab and we have a window drag handler, use that instead
+                    if (currentTabs.length === 1 && onSingleTabDrag) {
+                        handedOffToWindow = true;
+                        tabEl.releasePointerCapture(e.pointerId);
+                        // Pass the pointerId so the window drag can capture it
+                        onSingleTabDrag(e, tab, e.pointerId);
+                        return;
+                    }
+
+                    startTabDrag(tab, e.clientX, e.clientY);
+                }
+
+                if (hasMoved && tabDragState) {
+                    updateTabDrag(e.clientX, e.clientY);
+                }
+            });
+
+            tabEl.addEventListener('pointerup', (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+                if (!handedOffToWindow) {
+                    tabEl.releasePointerCapture(e.pointerId);
+                }
+
+                if (hasMoved && tabDragState) {
+                    endTabDrag(e.clientX, e.clientY);
+                }
+            });
+
+            tabEl.addEventListener('pointercancel', (e) => {
+                if (!isDragging) return;
+                isDragging = false;
+                if (!handedOffToWindow) {
+                    cancelTabDrag();
+                }
+            });
+        }
+
+        function startTabDrag(tab, x, y) {
+            // Create ghost element
+            const ghost = document.createElement('div');
+            ghost.className = 'sl-tabpane-drag-ghost';
+            ghost.innerHTML = `<span class="sl-tabpane-tab-icon">${tab.icon || ''}</span><span>${tab.label || tab.id}</span>`;
+            ghost.style.left = x + 'px';
+            ghost.style.top = y + 'px';
+            document.body.appendChild(ghost);
+
+            tabDragState = {
+                tab,
+                sourcePane: container,
+                sourcePaneId: id,
+                sourceGroup: group,
+                ghost,
+                startX: x,
+                startY: y
+            };
+
+            container.classList.add('dragging-tab');
+            document.body.classList.add('sl-tab-dragging');
+        }
+
+        function updateTabDrag(x, y) {
+            if (!tabDragState || !tabDragState.ghost) return;
+
+            tabDragState.ghost.style.left = x + 'px';
+            tabDragState.ghost.style.top = y + 'px';
+
+            // Find drop target
+            const target = findDropTarget(x, y);
+            clearDropIndicators();
+
+            if (target) {
+                showDropIndicator(target);
+            }
+        }
+
+        function endTabDrag(x, y) {
+            if (!tabDragState) return;
+
+            const target = findDropTarget(x, y);
+            clearDropIndicators();
+
+            if (target) {
+                handleTabDrop(target);
+            } else {
+                // Dragged outside all panes
+                if (onTabDragOut) {
+                    // Only remove tab if callback is provided (meaning something will handle it)
+                    const tab = tabDragState.tab;
+                    onTabDragOut(tab, x, y);
+                    // Pass true to trigger onEmpty if this was the last tab
+                    removeTab(tab.id, true);
+                }
+                // If no onTabDragOut callback, just cancel the drag (tab stays)
+            }
+
+            cleanupTabDrag();
+        }
+
+        function cancelTabDrag() {
+            clearDropIndicators();
+            cleanupTabDrag();
+        }
+
+        function cleanupTabDrag() {
+            if (tabDragState && tabDragState.ghost) {
+                tabDragState.ghost.remove();
+            }
+            container.classList.remove('dragging-tab');
+            document.body.classList.remove('sl-tab-dragging');
+            tabDragState = null;
+        }
+
+        function findDropTarget(x, y) {
+            const panes = document.querySelectorAll('.sl-tabpane');
+            
+            for (const pane of panes) {
+                if (!pane.dataset.tabGroup) continue;
+                
+                // Check group compatibility
+                if (tabDragState && pane.dataset.tabGroup !== tabDragState.sourceGroup) continue;
+
+                const bar = pane.querySelector('.sl-tabpane-bar');
+                if (!bar) continue;
+
+                const barRect = bar.getBoundingClientRect();
+                
+                // Check if over the tab bar
+                if (x >= barRect.left && x <= barRect.right && 
+                    y >= barRect.top && y <= barRect.bottom) {
+                    
+                    // Find insertion position
+                    const tabs = bar.querySelectorAll('.sl-tabpane-tab');
+                    let insertIndex = tabs.length;
+                    
+                    for (let i = 0; i < tabs.length; i++) {
+                        const tabRect = tabs[i].getBoundingClientRect();
+                        const midX = tabRect.left + tabRect.width / 2;
+                        
+                        if (x < midX) {
+                            insertIndex = i;
+                            break;
+                        }
+                    }
+
+                    return {
+                        pane,
+                        paneId: pane.dataset.tabpaneId,
+                        insertIndex,
+                        isOwnPane: pane === container
+                    };
+                }
+            }
+
+            return null;
+        }
+
+        function showDropIndicator(target) {
+            const bar = target.pane.querySelector('.sl-tabpane-bar');
+            if (!bar) return;
+
+            // Create or update indicator
+            let indicator = bar.querySelector('.sl-tabpane-drop-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.className = 'sl-tabpane-drop-indicator';
+                bar.appendChild(indicator);
+            }
+
+            const tabs = bar.querySelectorAll('.sl-tabpane-tab');
+            
+            if (tabs.length === 0 || target.insertIndex >= tabs.length) {
+                // At end
+                const lastTab = tabs[tabs.length - 1];
+                if (lastTab) {
+                    const rect = lastTab.getBoundingClientRect();
+                    const barRect = bar.getBoundingClientRect();
+                    indicator.style.left = (rect.right - barRect.left) + 'px';
+                } else {
+                    indicator.style.left = '0px';
+                }
+            } else {
+                // Before a tab
+                const tabRect = tabs[target.insertIndex].getBoundingClientRect();
+                const barRect = bar.getBoundingClientRect();
+                indicator.style.left = (tabRect.left - barRect.left) + 'px';
+            }
+
+            indicator.classList.add('visible');
+            target.pane.classList.add('drop-target');
+        }
+
+        function clearDropIndicators() {
+            document.querySelectorAll('.sl-tabpane-drop-indicator').forEach(el => {
+                el.classList.remove('visible');
+            });
+            document.querySelectorAll('.sl-tabpane.drop-target').forEach(el => {
+                el.classList.remove('drop-target');
+            });
+        }
+
+        function handleTabDrop(target) {
+            if (!tabDragState) return;
+
+            const tab = tabDragState.tab;
+            const sourcePane = tabDragState.sourcePane;
+            const targetPane = target.pane;
+
+            if (sourcePane === targetPane) {
+                // Reorder within same pane
+                reorderTab(tab.id, target.insertIndex);
+            } else {
+                // Move to different pane
+                if (sourcePane.removeTab) {
+                    // Pass true to trigger onEmpty if this was the last tab
+                    sourcePane.removeTab(tab.id, true);
+                }
+                if (targetPane.insertTab) {
+                    targetPane.insertTab(tab, target.insertIndex);
+                }
+                if (onTabDrop) {
+                    onTabDrop(tab, target.paneId);
+                }
+            }
+        }
+
+        function setupTabBarDrop() {
+            // The drop handling is done globally during drag
+            // This just marks the bar as a drop target
+            tabBar.dataset.droppable = 'true';
+        }
+
+        // ---- Tab Management ----
+
+        function setActiveTab(tabId) {
+            if (!currentTabs.find(t => t.id === tabId)) return;
+            const prevId = activeId;
+            activeId = tabId;
+
+            tabBar.querySelectorAll('.sl-tabpane-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.tabId === tabId);
+            });
+
+            renderContent();
+            if (onTabChange && prevId !== tabId) onTabChange(tabId, prevId);
+        }
+
+        function addTab(tab, activate = true) {
+            currentTabs.push(tab);
+            render();
+            if (activate) setActiveTab(tab.id);
+            return tab.id;
+        }
+
+        function insertTab(tab, index, activate = true) {
+            index = Math.max(0, Math.min(index, currentTabs.length));
+            currentTabs.splice(index, 0, tab);
+            render();
+            if (activate) setActiveTab(tab.id);
+            return tab.id;
+        }
+
+        function removeTab(tabId, triggerEmpty = true) {
+            const index = currentTabs.findIndex(t => t.id === tabId);
+            if (index === -1) return;
+
+            currentTabs.splice(index, 1);
+
+            if (activeId === tabId && currentTabs.length > 0) {
+                const newIndex = Math.min(index, currentTabs.length - 1);
+                activeId = currentTabs[newIndex].id;
+            } else if (currentTabs.length === 0) {
+                activeId = null;
+                if (triggerEmpty && onEmpty) onEmpty();
+            }
+
+            render();
+        }
+
+        function closeTab(tabId) {
+            if (onTabClose) {
+                const result = onTabClose(tabId);
+                if (result === false) return;
+            }
+            removeTab(tabId, true);
+        }
+
+        function reorderTab(tabId, newIndex) {
+            const oldIndex = currentTabs.findIndex(t => t.id === tabId);
+            if (oldIndex === -1 || oldIndex === newIndex) return;
+
+            const [tab] = currentTabs.splice(oldIndex, 1);
+            // Adjust index if moving forward
+            if (newIndex > oldIndex) newIndex--;
+            newIndex = Math.max(0, Math.min(newIndex, currentTabs.length));
+            currentTabs.splice(newIndex, 0, tab);
+
+            render();
+        }
+
+        function updateTab(tabId, updates) {
+            const tab = currentTabs.find(t => t.id === tabId);
+            if (tab) {
+                Object.assign(tab, updates);
+                render();
+            }
+        }
+
+        function getTab(tabId) {
+            return currentTabs.find(t => t.id === tabId);
+        }
+
+        // ---- Initialize ----
+
+        container.appendChild(tabBar);
+        container.appendChild(tabContent);
+        render();
+
+        // Public API
+        container.setActiveTab = setActiveTab;
+        container.addTab = addTab;
+        container.insertTab = insertTab;
+        container.removeTab = removeTab;
+        container.closeTab = closeTab;
+        container.reorderTab = reorderTab;
+        container.updateTab = updateTab;
+        container.getTab = getTab;
+        container.getTabs = () => [...currentTabs];
+        container.getActiveTab = () => activeId;
+        container.getGroup = () => group;
+        container.getId = () => id;
+        container.render = render;
+
+        return container;
+    }
+
+    // ========================================
+    // TABBED WINDOW - Window with integrated TabPane
+    // ========================================
+
+    // Registry of tabbed windows for cross-window tab dropping
+    const tabbedWindows = new Map();
     
+    // Get all window IDs that belong to a tab group
+    function getWindowsByTabGroup(group) {
+        const result = [];
+        for (const [windowId, data] of tabbedWindows) {
+            if (data.group === group) {
+                result.push(windowId);
+            }
+        }
+        return result;
+    }
+
+    function createTabbedWindow(options = {}) {
+        const {
+            id = 'tabwin-' + Date.now(),
+            title = null,                // If null, uses active tab label
+            icon = null,                 // If null, uses active tab icon
+            x = 100,
+            y = 100,
+            width = 450,
+            height = 350,
+            minWidth = 200,
+            minHeight = 150,
+            group = 'default',
+            tabs = [],
+            activeTab = null,
+            closable = true,
+            onWindowClose = null
+        } = options;
+
+        // Don't create windows in mobile mode
+        if (state.deviceMode === 'mobile') return null;
+
+        // Create window container first (needed for single-tab drag)
+        const container = document.createElement('div');
+        container.className = 'sl-window-container sl-tabbed-window';
+        container.id = `sl-window-container-${id}`;
+        container.dataset.windowId = id;
+        container.dataset.tabGroup = group;
+        container.style.left = `${x}px`;
+        container.style.top = `${y}px`;
+        container.style.width = `${width}px`;
+        container.style.height = `${height}px`;
+        container.style.minWidth = `${minWidth}px`;
+        container.style.minHeight = `${minHeight}px`;
+
+        // Frame
+        const frame = document.createElement('div');
+        frame.className = 'sl-window-frame';
+        container.appendChild(frame);
+
+        // Window element
+        const win = document.createElement('div');
+        win.className = 'sl-window';
+        win.id = `sl-window-${id}`;
+        win.dataset.windowId = id;
+
+        // Body
+        const body = document.createElement('div');
+        body.className = 'sl-window-body sl-tabbed-window-body';
+
+        // Window controls
+        const controls = document.createElement('div');
+        controls.className = 'sl-window-controls';
+
+        const dockBtn = document.createElement('button');
+        dockBtn.className = 'sl-window-ctrl-btn dock';
+        dockBtn.innerHTML = '↘';
+        dockBtn.title = 'Dock';
+        dockBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dockWindow(id, 'right');
+        });
+        controls.appendChild(dockBtn);
+
+        const undockBtn = document.createElement('button');
+        undockBtn.className = 'sl-window-ctrl-btn undock';
+        undockBtn.innerHTML = '↗';
+        undockBtn.title = 'Undock';
+        undockBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            undockWindow(id);
+        });
+        controls.appendChild(undockBtn);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'sl-window-ctrl-btn close';
+        closeBtn.innerHTML = '×';
+        closeBtn.title = t('window.close');
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeTabbedWindow(id);
+        });
+        controls.appendChild(closeBtn);
+
+        body.appendChild(controls);
+
+        // Create the TabPane (after container so we can reference it)
+        const tabPane = TabPane({
+            id: id + '-pane',
+            group,
+            tabs,
+            activeTab,
+            closable,
+            draggable: true,
+            droppable: true,
+            onTabChange: (tabId) => {
+                updateWindowTitle();
+            },
+            onTabClose: (tabId) => {
+                // Tab is being closed
+            },
+            onTabDragOut: (tab, dragX, dragY) => {
+                // Create a new window with this tab
+                const newWin = createTabbedWindow({
+                    group,
+                    tabs: [tab],
+                    activeTab: tab.id,
+                    x: dragX - 100,
+                    y: dragY - 20,
+                    width,
+                    height
+                });
+                if (newWin) {
+                    const floatLayer = document.getElementById('sl-float-layer');
+                    if (floatLayer) {
+                        floatLayer.appendChild(newWin);
+                    }
+                    bringToFront(newWin.dataset.windowId);
+                }
+            },
+            onEmpty: () => {
+                // Close the window when all tabs are closed
+                closeTabbedWindow(id);
+            },
+            onSingleTabDrag: (e, tab, pointerId) => {
+                // Only 1 tab - drag the whole window instead
+                // Start window drag with tab-merge capability
+                startTabbedWindowDrag(container, frame, e, tabPane, pointerId);
+            }
+        });
+
+        // Content area contains the TabPane
+        const contentEl = document.createElement('div');
+        contentEl.className = 'sl-window-content sl-tabbed-window-content';
+        contentEl.appendChild(tabPane);
+        body.appendChild(contentEl);
+
+        // Resize handles (corners only - edges are for move)
+        ['nw', 'ne', 'sw', 'se'].forEach(dir => {
+            const handle = document.createElement('div');
+            handle.className = `sl-resize-handle ${dir}`;
+            handle.dataset.direction = dir;
+            body.appendChild(handle);
+        });
+
+        win.appendChild(body);
+        container.appendChild(win);
+
+        // Update window title from active tab
+        function updateWindowTitle() {
+            const activeTabData = tabPane.getTab(tabPane.getActiveTab());
+            // Could update a title bar here if we add one
+            // For now, tabbed windows show tabs instead of title
+        }
+
+        // Setup interactions (reuse existing functions)
+        setupWindowControlsHover(body, controls);
+        setupFrameHover(container, body, frame);
+        setupWindowDrag(container, frame);
+        setupWindowResize(container, body);
+        setupWindowFocus(container);
+
+        // Setup tab drop zone on the tab bar
+        setupWindowTabDrop(container, tabPane);
+
+        // Store in windows and tabbedWindows registries
+        state.windows.set(id, {
+            element: container,
+            window: win,
+            body: body,
+            frame: frame,
+            controls: controls,
+            options: { ...options, id },
+            visible: true
+        });
+
+        tabbedWindows.set(id, {
+            container,
+            tabPane,
+            group
+        });
+
+        bringToFront(id);
+
+        // Attach API to container
+        container.getTabPane = () => tabPane;
+        container.addTab = (tab, activate) => tabPane.addTab(tab, activate);
+        container.removeTab = (tabId) => tabPane.removeTab(tabId);
+        container.getTabs = () => tabPane.getTabs();
+        container.getActiveTab = () => tabPane.getActiveTab();
+        container.setActiveTab = (tabId) => tabPane.setActiveTab(tabId);
+
+        return container;
+    }
+
+    function closeTabbedWindow(id) {
+        const windowData = state.windows.get(id);
+        if (!windowData) return;
+        
+        // If docked, remove from dock tree first
+        if (state.dockedWindows.has(id)) {
+            removeFromDockTree(id);
+            state.dockedWindows.delete(id);
+            renderDockTree();
+        }
+        
+        // Remove element from DOM
+        if (windowData.element) {
+            windowData.element.remove();
+        }
+        
+        // Clean up registries
+        state.windows.delete(id);
+        tabbedWindows.delete(id);
+
+        // Update toolbar if this was a registered panel
+        updateToolbarItem(id, false, false, false);
+    }
+
+    // Start dragging a tabbed window (when only 1 tab, drag from tab bar)
+    // Allows tab-merging when dropped on another window's tab bar
+    function startTabbedWindowDrag(container, frame, startEvent, sourceTabPane, pointerId) {
+        const startX = startEvent.clientX;
+        const startY = startEvent.clientY;
+        const startLeft = container.offsetLeft;
+        const startTop = container.offsetTop;
+        const sourceGroup = sourceTabPane.getGroup();
+
+        container.style.transition = 'none';
+        container.classList.add('dragging');
+        bringToFront(container.dataset.windowId);
+        
+        // Capture pointer on container for reliable tracking
+        if (pointerId !== undefined) {
+            try {
+                container.setPointerCapture(pointerId);
+            } catch (e) {
+                // Pointer capture may fail if pointer was already released
+            }
+        }
+
+        let currentDropTarget = null;
+
+        function onMove(e) {
+            const clientX = e.clientX !== undefined ? e.clientX : startX;
+            const clientY = e.clientY !== undefined ? e.clientY : startY;
+            
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+            container.style.left = `${startLeft + dx}px`;
+            container.style.top = `${startTop + dy}px`;
+
+            // Check for tab bar drop targets (other tabbed windows of same group)
+            currentDropTarget = findTabbedWindowDropTarget(clientX, clientY, container.dataset.windowId, sourceGroup);
+
+            // Show/hide drop indicators
+            document.querySelectorAll('.sl-tabbed-window-body.tab-drop-ready').forEach(el => {
+                el.classList.remove('tab-drop-ready');
+            });
+
+            if (currentDropTarget) {
+                currentDropTarget.body.classList.add('tab-drop-ready');
+            }
+        }
+
+        function cleanup(e) {
+            container.removeEventListener('pointermove', onMove);
+            container.removeEventListener('pointerup', onUp);
+            container.removeEventListener('pointercancel', onUp);
+            
+            if (pointerId !== undefined) {
+                try {
+                    container.releasePointerCapture(pointerId);
+                } catch (e) {
+                    // May already be released
+                }
+            }
+
+            container.style.transition = '';
+            container.classList.remove('dragging');
+
+            // Clear drop indicators
+            document.querySelectorAll('.sl-tabbed-window-body.tab-drop-ready').forEach(el => {
+                el.classList.remove('tab-drop-ready');
+            });
+        }
+
+        function onUp(e) {
+            cleanup(e);
+
+            // If dropped on another window's tab bar, merge tabs
+            if (currentDropTarget) {
+                mergeTabbedWindows(container.dataset.windowId, currentDropTarget.windowId);
+            }
+        }
+
+        // Attach to container since we captured the pointer there
+        container.addEventListener('pointermove', onMove);
+        container.addEventListener('pointerup', onUp);
+        container.addEventListener('pointercancel', onUp);
+    }
+    
+    // Find if cursor is over another tabbed window's tab bar
+    function findTabbedWindowDropTarget(x, y, excludeWindowId, requiredGroup) {
+        for (const [windowId, data] of tabbedWindows) {
+            if (windowId === excludeWindowId) continue;
+            if (data.group !== requiredGroup) continue;
+            
+            const tabBar = data.tabPane.querySelector('.sl-tabpane-bar');
+            if (!tabBar) continue;
+            
+            const rect = tabBar.getBoundingClientRect();
+            if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                return {
+                    windowId,
+                    tabPane: data.tabPane,
+                    body: data.container.querySelector('.sl-window-body')
+                };
+            }
+        }
+        return null;
+    }
+    
+    // Merge all tabs from source window into target window, then close source
+    function mergeTabbedWindows(sourceWindowId, targetWindowId) {
+        const sourceData = tabbedWindows.get(sourceWindowId);
+        const targetData = tabbedWindows.get(targetWindowId);
+        
+        if (!sourceData || !targetData) return;
+        
+        // Move all tabs from source to target
+        const sourceTabs = sourceData.tabPane.getTabs();
+        for (const tab of sourceTabs) {
+            targetData.tabPane.addTab(tab, false);
+        }
+        
+        // Activate the first moved tab
+        if (sourceTabs.length > 0) {
+            targetData.tabPane.setActiveTab(sourceTabs[0].id);
+        }
+        
+        // Close the source window
+        closeTabbedWindow(sourceWindowId);
+        
+        // Bring target to front
+        bringToFront(targetWindowId);
+    }
+
+    // Setup drop zone on window's tab bar for receiving tabs from other windows
+    function setupWindowTabDrop(container, tabPane) {
+        // The tabPane bar is already a drop target via TabPane's internal logic
+        // This extends detection to the window body during drag
+        const body = container.querySelector('.sl-window-body');
+        if (!body) return;
+
+        // Add a visual indicator when a tab can be dropped
+        body.addEventListener('mouseenter', () => {
+            if (tabDragState && tabDragState.sourceGroup === tabPane.getGroup()) {
+                body.classList.add('tab-drop-ready');
+            }
+        });
+
+        body.addEventListener('mouseleave', () => {
+            body.classList.remove('tab-drop-ready');
+        });
+    }
+
     // ========================================
     // PUBLIC API
     // ========================================
@@ -4937,11 +6952,28 @@ const SLUI = (function() {
         IntStack,
         UniformPanel,
         ColorPicker,
+        ColorUniform,
         ColorStack,
         Vec3Picker,
         Vec3Stack,
         PresetManager,
         Tabs,
+        TabPane,
+        
+        // Buttons
+        Button,
+        ToggleButton,
+        SlideToggle,
+
+        // Color
+        ColorInput,
+
+        // Tooltip
+        Tooltip,
+
+        // Tabbed Windows
+        createTabbedWindow,
+        closeTabbedWindow,
 
         // State access
         get state() { return state; }
