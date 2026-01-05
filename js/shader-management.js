@@ -518,15 +518,26 @@ export async function saveOwnedShader() {
     };
     
     // Collect code from editors using tab config
+    // NOTE: Tabs that share the same editor (e.g., all GLSL tabs share graphicsEditor)
+    // must use tabCodeCache, not editor.getValue(), because editor contains the
+    // currently-visible tab's code only.
     state.activeTabs.forEach(tabName => {
         if (tabName === 'boilerplate') return;
         
         const tabInfo = getTabConfig(tabName);
-        const editor = tabInfo ? getEditorForTab(tabName, state) : null;
-        if (editor && tabInfo) {
-            shaderData.code[tabInfo.dbKey] = editor.getValue();
-        } else if (isBufferChannel(tabName)) {
+        
+        // Buffer channels and GLSL tabs that share graphics editor use cache
+        if (isBufferChannel(tabName)) {
             shaderData.code[tabName] = state.tabCodeCache[tabName] ?? '';
+        } else if (tabInfo && tabInfo.editor === 'graphics') {
+            // All GLSL tabs share the graphics editor - use cached code
+            shaderData.code[tabInfo.dbKey] = state.tabCodeCache[tabName] ?? '';
+        } else {
+            // Other tabs (audio, js, common) have their own editors
+            const editor = tabInfo ? getEditorForTab(tabName, state) : null;
+            if (editor && tabInfo) {
+                shaderData.code[tabInfo.dbKey] = editor.getValue();
+            }
         }
     });
     
@@ -619,15 +630,26 @@ export async function saveShaderInline() {
     }
     
     // Collect code from editors using tab config
+    // NOTE: Tabs that share the same editor (e.g., all GLSL tabs share graphicsEditor)
+    // must use tabCodeCache, not editor.getValue(), because editor contains the
+    // currently-visible tab's code only.
     state.activeTabs.forEach(tabName => {
         if (tabName === 'boilerplate') return;
         
         const tabInfo = getTabConfig(tabName);
-        const editor = tabInfo ? getEditorForTab(tabName, state) : null;
-        if (editor && tabInfo) {
-            shaderData.code[tabInfo.dbKey] = editor.getValue();
-        } else if (isBufferChannel(tabName)) {
+        
+        // Buffer channels and GLSL tabs that share graphics editor use cache
+        if (isBufferChannel(tabName)) {
             shaderData.code[tabName] = state.tabCodeCache[tabName] ?? '';
+        } else if (tabInfo && tabInfo.editor === 'graphics') {
+            // All GLSL tabs share the graphics editor - use cached code
+            shaderData.code[tabInfo.dbKey] = state.tabCodeCache[tabName] ?? '';
+        } else {
+            // Other tabs (audio, js, common) have their own editors
+            const editor = tabInfo ? getEditorForTab(tabName, state) : null;
+            if (editor && tabInfo) {
+                shaderData.code[tabInfo.dbKey] = editor.getValue();
+            }
         }
     });
     
