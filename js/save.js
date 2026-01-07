@@ -28,6 +28,42 @@ export function captureThumbnail() {
 }
 
 // ============================================================================
+// Gallery Helpers
+// ============================================================================
+
+/**
+ * Extract Genuary number from title for sorting
+ * Handles formats like "Genuary #1", "Genuary #10", "Genuary 2025 #5", etc.
+ * @param {string} title - Shader title
+ * @returns {number} - The number after #, or Infinity if not found
+ */
+function extractGenuaryNumber(title) {
+    if (!title) return Infinity;
+    // Match # followed by digits
+    const match = title.match(/#(\d+)/);
+    return match ? parseInt(match[1], 10) : Infinity;
+}
+
+/**
+ * Sort Genuary shaders by their number (Genuary #1, #2, ... #10, etc.)
+ * When numbers are equal, sort alphabetically so "Genuary #1" comes before "Genuary #1 v2"
+ * @param {Array} shaders - Array of shader objects
+ * @returns {Array} - Sorted array
+ */
+function sortGenuaryShaders(shaders) {
+    return [...shaders].sort((a, b) => {
+        const numA = extractGenuaryNumber(a.title);
+        const numB = extractGenuaryNumber(b.title);
+        // First sort by number
+        if (numA !== numB) {
+            return numA - numB;
+        }
+        // If same number, sort alphabetically (shorter/simpler titles first)
+        return (a.title || '').localeCompare(b.title || '');
+    });
+}
+
+// ============================================================================
 // Gallery Population
 // ============================================================================
 
@@ -119,8 +155,10 @@ export async function populateGallery(tab = currentGalleryTab, forceRefresh = fa
         if (tab === 'genuary') {
             const result = await backend.loadGenuaryShaders();
             if (result.success && result.shaders.length > 0) {
-                galleryCache.genuary = result.shaders;
-                result.shaders.forEach(shader => {
+                // Sort by Genuary number (#1, #2, ... #10, etc.)
+                const sortedShaders = sortGenuaryShaders(result.shaders);
+                galleryCache.genuary = sortedShaders;
+                sortedShaders.forEach(shader => {
                     const item = createGalleryItem(shader, false);
                     if (item) galleryContent.appendChild(item);
                 });
