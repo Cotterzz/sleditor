@@ -1,0 +1,463 @@
+Question - i have a single texture I want to share with a multi buffer shader in webgl.
+what are my options if:
+a - its the same exact texture.
+b - its the same but with different filter settings for each pass eg mipmap, linear, nearest?
+
+Answer
+
+Sharing Textures Across Multiple Passes in WebGL
+Option A: Same Exact Texture
+You have several options:
+
+1. Simply rebind the same texture (Simplest)
+javascript
+// Pass 1
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_2D, sharedTexture);
+gl.useProgram(programA);
+gl.uniform1i(uTextureLocA, 0);
+// draw...
+
+// Pass 2
+gl.useProgram(programB);
+gl.uniform1i(uTextureLocB, 0); // Same texture unit, same texture
+// draw...
+2. Bind once, use across passes
+javascript
+// Bind once at setup
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_2D, sharedTexture);
+
+// Both programs reference unit 0
+gl.useProgram(programA);
+gl.uniform1i(uTextureLocA, 0);
+// draw...
+
+gl.useProgram(programB);
+gl.uniform1i(uTextureLocB, 0);
+// draw...
+Option B: Same Texture, Different Filter Settings
+1. Use Samplers (WebGL2 only) ✅ Best approach
+javascript
+// Create samplers with different settings
+const samplerLinear = gl.createSampler();
+gl.samplerParameteri(samplerLinear, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+gl.samplerParameteri(samplerLinear, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+const samplerNearest = gl.createSampler();
+gl.samplerParameteri(samplerNearest, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.samplerParameteri(samplerNearest, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+// Render passes - same texture, different samplers
+// Pass 1: Linear filtering
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_2D, sharedTexture);
+gl.bindSampler(0, samplerLinear);
+// draw...
+
+// Pass 2: Nearest filtering
+gl.bindSampler(0, samplerNearest);
+// draw...
+
+// Cleanup: unbind sampler to restore texture's own parameters
+gl.bindSampler(0, null);
+2. Change texture parameters between passes (WebGL1 & 2)
+javascript
+// Pass 1: Mipmap filtering
+gl.bindTexture(gl.TEXTURE_2D, sharedTexture);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+// draw...
+
+// Pass 2: Nearest filtering
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+// draw...
+⚠️ Downside: State changes have some overhead
+
+3. Create texture "views" (Duplicate texture objects)
+javascript
+// Create two texture objects pointing to same data
+const textureLinear = createTexture(imageData, gl.LINEAR_MIPMAP_LINEAR);
+const textureNearest = createTexture(imageData, gl.NEAREST);
+
+// Use different textures per pass
+⚠️ Downside: Doubles VRAM usage
+
+Summary Table
+Scenario	WebGL1	WebGL2
+Same texture, same filters	Rebind or keep bound	Same
+Same texture, different filters	Change texParameteri or duplicate	Use Samplers ✅
+Recommendation: If you're on WebGL2 and need different filter modes, samplers are the cleanest solution — they decouple filtering state from the texture object.
+
+Question 2
+
+Ok, so it's webGL2 only.
+I want to look at the difference between texture views and samplers - for supplying multiple passes with the same texture but different filter options.
+And - if the texture is another buffer - is mipmap every frame possible?
+
+Answer A 
+WebGL2: Texture Views vs Samplers + Dynamic Mipmaps
+Samplers vs "Texture Views" Comparison
+Samplers (WebGL2) ✅ Recommended
+javascript
+// Setup: One texture, multiple samplers
+const texture = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, texture);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+const samplerLinear = gl.createSampler();
+gl.samplerParameteri(samplerLinear, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+gl.samplerParameteri(samplerLinear, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+const samplerNearest = gl.createSampler();
+gl.samplerParameteri(samplerNearest, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.samplerParameteri(samplerNearest, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+
+// Usage per pass
+gl.bindTexture(gl.TEXTURE_2D, texture);
+gl.bindSampler(0, samplerLinear);  // Pass 1
+// draw...
+gl.bindSampler(0, samplerNearest); // Pass 2
+// draw...
+"Texture Views" (Not true views, just duplicates)
+javascript
+// WebGL2 doesn't have true texture views like OpenGL 4.3
+// You'd need to duplicate the texture with different parameters
+const textureLinear = gl.createTexture();
+const textureNearest = gl.createTexture();
+// Upload same data twice - wasteful!
+Note: WebGL2 does NOT have glTextureView from OpenGL. You cannot create multiple texture objects sharing the same memory.
+
+Dynamic Mipmaps from Render-to-Texture
+Yes, you can generate mipmaps every frame!
+javascript
+class DynamicMipmapTexture {
+    constructor(gl, width, height) {
+        this.gl = gl;
+        this.width = width;
+        this.height = height;
+        
+        // Create texture for rendering
+        this.texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, this.texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, 
+                      gl.RGBA, gl.UNSIGNED_BYTE, null);
+        
+        // Must set these BEFORE generating mipmaps
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        
+        // Create framebuffer for rendering
+        this.fbo = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, 
+                                gl.TEXTURE_2D, this.texture, 0);
+    }
+    
+    renderAndGenerateMipmaps(renderCallback) {
+        const gl = this.gl;
+        
+        // 1. Render to texture
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+        gl.viewport(0, 0, this.width, this.height);
+        renderCallback(); // Your scene rendering
+        
+        // 2. Generate mipmaps from rendered content
+        gl.bindTexture(gl.TEXTURE_2D, this.texture);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        
+        // 3. Back to screen
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+}
+
+// Per frame usage
+const dynamicTexture = new DynamicMipmapTexture(gl, 512, 512);
+
+function render() {
+    // Render scene to texture and generate mipmaps
+    dynamicTexture.renderAndGenerateMipmaps(() => {
+        // Draw your scene here
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        // ...
+    });
+    
+    // Now use texture with mipmaps in multiple passes
+    gl.bindTexture(gl.TEXTURE_2D, dynamicTexture.texture);
+    
+    // Pass 1: With mipmaps
+    gl.bindSampler(0, samplerWithMipmaps);
+    // draw...
+    
+    // Pass 2: Without mipmaps (NEAREST)
+    gl.bindSampler(0, samplerNoMipmaps);
+    // draw...
+    
+    requestAnimationFrame(render);
+}
+Performance Considerations
+Mipmap Generation Cost
+javascript
+// Timing example
+const startTime = performance.now();
+gl.generateMipmap(gl.TEXTURE_2D);
+const elapsed = performance.now() - startTime;
+console.log(`Mipmap generation: ${elapsed}ms`);
+Typical costs (rough estimates):
+
+256×256: ~0.1ms
+512×512: ~0.3ms
+1024×1024: ~1ms
+2048×2048: ~3-5ms
+Optimization Strategies
+Selective mipmap updates
+javascript
+// Only regenerate if content changed significantly
+if (this.contentChanged) {
+    gl.generateMipmap(gl.TEXTURE_2D);
+    this.contentChanged = false;
+}
+Lower resolution for effects
+javascript
+// Use smaller buffer for post-processing
+const effectBuffer = new DynamicMipmapTexture(gl, 256, 256); // Faster
+Manual mipmap levels (Advanced)
+javascript
+// Generate only specific levels if needed
+for (let level = 1; level <= maxLevel; level++) {
+    // Render to specific mipmap level
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, 
+                            gl.TEXTURE_2D, texture, level);
+    // Custom downsampling shader
+}
+Summary
+Feature	Samplers	"Texture Views" (Duplicates)
+Memory usage	1× texture ✅	2× texture ❌
+Filter switching	Fast (bind sampler)	Fast (bind texture)
+WebGL2 required	Yes	No
+True view (shared memory)	N/A	Not available in WebGL
+For dynamic mipmaps: Yes, gl.generateMipmap() works on render-to-texture buffers and is fast enough for real-time use at reasonable resolutions. Use samplers to switch between filtered/unfiltered views of the same dynamic texture.
+
+Answer B
+Texture Views vs Samplers in WebGL2
+Comparison
+javascript
+// ============================================
+// APPROACH 1: Duplicate Texture "Views"
+// ============================================
+function createTextureWithFilters(gl, source, minFilter, magFilter) {
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, minFilter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, magFilter);
+    if (minFilter >= gl.NEAREST_MIPMAP_NEAREST) {
+        gl.generateMipmap(gl.TEXTURE_2D);
+    }
+    return texture;
+}
+
+// Creates TWO textures in VRAM
+const texLinear = createTextureWithFilters(gl, image, gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
+const texNearest = createTextureWithFilters(gl, image, gl.NEAREST, gl.NEAREST);
+
+// Render
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_2D, texLinear);
+// draw pass 1...
+
+gl.bindTexture(gl.TEXTURE_2D, texNearest);
+// draw pass 2...
+
+
+// ============================================
+// APPROACH 2: Samplers (Single Texture)
+// ============================================
+function createSampler(gl, minFilter, magFilter) {
+    const sampler = gl.createSampler();
+    gl.samplerParameteri(sampler, gl.TEXTURE_MIN_FILTER, minFilter);
+    gl.samplerParameteri(sampler, gl.TEXTURE_MAG_FILTER, magFilter);
+    gl.samplerParameteri(sampler, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.samplerParameteri(sampler, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return sampler;
+}
+
+// Single texture in VRAM
+const texture = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, texture);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+gl.generateMipmap(gl.TEXTURE_2D);
+
+// Lightweight sampler objects
+const samplerLinear = createSampler(gl, gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
+const samplerNearest = createSampler(gl, gl.NEAREST, gl.NEAREST);
+
+// Render
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_2D, texture);
+
+gl.bindSampler(0, samplerLinear);
+// draw pass 1...
+
+gl.bindSampler(0, samplerNearest);
+// draw pass 2...
+
+gl.bindSampler(0, null); // cleanup
+Comparison Table
+Factor	Duplicate Textures	Samplers
+VRAM Usage	2x (full copy)	1x
+Mipmap Storage	Duplicated	Shared
+Setup Cost	High (upload twice)	Low
+Runtime Switch Cost	bindTexture	bindSampler (lighter)
+Flexibility	Independent textures	Shared data, different sampling
+Code Complexity	Simple	Slightly more setup
+Mipmapping a Buffer Texture Every Frame
+Yes, it's possible but has performance implications.
+
+javascript
+// Setup: Framebuffer with texture attachment
+const bufferTexture = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, bufferTexture);
+gl.texImage2D(
+    gl.TEXTURE_2D, 0, gl.RGBA8,
+    width, height, 0,
+    gl.RGBA, gl.UNSIGNED_BYTE, null
+);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+const fbo = gl.createFramebuffer();
+gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+gl.framebufferTexture2D(
+    gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+    gl.TEXTURE_2D, bufferTexture, 0
+);
+
+// ============================================
+// RENDER LOOP
+// ============================================
+function render() {
+    // Pass 1: Render TO the buffer
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.viewport(0, 0, width, height);
+    // draw scene into buffer...
+
+    // Generate mipmaps for the buffer we just rendered to
+    gl.bindTexture(gl.TEXTURE_2D, bufferTexture);
+    gl.generateMipmap(gl.TEXTURE_2D);  // <-- Every frame!
+
+    // Pass 2: Use buffer texture WITH mipmaps
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, bufferTexture);
+    gl.bindSampler(0, samplerLinear);  // Uses mipmaps
+    // draw using buffer...
+
+    // Pass 3: Same buffer, different sampling
+    gl.bindSampler(0, samplerNearest); // No mipmaps, nearest
+    // draw again...
+
+    requestAnimationFrame(render);
+}
+Performance Considerations for Per-Frame Mipmapping
+Factor	Impact
+GPU Cost	Moderate - GPU generates ~33% extra data
+Memory	~33% more than base texture
+Texture Size	Larger = more costly
+Format	Float textures heavier than UNSIGNED_BYTE
+Optimization Strategies
+javascript
+// 1. Only regenerate when needed
+let needsMipmap = true;
+
+function render() {
+    // Render to buffer
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    // draw...
+    
+    if (needsMipmap) {
+        gl.generateMipmap(gl.TEXTURE_2D);
+        needsMipmap = false; // Set true when buffer content changes
+    }
+}
+
+// 2. Use smaller buffer for mipped version (manual downscale)
+const fullResBuffer = createBuffer(1920, 1080);  // No mipmaps
+const mippedBuffer = createBuffer(512, 512);     // With mipmaps
+
+// 3. Consider if you really need full mip chain
+// Sometimes just 2-3 levels suffice - do manual downsample passes
+Complete Multi-Pass Example with Mipmapped Buffer
+javascript
+class MultiPassRenderer {
+    constructor(gl, width, height) {
+        this.gl = gl;
+        
+        // Buffer texture with mipmap capability
+        this.bufferTex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, this.bufferTex);
+        gl.texStorage2D(gl.TEXTURE_2D, 
+            Math.floor(Math.log2(Math.max(width, height))) + 1, // All mip levels
+            gl.RGBA8, width, height
+        );
+        
+        // FBO
+        this.fbo = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+        gl.framebufferTexture2D(
+            gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
+            gl.TEXTURE_2D, this.bufferTex, 0
+        );
+        
+        // Samplers
+        this.samplers = {
+            mipLinear: this.createSampler(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR),
+            mipNearest: this.createSampler(gl.NEAREST_MIPMAP_NEAREST, gl.NEAREST),
+            linear: this.createSampler(gl.LINEAR, gl.LINEAR),
+            nearest: this.createSampler(gl.NEAREST, gl.NEAREST)
+        };
+    }
+    
+    createSampler(min, mag) {
+        const s = this.gl.createSampler();
+        this.gl.samplerParameteri(s, this.gl.TEXTURE_MIN_FILTER, min);
+        this.gl.samplerParameteri(s, this.gl.TEXTURE_MAG_FILTER, mag);
+        this.gl.samplerParameteri(s, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+        this.gl.samplerParameteri(s, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+        return s;
+    }
+    
+    render() {
+        const gl = this.gl;
+        
+        // === PASS 1: Render to buffer ===
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+        // draw...
+        
+        // === Generate mipmaps ===
+        gl.bindTexture(gl.TEXTURE_2D, this.bufferTex);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        
+        // === PASS 2: Blur pass using mipmaps ===
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, this.bufferTex);
+        gl.bindSampler(0, this.samplers.mipLinear);
+        // draw blur...
+        
+        // === PASS 3: Sharp pass without mipmaps ===
+        gl.bindSampler(0, this.samplers.nearest);
+        // draw sharp...
+        
+        // Cleanup
+        gl.bindSampler(0, null);
+    }
+}
+TL;DR
+Samplers > Duplicate Textures for different filter modes (half memory, cleaner)
+Per-frame generateMipmap() works fine, costs ~33% extra processing
+Use texStorage2D for buffer textures you'll mipmap (pre-allocates all levels)
+Consider selective mipmap regeneration if performance is tight

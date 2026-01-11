@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Structure Mapper</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <header id="header">
+            <h1>📊 Project Structure Mapper</h1>
+            <div class="controls">
+                <button class="btn" id="zoomOutBtn">−</button>
+                <span id="zoomLevel" style="color: var(--text-secondary); font-size: 12px; min-width: 50px; text-align: center;">100%</span>
+                <button class="btn" id="zoomInBtn">+</button>
+                <button class="btn" id="resetBtn">Reset View</button>
+                <button class="btn" id="autoLayoutBtn">Auto Layout</button>
+                <select id="projectSelect" class="project-select">
+                    <option value="project-mapper.html">This App</option>
+                </select>
+                <button class="btn primary" id="scanBtn">Scan Project</button>
+            </div>
+        </header>
+
+        <aside id="fileTree">
+            <h3>📁 Files Discovered</h3>
+            <div id="fileList"></div>
+        </aside>
+
+        <main id="canvasArea">
+            <svg id="svgLayer"></svg>
+            <div id="nodeLayer"></div>
+            <svg id="svgLayerTop"></svg>
+        </main>
+
+        <aside id="infoPanel">
+            <div class="info-section">
+                <h3>📈 Statistics</h3>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="number" id="statFiles">0</div>
+                        <div class="label">Files</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number" id="statFunctions">0</div>
+                        <div class="label">Functions</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number" id="statDeps">0</div>
+                        <div class="label">Dependencies</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number" id="statCalls">0</div>
+                        <div class="label">Calls</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>📝 Activity Log</h3>
+                <div id="logArea"></div>
+            </div>
+
+            <div class="info-section" id="selectedInfo" style="display: none;">
+                <h3>🔍 Selected Node</h3>
+                <div id="selectedDetails"></div>
+            </div>
+        </aside>
+    </div>
+
+    <div id="loading" class="hidden">
+        <div class="spinner"></div>
+        <p id="loadingText">Scanning project...</p>
+    </div>
+
+    <script src="state.js"></script>
+    <script src="utils.js"></script>
+    <script src="parsers.js"></script>
+    <script src="nodes.js"></script>
+    <script src="ui.js"></script>
+    <script src="renderer.js"></script>
+    <script src="interactions.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
+
