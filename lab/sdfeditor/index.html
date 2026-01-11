@@ -255,6 +255,54 @@
             margin-bottom: 3px;
         }
 
+        .param-group .slider-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .param-group .slider-controls input[type="range"] {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .param-group .fine-tune-buttons {
+            display: flex;
+            gap: 2px;
+        }
+
+        .param-group .fine-tune-btn {
+            width: 24px;
+            height: 24px;
+            background: #2d3748;
+            border: 1px solid #4a5568;
+            border-radius: 3px;
+            color: #a0aec0;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s;
+            user-select: none;
+        }
+
+        .param-group .fine-tune-btn:hover:not(:disabled) {
+            background: #4a5568;
+            color: #e2e8f0;
+            border-color: #718096;
+        }
+
+        .param-group .fine-tune-btn:active:not(:disabled) {
+            background: #1a202c;
+            transform: scale(0.95);
+        }
+
+        .param-group .fine-tune-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
         .param-group .value-display {
             font-size: 11px;
             color: #718096;
@@ -1208,6 +1256,10 @@ function setParamControlsEnabled(enabled) {
     sliders.forEach(slider => {
         slider.disabled = !enabled;
     });
+    const fineTuneBtns = paramPanel ? paramPanel.querySelectorAll('.fine-tune-btn') : [];
+    fineTuneBtns.forEach(btn => {
+        btn.disabled = !enabled;
+    });
 }
 
 function ensureValidParamNode(node) {
@@ -1969,9 +2021,46 @@ function createParamSlider(node, key, def, value) {
     slider.value = value;
     slider.disabled = !paramControlsEnabled;
     
+    // Fine-tune step is 1/10 of the slider step
+    const fineStep = parseFloat(def.step) / 10;
+    
+    // Create decrement button
+    const decrementBtn = document.createElement('button');
+    decrementBtn.className = 'fine-tune-btn';
+    decrementBtn.textContent = '−';
+    decrementBtn.title = `Decrease by ${fineStep.toFixed(3)}`;
+    decrementBtn.disabled = !paramControlsEnabled;
+    
+    // Create increment button
+    const incrementBtn = document.createElement('button');
+    incrementBtn.className = 'fine-tune-btn';
+    incrementBtn.textContent = '+';
+    incrementBtn.title = `Increase by ${fineStep.toFixed(3)}`;
+    incrementBtn.disabled = !paramControlsEnabled;
+    
+    // Container for fine-tune buttons
+    const fineTuneButtons = document.createElement('div');
+    fineTuneButtons.className = 'fine-tune-buttons';
+    fineTuneButtons.appendChild(decrementBtn);
+    fineTuneButtons.appendChild(incrementBtn);
+    
+    // Container for slider and buttons
+    const sliderControls = document.createElement('div');
+    sliderControls.className = 'slider-controls';
+    sliderControls.appendChild(slider);
+    sliderControls.appendChild(fineTuneButtons);
+    
     const valueDisplay = document.createElement('div');
     valueDisplay.className = 'value-display';
     valueDisplay.textContent = value.toFixed(2);
+    
+    const updateValue = (newValue) => {
+        // Clamp to min/max
+        newValue = Math.max(parseFloat(def.min), Math.min(parseFloat(def.max), newValue));
+        slider.value = newValue;
+        valueDisplay.textContent = newValue.toFixed(2);
+        queueSliderUpdate(node, key, newValue);
+    };
     
     slider.addEventListener('input', () => {
         const numericValue = parseFloat(slider.value);
@@ -1979,8 +2068,18 @@ function createParamSlider(node, key, def, value) {
         queueSliderUpdate(node, key, numericValue);
     });
     
+    decrementBtn.addEventListener('click', () => {
+        const currentValue = parseFloat(slider.value);
+        updateValue(currentValue - fineStep);
+    });
+    
+    incrementBtn.addEventListener('click', () => {
+        const currentValue = parseFloat(slider.value);
+        updateValue(currentValue + fineStep);
+    });
+    
     group.appendChild(label);
-    group.appendChild(slider);
+    group.appendChild(sliderControls);
     group.appendChild(valueDisplay);
     
     return group;
