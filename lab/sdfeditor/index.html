@@ -2026,6 +2026,7 @@ function createParamSlider(node, key, def, value) {
     
     // Create decrement button
     const decrementBtn = document.createElement('button');
+    decrementBtn.type = 'button';
     decrementBtn.className = 'fine-tune-btn';
     decrementBtn.textContent = '−';
     decrementBtn.title = `Decrease by ${fineStep.toFixed(3)}`;
@@ -2033,6 +2034,7 @@ function createParamSlider(node, key, def, value) {
     
     // Create increment button
     const incrementBtn = document.createElement('button');
+    incrementBtn.type = 'button';
     incrementBtn.className = 'fine-tune-btn';
     incrementBtn.textContent = '+';
     incrementBtn.title = `Increase by ${fineStep.toFixed(3)}`;
@@ -2054,28 +2056,39 @@ function createParamSlider(node, key, def, value) {
     valueDisplay.className = 'value-display';
     valueDisplay.textContent = value.toFixed(2);
     
-    const updateValue = (newValue) => {
+    // Track the actual value (not constrained by slider step)
+    let actualValue = value;
+    
+    const updateFromFineTune = (delta) => {
+        // Update actual value with fine increment
+        actualValue = actualValue + delta;
         // Clamp to min/max
-        newValue = Math.max(parseFloat(def.min), Math.min(parseFloat(def.max), newValue));
-        slider.value = newValue;
-        valueDisplay.textContent = newValue.toFixed(2);
-        queueSliderUpdate(node, key, newValue);
+        actualValue = Math.max(parseFloat(def.min), Math.min(parseFloat(def.max), actualValue));
+        // Update display
+        valueDisplay.textContent = actualValue.toFixed(2);
+        // Update slider (will round to its step, but that's ok for visual)
+        slider.value = actualValue;
+        // Queue the precise value
+        queueSliderUpdate(node, key, actualValue);
     };
     
     slider.addEventListener('input', () => {
         const numericValue = parseFloat(slider.value);
+        actualValue = numericValue; // Sync actual value with slider
         valueDisplay.textContent = numericValue.toFixed(2);
         queueSliderUpdate(node, key, numericValue);
     });
     
-    decrementBtn.addEventListener('click', () => {
-        const currentValue = parseFloat(slider.value);
-        updateValue(currentValue - fineStep);
+    decrementBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        updateFromFineTune(-fineStep);
     });
     
-    incrementBtn.addEventListener('click', () => {
-        const currentValue = parseFloat(slider.value);
-        updateValue(currentValue + fineStep);
+    incrementBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        updateFromFineTune(fineStep);
     });
     
     group.appendChild(label);
