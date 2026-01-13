@@ -5,6 +5,20 @@
 // Signature: vec2 mainSound(int samp, float time)
 //   samp = absolute sample index from start
 //   time = absolute time in seconds
+//
+// KEY FIXES (Jan 2026):
+// 1. RACE CONDITION FIX: The `generating` flag must be reset in stop() to prevent
+//    a deadlock where audio stops working after recompilation. The issue occurred
+//    when stop() was called while waiting for worker audio data - the old worker
+//    would be terminated but `generating` remained true, blocking all future
+//    audio generation.
+//
+// 2. TIME SYNC ON RECOMPILE: start(fromTime) accepts an optional time parameter
+//    to resume audio from a specific position. This keeps audio in sync with the
+//    shader's iTime after recompilation instead of restarting from 0.
+//
+// 3. RUNTIME BUFFER CONTROL: bufferAheadTime and batchDuration are now
+//    configurable at runtime via setter functions, exposed in the UI.
 
 import { state, AUDIO_MODES, logStatus } from '../core.js';
 import * as waveformPanel from '../ui/audio-waveform-panel.js';
@@ -22,9 +36,12 @@ let sampleOffset = 0;
 let scheduledUntil = 0;
 let scheduledSources = [];
 let maxTextureSize = 4096;
-let bufferAheadTime = 0.5;
 let generating = false;
 let animationFrameId = null;
+
+// Configurable buffer parameters (can be changed at runtime)
+let bufferAheadTime = 0.5;    // How far ahead to buffer audio (seconds) - default 500ms
+let batchDuration = 0.1;       // How much audio to generate per batch (seconds) - default 100ms
 
 // ============================================================================
 // Initialization
@@ -78,6 +95,11 @@ export async function load(shaderCode) {
         return new Promise((resolve) => {
             let resolved = false;
             
+            // Handle worker-level errors (prevents silent failures)
+            renderWorker.onerror = (e) => {
+                console.error('GLSL Audio worker error:', e.message);
+                generating = false;
+            };
             renderWorker.onmessage = (e) => {
                 if (e.data.type === 'ready') {
                     workerReady = true;
@@ -513,11 +535,17 @@ function generationLoop() {
         generating = true;
         
         const sampleRate = audioContext.sampleRate;
-        // Generate ~100ms of audio per batch
-        const samplesToGenerate = Math.min(Math.floor(sampleRate * 0.1), maxTextureSize);
+        // Generate audio based on configurable batch duration
+        const samplesToGenerate = Math.min(Math.floor(sampleRate * batchDuration), maxTextureSize);
         
         // Get current uniform values from the shared uniform builder
         const uniforms = state.uniformBuilder ? state.uniformBuilder.getAudioUniforms() : null;
+        
+        if (!renderWorker) {
+            generating = false;
+            animationFrameId = requestAnimationFrame(generationLoop);
+            return;
+        }
         
         renderWorker.postMessage({
             type: 'render',
@@ -575,7 +603,13 @@ function onAudioDataGenerated(audioData, numSamples) {
 // Playback Control
 // ============================================================================
 
-export function start() {
+/**
+ * Start audio playback
+ * @param {number|null} fromTime - Optional time in seconds to resume from.
+ *   If provided, audio continues from this position (syncs with shader iTime).
+ *   If null/0, starts from the beginning.
+ */
+export function start(fromTime = null) {
     if (isRunning) return;
     
     isRunning = true;
@@ -584,8 +618,18 @@ export function start() {
     // Initialize timing
     const now = audioContext?.currentTime || 0;
     scheduledUntil = now;
-    sampleOffset = 0;
-    state.audioStartTime = now;  // Track start time for waveform playhead
+    
+    // If fromTime is specified, calculate sample offset to continue from that time
+    // This keeps audio in sync with shader iTime after recompilation
+    if (fromTime !== null && fromTime > 0) {
+        const sampleRate = audioContext?.sampleRate || 48000;
+        sampleOffset = Math.floor(fromTime * sampleRate);
+    } else {
+        sampleOffset = 0;
+    }
+    
+    // Adjust audioStartTime so waveform playhead calculates correct position
+    state.audioStartTime = now - (fromTime || 0);
     
     // Start generation loop
     generationLoop();
@@ -596,6 +640,11 @@ export function start() {
 
 export function stop() {
     isRunning = false;
+    // CRITICAL: Reset generating flag to prevent deadlock after recompilation.
+    // Without this, if stop() is called while waiting for worker audio data,
+    // the old worker is terminated but generating stays true, blocking all
+    // future audio generation when start() is called again.
+    generating = false;
     
     // Stop all scheduled sources
     scheduledSources.forEach((source) => {
@@ -654,3 +703,40 @@ export function cleanup() {
     waveformPanel.cleanup();
 }
 
+// ============================================================================
+// Buffer Configuration (can be changed at runtime without recompilation)
+// ============================================================================
+
+/**
+ * Set the buffer ahead time (how far ahead to pre-schedule audio)
+ * @param {number} ms - Buffer ahead time in milliseconds (50-1000)
+ */
+export function setBufferAheadTime(ms) {
+    const clamped = Math.max(50, Math.min(1000, ms));
+    bufferAheadTime = clamped / 1000;
+}
+
+/**
+ * Get the current buffer ahead time in milliseconds
+ * @returns {number}
+ */
+export function getBufferAheadTime() {
+    return bufferAheadTime * 1000;
+}
+
+/**
+ * Set the batch duration (how much audio to generate per render batch)
+ * @param {number} ms - Batch duration in milliseconds (20-200)
+ */
+export function setBatchDuration(ms) {
+    const clamped = Math.max(20, Math.min(200, ms));
+    batchDuration = clamped / 1000;
+}
+
+/**
+ * Get the current batch duration in milliseconds
+ * @returns {number}
+ */
+export function getBatchDuration() {
+    return batchDuration * 1000;
+}

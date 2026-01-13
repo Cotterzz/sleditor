@@ -5,6 +5,7 @@
 // Only visible when GLSL audio shader is active.
 
 import * as audioWaveform from '../audio-waveform.js';
+import * as audioGlsl from '../backends/audio-glsl.js';
 import { state, AUDIO_MODES } from '../core.js';
 
 let panelElement = null;
@@ -28,6 +29,20 @@ export function createPanel() {
                 <span id="waveformZoomInfo" class="waveform-zoom-info">Zoom: 1.00s</span>
                 <button id="waveformResetBtn" class="waveform-btn" title="Reset view">⟲</button>
                 <button id="waveformToggleBtn" class="waveform-btn" title="Collapse/Expand">▼</button>
+            </div>
+        </div>
+        <div class="waveform-buffer-controls">
+            <div class="buffer-slider-group">
+                <label for="bufferAheadSlider" title="How far ahead to pre-schedule audio. Higher = more stable, Lower = more responsive">
+                    Buffer: <span id="bufferAheadValue">500</span>ms
+                </label>
+                <input type="range" id="bufferAheadSlider" min="50" max="1000" value="500" step="10">
+            </div>
+            <div class="buffer-slider-group">
+                <label for="batchSizeSlider" title="Audio samples per render batch. Higher = more efficient, Lower = more responsive to uniform changes">
+                    Batch: <span id="batchSizeValue">100</span>ms
+                </label>
+                <input type="range" id="batchSizeSlider" min="20" max="200" value="100" step="5">
             </div>
         </div>
         <div class="waveform-panel-content">
@@ -63,6 +78,30 @@ export function createPanel() {
     
     resetBtn.addEventListener('click', () => {
         audioWaveform.resetView();
+    });
+    
+    // Buffer configuration sliders
+    const bufferAheadSlider = panelElement.querySelector('#bufferAheadSlider');
+    const bufferAheadValue = panelElement.querySelector('#bufferAheadValue');
+    const batchSizeSlider = panelElement.querySelector('#batchSizeSlider');
+    const batchSizeValue = panelElement.querySelector('#batchSizeValue');
+    
+    // Initialize sliders with current values
+    bufferAheadSlider.value = audioGlsl.getBufferAheadTime();
+    bufferAheadValue.textContent = Math.round(audioGlsl.getBufferAheadTime());
+    batchSizeSlider.value = audioGlsl.getBatchDuration();
+    batchSizeValue.textContent = Math.round(audioGlsl.getBatchDuration());
+    
+    bufferAheadSlider.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value, 10);
+        bufferAheadValue.textContent = value;
+        audioGlsl.setBufferAheadTime(value);
+    });
+    
+    batchSizeSlider.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value, 10);
+        batchSizeValue.textContent = value;
+        audioGlsl.setBatchDuration(value);
     });
     
     // Set up resize observer for canvas

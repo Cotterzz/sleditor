@@ -103,11 +103,12 @@
         </div>
     </noscript>
     
-    <!-- UI Module -->
-    <script src="ui.js"></script>
-    
-    <!-- Demo Application -->
-    <script>
+    <!-- UI Module (ES modules, source of truth is /src/) -->
+    <script type="module">
+        import SLUI from './src/index.js';
+        // Keep the global for parity with older demos
+        window.SLUI = SLUI;
+
         // Keep title static
         document.title = `SL Editor - UI System Prototype`;
         

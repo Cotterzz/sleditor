@@ -15,10 +15,37 @@ import { setToolbarPosition, getToolbarPosition, buildToolbar, createToolbarItem
 import { createWindow, bringToFront, closeWindow, openWindow, toggleWindow } from './layout/window.js';
 import { dockWindow, undockWindow, closeDockWindow, renderDockTree, detectDropZone, showDropPreview, hideDropPreview } from './layout/dock.js';
 import { buildMobileZones, renderMobileZones, renderMobileZoneContentsFromState, focusZone, openPanelInZone, closePanelInZone } from './layout/mobile-zones.js';
+import { createTabbedWindow, closeTabbedWindow } from './layout/tabbed-window.js';
 
 // Components
 import { Slider, LabeledSlider, SliderGroup } from './components/slider.js';
 import { Tabs } from './components/tabs.js';
+import {
+    UniformSlider,
+    SliderStack,
+    ParameterSlider,
+    IconSlider,
+    TimelineSlider,
+    Checkbox,
+    UniformBool,
+    BoolStack,
+    FloatStack,
+    IntStack,
+    UniformPanel,
+    ColorPicker,
+    ColorStack,
+    Vec3Picker,
+    Vec3Stack,
+    PresetManager,
+    VectorSliderStack
+} from './components/slider.js';
+import { Button, ToggleButton } from './components/buttons.js';
+import { SlideToggle } from './components/slide-toggle.js';
+import { ColorInput, ColorUniform } from './components/color-input.js';
+import { Tooltip } from './components/tooltip.js';
+import { TabPane } from './components/tabpane.js';
+import { Console } from './components/console.js';
+import { Select } from './components/select.js';
 
 /**
  * Initialize the UI system
@@ -52,6 +79,12 @@ async function init(options = {}) {
     
     // Build initial UI
     buildApp();
+
+    // Optional: restore layout from localStorage (robustness for large app migrations)
+    const restoreLayout = options.restoreLayout ?? true;
+    if (restoreLayout) {
+        try { loadLayout(); } catch (e) { console.warn('SLUI loadLayout failed:', e); }
+    }
     
     console.log('SLUI initialized', { 
         theme: state.theme, 
@@ -61,6 +94,135 @@ async function init(options = {}) {
     });
     
     return SLUI;
+}
+
+// ========================================
+// LAYOUT PERSISTENCE (no build step)
+// ========================================
+
+const DEFAULT_LAYOUT_KEY = 'slui-layout-v1';
+
+function safeJsonParse(str) {
+    try { return JSON.parse(str); } catch { return null; }
+}
+
+function snapshotWindowRecord(windowId, winState) {
+    const el = winState?.element;
+    const opts = { ...(winState?.options || {}) };
+    if (el) {
+        opts.x = el.offsetLeft;
+        opts.y = el.offsetTop;
+        opts.width = el.offsetWidth;
+        opts.height = el.offsetHeight;
+    }
+    return {
+        id: windowId,
+        visible: !!winState?.visible,
+        tabbed: !!(el?.classList?.contains('sl-tabbed-window') || Array.isArray(opts.tabs)),
+        options: opts
+    };
+}
+
+function isDockedId(id, dockTree) {
+    if (!dockTree) return false;
+    if (dockTree.type === 'leaf') return dockTree.panelId === id;
+    if (dockTree.type === 'split') return isDockedId(id, dockTree.first) || isDockedId(id, dockTree.second);
+    return false;
+}
+
+function saveLayout(key = DEFAULT_LAYOUT_KEY) {
+    const windows = [];
+    for (const [windowId, winState] of state.windows.entries()) {
+        windows.push(snapshotWindowRecord(windowId, winState));
+    }
+
+    const payload = {
+        version: 1,
+        dockTree: state.dockTree,
+        dockedWindows: Array.from(state.dockedWindows),
+        windows
+    };
+
+    localStorage.setItem(key, JSON.stringify(payload));
+    return payload;
+}
+
+function clearLayout(key = DEFAULT_LAYOUT_KEY) {
+    localStorage.removeItem(key);
+}
+
+function loadLayout(key = DEFAULT_LAYOUT_KEY) {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+
+    const payload = safeJsonParse(raw);
+    if (!payload || payload.version !== 1) return null;
+
+    // Close existing windows
+    for (const [id] of Array.from(state.windows.entries())) {
+        // Works for both regular + tabbed windows (both are in state.windows)
+        const ws = state.windows.get(id);
+        ws?.element?.remove?.();
+        state.windows.delete(id);
+    }
+    state.dockedWindows.clear();
+    state.dockTree = null;
+
+    // Restore docking structure first (so renderDockTree can place docked elements)
+    state.dockTree = payload.dockTree || null;
+    (payload.dockedWindows || []).forEach(id => state.dockedWindows.add(id));
+
+    const floatLayer = document.getElementById('sl-float-layer');
+
+    // Recreate windows from panel registry when possible (content is not serializable)
+    for (const w of payload.windows || []) {
+        const panel = panels.get(w.id);
+
+        if (w.tabbed) {
+            // Tabbed windows carry their own tabs in options (serializable)
+            const el = createTabbedWindow({
+                ...w.options,
+                id: w.id
+            });
+            if (!el) continue;
+        } else {
+            // Regular windows: rebuild content from panel.createContent
+            const content = panel?.createContent ? panel.createContent() : null;
+            const el = createWindow({
+                ...w.options,
+                id: w.id,
+                title: t(`panels.${w.id}.title`) || panel?.title || w.options?.title || w.id,
+                icon: panel?.icon || w.options?.icon || '📄',
+                content
+            }, dockWindow, closeDockWindow);
+            if (!el) continue;
+        }
+
+        const winState = state.windows.get(w.id);
+        if (!winState?.element) continue;
+
+        // Restore visibility
+        winState.visible = !!w.visible;
+        winState.element.style.display = w.visible ? '' : 'none';
+    }
+
+    // Render docked windows into dock layer
+    renderDockTree();
+
+    // Attach floating windows to float layer
+    if (floatLayer) {
+        for (const [id, winState] of state.windows.entries()) {
+            const docked = payload.dockedWindows?.includes?.(id) || isDockedId(id, payload.dockTree);
+            if (!docked) {
+                floatLayer.appendChild(winState.element);
+            }
+        }
+    }
+
+    // Toolbar states
+    updateAllToolbarItems();
+
+    return payload;
 }
 
 /**
@@ -346,7 +508,18 @@ function reRegisterPanels() {
  * Register a panel
  */
 function registerPanel(config, isReRegister = false) {
-    const { id, icon, title, createContent, showInToolbar = true } = config;
+    const {
+        id, icon, title, createContent, showInToolbar = true,
+        // Tabbed window options (ui.js compatibility)
+        tabbed = false,
+        tabGroup = 'default',
+        tabs = null,
+        tabBarAddon = null,          // Custom element at end of tab bar
+        // Lifecycle callbacks
+        onWindowCreated = null,
+        onWindowClosed = null,
+        onTabClose = null            // Called when a tab is closed
+    } = config;
     
     if (!isReRegister) {
         panelConfigs.push(config);
@@ -373,27 +546,75 @@ function registerPanel(config, isReRegister = false) {
                     openPanelInZone(id);
                 }
             } else {
-                const winState = state.windows.get(id);
-                if (winState) {
-                    toggleWindow(id, closeDockWindow);
-                } else {
-                    const content = createContent ? createContent() : null;
-                    const win = createWindow({
-                        id,
-                        title: t(`panels.${id}.title`) || title,
-                        icon,
-                        x: 100 + panels.size * 30,
-                        y: 100 + panels.size * 30,
-                        width: 500,
-                        height: 400,
-                        content
-                    }, dockWindow, closeDockWindow);
-                    
-                    const floatLayer = document.getElementById('sl-float-layer');
-                    if (floatLayer) {
-                        floatLayer.appendChild(win);
+                // Desktop: window mode
+                if (tabbed) {
+                    // Match ui.js behavior: toggle the whole tab group
+                    const groupWindows = [];
+                    for (const [windowId, data] of (state.windows || new Map())) {
+                        if (data?.options?.group === tabGroup || data?.element?.dataset?.tabGroup === tabGroup) {
+                            groupWindows.push(windowId);
+                        }
                     }
-                    updateToolbarItem(id, true, true, false);
+
+                    if (groupWindows.length > 0) {
+                        for (const winId of groupWindows) {
+                            closeTabbedWindow(winId);
+                        }
+                        updateToolbarItem(id, false, false, false);
+                    } else {
+                        const tabsData = typeof tabs === 'function' ? tabs() : tabs;
+                        const addonEl = typeof tabBarAddon === 'function' ? tabBarAddon : tabBarAddon;
+                        const win = createTabbedWindow({
+                            id,
+                            group: tabGroup,
+                            x: 100 + panels.size * 30,
+                            y: 100 + panels.size * 30,
+                            width: 500,
+                            height: 400,
+                            tabs: tabsData || [],
+                            tabBarAddon: addonEl,
+                            onTabClose,
+                            onWindowClosed
+                        });
+                        
+                        // Call onWindowCreated callback if provided
+                        if (onWindowCreated && win) {
+                            try {
+                                onWindowCreated(id);
+                            } catch (e) {
+                                console.error('onWindowCreated callback error:', e);
+                            }
+                        }
+
+                        const floatLayer = document.getElementById('sl-float-layer');
+                        if (floatLayer && win) {
+                            floatLayer.appendChild(win);
+                        }
+                        updateToolbarItem(id, true, true, false);
+                    }
+                } else {
+                    const winState = state.windows.get(id);
+                    if (winState) {
+                        toggleWindow(id, closeDockWindow);
+                    } else {
+                        const content = createContent ? createContent() : null;
+                        const win = createWindow({
+                            id,
+                            title: t(`panels.${id}.title`) || title,
+                            icon,
+                            x: 100 + panels.size * 30,
+                            y: 100 + panels.size * 30,
+                            width: 500,
+                            height: 400,
+                            content
+                        }, dockWindow, closeDockWindow);
+
+                        const floatLayer = document.getElementById('sl-float-layer');
+                        if (floatLayer) {
+                            floatLayer.appendChild(win);
+                        }
+                        updateToolbarItem(id, true, true, false);
+                    }
                 }
             }
         });
@@ -503,7 +724,52 @@ const SLUI = {
     Slider,
     LabeledSlider,
     SliderGroup,
+    UniformSlider,
+    SliderStack,
+    ParameterSlider,
+    IconSlider,
+    TimelineSlider,
+    Checkbox,
+    UniformBool,
+    BoolStack,
+    FloatStack,
+    IntStack,
+    UniformPanel,
+    ColorPicker,
+    ColorUniform,
+    ColorStack,
+    Vec3Picker,
+    Vec3Stack,
+    PresetManager,
+    VectorSliderStack,
     Tabs,
+    TabPane,
+    
+    // Buttons
+    Button,
+    ToggleButton,
+    SlideToggle,
+    
+    // Form Controls
+    Select,
+    
+    // Color
+    ColorInput,
+    
+    // Tooltip
+    Tooltip,
+    
+    // Console
+    Console,
+    
+    // Tabbed Windows
+    createTabbedWindow,
+    closeTabbedWindow,
+
+    // Layout persistence
+    saveLayout,
+    loadLayout,
+    clearLayout,
     
     // State access
     get state() { return state; }

@@ -5,6 +5,7 @@
 
 import { state } from '../core/state.js';
 import { updateToolbarItem } from './toolbar.js';
+import { bringToFront } from './window.js';
 
 /**
  * Dock a window to a specific edge
@@ -154,7 +155,6 @@ export function undockWindow(windowId) {
         floatLayer.appendChild(winState.element);
         
         // Bring to front
-        const { bringToFront } = require('./window.js');
         bringToFront(windowId);
     }
     

@@ -3,7 +3,7 @@
  * Translation and language management
  */
 
-import { state } from './state.js';
+import { state, panels } from './state.js';
 import { emit, EVENTS } from './events.js';
 
 /**
@@ -92,7 +92,6 @@ export function updateAllText() {
     document.querySelectorAll('.sl-zone-title').forEach(el => {
         const panelId = el.closest('.sl-zone-content')?.querySelector('[data-panel]')?.dataset.panel;
         if (panelId) {
-            const { panels } = require('./state.js');
             el.textContent = t(`panels.${panelId}.title`) || panels.get(panelId)?.title || panelId;
         }
     });
@@ -105,7 +104,6 @@ export function updateAllText() {
     // Update toolbar item titles
     document.querySelectorAll('.sl-toolbar-item[data-panel-id]').forEach(btn => {
         const panelId = btn.dataset.panelId;
-        const { panels } = require('./state.js');
         const panel = panels.get(panelId);
         if (panel) {
             btn.title = t(`panels.${panelId}.title`) || panel.title || panelId;

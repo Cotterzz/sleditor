@@ -59,4 +59,8 @@ export function resetLayoutState() {
     };
     
     state.settingsOpen = false;
+
+    // Docking state
+    state.dockTree = null;
+    state.dockedWindows.clear();
 }

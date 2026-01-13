@@ -8,6 +8,9 @@
  * - SliderStack: Container managing multiple expandable sliders
  */
 
+import { SlideToggle } from './slide-toggle.js';
+import { ColorUniform } from './color-input.js';
+
 // ========================================
 // SLIDER TRACK - Base skinnable element
 // ========================================
@@ -122,6 +125,8 @@ export function UniformSlider(options = {}) {
         isInt = false,
         locked = false,
         expanded = false,
+        editable = false,  // NEW: Whether label is editable (false = display only)
+        showRemove = true, // NEW: Whether to show remove button
         onChange = null,
         onNameChange = null,
         onRangeChange = null,
@@ -194,13 +199,21 @@ export function UniformSlider(options = {}) {
     const middleRow = document.createElement('div');
     middleRow.className = 'sl-uniform-row sl-uniform-row-middle';
     
-    const labelInput = document.createElement('input');
-    labelInput.type = 'text';
-    labelInput.className = 'sl-uniform-label';
-    labelInput.value = currentName;
-    labelInput.addEventListener('blur', () => { currentName = labelInput.value || 'u_custom'; if (onNameChange) onNameChange(currentName); });
-    labelInput.addEventListener('pointerdown', (e) => e.stopPropagation());
-    labelInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+    // Label: editable input or display-only span
+    let labelEl;
+    if (editable) {
+        labelEl = document.createElement('input');
+        labelEl.type = 'text';
+        labelEl.className = 'sl-uniform-label';
+        labelEl.value = currentName;
+        labelEl.addEventListener('blur', () => { currentName = labelEl.value || 'u_custom'; if (onNameChange) onNameChange(currentName); });
+        labelEl.addEventListener('pointerdown', (e) => e.stopPropagation());
+        labelEl.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+    } else {
+        labelEl = document.createElement('span');
+        labelEl.className = 'sl-uniform-label sl-uniform-label-readonly';
+        labelEl.textContent = currentName;
+    }
     
     const track = document.createElement('div');
     track.className = 'sl-slider-track';
@@ -220,10 +233,16 @@ export function UniformSlider(options = {}) {
     trackBg.appendChild(thumb);
     track.appendChild(trackBg);
     
+    // Value display for collapsed view (always visible)
+    const collapsedValue = document.createElement('span');
+    collapsedValue.className = 'sl-uniform-collapsed-value';
+    collapsedValue.textContent = formatNumber(currentValue, isInt, 2);
+    
     function updateTrackVisuals() {
         const percent = ((currentValue - currentMin) / (currentMax - currentMin)) * 100;
         fill.style.width = `${percent}%`;
         thumb.style.left = `${percent}%`;
+        collapsedValue.textContent = formatNumber(currentValue, isInt, 2);
     }
     
     function handleTrackPointer(e) {
@@ -249,8 +268,9 @@ export function UniformSlider(options = {}) {
         document.addEventListener('pointerup', upHandler);
     });
     
-    middleRow.appendChild(labelInput);
+    middleRow.appendChild(labelEl);
     middleRow.appendChild(track);
+    middleRow.appendChild(collapsedValue);
     middleRow.appendChild(toggleBtn);
     
     // Bottom row: Lock | Step | Incrementer | Close
@@ -289,17 +309,20 @@ export function UniformSlider(options = {}) {
     incrementer.appendChild(decBtn);
     incrementer.appendChild(incBtn);
     
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'sl-uniform-close';
-    closeBtn.textContent = '×';
-    closeBtn.title = 'Remove';
-    closeBtn.style.cursor = 'pointer';
-    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); if (onRemove) onRemove(container); });
+    let closeBtn = null;
+    if (showRemove && onRemove) {
+        closeBtn = document.createElement('button');
+        closeBtn.className = 'sl-uniform-close';
+        closeBtn.textContent = '×';
+        closeBtn.title = 'Remove';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.addEventListener('click', (e) => { e.stopPropagation(); if (onRemove) onRemove(container); });
+    }
     
     bottomRow.appendChild(lockBtn);
     bottomRow.appendChild(stepInput);
     bottomRow.appendChild(incrementer);
-    bottomRow.appendChild(closeBtn);
+    if (closeBtn) bottomRow.appendChild(closeBtn);
     
     container.appendChild(topRow);
     container.appendChild(middleRow);
@@ -336,7 +359,7 @@ export function UniformSlider(options = {}) {
     container.getValue = () => currentValue;
     container.setValue = (v) => { currentValue = Math.max(currentMin, Math.min(currentMax, v)); updateTrackVisuals(); valueInput.setValue(currentValue); };
     container.getName = () => currentName;
-    container.setName = (n) => { currentName = n; labelInput.value = n; };
+    container.setName = (n) => { currentName = n; if (editable) labelEl.value = n; else labelEl.textContent = n; };
     container.getRange = () => ({ min: currentMin, max: currentMax });
     container.setRange = (newMin, newMax) => { currentMin = newMin; currentMax = newMax; startInput.setValue(currentMin); endInput.setValue(currentMax); };
     container.isLocked = () => isLocked;
@@ -959,6 +982,83 @@ export function UniformPanel(options = {}) {
 }
 
 // ========================================
+// VECTOR SLIDER STACK - For vec2/vec3/vec4 non-color uniforms
+// Uses UniformSlider for each component with expandable parameters
+// ========================================
+
+export function VectorSliderStack(options = {}) {
+    const {
+        name = 'u_vector',
+        components = 3,        // 2, 3, or 4 for vec2/vec3/vec4
+        values = null,         // Array of values [x, y, z, w] or null for defaults
+        min = 0,
+        max = 1,
+        step = 0.01,
+        isInt = false,
+        onChange = null
+    } = options;
+
+    const componentNames = ['x', 'y', 'z', 'w'];
+    const numComponents = Math.min(4, Math.max(2, components));
+    let currentValues = values ? [...values] : Array(numComponents).fill(0.5);
+
+    const container = document.createElement('div');
+    container.className = 'sl-vector-stack';
+
+    // Header with uniform name
+    const header = document.createElement('div');
+    header.className = 'sl-vector-stack-header';
+    
+    const nameLabel = document.createElement('span');
+    nameLabel.className = 'sl-vector-stack-name';
+    nameLabel.textContent = name;
+    header.appendChild(nameLabel);
+    
+    container.appendChild(header);
+
+    // Sliders container - use UniformSlider for each component
+    const slidersContainer = document.createElement('div');
+    slidersContainer.className = 'sl-vector-stack-sliders';
+
+    const sliderEls = [];
+
+    for (let i = 0; i < numComponents; i++) {
+        const slider = UniformSlider({
+            name: `.${componentNames[i]}`,  // .x, .y, .z, .w
+            min,
+            max,
+            value: currentValues[i],
+            step,
+            isInt,
+            editable: false,
+            showRemove: false,
+            onChange: (v) => {
+                currentValues[i] = v;
+                if (onChange) onChange([...currentValues], name);
+            }
+        });
+        slider.classList.add('sl-vector-component-slider');
+        slidersContainer.appendChild(slider);
+        sliderEls.push(slider);
+    }
+
+    container.appendChild(slidersContainer);
+
+    // API
+    container.getName = () => name;
+    container.getValues = () => [...currentValues];
+    container.setValues = (vals) => {
+        for (let i = 0; i < numComponents && i < vals.length; i++) {
+            currentValues[i] = vals[i];
+            sliderEls[i].setValue(vals[i]);
+        }
+    };
+    container.getData = () => ({ name, values: [...currentValues] });
+
+    return container;
+}
+
+// ========================================
 // COLOR PICKER - RGB + HSV with gradient sliders
 // ========================================
 
@@ -1210,24 +1310,112 @@ export function Vec3Picker(options = {}) {
 // ========================================
 
 export function ColorStack(options = {}) {
-    const { colors = [], addable = true, removable = true, onChange = null, onAdd = null, onRemove = null } = options;
+    // Match ui.js behavior: ColorUniform rows + stack-level SL/OS toggle controlling native mode.
+    const {
+        colors = [],
+        addable = true,
+        removable = true,
+        useNative = false,
+        showModeToggle = true,
+        onChange = null,
+        onAdd = null,
+        onRemove = null
+    } = options;
+
+    let isNativeMode = useNative;
+
     const container = document.createElement('div');
     container.className = 'sl-color-stack';
+
+    // Header with mode toggle
+    const header = document.createElement('div');
+    header.className = 'sl-color-stack-header';
+
     const colorElements = [];
+
+    if (showModeToggle) {
+        const modeToggle = SlideToggle({
+            labelLeft: 'SL',
+            labelRight: 'OS',
+            value: isNativeMode,
+            size: 'small',
+            onChange: (useOS) => {
+                isNativeMode = useOS;
+                colorElements.forEach(el => el.setNativeMode(useOS));
+            }
+        });
+        header.appendChild(modeToggle);
+        container._modeToggle = modeToggle;
+    }
+
+    container.appendChild(header);
+
+    // Colors container
+    const colorsContainer = document.createElement('div');
+    colorsContainer.className = 'sl-color-stack-colors';
+    container.appendChild(colorsContainer);
+
+    function addColor(config) {
+        const uniform = ColorUniform({
+            ...config,
+            useNative: isNativeMode,
+            onChange: (color, name) => {
+                if (onChange) onChange(color, name, colorElements.indexOf(uniform));
+            }
+        });
+
+        if (removable) {
+            uniform.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                if (confirm(`Remove ${uniform.getName()}?`)) removeColor(colorElements.indexOf(uniform));
+            });
+        }
+
+        colorElements.push(uniform);
+        colorsContainer.insertBefore(uniform, addBtn);
+        return uniform;
+    }
+
+    function removeColor(index) {
+        if (index < 0 || index >= colorElements.length) return;
+        const p = colorElements[index];
+        const d = p.getData();
+        p.remove();
+        colorElements.splice(index, 1);
+        if (onRemove) onRemove(d, index);
+    }
+
     let addBtn = null;
-    
-    function addColor(config) { const picker = ColorPicker({ ...config, onChange: (color, name) => { if (onChange) onChange(color, name, colorElements.indexOf(picker)); } }); if (removable) { picker.addEventListener('contextmenu', (e) => { e.preventDefault(); if (confirm(`Remove ${picker.getName()}?`)) removeColor(colorElements.indexOf(picker)); }); } colorElements.push(picker); container.insertBefore(picker, addBtn); return picker; }
-    function removeColor(index) { if (index < 0 || index >= colorElements.length) return; const p = colorElements[index]; const d = p.getData(); p.remove(); colorElements.splice(index, 1); if (onRemove) onRemove(d, index); }
-    
-    if (addable) { addBtn = document.createElement('button'); addBtn.className = 'sl-color-stack-add'; addBtn.textContent = '+ Add Color'; addBtn.style.cursor = 'pointer'; addBtn.addEventListener('click', () => { const n = addColor({ name: `u_color${colorElements.length}`, r: Math.random(), g: Math.random(), b: Math.random() }); if (onAdd) onAdd(n.getData()); }); container.appendChild(addBtn); }
+    if (addable) {
+        addBtn = document.createElement('button');
+        addBtn.className = 'sl-color-stack-add';
+        addBtn.textContent = '+ Add Color';
+        addBtn.style.cursor = 'pointer';
+        addBtn.addEventListener('click', () => {
+            const n = addColor({ name: `u_color${colorElements.length}`, r: Math.random(), g: Math.random(), b: Math.random() });
+            if (onAdd) onAdd(n.getData());
+        });
+        colorsContainer.appendChild(addBtn);
+    }
+
     colors.forEach(c => addColor(c));
-    
+
+    // Public API
     container.addColor = addColor;
     container.removeColor = removeColor;
     container.getColors = () => colorElements;
     container.getData = () => colorElements.map(c => c.getData());
     container.setData = (data) => { while (colorElements.length > 0) removeColor(0); data.forEach(c => addColor(c)); };
     container.randomize = () => { colorElements.forEach(c => c.setColor({ r: Math.random(), g: Math.random(), b: Math.random() })); };
+    container.setNativeMode = (native) => {
+        isNativeMode = native;
+        colorElements.forEach(el => el.setNativeMode(native));
+        if (container._modeToggle) {
+            container._modeToggle.setValue(native);
+        }
+    };
+    container.isNativeMode = () => isNativeMode;
+
     return container;
 }
 

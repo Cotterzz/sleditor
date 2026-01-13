@@ -1340,9 +1340,17 @@ async function init() {
     // Now set up playback state
     state.isRunning = true;
     ui.restart();
-    state.isPlaying = true;
-    state.audioContext.resume();
-    ui.updatePlayPauseButton();
+    
+    // Only auto-start playback if AudioContext is running (not suspended)
+    // If suspended, the audio start overlay will handle starting playback
+    if (state.audioContext?.state === 'running') {
+        state.isPlaying = true;
+        ui.updatePlayPauseButton();
+    } else {
+        // Keep paused until user interacts with overlay
+        state.isPlaying = false;
+        ui.updatePlayPauseButton();
+    }
     
     // Mark initialization complete - now dirty tracking can start
     // Small delay to ensure all initial setValue calls have completed

@@ -949,8 +949,16 @@ export async function loadDatabaseShader(shader) {
     state.linearColorspace = linearColorspace;
     ui.updateColorspaceIcon();
     
-    const hasMedia = channels.hasMediaChannels();
-    if (hasMedia && !state.mediaStartUnlocked) {
+    // Check for media channels (audio/video inputs) OR audio output tabs (audio_glsl)
+    // Audio OUTPUT only needs overlay if AudioContext is suspended
+    // Audio INPUT always needs overlay for media access permission
+    const hasMediaInput = channels.hasMediaChannels();
+    const hasAudioOutput = state.activeTabs?.includes('audio_glsl');
+    const audioContextNeedsResume = state.audioContext?.state === 'suspended';
+    const needsInteractionForOutput = hasAudioOutput && audioContextNeedsResume;
+    const needsInteraction = hasMediaInput || needsInteractionForOutput;
+    
+    if (needsInteraction && !state.mediaStartUnlocked) {
         ui.showAudioStartOverlay();
     } else {
         ui.hideAudioStartOverlay();

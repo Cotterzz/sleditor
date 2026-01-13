@@ -1365,18 +1365,42 @@ body {
 }
 
 .sl-select {
-    padding: 8px 32px 8px 12px;
-    background: var(--bg-primary);
+    padding: 6px 28px 6px 10px;
+    background: var(--bg-secondary);
     border: 1px solid var(--border);
     border-radius: var(--border-radius);
     color: var(--text-primary);
     font-family: var(--font-ui);
-    font-size: 0.875rem;
+    font-size: 0.75rem; /* 12px */
     cursor: pointer;
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6b8d' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 10px center;
+    background-position: right 8px center;
+    min-width: 140px;
+}
+
+.sl-select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-color: var(--accent);
+}
+
+/* Compact variant (media panels, inline forms) */
+.sl-select-compact {
+    padding: 4px 24px 4px 8px;
+    font-size: 0.6875rem; /* 11px */
+    min-width: auto;
+    background-position: right 6px center;
+}
+
+/* Monospace variant (channel viewer, code-related) */
+.sl-select-monospace {
+    font-family: var(--font-code);
+    padding: 2px 20px 2px 6px;
+    font-size: 0.6875rem; /* 11px */
+    min-width: 70px;
+    background-position: right 4px center;
 }
 
 /* ========================================
@@ -2256,6 +2280,24 @@ body {
     cursor: text;
 }
 
+.sl-uniform-label-readonly {
+    cursor: default !important;
+    border: none !important;
+    background: transparent !important;
+    user-select: none;
+}
+
+/* Collapsed value display (always visible in middle row) */
+.sl-uniform-collapsed-value {
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    min-width: 40px;
+    text-align: right;
+    flex-shrink: 0;
+    margin-left: 6px;
+}
+
 .sl-uniform-row-middle .sl-slider-track {
     flex: 1;
     height: 18px;
@@ -2503,6 +2545,53 @@ body {
     border-color: var(--accent);
     color: var(--accent);
     background: var(--bg-hover);
+}
+
+/* ========================================
+   VECTOR SLIDER STACK - vec2/vec3/vec4
+   Uses UniformSlider for each component
+   ======================================== */
+
+.sl-vector-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border);
+    margin-bottom: 6px;
+}
+
+.sl-vector-stack-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+}
+
+.sl-vector-stack-name {
+    font-family: var(--font-code);
+    font-size: 0.75rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.sl-vector-stack-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/* Make component sliders more compact */
+.sl-vector-component-slider {
+    padding: 2px 0;
+}
+
+.sl-vector-component-slider .sl-uniform-label {
+    width: 25px;
+    min-width: 25px;
 }
 
 /* ========================================
@@ -3411,8 +3500,63 @@ body {
     font-family: var(--font-code);
     font-size: 0.65rem;
     color: var(--text-muted);
-    width: 55px;
+    min-width: 55px;
     text-align: right;
+    flex-shrink: 0;
+}
+
+/* Single-line layout - all elements inline */
+.sl-color-uniform-label-readonly {
+    cursor: default;
+    border: none !important;
+    background: transparent !important;
+}
+
+/* Alpha controls - inline */
+.sl-color-uniform-alpha-label {
+    font-family: var(--font-code);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-left: 8px;
+    flex-shrink: 0;
+}
+
+.sl-color-uniform-alpha-track {
+    width: 60px;
+    height: 14px;
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    margin: 0 4px;
+    flex-shrink: 0;
+}
+
+.sl-color-uniform-alpha-bg {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.sl-color-uniform-alpha-thumb {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 8px;
+    height: 12px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.sl-color-uniform-alpha-value {
+    font-family: var(--font-code);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    width: 28px;
+    text-align: right;
+    flex-shrink: 0;
 }
 
 /* ========================================
@@ -3607,6 +3751,8 @@ body {
     flex: 1;
     min-height: 0;
     overflow: auto;
+    display: flex;
+    flex-direction: column;
     background: var(--bg-panel);
     border-radius: 0 0 var(--border-radius) var(--border-radius);
 }
@@ -3625,6 +3771,10 @@ body {
 
 .sl-tab-panel {
     padding: 12px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Tabs Variants */

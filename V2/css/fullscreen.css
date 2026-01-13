@@ -1,0 +1,99 @@
+/**
+ * Fullscreen Mode Styles
+ * 
+ * Auto-hiding controls with smooth transitions.
+ * Works with SLUI windows and undocked shader controls.
+ */
+
+/* When in fullscreen mode */
+.v2-preview-canvas-container.fullscreen-mode {
+    cursor: default;
+}
+
+/* Hide cursor when controls are hidden */
+.v2-preview-canvas-container.fullscreen-mode.hide-controls {
+    cursor: none;
+}
+
+/* Floating controls bar - auto-hide in fullscreen */
+.fullscreen-mode .v2-shader-controls-floating {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fullscreen-mode.hide-controls .v2-shader-controls-floating {
+    opacity: 0;
+    transform: translateY(20px);
+    pointer-events: none;
+}
+
+/* Reappear on direct hover */
+.fullscreen-mode.hide-controls .v2-shader-controls-floating:hover {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+/* SLUI windows - auto-hide in fullscreen */
+.fullscreen-mode .sl-window-container {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fullscreen-mode.hide-controls .sl-window-container {
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+}
+
+/* Reappear on hover or interaction */
+.fullscreen-mode.hide-controls .sl-window-container:hover,
+.fullscreen-mode.hide-controls .sl-window-container:focus-within {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+/* Ensure uniform panel stays accessible in fullscreen */
+.fullscreen-mode .sl-window-container[data-window-id*="uniforms"] {
+    z-index: 10001;
+}
+
+/* Hide dock/undock buttons in fullscreen (both shader controls and SLUI windows) */
+.fullscreen-mode button[title="Dock"],
+.fullscreen-mode button[title="Undock"],
+.fullscreen-mode button[title*="Float controls"],
+.fullscreen-mode button[title*="Dock controls"],
+.fullscreen-mode .fullscreen-hidden {
+    display: none !important;
+}
+
+/* Canvas takes full viewport in fullscreen */
+.v2-preview-canvas-container:fullscreen {
+    width: 100vw !important;
+    height: 100vh !important;
+}
+
+.v2-preview-canvas-container:fullscreen .v2-preview-canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Media Panel Tabs - Compact styling and overflow fix */
+.v2-media-tabs-container .sl-tabs-bar {
+    flex-shrink: 0 !important;
+    padding: 2px 4px !important;
+}
+
+.v2-media-tabs-container .sl-tab {
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+}
+
+.v2-media-tabs-container .sl-tabs-content {
+    overflow: hidden !important; /* Override default auto for this use case */
+    height: 0 !important; /* Force flex to work in constrained space */
+}
+
+.v2-media-tabs-container .sl-tab-panel {
+    padding: 0 !important; /* Remove default padding for media panel */
+    overflow: hidden !important;
+}

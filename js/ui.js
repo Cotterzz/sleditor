@@ -150,7 +150,17 @@ function ensureAudioStartOverlay() {
 }
 
 export function showAudioStartOverlay(message = 'Click to start audio & shader') {
-    if (state.mediaStartUnlocked || !channels.hasMediaChannels()) return;
+    // Check for media channels (audio/video inputs) OR audio output tabs (audio_glsl)
+    const hasMediaInput = channels.hasMediaChannels();
+    const hasAudioOutput = state.activeTabs?.includes('audio_glsl');
+    
+    // Audio INPUT always needs interaction for media access permission
+    // Audio OUTPUT needs interaction if AudioContext is suspended
+    const audioContextSuspended = state.audioContext?.state === 'suspended';
+    const needsInteraction = hasMediaInput || (hasAudioOutput && audioContextSuspended);
+    
+    // Skip overlay if already unlocked OR if no interaction needed
+    if (state.mediaStartUnlocked || !needsInteraction) return;
     if (state.isPlaying) {
         pausePlayback();
     }
@@ -452,9 +462,10 @@ async function startPlayback() {
     state.pausedTime += pauseDuration;
     state.lastPauseTime = 0;
     
-    // Start GLSL audio if active
+    // Start GLSL audio if active, resuming from current shader time
     if (state.audioMode === AUDIO_MODES.GLSL) {
-        audioGlsl.start();
+        const currentTime = state.uniformBuilder?.data?.time || 0;
+        audioGlsl.start(currentTime);
     }
     
     updatePlayPauseButton();

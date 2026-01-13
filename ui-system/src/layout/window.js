@@ -7,6 +7,7 @@ import { state } from '../core/state.js';
 import { t } from '../core/i18n.js';
 import { emit, EVENTS } from '../core/events.js';
 import { updateToolbarItem } from './toolbar.js';
+import { detectDropZone, showDropPreview, hideDropPreview, undockWindow } from './dock.js';
 
 /**
  * Create a new floating window
@@ -82,7 +83,7 @@ export function createWindow(options, dockWindow, closeDockWindow) {
     undockBtn.title = 'Undock';
     undockBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        // Undock handled by dock module
+        undockWindow(id);
     });
     controls.appendChild(undockBtn);
     
@@ -140,7 +141,7 @@ export function createWindow(options, dockWindow, closeDockWindow) {
     
     // Setup interactions
     setupFrameHover(container, body, frame);
-    setupWindowDrag(container, frame);
+    setupWindowDrag(container, frame, dockWindow);
     if (resizable) setupWindowResize(container, body);
     setupWindowFocus(container);
     
@@ -158,7 +159,7 @@ export function createWindow(options, dockWindow, closeDockWindow) {
 /**
  * Frame hover - show frame when cursor is near window but not inside body
  */
-function setupFrameHover(container, body, frame) {
+export function setupFrameHover(container, body, frame) {
     let isInsideBody = false;
     
     body.addEventListener('mouseenter', () => {
@@ -196,9 +197,10 @@ function setupFrameHover(container, body, frame) {
 /**
  * Setup window drag behavior
  */
-function setupWindowDrag(container, frame) {
+export function setupWindowDrag(container, frame, dockWindow) {
     let isDragging = false;
     let startX, startY, startLeft, startTop;
+    let currentDropInfo = null;
     
     frame.addEventListener('mousedown', (e) => {
         isDragging = true;
@@ -218,6 +220,15 @@ function setupWindowDrag(container, frame) {
         const dy = e.clientY - startY;
         container.style.left = `${startLeft + dx}px`;
         container.style.top = `${startTop + dy}px`;
+
+        // Docking preview
+        const windowId = container.dataset.windowId;
+        currentDropInfo = detectDropZone(e.clientX, e.clientY, windowId);
+        if (currentDropInfo) {
+            showDropPreview(currentDropInfo);
+        } else {
+            hideDropPreview();
+        }
     });
     
     document.addEventListener('mouseup', () => {
@@ -225,6 +236,22 @@ function setupWindowDrag(container, frame) {
             isDragging = false;
             container.style.transition = '';
             container.classList.remove('dragging');
+
+            // Perform docking if we had a valid drop target
+            const windowId = container.dataset.windowId;
+            if (currentDropInfo && dockWindow) {
+                dockWindow(windowId, currentDropInfo.side, currentDropInfo.targetPanel || null);
+            }
+            // Persist bounds back into state (robust restore)
+            const winState = state.windows.get(windowId);
+            if (winState?.options) {
+                winState.options.x = container.offsetLeft;
+                winState.options.y = container.offsetTop;
+                winState.options.width = container.offsetWidth;
+                winState.options.height = container.offsetHeight;
+            }
+            currentDropInfo = null;
+            hideDropPreview();
         }
     });
     
@@ -247,12 +274,35 @@ function setupWindowDrag(container, frame) {
         const dy = touch.clientY - startY;
         container.style.left = `${startLeft + dx}px`;
         container.style.top = `${startTop + dy}px`;
+
+        // Docking preview
+        const windowId = container.dataset.windowId;
+        currentDropInfo = detectDropZone(touch.clientX, touch.clientY, windowId);
+        if (currentDropInfo) {
+            showDropPreview(currentDropInfo);
+        } else {
+            hideDropPreview();
+        }
     });
     
     document.addEventListener('touchend', () => {
         if (isDragging) {
             isDragging = false;
             container.classList.remove('dragging');
+
+            const windowId = container.dataset.windowId;
+            if (currentDropInfo && dockWindow) {
+                dockWindow(windowId, currentDropInfo.side, currentDropInfo.targetPanel || null);
+            }
+            const winState = state.windows.get(windowId);
+            if (winState?.options) {
+                winState.options.x = container.offsetLeft;
+                winState.options.y = container.offsetTop;
+                winState.options.width = container.offsetWidth;
+                winState.options.height = container.offsetHeight;
+            }
+            currentDropInfo = null;
+            hideDropPreview();
         }
     });
 }
@@ -260,7 +310,7 @@ function setupWindowDrag(container, frame) {
 /**
  * Setup window resize behavior
  */
-function setupWindowResize(container, body) {
+export function setupWindowResize(container, body) {
     let isResizing = false;
     let startX, startY, startW, startH, startL, startT, direction;
     
@@ -304,6 +354,15 @@ function setupWindowResize(container, body) {
             isResizing = false;
             container.style.transition = '';
             container.classList.remove('resizing');
+
+            const windowId = container.dataset.windowId;
+            const winState = state.windows.get(windowId);
+            if (winState?.options) {
+                winState.options.x = container.offsetLeft;
+                winState.options.y = container.offsetTop;
+                winState.options.width = container.offsetWidth;
+                winState.options.height = container.offsetHeight;
+            }
         }
     });
 }
@@ -311,7 +370,7 @@ function setupWindowResize(container, body) {
 /**
  * Setup window focus on click
  */
-function setupWindowFocus(container) {
+export function setupWindowFocus(container) {
     container.addEventListener('mousedown', () => {
         bringToFront(container.dataset.windowId);
     });
@@ -320,7 +379,7 @@ function setupWindowFocus(container) {
 /**
  * Setup hover detection for window controls
  */
-function setupWindowControlsHover(body, controls) {
+export function setupWindowControlsHover(body, controls) {
     const hoverZone = 60;
     
     body.addEventListener('mousemove', (e) => {

@@ -230,6 +230,7 @@ export async function compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioReload
         
         // Load Audio if present
         let audioSuccess = true;
+        let glslAudioLoaded = false;
         if (!skipAudioReload) {
             if (hasAudioGlsl) {
                 // Initialize GLSL audio backend
@@ -247,6 +248,8 @@ export async function compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioReload
                     const errMsg = result.errors[0] ? `Line ${result.errors[0].lineNum || '?'}: ${result.errors[0].message}` : 'Unknown error';
                     logStatus(`✗ GLSL Audio error: ${errMsg}`, 'error');
                     audioSuccess = false;
+                } else {
+                    glslAudioLoaded = true;
                 }
             } else if (hasAudioWorklet) {
                 const audioCode = state.audioEditor.getValue();
@@ -293,6 +296,13 @@ export async function compileGLSL(hasAudioWorklet, hasAudioGlsl, skipAudioReload
         logStatus(statusMessage, 'success');
         
         jsRuntime.callInit();
+        
+        // Auto-restart GLSL audio if it was successfully compiled and playback is active
+        // Resume from current shader time to stay in sync
+        if (glslAudioLoaded && state.isPlaying) {
+            const currentTime = state.uniformBuilder?.data?.time || 0;
+            audioGlsl.start(currentTime);
+        }
         
         if (!state.isPlaying) {
             render.renderOnce();
@@ -377,6 +387,7 @@ export async function reloadShader(isResizeOnly = false) {
             const startTotal = performance.now();
             let audioSuccess = true;
             let jsSuccess = true;
+            let glslAudioLoaded = false;
             
             // Load Audio if present
             if (!skipAudioReload) {
@@ -393,6 +404,8 @@ export async function reloadShader(isResizeOnly = false) {
                         editor.setAudioWorkletErrors(result.errors);
                         logStatus(`✗ GLSL Audio error: ${result.errors[0].message}`, 'error');
                         audioSuccess = false;
+                    } else {
+                        glslAudioLoaded = true;
                     }
                 } else if (hasAudioWorklet) {
                     const audioCode = state.audioEditor.getValue();
@@ -422,6 +435,14 @@ export async function reloadShader(isResizeOnly = false) {
             if (audioSuccess && jsSuccess) {
                 const totalTime = performance.now() - startTotal;
                 logStatus(`✓ Compiled in ${totalTime.toFixed(1)}ms`, 'success');
+                
+                // Auto-restart GLSL audio if it was successfully compiled and playback is active
+                // Resume from current shader time to stay in sync
+                if (glslAudioLoaded && state.isPlaying) {
+                    const currentTime = state.uniformBuilder?.data?.time || 0;
+                    audioGlsl.start(currentTime);
+                }
+                
                 return true;
             }
             return false;
