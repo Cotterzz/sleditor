@@ -378,7 +378,9 @@ vec2 mainSound(int samp, float time) {
 			
 			// Simple sustained tone - no envelope decay
 			// This avoids clicks from duration changing between batches
-			float envelope = 1.0;
+            float at = 50.;
+            float de = 1./vel;
+			float envelope = (1.0 - exp(-dur*at))*exp(-dur*de);
 			
 			// Sine wave
 			float wave = sin(6.2831 * phase);
