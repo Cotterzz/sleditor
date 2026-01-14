@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI Input Monitor</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+        }
+        
+        h1 {
+            color: #4CAF50;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #333;
+        }
+        
+        .status.connected {
+            background-color: #2a4a2a;
+            border: 1px solid #4CAF50;
+        }
+        
+        .status.error {
+            background-color: #4a2a2a;
+            border: 1px solid #f44336;
+        }
+        
+        #midiDevices {
+            margin: 20px 0;
+        }
+        
+        .device {
+            background-color: #2a2a2a;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #444;
+        }
+        
+        #midiLog {
+            background-color: #0a0a0a;
+            border: 1px solid #444;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            font-size: 12px;
+            border-radius: 5px;
+        }
+        
+        .midi-message {
+            margin: 2px 0;
+            padding: 5px;
+            background-color: #1a1a1a;
+            border-radius: 3px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .timestamp {
+            color: #888;
+        }
+        
+        .message-type {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .clear-button {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 0;
+        }
+        
+        .clear-button:hover {
+            background-color: #da190b;
+        }
+    </style>
+</head>
+<body>
+    <h1>MIDI Input Monitor</h1>
+    
+    <div id="status" class="status">
+        Checking for MIDI support...
+    </div>
+    
+    <div id="midiDevices">
+        <h2>Available MIDI Devices:</h2>
+        <div id="deviceList"></div>
+    </div>
+    
+    <button class="clear-button" onclick="clearLog()">Clear Log</button>
+    
+    <h2>MIDI Messages:</h2>
+    <div id="midiLog"></div>
+
+    <script>
+        let midiAccess = null;
+        let midiLog = document.getElementById('midiLog');
+        let statusElement = document.getElementById('status');
+        let deviceListElement = document.getElementById('deviceList');
+
+        // Check for MIDI support
+        if (navigator.requestMIDIAccess) {
+            navigator.requestMIDIAccess()
+                .then(onMIDISuccess, onMIDIFailure);
+        } else {
+            statusElement.textContent = "Web MIDI API is not supported in this browser.";
+            statusElement.className = "status error";
+        }
+
+        function onMIDISuccess(access) {
+            midiAccess = access;
+            statusElement.textContent = "MIDI Access Granted!";
+            statusElement.className = "status connected";
+            
+            // List all available MIDI input devices
+            listMIDIDevices();
+            
+            // Listen for device changes
+            midiAccess.onstatechange = (e) => {
+                listMIDIDevices();
+            };
+            
+            // Start listening to all MIDI inputs
+            for (let input of midiAccess.inputs.values()) {
+                input.onmidimessage = handleMIDIMessage;
+            }
+        }
+
+        function onMIDIFailure() {
+            statusElement.textContent = "Failed to get MIDI access.";
+            statusElement.className = "status error";
+        }
+
+        function listMIDIDevices() {
+            deviceListElement.innerHTML = '';
+            
+            if (midiAccess.inputs.size === 0) {
+                deviceListElement.innerHTML = '<div class="device">No MIDI input devices found</div>';
+                return;
+            }
+            
+            for (let input of midiAccess.inputs.values()) {
+                let device = document.createElement('div');
+                device.className = 'device';
+                device.innerHTML = `
+                    <strong>${input.name}</strong><br>
+                    ID: ${input.id}<br>
+                    State: ${input.state}<br>
+                    Connection: ${input.connection}
+                `;
+                deviceListElement.appendChild(device);
+            }
+        }
+
+        function handleMIDIMessage(message) {
+            // Get timestamp
+            let timestamp = new Date().toLocaleTimeString();
+            
+            // Get message data
+            let data = message.data;
+            let cmd = data[0] >> 4;
+            let channel = data[0] & 0xf;
+            let type = getMIDIMessageType(data[0]);
+            
+            // Create readable message
+            let hexString = Array.from(data, byte => 
+                '0x' + byte.toString(16).padStart(2, '0').toUpperCase()
+            ).join(' ');
+            
+            let decimalString = Array.from(data).join(', ');
+            
+            // Create log entry
+            let logEntry = document.createElement('div');
+            logEntry.className = 'midi-message';
+            logEntry.innerHTML = `
+                <span>
+                    <span class="message-type">${type}</span> 
+                    Ch: ${channel + 1} | 
+                    Hex: ${hexString} | 
+                    Dec: [${decimalString}]
+                </span>
+                <span class="timestamp">${timestamp}</span>
+            `;
+            
+            // Add to log (newest at top)
+            midiLog.insertBefore(logEntry, midiLog.firstChild);
+            
+            // Limit log size
+            while (midiLog.children.length > 100) {
+                midiLog.removeChild(midiLog.lastChild);
+            }
+        }
+
+        function getMIDIMessageType(status) {
+            let type = status & 0xf0;
+            switch(type) {
+                case 0x80: return 'Note Off';
+                case 0x90: return 'Note On';
+                case 0xA0: return 'Aftertouch';
+                case 0xB0: return 'Control Change';
+                case 0xC0: return 'Program Change';
+                case 0xD0: return 'Channel Pressure';
+                case 0xE0: return 'Pitch Bend';
+                case 0xF0: return 'System';
+                default: return 'Unknown';
+            }
+        }
+
+        function clearLog() {
+            midiLog.innerHTML = '';
+        }
+    </script>
+</body>
+</html>

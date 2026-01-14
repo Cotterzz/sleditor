@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI Input Monitor</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 20px;
+            margin: 0;
+            min-height: 100vh;
+        }
+        
+        h1 {
+            color: #00d4ff;
+            margin-bottom: 20px;
+        }
+        
+        #status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        #status.success {
+            background: #0a3d2a;
+            border: 1px solid #00ff88;
+            color: #00ff88;
+        }
+        
+        #status.error {
+            background: #3d0a0a;
+            border: 1px solid #ff4444;
+            color: #ff4444;
+        }
+        
+        #status.waiting {
+            background: #3d3a0a;
+            border: 1px solid #ffcc00;
+            color: #ffcc00;
+        }
+        
+        #devices {
+            background: #252540;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        #devices h2 {
+            margin-top: 0;
+            color: #aa88ff;
+        }
+        
+        .device {
+            padding: 8px 12px;
+            background: #1a1a2e;
+            border-radius: 4px;
+            margin: 5px 0;
+            border-left: 3px solid #00d4ff;
+        }
+        
+        #messages-container {
+            background: #252540;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        
+        #messages-container h2 {
+            margin-top: 0;
+            color: #aa88ff;
+        }
+        
+        #clear-btn {
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        
+        #clear-btn:hover {
+            background: #ff6666;
+        }
+        
+        #messages {
+            max-height: 500px;
+            overflow-y: auto;
+            font-size: 14px;
+        }
+        
+        .message {
+            padding: 8px 12px;
+            margin: 4px 0;
+            border-radius: 4px;
+            display: grid;
+            grid-template-columns: 100px 80px 1fr;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .message.note-on {
+            background: linear-gradient(90deg, #0a3d2a 0%, #252540 100%);
+            border-left: 3px solid #00ff88;
+        }
+        
+        .message.note-off {
+            background: linear-gradient(90deg, #3d2a0a 0%, #252540 100%);
+            border-left: 3px solid #ff8800;
+        }
+        
+        .message.cc {
+            background: linear-gradient(90deg, #0a2a3d 0%, #252540 100%);
+            border-left: 3px solid #00aaff;
+        }
+        
+        .message.pitch-bend {
+            background: linear-gradient(90deg, #2a0a3d 0%, #252540 100%);
+            border-left: 3px solid #aa00ff;
+        }
+        
+        .message.other {
+            background: linear-gradient(90deg, #2a2a2a 0%, #252540 100%);
+            border-left: 3px solid #888;
+        }
+        
+        .raw {
+            color: #888;
+            font-size: 12px;
+        }
+        
+        .type {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        
+        .details {
+            color: #fff;
+        }
+        
+        .channel {
+            color: #ffcc00;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎹 MIDI Input Monitor</h1>
+    
+    <div id="status" class="waiting">Initializing MIDI...</div>
+    
+    <div id="devices">
+        <h2>Connected Devices</h2>
+        <div id="device-list">No devices found</div>
+    </div>
+    
+    <div id="messages-container">
+        <h2>MIDI Messages</h2>
+        <button id="clear-btn" onclick="clearMessages()">Clear Messages</button>
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let midiAccess = null;
+        const messagesDiv = document.getElementById('messages');
+        const statusDiv = document.getElementById('status');
+        const deviceListDiv = document.getElementById('device-list');
+        
+        // Initialize MIDI
+        async function initMIDI() {
+            if (!navigator.requestMIDIAccess) {
+                setStatus('error', '❌ Web MIDI API not supported in this browser. Try Chrome or Edge.');
+                return;
+            }
+            
+            try {
+                midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+                setStatus('success', '✅ MIDI Access Granted');
+                
+                // List devices and set up listeners
+                updateDevices();
+                
+                // Listen for device changes
+                midiAccess.onstatechange = (e) => {
+                    console.log('MIDI state change:', e.port.name, e.port.state);
+                    updateDevices();
+                };
+                
+            } catch (err) {
+                setStatus('error', `❌ MIDI Access Denied: ${err.message}`);
+            }
+        }
+        
+        function setStatus(type, message) {
+            statusDiv.className = type;
+            statusDiv.textContent = message;
+        }
+        
+        function updateDevices() {
+            const inputs = Array.from(midiAccess.inputs.values());
+            
+            if (inputs.length === 0) {
+                deviceListDiv.innerHTML = '<div class="device">No MIDI input devices found. Connect a device and refresh.</div>';
+                return;
+            }
+            
+            deviceListDiv.innerHTML = inputs.map(input => {
+                // Set up message handler for each input
+                input.onmidimessage = handleMIDIMessage;
+                
+                return `<div class="device">
+                    <strong>${input.name}</strong> 
+                    (${input.manufacturer || 'Unknown manufacturer'}) 
+                    - ${input.state}
+                </div>`;
+            }).join('');
+        }
+        
+        function handleMIDIMessage(event) {
+            const [status, data1, data2] = event.data;
+            const channel = (status & 0x0F) + 1;
+            const command = status & 0xF0;
+            
+            let type = 'other';
+            let typeName = 'Unknown';
+            let details = '';
+            
+            switch (command) {
+                case 0x90: // Note On
+                    if (data2 > 0) {
+                        type = 'note-on';
+                        typeName = 'Note On';
+                        details = `Note: ${data1} (${noteToName(data1)}) Velocity: ${data2}`;
+                    } else {
+                        // Note On with velocity 0 = Note Off
+                        type = 'note-off';
+                        typeName = 'Note Off';
+                        details = `Note: ${data1} (${noteToName(data1)})`;
+                    }
+                    break;
+                    
+                case 0x80: // Note Off
+                    type = 'note-off';
+                    typeName = 'Note Off';
+                    details = `Note: ${data1} (${noteToName(data1)}) Velocity: ${data2}`;
+                    break;
+                    
+                case 0xB0: // Control Change
+                    type = 'cc';
+                    typeName = 'CC';
+                    details = `Controller: ${data1} (${ccToName(data1)}) Value: ${data2}`;
+                    break;
+                    
+                case 0xE0: // Pitch Bend
+                    type = 'pitch-bend';
+                    typeName = 'Pitch Bend';
+                    const pitchValue = (data2 << 7) | data1;
+                    details = `Value: ${pitchValue} (${pitchValue - 8192})`;
+                    break;
+                    
+                case 0xC0: // Program Change
+                    type = 'other';
+                    typeName = 'Program';
+                    details = `Program: ${data1}`;
+                    break;
+                    
+                case 0xD0: // Channel Pressure
+                    type = 'other';
+                    typeName = 'Pressure';
+                    details = `Pressure: ${data1}`;
+                    break;
+                    
+                case 0xA0: // Polyphonic Aftertouch
+                    type = 'other';
+                    typeName = 'Poly AT';
+                    details = `Note: ${data1} Pressure: ${data2}`;
+                    break;
+                    
+                default:
+                    typeName = `0x${command.toString(16).toUpperCase()}`;
+                    details = `Data: ${data1}, ${data2}`;
+            }
+            
+            const rawHex = Array.from(event.data)
+                .map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0'))
+                .join(' ');
+            
+            const messageHTML = `
+                <div class="message ${type}">
+                    <span class="type">${typeName}</span>
+                    <span class="channel">Ch ${channel}</span>
+                    <span class="details">${details} <span class="raw">[${rawHex}]</span></span>
+                </div>
+            `;
+            
+            messagesDiv.insertAdjacentHTML('afterbegin', messageHTML);
+            
+            // Keep only last 100 messages
+            while (messagesDiv.children.length > 100) {
+                messagesDiv.removeChild(messagesDiv.lastChild);
+            }
+        }
+        
+        function noteToName(noteNumber) {
+            const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const octave = Math.floor(noteNumber / 12) - 1;
+            const note = notes[noteNumber % 12];
+            return `${note}${octave}`;
+        }
+        
+        function ccToName(cc) {
+            const ccNames = {
+                1: 'Mod Wheel',
+                7: 'Volume',
+                10: 'Pan',
+                11: 'Expression',
+                64: 'Sustain',
+                65: 'Portamento',
+                71: 'Resonance',
+                74: 'Cutoff',
+                91: 'Reverb',
+                93: 'Chorus'
+            };
+            return ccNames[cc] || `CC${cc}`;
+        }
+        
+        function clearMessages() {
+            messagesDiv.innerHTML = '';
+        }
+        
+        // Start
+        initMIDI();
+    </script>
+</body>
+</html>

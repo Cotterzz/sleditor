@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI State Visualizer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #0a0a0f;
+            color: #eee;
+            padding: 20px;
+            margin: 0;
+            min-height: 100vh;
+        }
+        
+        h1 {
+            color: #00d4ff;
+            margin-bottom: 20px;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .panel {
+            background: #1a1a2e;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #252540;
+        }
+        
+        .panel h2 {
+            margin-top: 0;
+            color: #aa88ff;
+        }
+        
+        #status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        #status.success {
+            background: #0a3d2a;
+            border: 1px solid #00ff88;
+            color: #00ff88;
+        }
+        
+        #status.error {
+            background: #3d0a0a;
+            border: 1px solid #ff4444;
+            color: #ff4444;
+        }
+        
+        /* Active Notes Visualization */
+        #active-notes {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .note-cell {
+            aspect-ratio: 1;
+            background: #252540;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.1s ease;
+        }
+        
+        .note-cell.active {
+            background: #00d4ff;
+            color: #000;
+            font-weight: bold;
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+        
+        .note-cell .velocity-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.3);
+            transition: height 0.1s ease;
+        }
+        
+        /* Velocity Meter */
+        #velocity-meter {
+            height: 40px;
+            background: #252540;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 10px;
+        }
+        
+        #velocity-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88 0%, #ffcc00 50%, #ff4444 100%);
+            width: 0%;
+            transition: width 0.05s ease;
+        }
+        
+        #velocity-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-weight: bold;
+            text-shadow: 0 0 4px rgba(0,0,0,0.8);
+        }
+        
+        /* Pitch Bend */
+        #pitch-bend-container {
+            height: 60px;
+            background: #252540;
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #pitch-bend-center {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #666;
+        }
+        
+        #pitch-bend-indicator {
+            position: absolute;
+            width: 10px;
+            height: 100%;
+            background: #aa00ff;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: left 0.05s ease;
+        }
+        
+        /* CC Values */
+        .cc-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+        
+        .cc-item {
+            background: #252540;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        
+        .cc-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00aaff;
+        }
+        
+        .cc-label {
+            font-size: 12px;
+            color: #888;
+        }
+        
+        /* State Output */
+        #state-output {
+            background: #000;
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: pre;
+            overflow-x: auto;
+            max-height: 200px;
+        }
+        
+        /* Time visualization */
+        #time-graph {
+            height: 100px;
+            background: #252540;
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .time-bar {
+            position: absolute;
+            bottom: 0;
+            width: 2px;
+            background: #00ff88;
+            animation: slide 5s linear;
+        }
+        
+        @keyframes slide {
+            from { right: 0; }
+            to { right: 100%; }
+        }
+        
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎹 MIDI State Visualizer</h1>
+    
+    <div id="status" class="waiting">Initializing MIDI...</div>
+    
+    <div class="container">
+        <div class="panel">
+            <h2>Active Notes</h2>
+            <div id="active-notes"></div>
+            
+            <h2>Velocity</h2>
+            <div id="velocity-meter">
+                <div id="velocity-bar"></div>
+                <div id="velocity-value">0</div>
+            </div>
+            
+            <h2>Pitch Bend</h2>
+            <div id="pitch-bend-container">
+                <div id="pitch-bend-center"></div>
+                <div id="pitch-bend-indicator"></div>
+            </div>
+            
+            <h2>Control Changes</h2>
+            <div class="cc-grid">
+                <div class="cc-item">
+                    <div class="cc-value" id="cc-1">0</div>
+                    <div class="cc-label">Mod Wheel</div>
+                </div>
+                <div class="cc-item">
+                    <div class="cc-value" id="cc-7">0</div>
+                    <div class="cc-label">Volume</div>
+                </div>
+                <div class="cc-item">
+                    <div class="cc-value" id="cc-11">0</div>
+                    <div class="cc-label">Expression</div>
+                </div>
+                <div class="cc-item">
+                    <div class="cc-value" id="cc-64">0</div>
+                    <div class="cc-label">Sustain</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>Note Activity Timeline</h2>
+            <div id="time-graph"></div>
+            
+            <h2>Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat">
+                    <div class="stat-value" id="note-count">0</div>
+                    <div class="stat-label">Active Notes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="avg-velocity">0</div>
+                    <div class="stat-label">Avg Velocity</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="note-range">-</div>
+                    <div class="stat-label">Note Range</div>
+                </div>
+            </div>
+            
+            <h2>Shader State Data</h2>
+            <div id="state-output">// Waiting for MIDI data...</div>
+        </div>
+    </div>
+
+    <script>
+        let midiAccess = null;
+        
+        // Current state
+        const state = {
+            activeNotes: new Map(), // note -> {velocity, startTime}
+            cc: new Array(128).fill(0),
+            pitchBend: 8192, // center value
+            lastVelocity: 0,
+            sustain: false,
+            channel: 1
+        };
+        
+        // Initialize note grid
+        function initNoteGrid() {
+            const notesDiv = document.getElementById('active-notes');
+            const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            
+            // Show 8 octaves (96 notes)
+            for (let i = 24; i < 120; i++) {
+                const noteDiv = document.createElement('div');
+                noteDiv.className = 'note-cell';
+                noteDiv.id = `note-${i}`;
+                noteDiv.textContent = noteNames[i % 12] + Math.floor(i / 12 - 1);
+                
+                const velocityBar = document.createElement('div');
+                velocityBar.className = 'velocity-bar';
+                noteDiv.appendChild(velocityBar);
+                
+                notesDiv.appendChild(noteDiv);
+            }
+        }
+        
+        // Initialize MIDI
+        async function initMIDI() {
+            if (!navigator.requestMIDIAccess) {
+                setStatus('error', '❌ Web MIDI API not supported in this browser.');
+                return;
+            }
+            
+            try {
+                midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+                setStatus('success', '✅ MIDI Access Granted - Play some notes!');
+                
+                // Set up listeners for all inputs
+                for (const input of midiAccess.inputs.values()) {
+                    input.onmidimessage = handleMIDIMessage;
+                }
+                
+                // Start update loop
+                requestAnimationFrame(updateDisplay);
+                
+            } catch (err) {
+                setStatus('error', `❌ MIDI Access Denied: ${err.message}`);
+            }
+        }
+        
+        function setStatus(type, message) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = type;
+            statusDiv.textContent = message;
+        }
+        
+        function handleMIDIMessage(event) {
+            const [status, data1, data2] = event.data;
+            const channel = (status & 0x0F) + 1;
+            const command = status & 0xF0;
+            
+            state.channel = channel;
+            
+            switch (command) {
+                case 0x90: // Note On
+                    if (data2 > 0) {
+                        state.activeNotes.set(data1, {
+                            velocity: data2,
+                            startTime: performance.now()
+                        });
+                        state.lastVelocity = data2;
+                        addTimelineEvent(data1, data2);
+                    } else {
+                        // Note On with velocity 0 = Note Off
+                        state.activeNotes.delete(data1);
+                    }
+                    break;
+                    
+                case 0x80: // Note Off
+                    state.activeNotes.delete(data1);
+                    break;
+                    
+                case 0xB0: // Control Change
+                    state.cc[data1] = data2;
+                    if (data1 === 64) { // Sustain pedal
+                        state.sustain = data2 >= 64;
+                    }
+                    break;
+                    
+                case 0xE0: // Pitch Bend
+                    state.pitchBend = (data2 << 7) | data1;
+                    break;
+            }
+        }
+        
+        function addTimelineEvent(note, velocity) {
+            const timeGraph = document.getElementById('time-graph');
+            const bar = document.createElement('div');
+            bar.className = 'time-bar';
+            bar.style.height = `${(velocity / 127) * 100}%`;
+            bar.style.background = `hsl(${(note % 12) * 30}, 100%, 50%)`;
+            timeGraph.appendChild(bar);
+            
+            // Remove after animation
+            setTimeout(() => bar.remove(), 5000);
+        }
+        
+        function updateDisplay() {
+            // Update active notes
+            for (let i = 24; i < 120; i++) {
+                const noteDiv = document.getElementById(`note-${i}`);
+                if (noteDiv) {
+                    const noteData = state.activeNotes.get(i);
+                    if (noteData) {
+                        noteDiv.classList.add('active');
+                        const velocityBar = noteDiv.querySelector('.velocity-bar');
+                        velocityBar.style.height = `${(noteData.velocity / 127) * 100}%`;
+                    } else {
+                        noteDiv.classList.remove('active');
+                        const velocityBar = noteDiv.querySelector('.velocity-bar');
+                        velocityBar.style.height = '0%';
+                    }
+                }
+            }
+            
+            // Update velocity meter
+            const velocityBar = document.getElementById('velocity-bar');
+            const velocityValue = document.getElementById('velocity-value');
+            velocityBar.style.width = `${(state.lastVelocity / 127) * 100}%`;
+            velocityValue.textContent = state.lastVelocity;
+            
+            // Update pitch bend
+            const pitchBendIndicator = document.getElementById('pitch-bend-indicator');
+            const bendPercent = ((state.pitchBend - 8192) / 8192 + 1) * 50;
+            pitchBendIndicator.style.left = `${bendPercent}%`;
+            
+            // Update CC displays
+            document.getElementById('cc-1').textContent = state.cc[1];
+            document.getElementById('cc-7').textContent = state.cc[7];
+            document.getElementById('cc-11').textContent = state.cc[11];
+            document.getElementById('cc-64').textContent = state.cc[64];
+            
+            // Update statistics
+            const activeCount = state.activeNotes.size;
+            document.getElementById('note-count').textContent = activeCount;
+            
+            if (activeCount > 0) {
+                const velocities = Array.from(state.activeNotes.values()).map(n => n.velocity);
+                const avgVel = Math.round(velocities.reduce((a, b) => a + b, 0) / activeCount);
+                document.getElementById('avg-velocity').textContent = avgVel;
+                
+                const noteNumbers = Array.from(state.activeNotes.keys());
+                const minNote = Math.min(...noteNumbers);
+                const maxNote = Math.max(...noteNumbers);
+                document.getElementById('note-range').textContent = 
+                    `${noteToName(minNote)}-${noteToName(maxNote)}`;
+            } else {
+                document.getElementById('avg-velocity').textContent = '0';
+                document.getElementById('note-range').textContent = '-';
+            }
+            
+            // Update shader state output
+            updateShaderState();
+            
+            requestAnimationFrame(updateDisplay);
+        }
+        
+        function updateShaderState() {
+            // Prepare data for shader
+            const shaderData = {
+                // Active notes as array of [note, velocity, duration]
+                notes: Array.from(state.activeNotes.entries()).map(([note, data]) => ({
+                    note: note / 127.0, // Normalized
+                    velocity: data.velocity / 127.0,
+                    duration: (performance.now() - data.startTime) / 1000.0 // seconds
+                })),
+                
+                // Pitch bend normalized to -1 to 1
+                pitchBend: (state.pitchBend - 8192) / 8192.0,
+                
+                // Common CCs
+                modWheel: state.cc[1] / 127.0,
+                volume: state.cc[7] / 127.0,
+                expression: state.cc[11] / 127.0,
+                sustain: state.sustain ? 1.0 : 0.0,
+                
+                // Overall state
+                noteCount: state.activeNotes.size,
+                avgVelocity: state.activeNotes.size > 0 
+                    ? Array.from(state.activeNotes.values())
+                        .reduce((sum, n) => sum + n.velocity, 0) / state.activeNotes.size / 127.0
+                    : 0.0,
+                
+                time: performance.now() / 1000.0
+            };
+            
+            // Display as formatted JSON
+            document.getElementById('state-output').textContent = 
+                JSON.stringify(shaderData, null, 2);
+        }
+        
+        function noteToName(noteNumber) {
+            const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const octave = Math.floor(noteNumber / 12) - 1;
+            const note = notes[noteNumber % 12];
+            return `${note}${octave}`;
+        }
+        
+        // Initialize
+        initNoteGrid();
+        initMIDI();
+    </script>
+</body>
+</html>
