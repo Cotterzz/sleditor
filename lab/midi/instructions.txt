@@ -1,0 +1,34 @@
+Combined MIDI input and Audio shader proof of concept.
+
+I need to add MIDI input to the audio shader+waveform visualiser.
+
+Use  midiE.html  and  audiopluswave.html (and index.js)
+
+Other than combining them and sending MIDI uniforms to the shader we will need to add the following functionality:
+
+Sliders to adjust the audio frames to make it more/less responsive.
+Buffer ahead time should be 50ms to 1000ms (default to 500ms)
+Sample number/batch size:  20ms to 200ms (default to 100ms) or whatever number of samples fits into that period.
+
+Pressing the piano keys simulates a note - for those that dont have midi input, and if no midi device is found.
+
+A default shader, based on this one:
+vec2 mainSound(int samp, float time) {
+	float freq = 440.0;
+	int period = int(iSampleRate);  // Use sample rate as period
+	int sampMod = samp % period;
+	float phase = fract(float(sampMod) * freq / iSampleRate);
+	float envelope = exp(-0.5 * time)*0.5;
+	float wave = sin(6.2831 * phase);
+	return vec2(wave)*envelope;
+}
+
+the MIDI uniforms will be in the boilerplate, but it will use them and create a note sound for each note (up to ten) supplied by the uniform data, and taking into account velocity and possible time note is down
+
+We dont need:
+
+shader state panel or copy JSON/GLSL buttons
+
+the extra MIDI data, like sustain etc, (except number of notes, that will be needed)
+
+the controllers and active notes panels (though a compact midi log panel would be useful)

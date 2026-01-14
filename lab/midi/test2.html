@@ -1,0 +1,42 @@
+<html>
+<head>
+	<title>Test Audio - Original</title>
+</head>
+<body>
+	<h1>Test Audio (Original index.js)</h1>
+	<button id="start">Start</button>
+	<div id="status">Ready</div>
+	
+	<script type="module">
+		import { WebGLAudioShader } from './index.js'
+		
+		const shader = new WebGLAudioShader()
+		
+		shader.onError = (error) => {
+			document.getElementById('status').textContent = 'ERROR: ' + error
+			console.error('Shader error:', error)
+		}
+		
+		shader.onSuccess = () => {
+			document.getElementById('status').textContent = 'Shader compiled successfully'
+		}
+		
+		// Very simple test shader - just a 440Hz sine wave
+		const testShader = `
+vec2 mainSound(int samp, float time) {
+	float freq = 440.0;
+	float wave = sin(6.2831 * freq * time);
+	return vec2(wave * 0.3);
+}
+`
+		
+		await shader.init(testShader)
+		document.getElementById('status').textContent = 'Initialized'
+		
+		document.getElementById('start').addEventListener('click', () => {
+			shader.start()
+			document.getElementById('status').textContent = 'Playing...'
+		})
+	</script>
+</body>
+</html>

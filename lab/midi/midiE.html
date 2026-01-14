@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI State Monitor</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Consolas', 'Monaco', monospace;
+            background: #0a0a12;
+            color: #eee;
+            padding: 20px;
+            margin: 0;
+            min-height: 100vh;
+        }
+        
+        h1 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        
+        h2 {
+            color: #aa88ff;
+            margin: 15px 0 10px 0;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        #status {
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+        
+        #status.success { background: #0a3d2a; border: 1px solid #00ff88; color: #00ff88; }
+        #status.error { background: #3d0a0a; border: 1px solid #ff4444; color: #ff4444; }
+        #status.waiting { background: #3d3a0a; border: 1px solid #ffcc00; color: #ffcc00; }
+        
+        .panel {
+            background: #151525;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border: 1px solid #252540;
+        }
+        
+        /* Piano Keyboard Visualization */
+        #keyboard {
+            display: flex;
+            height: 120px;
+            position: relative;
+            margin-bottom: 10px;
+            overflow-x: auto;
+        }
+        
+        .key {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: center;
+            padding-bottom: 5px;
+            font-size: 9px;
+            transition: background 0.05s;
+        }
+        
+        .key.white {
+            width: 24px;
+            height: 100%;
+            background: linear-gradient(to bottom, #e8e8e8, #fff);
+            border: 1px solid #999;
+            border-radius: 0 0 4px 4px;
+            color: #333;
+            z-index: 1;
+        }
+        
+        .key.black {
+            width: 16px;
+            height: 60%;
+            background: linear-gradient(to bottom, #333, #000);
+            border: 1px solid #000;
+            border-radius: 0 0 3px 3px;
+            margin-left: -8px;
+            margin-right: -8px;
+            color: #888;
+            z-index: 2;
+        }
+        
+        .key.white.active {
+            background: linear-gradient(to bottom, #00cc66, #00ff88);
+        }
+        
+        .key.black.active {
+            background: linear-gradient(to bottom, #009944, #00cc66);
+        }
+        
+        .key .velocity-bar {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            background: #ff4444;
+            border-radius: 2px;
+            opacity: 0;
+            transition: height 0.05s, opacity 0.05s;
+        }
+        
+        .key.active .velocity-bar {
+            opacity: 1;
+        }
+        
+        /* Active Notes List */
+        #active-notes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            min-height: 60px;
+        }
+        
+        .active-note {
+            background: linear-gradient(135deg, #1a3d1a, #0a2a0a);
+            border: 1px solid #00ff88;
+            border-radius: 6px;
+            padding: 8px 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 80px;
+        }
+        
+        .active-note .note-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #00ff88;
+        }
+        
+        .active-note .note-details {
+            font-size: 10px;
+            color: #888;
+            margin-top: 4px;
+        }
+        
+        .active-note .velocity-display {
+            width: 100%;
+            height: 6px;
+            background: #1a1a2e;
+            border-radius: 3px;
+            margin-top: 6px;
+            overflow: hidden;
+        }
+        
+        .active-note .velocity-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #ffcc00, #ff4444);
+            border-radius: 3px;
+            transition: width 0.05s;
+        }
+        
+        .active-note .time-display {
+            font-size: 10px;
+            color: #00d4ff;
+            margin-top: 4px;
+        }
+        
+        .active-note .freq-display {
+            font-size: 9px;
+            color: #aa88ff;
+            margin-top: 2px;
+        }
+        
+        /* Controllers Display */
+        #controllers {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        
+        .controller {
+            background: #1a1a2e;
+            border-radius: 6px;
+            padding: 10px;
+        }
+        
+        .controller-label {
+            font-size: 11px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        
+        .controller-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+        
+        .controller-bar {
+            height: 8px;
+            background: #252540;
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+        
+        .controller-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #aa88ff);
+            border-radius: 4px;
+            transition: width 0.05s;
+        }
+        
+        /* Pitch Bend Special Display */
+        #pitch-bend-display {
+            position: relative;
+            height: 20px;
+            background: #252540;
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+        
+        #pitch-bend-display::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #444;
+            transform: translateX(-50%);
+        }
+        
+        #pitch-bend-indicator {
+            position: absolute;
+            top: 2px;
+            bottom: 2px;
+            width: 10px;
+            background: #ff8800;
+            border-radius: 3px;
+            left: 50%;
+            transform: translateX(-50%);
+            transition: left 0.02s;
+        }
+        
+        /* Shader State Panel */
+        #shader-state {
+            font-size: 11px;
+            background: #0a0a12;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        #shader-state pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .state-section {
+            margin-bottom: 10px;
+        }
+        
+        .state-label {
+            color: #aa88ff;
+            margin-bottom: 5px;
+        }
+        
+        .state-value {
+            color: #00ff88;
+            font-family: monospace;
+        }
+        
+        /* Message Log */
+        #messages {
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        
+        .message {
+            padding: 4px 8px;
+            margin: 2px 0;
+            border-radius: 3px;
+            display: grid;
+            grid-template-columns: 70px 60px 1fr auto;
+            gap: 10px;
+            background: #1a1a2e;
+            border-left: 3px solid #444;
+        }
+        
+        .message.note-on { border-left-color: #00ff88; }
+        .message.note-off { border-left-color: #ff8800; }
+        .message.cc { border-left-color: #00aaff; }
+        .message.pitch-bend { border-left-color: #aa00ff; }
+        
+        .msg-type { color: #00d4ff; }
+        .msg-channel { color: #ffcc00; }
+        .msg-details { color: #ccc; }
+        .msg-raw { color: #666; font-size: 10px; }
+        
+        /* Stats */
+        #stats {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .stat-value {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        
+        /* Explanation panel */
+        .explanation {
+            background: #1a1a2e;
+            border-left: 3px solid #00d4ff;
+            padding: 10px 15px;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        
+        .explanation code {
+            background: #252540;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #00ff88;
+        }
+        
+        .layout-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        @media (max-width: 900px) {
+            .layout-row {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        #copy-state {
+            background: #aa88ff;
+            color: #000;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+        
+        #copy-state:hover {
+            background: #bb99ff;
+        }
+
+        #copy-glsl {
+            background: #00d4ff;
+            color: #000;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+        
+        #copy-glsl:hover {
+            background: #00eeff;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎹 MIDI State Monitor (Shader-Ready)</h1>
+    <div id="status" class="waiting">Initializing MIDI...</div>
+    
+    <div class="panel explanation">
+        <strong>Shader Output Format:</strong><br>
+        Fixed array of 10 most recent notes (newest prioritized). Each note contains:<br>
+        • <code>frequency</code> - Note frequency in Hz (A4 = 440Hz)<br>
+        • <code>velocity</code> - Normalized 0-1<br>
+        • <code>duration</code> - Time held in seconds<br>
+        • <code>noteNumber</code> - MIDI note number (0-127, or -1 if slot empty)<br>
+        If more than 10 notes are held, older notes are replaced by newer ones.
+    </div>
+    
+    <div class="panel">
+        <h2>🎹 Keyboard</h2>
+        <div id="keyboard"></div>
+        <div id="stats">
+            <span>Notes held: <span class="stat-value" id="note-count">0</span></span>
+            <span>Total messages: <span class="stat-value" id="msg-count">0</span></span>
+            <span>Last activity: <span class="stat-value" id="last-activity">-</span></span>
+        </div>
+    </div>
+    
+    <div class="panel">
+        <h2>🔥 Active Notes (Most Recent 10)</h2>
+        <div id="active-notes">
+            <span style="color: #666;">Play some notes...</span>
+        </div>
+    </div>
+    
+    <div class="layout-row">
+        <div class="panel">
+            <h2>🎛️ Controllers</h2>
+            <div id="controllers">
+                <div class="controller" id="ctrl-pitch-bend">
+                    <div class="controller-label">Pitch Bend</div>
+                    <div class="controller-value" id="pitch-bend-value">0</div>
+                    <div id="pitch-bend-display">
+                        <div id="pitch-bend-indicator"></div>
+                    </div>
+                </div>
+                <div class="controller" id="ctrl-mod">
+                    <div class="controller-label">Mod Wheel (CC1)</div>
+                    <div class="controller-value" id="mod-value">0</div>
+                    <div class="controller-bar"><div class="controller-fill" id="mod-fill" style="width: 0%"></div></div>
+                </div>
+                <div class="controller" id="ctrl-volume">
+                    <div class="controller-label">Volume (CC7)</div>
+                    <div class="controller-value" id="volume-value">0</div>
+                    <div class="controller-bar"><div class="controller-fill" id="volume-fill" style="width: 0%"></div></div>
+                </div>
+                <div class="controller" id="ctrl-expression">
+                    <div class="controller-label">Expression (CC11)</div>
+                    <div class="controller-value" id="expression-value">0</div>
+                    <div class="controller-bar"><div class="controller-fill" id="expression-fill" style="width: 0%"></div></div>
+                </div>
+                <div class="controller" id="ctrl-sustain">
+                    <div class="controller-label">Sustain (CC64)</div>
+                    <div class="controller-value" id="sustain-value">Off</div>
+                    <div class="controller-bar"><div class="controller-fill" id="sustain-fill" style="width: 0%"></div></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>📊 Shader State 
+                <button id="copy-state" onclick="copyState()">Copy JSON</button>
+                <button id="copy-glsl" onclick="copyGLSL()">Copy GLSL</button>
+            </h2>
+            <div id="shader-state">
+                <pre id="state-json"></pre>
+            </div>
+        </div>
+    </div>
+    
+    <div class="panel">
+        <h2>📜 Message Log</h2>
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        // ============================================
+        // SHADER-READY STATE OBJECT
+        // ============================================
+        const MAX_NOTES = 10; // Fixed size array for shader
+        
+        const midiState = {
+            // Fixed array of most recent notes for shader
+            // Each entry: { noteNumber, frequency, velocity, duration, startTime }
+            notes: Array(MAX_NOTES).fill(null).map(() => ({
+                noteNumber: -1,
+                frequency: 0,
+                velocity: 0,
+                duration: 0,
+                startTime: 0
+            })),
+            
+            // Map to track all currently held notes
+            // note -> { velocity, startTime, arrayIndex }
+            activeNotes: new Map(),
+            
+            // Controllers (normalized 0-1)
+            pitchBend: 0.5,        // 0.5 = center, 0 = full down, 1 = full up
+            pitchBendRaw: 8192,    // Raw 14-bit value
+            modWheel: 0,          // CC1
+            volume: 0,            // CC7
+            expression: 0,        // CC11
+            sustain: 0,           // CC64 (0 or 1)
+            
+            // All CC values (normalized 0-1)
+            cc: new Float32Array(128),
+            
+            // Metadata
+            noteCount: 0,
+            lastNoteOnTime: 0,
+            lastNoteOffTime: 0,
+            lastNoteOn: -1,
+            lastNoteOff: -1,
+            totalMessages: 0,
+            
+            // For detecting note changes in shader
+            noteOnTrigger: 0,     // Increments on each note on
+            noteOffTrigger: 0,    // Increments on each note off
+            
+            // Timestamp
+            currentTime: 0
+        };
+        
+        // ============================================
+        // MIDI NOTE TO FREQUENCY CONVERSION
+        // ============================================
+        function noteToFrequency(note) {
+            // A4 (note 69) = 440 Hz
+            return 440 * Math.pow(2, (note - 69) / 12);
+        }
+        
+        // ============================================
+        // UI ELEMENTS
+        // ============================================
+        const elements = {
+            status: document.getElementById('status'),
+            keyboard: document.getElementById('keyboard'),
+            activeNotes: document.getElementById('active-notes'),
+            messages: document.getElementById('messages'),
+            stateJson: document.getElementById('state-json'),
+            noteCount: document.getElementById('note-count'),
+            msgCount: document.getElementById('msg-count'),
+            lastActivity: document.getElementById('last-activity'),
+            pitchBendValue: document.getElementById('pitch-bend-value'),
+            pitchBendIndicator: document.getElementById('pitch-bend-indicator'),
+            modValue: document.getElementById('mod-value'),
+            modFill: document.getElementById('mod-fill'),
+            volumeValue: document.getElementById('volume-value'),
+            volumeFill: document.getElementById('volume-fill'),
+            expressionValue: document.getElementById('expression-value'),
+            expressionFill: document.getElementById('expression-fill'),
+            sustainValue: document.getElementById('sustain-value'),
+            sustainFill: document.getElementById('sustain-fill')
+        };
+        
+        // ============================================
+        // BUILD KEYBOARD UI
+        // ============================================
+        function buildKeyboardA() {
+            const keyboard = elements.keyboard;
+            keyboard.innerHTML = '';
+            
+            // Build 128 keys (full MIDI range)
+            for (let note = 0; note < 128; note++) {
+                const isBlack = [1, 3, 6, 8, 10].includes(note % 12);
+                const key = document.createElement('div');
+                key.className = `key ${isBlack ? 'black' : 'white'}`;
+                key.dataset.note = note;
+                key.innerHTML = `
+                    <div class="velocity-bar"></div>
+                    ${note % 12 === 0 ? `<span>C${Math.floor(note / 12) - 1}</span>` : ''}
+                `;
+                keyboard.appendChild(key);
+            }
+        }
+        function buildKeyboardB() {
+    const keyboard = elements.keyboard;
+    keyboard.innerHTML = '';
+    
+    // Build 88 keys (A0 to C8 - standard piano range)
+    for (let note = 21; note <= 108; note++) {
+        const isBlack = [1, 3, 6, 8, 10].includes(note % 12);
+        const key = document.createElement('div');
+        key.className = `key ${isBlack ? 'black' : 'white'}`;
+        key.dataset.note = note;
+        key.innerHTML = `
+            <div class="velocity-bar"></div>
+            ${note % 12 === 0 ? `<span>C${Math.floor(note / 12) - 1}</span>` : ''}
+        `;
+        keyboard.appendChild(key);
+    }
+}
+function buildKeyboard() {
+    const keyboard = elements.keyboard;
+    keyboard.innerHTML = '';
+    
+    // Build 88 keys: A0 (note 21) to C8 (note 108)
+    for (let note = 21; note <= 108; note++) {
+        const isBlack = [1, 3, 6, 8, 10].includes(note % 12);
+        const key = document.createElement('div');
+        key.className = `key ${isBlack ? 'black' : 'white'}`;
+        key.dataset.note = note;
+        key.innerHTML = `
+            <div class="velocity-bar"></div>
+            ${note % 12 === 0 ? `<span>C${Math.floor(note / 12) - 1}</span>` : (note === 21 ? '<span>A0</span>' : '')}
+        `;
+        keyboard.appendChild(key);
+    }
+}
+        // ============================================
+        // NOTE ARRAY MANAGEMENT
+        // ============================================
+        function findEmptySlot() {
+            return midiState.notes.findIndex(n => n.noteNumber === -1);
+        }
+        
+        function findOldestNote() {
+            let oldestIndex = 0;
+            let oldestTime = Infinity;
+            
+            for (let i = 0; i < MAX_NOTES; i++) {
+                if (midiState.notes[i].noteNumber !== -1 && 
+                    midiState.notes[i].startTime < oldestTime) {
+                    oldestTime = midiState.notes[i].startTime;
+                    oldestIndex = i;
+                }
+            }
+            
+            return oldestIndex;
+        }
+        
+        function addNoteToArray(note, velocity, startTime) {
+            // Find empty slot or replace oldest
+            let index = findEmptySlot();
+            if (index === -1) {
+                index = findOldestNote();
+                // Remove the old note from tracking
+                const oldNote = midiState.notes[index].noteNumber;
+                if (oldNote !== -1 && midiState.activeNotes.has(oldNote)) {
+                    midiState.activeNotes.delete(oldNote);
+                }
+            }
+            
+            // Add new note
+            midiState.notes[index] = {
+                noteNumber: note,
+                frequency: noteToFrequency(note),
+                velocity: velocity / 127,
+                duration: 0,
+                startTime: startTime
+            };
+            
+            return index;
+        }
+        
+        function removeNoteFromArray(note) {
+            const noteData = midiState.activeNotes.get(note);
+            if (noteData && noteData.arrayIndex !== undefined) {
+                const index = noteData.arrayIndex;
+                midiState.notes[index] = {
+                    noteNumber: -1,
+                    frequency: 0,
+                    velocity: 0,
+                    duration: 0,
+                    startTime: 0
+                };
+            }
+        }
+        
+        // ============================================
+        // UPDATE FUNCTIONS
+        // ============================================
+        function updateKeyboard(note, velocity) {
+            const key = elements.keyboard.querySelector(`[data-note="${note}"]`);
+            if (key) {
+                if (velocity > 0) {
+                    key.classList.add('active');
+                    const bar = key.querySelector('.velocity-bar');
+                    const height = (velocity / 127) * 80;
+                    bar.style.height = `${height}%`;
+                } else {
+                    key.classList.remove('active');
+                    const bar = key.querySelector('.velocity-bar');
+                    bar.style.height = '0%';
+                }
+            }
+        }
+        
+        function updateActiveNotesDisplay() {
+            // Show only the notes in our fixed array (in order)
+            const displayNotes = midiState.notes.filter(n => n.noteNumber !== -1);
+            
+            if (displayNotes.length === 0) {
+                elements.activeNotes.innerHTML = '<span style="color: #666;">No notes held...</span>';
+                return;
+            }
+            
+            const now = performance.now();
+            let html = '';
+            
+            for (const noteData of displayNotes) {
+                const age = ((now - noteData.startTime) / 1000).toFixed(2);
+                const velPercent = noteData.velocity * 100;
+                const note = noteData.noteNumber;
+                const freq = noteData.frequency.toFixed(2);
+                
+                html += `
+                    <div class="active-note">
+                        <div class="note-name">${noteToName(note)}</div>
+                        <div class="note-details">Note ${note} | Vel ${Math.round(noteData.velocity * 127)}</div>
+                        <div class="freq-display">${freq} Hz</div>
+                        <div class="velocity-display">
+                            <div class="velocity-fill" style="width: ${velPercent}%"></div>
+                        </div>
+                        <div class="time-display">${age}s</div>
+                    </div>
+                `;
+            }
+            
+            elements.activeNotes.innerHTML = html;
+        }
+        
+        function updateControllersDisplay() {
+            // Pitch bend
+            const pbPercent = midiState.pitchBend * 100;
+            elements.pitchBendValue.textContent = (midiState.pitchBendRaw - 8192).toString();
+            elements.pitchBendIndicator.style.left = `${pbPercent}%`;
+            
+            // Mod wheel
+            elements.modValue.textContent = Math.round(midiState.modWheel * 127);
+            elements.modFill.style.width = `${midiState.modWheel * 100}%`;
+            
+            // Volume
+            elements.volumeValue.textContent = Math.round(midiState.volume * 127);
+            elements.volumeFill.style.width = `${midiState.volume * 100}%`;
+            
+            // Expression
+            elements.expressionValue.textContent = Math.round(midiState.expression * 127);
+            elements.expressionFill.style.width = `${midiState.expression * 100}%`;
+            
+            // Sustain
+            elements.sustainValue.textContent = midiState.sustain > 0.5 ? 'On' : 'Off';
+            elements.sustainFill.style.width = `${midiState.sustain * 100}%`;
+        }
+        
+        function updateStats() {
+            elements.noteCount.textContent = midiState.activeNotes.size;
+            elements.msgCount.textContent = midiState.totalMessages;
+            
+            const timeSince = ((performance.now() - midiState.lastNoteOnTime) / 1000).toFixed(1);
+            elements.lastActivity.textContent = midiState.lastNoteOnTime > 0 ? `${timeSince}s ago` : '-';
+        }
+        
+        function updateStateJson() {
+            // Create shader-friendly state object
+            const shaderState = {
+                // Fixed array of 10 notes for shader
+                notes: midiState.notes.map(n => ({
+                    noteNumber: n.noteNumber,
+                    frequency: parseFloat(n.frequency.toFixed(2)),
+                    velocity: parseFloat(n.velocity.toFixed(4)),
+                    duration: parseFloat(n.duration.toFixed(3))
+                })),
+                
+                // Count of active notes
+                activeNoteCount: midiState.activeNotes.size,
+                
+                // Controllers
+                pitchBend: parseFloat(midiState.pitchBend.toFixed(4)),
+                modWheel: parseFloat(midiState.modWheel.toFixed(4)),
+                volume: parseFloat(midiState.volume.toFixed(4)),
+                expression: parseFloat(midiState.expression.toFixed(4)),
+                sustain: parseFloat(midiState.sustain.toFixed(4)),
+                
+                // Triggers (for detecting changes)
+                noteOnTrigger: midiState.noteOnTrigger,
+                noteOffTrigger: midiState.noteOffTrigger,
+                lastNoteOn: midiState.lastNoteOn,
+                lastNoteOff: midiState.lastNoteOff,
+                
+                // Timestamp
+                time: parseFloat((midiState.currentTime / 1000).toFixed(3))
+            };
+            
+            elements.stateJson.textContent = JSON.stringify(shaderState, null, 2);
+        }
+        
+        // ============================================
+        // MIDI MESSAGE HANDLING
+        // ============================================
+        function handleMIDIMessage(event) {
+            const [status, data1, data2] = event.data;
+            const channel = (status & 0x0F) + 1;
+            const command = status & 0xF0;
+            const now = performance.now();
+            
+            midiState.totalMessages++;
+            midiState.currentTime = now;
+            
+            let type = 'other';
+            let typeName = 'Unknown';
+            let details = '';
+            
+            switch (command) {
+                case 0x90: // Note On
+                    if (data2 > 0) {
+                        type = 'note-on';
+                        typeName = 'Note On';
+                        details = `${noteToName(data1)} (${data1}) vel=${data2}`;
+                        
+                        // Add to array and track
+                        const index = addNoteToArray(data1, data2, now);
+                        midiState.activeNotes.set(data1, {
+                            velocity: data2,
+                            startTime: now,
+                            arrayIndex: index
+                        });
+                        
+                        midiState.noteCount = midiState.activeNotes.size;
+                        midiState.lastNoteOnTime = now;
+                        midiState.lastNoteOn = data1;
+                        midiState.noteOnTrigger++;
+                        
+                        updateKeyboard(data1, data2);
+                    } else {
+                        // Note On with velocity 0 = Note Off
+                        handleNoteOff(data1, data2, now);
+                        type = 'note-off';
+                        typeName = 'Note Off';
+                        details = `${noteToName(data1)} (${data1}) rel_vel=${data2}`;
+                    }
+                    break;
+                    
+                case 0x80: // Note Off
+                    type = 'note-off';
+                    typeName = 'Note Off';
+                    details = `${noteToName(data1)} (${data1}) rel_vel=${data2}`;
+                    handleNoteOff(data1, data2, now);
+                    break;
+                    
+                case 0xB0: // Control Change
+                    type = 'cc';
+                    typeName = 'CC';
+                    details = `${ccToName(data1)} (${data1}) = ${data2}`;
+                    handleCC(data1, data2);
+                    break;
+                    
+                case 0xE0: // Pitch Bend
+                    type = 'pitch-bend';
+                    typeName = 'Pitch';
+                    const pitchValue = (data2 << 7) | data1;
+                    midiState.pitchBendRaw = pitchValue;
+                    midiState.pitchBend = pitchValue / 16383;
+                    details = `${pitchValue} (${pitchValue - 8192})`;
+                    updateControllersDisplay();
+                    break;
+                    
+                case 0xC0: // Program Change
+                    typeName = 'Prog';
+                    details = `Program ${data1}`;
+                    break;
+                    
+                case 0xD0: // Channel Pressure
+                    typeName = 'Press';
+                    details = `Pressure ${data1}`;
+                    break;
+                    
+                case 0xA0: // Polyphonic Aftertouch
+                    typeName = 'PolyAT';
+                    details = `${noteToName(data1)} pressure=${data2}`;
+                    break;
+            }
+            
+            logMessage(type, typeName, channel, details, event.data);
+            updateStats();
+        }
+        
+        function handleNoteOff(note, releaseVelocity, now) {
+            removeNoteFromArray(note);
+            midiState.activeNotes.delete(note);
+            midiState.noteCount = midiState.activeNotes.size;
+            midiState.lastNoteOffTime = now;
+            midiState.lastNoteOff = note;
+            midiState.noteOffTrigger++;
+            
+            updateKeyboard(note, 0);
+        }
+        
+        function handleCC(cc, value) {
+            const normalized = value / 127;
+            midiState.cc[cc] = normalized;
+            
+            switch (cc) {
+                case 1: midiState.modWheel = normalized; break;
+                case 7: midiState.volume = normalized; break;
+                case 11: midiState.expression = normalized; break;
+                case 64: midiState.sustain = normalized; break;
+            }
+            
+            updateControllersDisplay();
+        }
+        
+        function logMessage(type, typeName, channel, details, rawData) {
+            const rawHex = Array.from(rawData)
+                .map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0'))
+                .join(' ');
+            
+            const html = `
+                <div class="message ${type}">
+                    <span class="msg-type">${typeName}</span>
+                    <span class="msg-channel">Ch ${channel}</span>
+                    <span class="msg-details">${details}</span>
+                    <span class="msg-raw">${rawHex}</span>
+                </div>
+            `;
+            
+            elements.messages.insertAdjacentHTML('afterbegin', html);
+            
+            while (elements.messages.children.length > 50) {
+                elements.messages.removeChild(elements.messages.lastChild);
+            }
+        }
+        
+        // ============================================
+        // UTILITIES
+        // ============================================
+        function noteToName(noteNumber) {
+            const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const octave = Math.floor(noteNumber / 12) - 1;
+            return `${notes[noteNumber % 12]}${octave}`;
+        }
+        
+        function ccToName(cc) {
+            const names = {
+                1: 'Mod', 7: 'Vol', 10: 'Pan', 11: 'Expr',
+                64: 'Sustain', 65: 'Port', 71: 'Reso', 74: 'Cut'
+            };
+            return names[cc] || `CC${cc}`;
+        }
+        
+        function copyState() {
+            navigator.clipboard.writeText(elements.stateJson.textContent);
+            const btn = document.getElementById('copy-state');
+            const oldText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = oldText, 1000);
+        }
+
+        function copyGLSL() {
+            const glslCode = `// GLSL Uniform definitions for MIDI state
+// Copy this into your shader
+
+struct MIDINote {
+    float noteNumber;  // -1 if empty, 0-127 if active
+    float frequency;   // Hz
+    float velocity;    // 0-1
+    float duration;    // seconds
+};
+
+uniform MIDINote notes[10];  // 10 most recent notes
+uniform int activeNoteCount;
+
+uniform float pitchBend;    // 0-1, 0.5 = center
+uniform float modWheel;     // 0-1
+uniform float volume;       // 0-1
+uniform float expression;   // 0-1
+uniform float sustain;      // 0-1
+
+uniform int noteOnTrigger;  // Increments on note on
+uniform int noteOffTrigger; // Increments on note off
+uniform int lastNoteOn;
+uniform int lastNoteOff;
+
+uniform float time;
+
+// Example usage:
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / iResolution.xy;
+    vec3 col = vec3(0.0);
+    
+    // Iterate through active notes
+    for (int i = 0; i < 10; i++) {
+        if (notes[i].noteNumber >= 0.0) {
+            float freq = notes[i].frequency;
+            float vel = notes[i].velocity;
+            float dur = notes[i].duration;
+            
+            // Use note data for visualization
+            col += vec3(vel) * sin(freq * uv.x + dur);
+        }
+    }
+    
+    fragColor = vec4(col, 1.0);
+}`;
+            
+            navigator.clipboard.writeText(glslCode);
+            const btn = document.getElementById('copy-glsl');
+            const oldText = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = oldText, 1000);
+        }
+        
+        // ============================================
+        // ANIMATION LOOP - Updates durations and display
+        // ============================================
+        function updateLoop() {
+            const now = performance.now();
+            midiState.currentTime = now;
+            
+            // Update note durations
+            for (let i = 0; i < MAX_NOTES; i++) {
+                if (midiState.notes[i].noteNumber !== -1) {
+                    midiState.notes[i].duration = (now - midiState.notes[i].startTime) / 1000;
+                }
+            }
+            
+            updateActiveNotesDisplay();
+            updateStateJson();
+            
+            requestAnimationFrame(updateLoop);
+        }
+        
+        // ============================================
+        // MIDI INITIALIZATION
+        // ============================================
+        async function initMIDI() {
+            if (!navigator.requestMIDIAccess) {
+                elements.status.className = 'error';
+                elements.status.textContent = '❌ Web MIDI API not supported. Use Chrome or Edge.';
+                return;
+            }
+            
+            try {
+                const midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+                elements.status.className = 'success';
+                
+                const inputs = Array.from(midiAccess.inputs.values());
+                elements.status.textContent = `✅ MIDI Ready - ${inputs.length} device(s): ${inputs.map(i => i.name).join(', ') || 'None'}`;
+                
+                for (const input of inputs) {
+                    input.onmidimessage = handleMIDIMessage;
+                }
+                
+                midiAccess.onstatechange = () => {
+                    const inputs = Array.from(midiAccess.inputs.values());
+                    elements.status.textContent = `✅ MIDI Ready - ${inputs.length} device(s): ${inputs.map(i => i.name).join(', ') || 'None'}`;
+                    for (const input of inputs) {
+                        input.onmidimessage = handleMIDIMessage;
+                    }
+                };
+                
+            } catch (err) {
+                elements.status.className = 'error';
+                elements.status.textContent = `❌ MIDI Error: ${err.message}`;
+            }
+        }
+        
+        // ============================================
+        // START
+        // ============================================
+        buildKeyboard();
+        initMIDI();
+        updateLoop();
+    </script>
+</body>
+</html>

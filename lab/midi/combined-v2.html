@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>MIDI + Audio Shader v2</title>
+	<style>
+		* { box-sizing: border-box; }
+		
+		body {
+			font-family: 'Consolas', 'Monaco', monospace;
+			background: #0a0a12;
+			color: #eee;
+			margin: 0;
+			padding: 10px;
+			display: flex;
+			flex-direction: column;
+			height: 100vh;
+			overflow: hidden;
+		}
+		
+		h1 {
+			color: #00d4ff;
+			margin: 0 0 10px 0;
+			font-size: 20px;
+		}
+		
+		h3 {
+			color: #aa88ff;
+			margin: 10px 0 5px 0;
+			font-size: 14px;
+			text-transform: uppercase;
+			letter-spacing: 1px;
+		}
+		
+		.main-container {
+			flex: 1;
+			display: grid;
+			grid-template-columns: 250px 1fr;
+			gap: 10px;
+			min-height: 0;
+		}
+		
+		.left-panel {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			overflow-y: auto;
+		}
+		
+		.right-panel {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			min-height: 0;
+		}
+		
+		.panel, .piano-panel {
+			background: #151525;
+			border-radius: 8px;
+			padding: 12px;
+			border: 1px solid #252540;
+		}
+		
+		#status {
+			padding: 8px 12px;
+			border-radius: 6px;
+			font-size: 12px;
+		}
+		
+		#status.success { background: #0a3d2a; border: 1px solid #00ff88; color: #00ff88; }
+		#status.error { background: #3d0a0a; border: 1px solid #ff4444; color: #ff4444; }
+		#status.waiting { background: #3d3a0a; border: 1px solid #ffcc00; color: #ffcc00; }
+		
+		#keyboard {
+			display: flex;
+			height: 100px;
+			position: relative;
+			overflow-x: auto;
+			margin-bottom: 8px;
+		}
+		
+		.key {
+			position: relative;
+			display: flex;
+			flex-direction: column;
+			justify-content: flex-end;
+			align-items: center;
+			padding-bottom: 3px;
+			font-size: 8px;
+			transition: background 0.05s;
+			cursor: pointer;
+			user-select: none;
+		}
+		
+		.key.white {
+			width: 20px;
+			height: 100%;
+			background: linear-gradient(to bottom, #e8e8e8, #fff);
+			border: 1px solid #999;
+			border-radius: 0 0 3px 3px;
+			color: #333;
+			z-index: 1;
+		}
+		
+		.key.black {
+			width: 14px;
+			height: 60%;
+			background: linear-gradient(to bottom, #333, #000);
+			border: 1px solid #000;
+			border-radius: 0 0 2px 2px;
+			margin-left: -7px;
+			margin-right: -7px;
+			color: #888;
+			z-index: 2;
+		}
+		
+		.key.white.active { background: linear-gradient(to bottom, #00cc66, #00ff88); }
+		.key.black.active { background: linear-gradient(to bottom, #009944, #00cc66); }
+		
+		.controls {
+			display: flex;
+			gap: 8px;
+			align-items: center;
+			flex-wrap: wrap;
+		}
+		
+		button {
+			padding: 8px 16px;
+			background: #0e639c;
+			color: white;
+			border: none;
+			cursor: pointer;
+			font-size: 13px;
+			border-radius: 4px;
+			font-family: inherit;
+		}
+		
+		button:hover { background: #1177bb; }
+		button:disabled { background: #3c3c3c; cursor: not-allowed; }
+		
+		.time { color: #dcdcaa; font-size: 13px; }
+		
+		#shaderText {
+			width: 100%;
+			flex: 1;
+			background: #2d2d2d;
+			color: #d4d4d4;
+			border: 1px solid #3c3c3c;
+			padding: 10px;
+			font-family: 'Consolas', 'Monaco', monospace;
+			font-size: 13px;
+			resize: none;
+			border-radius: 4px;
+		}
+		
+		#error { color: #f44747; font-size: 12px; min-height: 20px; }
+		
+		.waveform-container {
+			height: 180px;
+			background: #1e1e1e;
+			border: 1px solid #3c3c3c;
+			border-radius: 4px;
+			position: relative;
+		}
+		
+		#waveformCanvas { width: 100%; height: 100%; display: block; }
+		
+		.waveform-info {
+			position: absolute;
+			top: 5px;
+			left: 10px;
+			font-size: 10px;
+			color: #808080;
+			pointer-events: none;
+		}
+		
+		.waveform-legend {
+			position: absolute;
+			top: 5px;
+			right: 10px;
+			font-size: 10px;
+			display: flex;
+			gap: 12px;
+			pointer-events: none;
+		}
+		
+		.legend-item { display: flex; align-items: center; gap: 4px; }
+		.legend-color { width: 10px; height: 10px; border-radius: 2px; }
+		.legend-left { background: rgba(255, 80, 80, 0.8); }
+		.legend-right { background: rgba(80, 255, 80, 0.8); }
+		
+		#midi-log {
+			max-height: 150px;
+			overflow-y: auto;
+			font-size: 11px;
+		}
+		
+		.log-entry {
+			padding: 3px 6px;
+			margin: 2px 0;
+			border-radius: 3px;
+			background: #1a1a2e;
+			border-left: 3px solid #444;
+		}
+		
+		.log-entry.note-on { border-left-color: #00ff88; }
+		.log-entry.note-off { border-left-color: #ff8800; }
+		
+		.info-text {
+			font-size: 11px;
+			color: #808080;
+			line-height: 1.4;
+		}
+		
+		.stat-row {
+			display: flex;
+			justify-content: space-between;
+			font-size: 11px;
+			color: #888;
+			margin-top: 5px;
+		}
+		
+		.stat-value {
+			color: #00d4ff;
+			font-weight: bold;
+		}
+	</style>
+</head>
+<body>
+	<h1>🎹 MIDI + Audio Shader v2 (Using Original index.js)</h1>
+	
+	<div class="main-container">
+		<div class="left-panel">
+			<div class="panel">
+				<div id="status" class="waiting">Initializing MIDI...</div>
+				<div class="stat-row" style="margin-top: 8px;">
+					<span>Notes: <span class="stat-value" id="note-count">0</span></span>
+					<span>Messages: <span class="stat-value" id="msg-count">0</span></span>
+				</div>
+			</div>
+			
+			<div class="panel">
+				<h3>📜 MIDI Log</h3>
+				<div id="midi-log">
+					<div class="info-text">Waiting for MIDI input...</div>
+				</div>
+			</div>
+		</div>
+		
+		<div class="right-panel">
+			<div class="panel" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+				<h3>🎵 Audio Shader (GLSL)</h3>
+				<div class="info-text" style="margin-bottom: 8px;">
+					Simple test: write only <code>vec2 mainSound(int samp, float time)</code><br>
+					Available: <code>iSampleRate</code> uniform
+				</div>
+				<textarea id="shaderText" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">// Simple test shader
+vec2 mainSound(int samp, float time) {
+	float freq = 440.0;
+	
+	int period = int(iSampleRate);
+	int sampMod = samp % period;
+	float phase = fract(float(sampMod) * freq / iSampleRate);
+	
+	float wave = sin(6.2831 * phase);
+	return vec2(wave * 0.3);
+}
+</textarea>
+				<div id="error"></div>
+				
+				<div class="controls" style="margin-top: 8px;">
+					<button id="buttonStart">▶ Start</button>
+					<button id="buttonStop" disabled>⏹ Stop</button>
+					<button id="buttonRestart" disabled>↺ Restart</button>
+					<span class="time">Time: <span id="timeDisplay">0.00</span>s</span>
+				</div>
+			</div>
+			
+			<div class="waveform-container">
+				<canvas id="waveformCanvas"></canvas>
+				<div class="waveform-info">
+					<span id="zoomInfo">Zoom: 1.00s</span> | Scroll to zoom, drag to pan
+				</div>
+				<div class="waveform-legend">
+					<div class="legend-item">
+						<div class="legend-color legend-left"></div>
+						<span>Left</span>
+					</div>
+					<div class="legend-item">
+						<div class="legend-color legend-right"></div>
+						<span>Right</span>
+					</div>
+				</div>
+			</div>
+			
+			<div class="piano-panel">
+				<h3>🎹 Piano Keyboard (click to simulate MIDI)</h3>
+				<div id="keyboard"></div>
+			</div>
+		</div>
+	</div>
+	
+	<script type="module">
+		// Use ORIGINAL working index.js
+		import { WebGLAudioShader } from './index.js'
+		
+		console.log('Script starting...')
+		
+		const elements = {
+			status: document.getElementById('status'),
+			keyboard: document.getElementById('keyboard'),
+			noteCount: document.getElementById('note-count'),
+			msgCount: document.getElementById('msg-count'),
+			midiLog: document.getElementById('midi-log'),
+			buttonStart: document.getElementById('buttonStart'),
+			buttonStop: document.getElementById('buttonStop'),
+			buttonRestart: document.getElementById('buttonRestart'),
+			shaderText: document.getElementById('shaderText'),
+			errorEl: document.getElementById('error'),
+			timeDisplay: document.getElementById('timeDisplay'),
+			waveformCanvas: document.getElementById('waveformCanvas'),
+			zoomInfo: document.getElementById('zoomInfo')
+		}
+		
+		let shader = null
+		let timeUpdateInterval = null
+		
+		function resizeCanvas() {
+			const container = elements.waveformCanvas.parentElement
+			elements.waveformCanvas.width = container.clientWidth
+			elements.waveformCanvas.height = container.clientHeight
+			if (shader) {
+				shader.requestWaveformUpdate()
+			}
+		}
+		
+		window.addEventListener('resize', resizeCanvas)
+		resizeCanvas()
+		
+		async function initShader() {
+			console.log('Initializing shader...')
+			shader = new WebGLAudioShader()
+			
+			shader.onError = (error) => {
+				console.error('Shader error:', error)
+				elements.errorEl.textContent = '❌ ' + error
+			}
+			
+			shader.onSuccess = () => {
+				console.log('Shader success!')
+				elements.errorEl.textContent = ''
+			}
+			
+			try {
+				await shader.init(elements.shaderText.value)
+				shader.setupWaveformCanvas(elements.waveformCanvas)
+				elements.errorEl.textContent = ''
+				updateZoomInfo()
+				console.log('Shader initialized successfully')
+			} catch (e) {
+				console.error('Init error:', e)
+				elements.errorEl.textContent = '❌ ' + e.message
+			}
+		}
+		
+		function updateZoomInfo() {
+			if (!shader) return
+			const zoom = shader.waveformZoom
+			if (zoom < 1) {
+				elements.zoomInfo.textContent = `Zoom: ${(zoom * 1000).toFixed(0)}ms`
+			} else {
+				elements.zoomInfo.textContent = `Zoom: ${zoom.toFixed(2)}s`
+			}
+		}
+		
+		elements.waveformCanvas.addEventListener('wheel', () => {
+			setTimeout(updateZoomInfo, 10)
+		})
+		
+		await initShader()
+		
+		elements.buttonStart.addEventListener('click', async () => {
+			console.log('Start clicked')
+			if (!shader) await initShader()
+			
+			shader.start()
+			elements.buttonStart.disabled = true
+			elements.buttonStop.disabled = false
+			elements.buttonRestart.disabled = false
+			
+			timeUpdateInterval = setInterval(() => {
+				elements.timeDisplay.textContent = shader.getCurrentTime().toFixed(2)
+			}, 100)
+		})
+		
+		elements.buttonStop.addEventListener('click', () => {
+			if (shader) {
+				shader.stop()
+			}
+			elements.buttonStart.disabled = false
+			elements.buttonStop.disabled = true
+			elements.buttonRestart.disabled = true
+			elements.timeDisplay.textContent = '0.00'
+			
+			if (timeUpdateInterval) {
+				clearInterval(timeUpdateInterval)
+				timeUpdateInterval = null
+			}
+		})
+		
+		elements.buttonRestart.addEventListener('click', () => {
+			if (shader) {
+				shader.restart()
+			}
+		})
+		
+		console.log('Setup complete')
+	</script>
+</body>
+</html>

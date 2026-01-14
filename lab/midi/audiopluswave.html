@@ -1,0 +1,322 @@
+<html>
+	<head>
+		<title>GLSL Audio Shader v2 (with Waveform)</title>
+		<style>
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				background: #1e1e1e;
+				color: #d4d4d4;
+				font-family: 'Consolas', 'Monaco', monospace;
+				display: flex;
+				flex-direction: column;
+				height: 100vh;
+				margin: 0;
+				padding: 0;
+				overflow: hidden;
+			}
+			.main-content {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+				padding: 10px;
+				min-height: 0;
+			}
+			h3 {
+				margin: 0;
+				color: #569cd6;
+			}
+			.info {
+				font-size: 12px;
+				color: #808080;
+			}
+			textarea {
+				display: block;
+				width: 100%;
+				flex: 1;
+				background: #2d2d2d;
+				color: #d4d4d4;
+				border: 1px solid #3c3c3c;
+				padding: 10px;
+				font-family: 'Consolas', 'Monaco', monospace;
+				font-size: 14px;
+				resize: none;
+			}
+			.controls {
+				display: flex;
+				gap: 10px;
+				align-items: center;
+				flex-wrap: wrap;
+			}
+			button {
+				padding: 10px 20px;
+				background: #0e639c;
+				color: white;
+				border: none;
+				cursor: pointer;
+				font-size: 14px;
+			}
+			button:hover {
+				background: #1177bb;
+			}
+			button:disabled {
+				background: #3c3c3c;
+				cursor: not-allowed;
+			}
+			#status {
+				color: #4ec9b0;
+				font-size: 12px;
+			}
+			#error {
+				color: #f44747;
+				font-size: 12px;
+				min-height: 20px;
+			}
+			.time {
+				color: #dcdcaa;
+				font-size: 14px;
+				min-width: 100px;
+			}
+			
+			/* Waveform section */
+			.waveform-container {
+				height: 200px;
+				background: #1e1e1e;
+				border-top: 1px solid #3c3c3c;
+				position: relative;
+			}
+			#waveformCanvas {
+				width: 100%;
+				height: 100%;
+				display: block;
+			}
+			.waveform-info {
+				position: absolute;
+				top: 5px;
+				left: 10px;
+				font-size: 11px;
+				color: #808080;
+				pointer-events: none;
+			}
+			.waveform-legend {
+				position: absolute;
+				top: 5px;
+				right: 10px;
+				font-size: 11px;
+				display: flex;
+				gap: 15px;
+				pointer-events: none;
+			}
+			.legend-item {
+				display: flex;
+				align-items: center;
+				gap: 4px;
+			}
+			.legend-color {
+				width: 12px;
+				height: 12px;
+				border-radius: 2px;
+			}
+			.legend-left { background: rgba(255, 80, 80, 0.8); }
+			.legend-right { background: rgba(80, 255, 80, 0.8); }
+		</style>
+	</head>
+	<body>
+		<div class="main-content">
+			<h3>🔊 GLSL Audio Shader v2</h3>
+			<div class="info">
+				Shadertoy compatible: <code>vec2 mainSound(int samp, float time)</code><br>
+				• <code>samp</code> = absolute sample index (0, 1, 2, 3...)<br>
+				• <code>time</code> = absolute time in seconds<br>
+				• Returns stereo audio (-1.0 to 1.0)
+			</div>
+			
+			<textarea id="shaderText" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">
+// Shadertoy-compatible GLSL Audio
+// samp = absolute sample index (combine with sampleRate for precision!)
+// time = time in seconds
+// iSampleRate = sample rate uniform (e.g. 48000.0)
+//
+// IMPORTANT: For oscillators, use samp period to avoid float precision issues:
+
+vec2 mainSound(int samp, float time) {
+
+    float freq = 440.0;
+
+        float offset = 0.; // seconds offset to find behavior at specific time.
+
+        samp += int(offset*iSampleRate);
+
+    int period = int(iSampleRate);  // Use sample rate as period
+        int sampMod = samp % period;
+    float phase = fract(float(sampMod) * freq / iSampleRate);
+
+        float envelope = 1.0;//exp(-0.5 * time)*0.5;
+
+        float brokenWave = sin(6.2831 * freq * (time+offset));
+    float correctWave = sin(6.2831 * phase);
+
+    return vec2(brokenWave, correctWave)*envelope;
+}
+                
+</textarea>
+
+			<div id="error"></div>
+			
+			<div class="controls">
+				<button id="buttonStart">▶ Start</button>
+				<button id="buttonStop" disabled>⏹ Stop</button>
+				<button id="buttonRestart" disabled>↺ Restart</button>
+				<span class="time">Time: <span id="timeDisplay">0.00</span>s</span>
+				<span id="status">Ready</span>
+			</div>
+		</div>
+		
+		<div class="waveform-container">
+			<canvas id="waveformCanvas"></canvas>
+			<div class="waveform-info">
+				<span id="zoomInfo">Zoom: 1.00s</span> | Scroll to zoom, drag to pan
+			</div>
+			<div class="waveform-legend">
+				<div class="legend-item">
+					<div class="legend-color legend-left"></div>
+					<span>Left</span>
+				</div>
+				<div class="legend-item">
+					<div class="legend-color legend-right"></div>
+					<span>Right</span>
+				</div>
+			</div>
+		</div>
+	</body>
+	<script type="module">
+		import { WebGLAudioShader } from './index.js'
+
+		const buttonStart = document.getElementById('buttonStart')
+		const buttonStop = document.getElementById('buttonStop')
+		const buttonRestart = document.getElementById('buttonRestart')
+		const shaderText = document.getElementById('shaderText')
+		const statusEl = document.getElementById('status')
+		const errorEl = document.getElementById('error')
+		const timeDisplay = document.getElementById('timeDisplay')
+		const waveformCanvas = document.getElementById('waveformCanvas')
+		const zoomInfo = document.getElementById('zoomInfo')
+
+		let shader = null
+		let timeUpdateInterval = null
+
+		// Set canvas size
+		function resizeCanvas() {
+			const container = waveformCanvas.parentElement
+			waveformCanvas.width = container.clientWidth
+			waveformCanvas.height = container.clientHeight
+			if (shader) {
+				shader.requestWaveformUpdate()
+			}
+		}
+		
+		window.addEventListener('resize', resizeCanvas)
+		resizeCanvas()
+
+		async function initShader() {
+			shader = new WebGLAudioShader()
+			
+			shader.onError = (error) => {
+				errorEl.textContent = '❌ ' + error
+				statusEl.textContent = 'Error'
+			}
+			
+			shader.onSuccess = () => {
+				errorEl.textContent = ''
+			}
+			
+			try {
+				await shader.init(shaderText.value)
+				shader.setupWaveformCanvas(waveformCanvas)
+				statusEl.textContent = 'Initialized'
+				errorEl.textContent = ''
+				updateZoomInfo()
+			} catch (e) {
+				errorEl.textContent = '❌ ' + e.message
+			}
+		}
+
+		function updateZoomInfo() {
+			if (!shader) return
+			const zoom = shader.waveformZoom
+			if (zoom < 1) {
+				zoomInfo.textContent = `Zoom: ${(zoom * 1000).toFixed(0)}ms`
+			} else {
+				zoomInfo.textContent = `Zoom: ${zoom.toFixed(2)}s`
+			}
+		}
+
+		// Update zoom info on wheel
+		waveformCanvas.addEventListener('wheel', () => {
+			setTimeout(updateZoomInfo, 10)
+		})
+
+		await initShader()
+
+		buttonStart.addEventListener('click', async () => {
+			if (!shader) await initShader()
+			
+			shader.start()
+			buttonStart.disabled = true
+			buttonStop.disabled = false
+			buttonRestart.disabled = false
+			statusEl.textContent = '🔊 Playing'
+			errorEl.textContent = ''
+			
+			// Update time display
+			timeUpdateInterval = setInterval(() => {
+				timeDisplay.textContent = shader.getCurrentTime().toFixed(2)
+			}, 100)
+		})
+
+		buttonStop.addEventListener('click', () => {
+			if (shader) {
+				shader.stop()
+			}
+			buttonStart.disabled = false
+			buttonStop.disabled = true
+			buttonRestart.disabled = true
+			statusEl.textContent = 'Stopped'
+			timeDisplay.textContent = '0.00'
+			
+			if (timeUpdateInterval) {
+				clearInterval(timeUpdateInterval)
+				timeUpdateInterval = null
+			}
+		})
+
+		buttonRestart.addEventListener('click', () => {
+			if (shader) {
+				shader.restart()
+				statusEl.textContent = '🔊 Restarted'
+			}
+		})
+
+		// Live update shader on edit
+		let updateTimeout = null
+		shaderText.addEventListener('input', () => {
+			if (updateTimeout) clearTimeout(updateTimeout)
+			
+			updateTimeout = setTimeout(async () => {
+				if (shader) {
+					errorEl.textContent = ''
+					
+					try {
+						await shader.setShader(shaderText.value)
+						statusEl.textContent = shader.isRunning ? '🔊 Updated' : 'Updated'
+					} catch (e) {
+						errorEl.textContent = '❌ ' + e.message
+					}
+				}
+			}, 300)
+		})
+	</script>
+</html>
+

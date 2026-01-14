@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>MIDI + Audio Shader</title>
+	<style>
+		* {
+			box-sizing: border-box;
+		}
+		
+		body {
+			font-family: 'Consolas', 'Monaco', monospace;
+			background: #0a0a12;
+			color: #eee;
+			margin: 0;
+			padding: 10px;
+			display: flex;
+			flex-direction: column;
+			height: 100vh;
+			overflow: hidden;
+		}
+		
+		h1 {
+			color: #00d4ff;
+			margin: 0 0 10px 0;
+			font-size: 20px;
+		}
+		
+		h3 {
+			color: #aa88ff;
+			margin: 10px 0 5px 0;
+			font-size: 14px;
+			text-transform: uppercase;
+			letter-spacing: 1px;
+		}
+		
+		.main-container {
+			flex: 1;
+			display: grid;
+			grid-template-columns: 250px 1fr;
+			gap: 10px;
+			min-height: 0;
+		}
+		
+		.left-panel {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			overflow-y: auto;
+		}
+		
+		.right-panel {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			min-height: 0;
+		}
+		
+		.piano-panel {
+			background: #151525;
+			border-radius: 8px;
+			padding: 12px;
+			border: 1px solid #252540;
+		}
+		
+		.panel {
+			background: #151525;
+			border-radius: 8px;
+			padding: 12px;
+			border: 1px solid #252540;
+		}
+		
+		/* MIDI Status */
+		#status {
+			padding: 8px 12px;
+			border-radius: 6px;
+			font-size: 12px;
+		}
+		
+		#status.success { background: #0a3d2a; border: 1px solid #00ff88; color: #00ff88; }
+		#status.error { background: #3d0a0a; border: 1px solid #ff4444; color: #ff4444; }
+		#status.waiting { background: #3d3a0a; border: 1px solid #ffcc00; color: #ffcc00; }
+		
+		/* Piano Keyboard */
+		#keyboard {
+			display: flex;
+			height: 100px;
+			position: relative;
+			overflow-x: auto;
+			margin-bottom: 8px;
+		}
+		
+		.key {
+			position: relative;
+			display: flex;
+			flex-direction: column;
+			justify-content: flex-end;
+			align-items: center;
+			padding-bottom: 3px;
+			font-size: 8px;
+			transition: background 0.05s;
+			cursor: pointer;
+			user-select: none;
+		}
+		
+		.key.white {
+			width: 20px;
+			height: 100%;
+			background: linear-gradient(to bottom, #e8e8e8, #fff);
+			border: 1px solid #999;
+			border-radius: 0 0 3px 3px;
+			color: #333;
+			z-index: 1;
+		}
+		
+		.key.black {
+			width: 14px;
+			height: 60%;
+			background: linear-gradient(to bottom, #333, #000);
+			border: 1px solid #000;
+			border-radius: 0 0 2px 2px;
+			margin-left: -7px;
+			margin-right: -7px;
+			color: #888;
+			z-index: 2;
+		}
+		
+		.key.white.active {
+			background: linear-gradient(to bottom, #00cc66, #00ff88);
+		}
+		
+		.key.black.active {
+			background: linear-gradient(to bottom, #009944, #00cc66);
+		}
+		
+		/* Audio Controls */
+		.controls {
+			display: flex;
+			gap: 8px;
+			align-items: center;
+			flex-wrap: wrap;
+		}
+		
+		button {
+			padding: 8px 16px;
+			background: #0e639c;
+			color: white;
+			border: none;
+			cursor: pointer;
+			font-size: 13px;
+			border-radius: 4px;
+			font-family: inherit;
+		}
+		
+		button:hover {
+			background: #1177bb;
+		}
+		
+		button:disabled {
+			background: #3c3c3c;
+			cursor: not-allowed;
+		}
+		
+		.time {
+			color: #dcdcaa;
+			font-size: 13px;
+		}
+		
+		/* Shader Editor */
+		#shaderText {
+			width: 100%;
+			flex: 1;
+			background: #2d2d2d;
+			color: #d4d4d4;
+			border: 1px solid #3c3c3c;
+			padding: 10px;
+			font-family: 'Consolas', 'Monaco', monospace;
+			font-size: 13px;
+			resize: none;
+			border-radius: 4px;
+		}
+		
+		#error {
+			color: #f44747;
+			font-size: 12px;
+			min-height: 20px;
+		}
+		
+		/* Waveform */
+		.waveform-container {
+			height: 180px;
+			background: #1e1e1e;
+			border: 1px solid #3c3c3c;
+			border-radius: 4px;
+			position: relative;
+		}
+		
+		#waveformCanvas {
+			width: 100%;
+			height: 100%;
+			display: block;
+		}
+		
+		.waveform-info {
+			position: absolute;
+			top: 5px;
+			left: 10px;
+			font-size: 10px;
+			color: #808080;
+			pointer-events: none;
+		}
+		
+		.waveform-legend {
+			position: absolute;
+			top: 5px;
+			right: 10px;
+			font-size: 10px;
+			display: flex;
+			gap: 12px;
+			pointer-events: none;
+		}
+		
+		.legend-item {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+		}
+		
+		.legend-color {
+			width: 10px;
+			height: 10px;
+			border-radius: 2px;
+		}
+		
+		.legend-left { background: rgba(255, 80, 80, 0.8); }
+		.legend-right { background: rgba(80, 255, 80, 0.8); }
+		
+		/* MIDI Log */
+		#midi-log {
+			max-height: 150px;
+			overflow-y: auto;
+			font-size: 11px;
+		}
+		
+		.log-entry {
+			padding: 3px 6px;
+			margin: 2px 0;
+			border-radius: 3px;
+			background: #1a1a2e;
+			border-left: 3px solid #444;
+		}
+		
+		.log-entry.note-on { border-left-color: #00ff88; }
+		.log-entry.note-off { border-left-color: #ff8800; }
+		
+		/* Settings sliders */
+		.slider-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin: 6px 0;
+			font-size: 12px;
+		}
+		
+		.slider-row label {
+			flex: 1;
+			color: #888;
+		}
+		
+		.slider-row input[type="range"] {
+			flex: 2;
+			margin: 0 8px;
+		}
+		
+		.slider-row .value {
+			color: #00d4ff;
+			min-width: 60px;
+			text-align: right;
+			font-weight: bold;
+		}
+		
+		.info-text {
+			font-size: 11px;
+			color: #808080;
+			line-height: 1.4;
+		}
+		
+		.stat-row {
+			display: flex;
+			justify-content: space-between;
+			font-size: 11px;
+			color: #888;
+			margin-top: 5px;
+		}
+		
+		.stat-value {
+			color: #00d4ff;
+			font-weight: bold;
+		}
+		
+		@media (max-width: 1000px) {
+			.main-container {
+				grid-template-columns: 1fr;
+			}
+		}
+	</style>
+</head>
+<body>
+	<h1>🎹 MIDI + Audio Shader</h1>
+	
+	<div class="main-container">
+		<!-- Left Panel: MIDI Controls -->
+		<div class="left-panel">
+			<!-- MIDI Status -->
+			<div class="panel">
+				<div id="status" class="waiting">Initializing MIDI...</div>
+				<div class="stat-row" style="margin-top: 8px;">
+					<span>Notes: <span class="stat-value" id="note-count">0</span></span>
+					<span>Messages: <span class="stat-value" id="msg-count">0</span></span>
+				</div>
+			</div>
+			
+			<!-- Audio Settings -->
+			<div class="panel">
+				<h3>⚙️ Audio Settings</h3>
+				<div class="slider-row">
+					<label>Buffer ahead:</label>
+					<input type="range" id="bufferTime" min="50" max="1000" value="500" step="50">
+					<span class="value" id="bufferTimeValue">500ms</span>
+				</div>
+				<div class="slider-row">
+					<label>Sample batch:</label>
+					<input type="range" id="batchSize" min="20" max="200" value="100" step="10">
+					<span class="value" id="batchSizeValue">100ms</span>
+				</div>
+			</div>
+			
+			<!-- MIDI Log -->
+			<div class="panel">
+				<h3>📜 MIDI Log</h3>
+				<div id="midi-log">
+					<div class="info-text">Waiting for MIDI input...</div>
+				</div>
+			</div>
+		</div>
+		
+		<!-- Right Panel: Shader Editor & Waveform -->
+		<div class="right-panel">
+			<!-- Shader Editor -->
+			<div class="panel" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+				<h3>🎵 Audio Shader (GLSL)</h3>
+				<div class="info-text" style="margin-bottom: 8px;">
+					Write only: <code>vec2 mainSound(int samp, float time)</code><br>
+					Auto-injected uniforms: <code>midiNotes[10]</code> (noteNumber, frequency, velocity, duration), <code>activeNoteCount</code>, <code>iSampleRate</code>
+				</div>
+				<textarea id="shaderText" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off">// MIDI-enabled audio shader
+// Available MIDI uniforms (automatically injected):
+// - midiNotes[10]: array of notes (noteNumber, frequency, velocity, duration)
+// - activeNoteCount: number of active notes
+// - iSampleRate: sample rate (e.g. 48000.0)
+
+vec2 mainSound(int samp, float time) {
+	float sound = 0.0;
+	int noteCount = 0;
+	
+	// Generate a tone for each active MIDI note
+	for (int i = 0; i < 10; i++) {
+		if (midiNotes[i].noteNumber >= 0.0) {
+			float freq = midiNotes[i].frequency;
+			float vel = midiNotes[i].velocity;
+			
+			// Phase calculation using fract to avoid float precision issues
+			// This wraps smoothly at each cycle without clicks
+			float phase = fract(float(samp) * freq / iSampleRate);
+			
+			// Simple sustained tone - no envelope decay
+			// This avoids clicks from duration changing between batches
+			float envelope = 1.0;
+			
+			// Sine wave
+			float wave = sin(6.2831 * phase);
+			
+			sound += wave * envelope * vel;
+			noteCount++;
+		}
+	}
+	
+	// Automatic gain control - prevent clipping with multiple notes
+	if (noteCount > 0) {
+		sound = sound / sqrt(float(noteCount));  // Divide by sqrt for better loudness perception
+	}
+	
+	// Soft clipping using tanh for smooth saturation
+	sound = tanh(sound * 0.8);
+	
+	return vec2(sound);
+}
+</textarea>
+				<div id="error"></div>
+				
+				<div class="controls" style="margin-top: 8px;">
+					<button id="buttonStart">▶ Start</button>
+					<button id="buttonStop" disabled>⏹ Stop</button>
+					<button id="buttonRestart" disabled>↺ Restart</button>
+					<span class="time">Time: <span id="timeDisplay">0.00</span>s</span>
+				</div>
+			</div>
+			
+			<!-- Waveform Visualization -->
+			<div class="waveform-container">
+				<canvas id="waveformCanvas"></canvas>
+				<div class="waveform-info">
+					<span id="zoomInfo">Zoom: 1.00s</span> | Scroll to zoom
+				</div>
+				<div class="waveform-legend">
+					<div class="legend-item">
+						<div class="legend-color legend-left"></div>
+						<span>Left</span>
+					</div>
+					<div class="legend-item">
+						<div class="legend-color legend-right"></div>
+						<span>Right</span>
+					</div>
+				</div>
+			</div>
+			
+			<!-- Piano Keyboard -->
+			<div class="piano-panel">
+				<h3>🎹 Piano Keyboard (click to simulate MIDI)</h3>
+				<div id="keyboard"></div>
+			</div>
+		</div>
+	</div>
+	
+	<script type="module">
+		import { WebGLAudioShader } from './index-midi.js'
+		
+		// ============================================
+		// MIDI STATE
+		// ============================================
+		const MAX_NOTES = 10
+		
+		const midiState = {
+			notes: Array(MAX_NOTES).fill(null).map(() => ({
+				noteNumber: -1,
+				frequency: 0,
+				velocity: 0,
+				duration: 0,
+				startTime: 0
+			})),
+			activeNotes: new Map(),
+			noteCount: 0,
+			totalMessages: 0,
+			currentTime: 0
+		}
+		
+		// ============================================
+		// UI ELEMENTS
+		// ============================================
+		const elements = {
+			status: document.getElementById('status'),
+			keyboard: document.getElementById('keyboard'),
+			noteCount: document.getElementById('note-count'),
+			msgCount: document.getElementById('msg-count'),
+			midiLog: document.getElementById('midi-log'),
+			buttonStart: document.getElementById('buttonStart'),
+			buttonStop: document.getElementById('buttonStop'),
+			buttonRestart: document.getElementById('buttonRestart'),
+			shaderText: document.getElementById('shaderText'),
+			errorEl: document.getElementById('error'),
+			timeDisplay: document.getElementById('timeDisplay'),
+			waveformCanvas: document.getElementById('waveformCanvas'),
+			zoomInfo: document.getElementById('zoomInfo'),
+			bufferTime: document.getElementById('bufferTime'),
+			bufferTimeValue: document.getElementById('bufferTimeValue'),
+			batchSize: document.getElementById('batchSize'),
+			batchSizeValue: document.getElementById('batchSizeValue')
+		}
+		
+		// ============================================
+		// MIDI FUNCTIONS
+		// ============================================
+		function noteToFrequency(note) {
+			return 440 * Math.pow(2, (note - 69) / 12)
+		}
+		
+		function noteToName(noteNumber) {
+			const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+			const octave = Math.floor(noteNumber / 12) - 1
+			return `${notes[noteNumber % 12]}${octave}`
+		}
+		
+		function findEmptySlot() {
+			return midiState.notes.findIndex(n => n.noteNumber === -1)
+		}
+		
+		function findOldestNote() {
+			let oldestIndex = 0
+			let oldestTime = Infinity
+			
+			for (let i = 0; i < MAX_NOTES; i++) {
+				if (midiState.notes[i].noteNumber !== -1 && 
+					midiState.notes[i].startTime < oldestTime) {
+					oldestTime = midiState.notes[i].startTime
+					oldestIndex = i
+				}
+			}
+			
+			return oldestIndex
+		}
+		
+		function addNoteToArray(note, velocity, startTime) {
+			let index = findEmptySlot()
+			if (index === -1) {
+				index = findOldestNote()
+				const oldNote = midiState.notes[index].noteNumber
+				if (oldNote !== -1 && midiState.activeNotes.has(oldNote)) {
+					midiState.activeNotes.delete(oldNote)
+				}
+			}
+			
+			midiState.notes[index] = {
+				noteNumber: note,
+				frequency: noteToFrequency(note),
+				velocity: velocity / 127,
+				duration: 0,
+				startTime: startTime
+			}
+			
+			return index
+		}
+		
+		function removeNoteFromArray(note) {
+			const noteData = midiState.activeNotes.get(note)
+			if (noteData && noteData.arrayIndex !== undefined) {
+				const index = noteData.arrayIndex
+				midiState.notes[index] = {
+					noteNumber: -1,
+					frequency: 0,
+					velocity: 0,
+					duration: 0,
+					startTime: 0
+				}
+			}
+		}
+		
+		function updateKeyboard(note, velocity) {
+			const key = elements.keyboard.querySelector(`[data-note="${note}"]`)
+			if (key) {
+				if (velocity > 0) {
+					key.classList.add('active')
+				} else {
+					key.classList.remove('active')
+				}
+			}
+		}
+		
+		function logMIDI(type, message) {
+			const entry = document.createElement('div')
+			entry.className = `log-entry ${type}`
+			entry.textContent = message
+			
+			elements.midiLog.insertBefore(entry, elements.midiLog.firstChild)
+			
+			while (elements.midiLog.children.length > 30) {
+				elements.midiLog.removeChild(elements.midiLog.lastChild)
+			}
+		}
+		
+		function handleMIDIMessage(event) {
+			const [status, data1, data2] = event.data
+			const command = status & 0xF0
+			const now = performance.now()
+			
+			midiState.totalMessages++
+			midiState.currentTime = now
+			
+			switch (command) {
+				case 0x90: // Note On
+					if (data2 > 0) {
+						const index = addNoteToArray(data1, data2, now)
+						midiState.activeNotes.set(data1, {
+							velocity: data2,
+							startTime: now,
+							arrayIndex: index
+						})
+						midiState.noteCount = midiState.activeNotes.size
+						updateKeyboard(data1, data2)
+						logMIDI('note-on', `Note On: ${noteToName(data1)} (${data1}) vel=${data2}`)
+					} else {
+						handleNoteOff(data1, data2, now)
+					}
+					break
+					
+				case 0x80: // Note Off
+					handleNoteOff(data1, data2, now)
+					break
+			}
+			
+			updateStats()
+			updateShaderUniforms(true)  // Note on/off - trigger waveform update
+		}
+		
+		function handleNoteOff(note, releaseVelocity, now) {
+			removeNoteFromArray(note)
+			midiState.activeNotes.delete(note)
+			midiState.noteCount = midiState.activeNotes.size
+			updateKeyboard(note, 0)
+			logMIDI('note-off', `Note Off: ${noteToName(note)} (${note})`)
+		}
+		
+		function updateStats() {
+			elements.noteCount.textContent = midiState.activeNotes.size
+			elements.msgCount.textContent = midiState.totalMessages
+		}
+		
+		// ============================================
+		// KEYBOARD UI
+		// ============================================
+		function buildKeyboard() {
+			const keyboard = elements.keyboard
+			keyboard.innerHTML = ''
+			
+			// Build 88 keys: A0 (note 21) to C8 (note 108)
+			for (let note = 21; note <= 108; note++) {
+				const isBlack = [1, 3, 6, 8, 10].includes(note % 12)
+				const key = document.createElement('div')
+				key.className = `key ${isBlack ? 'black' : 'white'}`
+				key.dataset.note = note
+				
+				if (note % 12 === 0) {
+					key.innerHTML = `<span>C${Math.floor(note / 12) - 1}</span>`
+				} else if (note === 21) {
+					key.innerHTML = '<span>A0</span>'
+				}
+				
+				// Mouse events for simulating MIDI
+				key.addEventListener('mousedown', () => simulateNoteOn(note, 100))
+				key.addEventListener('mouseup', () => simulateNoteOff(note))
+				key.addEventListener('mouseleave', () => {
+					if (key.classList.contains('active')) {
+						simulateNoteOff(note)
+					}
+				})
+				
+				keyboard.appendChild(key)
+			}
+		}
+		
+		// Simulate MIDI note events (for users without MIDI devices)
+		function simulateNoteOn(note, velocity) {
+			const now = performance.now()
+			const index = addNoteToArray(note, velocity, now)
+			midiState.activeNotes.set(note, {
+				velocity: velocity,
+				startTime: now,
+				arrayIndex: index
+			})
+			midiState.noteCount = midiState.activeNotes.size
+			updateKeyboard(note, velocity)
+			logMIDI('note-on', `Simulated: ${noteToName(note)} (${note}) vel=${velocity}`)
+			updateStats()
+			updateShaderUniforms(true)  // Note on - trigger waveform update
+		}
+		
+		function simulateNoteOff(note) {
+			const now = performance.now()
+			handleNoteOff(note, 0, now)
+			updateStats()
+			updateShaderUniforms(true)  // Note off - trigger waveform update
+		}
+		
+		// ============================================
+		// AUDIO SHADER
+		// ============================================
+		let shader = null
+		let timeUpdateInterval = null
+		
+		// Resize waveform canvas
+		function resizeCanvas() {
+			const container = elements.waveformCanvas.parentElement
+			elements.waveformCanvas.width = container.clientWidth
+			elements.waveformCanvas.height = container.clientHeight
+			if (shader) {
+				shader.requestWaveformUpdate()
+			}
+		}
+		
+		window.addEventListener('resize', resizeCanvas)
+		resizeCanvas()
+		
+		async function initShader() {
+			shader = new WebGLAudioShader()
+			
+			shader.onError = (error) => {
+				elements.errorEl.textContent = '❌ ' + error
+			}
+			
+			shader.onSuccess = () => {
+				elements.errorEl.textContent = ''
+			}
+			
+			try {
+				await shader.init(elements.shaderText.value)
+				shader.setupWaveformCanvas(elements.waveformCanvas)
+				elements.errorEl.textContent = ''
+				updateZoomInfo()
+				// Give workers a moment to be ready, then send initial MIDI state
+				setTimeout(() => {
+					updateShaderUniforms()
+					// Trigger waveform update after MIDI state is sent
+					if (shader && shader.requestWaveformUpdate) {
+						shader.requestWaveformUpdate()
+					}
+				}, 200)
+			} catch (e) {
+				elements.errorEl.textContent = '❌ ' + e.message
+			}
+		}
+		
+		function updateZoomInfo() {
+			if (!shader) return
+			const zoom = shader.waveformZoom
+			if (zoom < 0.1) {
+				elements.zoomInfo.textContent = `${(zoom * 1000).toFixed(0)}ms window`
+			} else {
+				elements.zoomInfo.textContent = `${zoom.toFixed(2)}s window`
+			}
+		}
+		
+		elements.waveformCanvas.addEventListener('wheel', () => {
+			setTimeout(updateZoomInfo, 10)
+		})
+		
+		// Update shader uniforms with MIDI data
+		// triggerWaveform: set to true for note on/off, false for duration updates only
+		function updateShaderUniforms(triggerWaveform = false) {
+			if (!shader) return
+			
+			const midiNotes = midiState.notes.map(n => ({
+				noteNumber: n.noteNumber,
+				frequency: n.frequency,
+				velocity: n.velocity,
+				duration: n.duration
+			}))
+			
+			const activeNoteCount = midiState.activeNotes.size
+			
+			// Use the new updateMIDI method which handles both storage and worker messaging
+			if (shader.updateMIDI) {
+				shader.updateMIDI(midiNotes, activeNoteCount, triggerWaveform)
+			}
+		}
+		
+		await initShader()
+		
+		// ============================================
+		// AUDIO CONTROLS
+		// ============================================
+		elements.buttonStart.addEventListener('click', async () => {
+			if (!shader) await initShader()
+			
+			shader.start()
+			elements.buttonStart.disabled = true
+			elements.buttonStop.disabled = false
+			elements.buttonRestart.disabled = false
+			
+			// Ensure waveform updates
+			if (shader.requestWaveformUpdate) {
+				shader.requestWaveformUpdate()
+			}
+			
+			timeUpdateInterval = setInterval(() => {
+				elements.timeDisplay.textContent = shader.getCurrentTime().toFixed(2)
+			}, 100)
+		})
+		
+		elements.buttonStop.addEventListener('click', () => {
+			if (shader) {
+				shader.stop()
+			}
+			elements.buttonStart.disabled = false
+			elements.buttonStop.disabled = true
+			elements.buttonRestart.disabled = true
+			elements.timeDisplay.textContent = '0.00'
+			
+			if (timeUpdateInterval) {
+				clearInterval(timeUpdateInterval)
+				timeUpdateInterval = null
+			}
+		})
+		
+		elements.buttonRestart.addEventListener('click', () => {
+			if (shader) {
+				shader.restart()
+			}
+		})
+		
+		// Live update shader on edit
+		let updateTimeout = null
+		elements.shaderText.addEventListener('input', () => {
+			if (updateTimeout) clearTimeout(updateTimeout)
+			
+			updateTimeout = setTimeout(async () => {
+				if (shader) {
+					elements.errorEl.textContent = ''
+					
+				try {
+					await shader.setShader(elements.shaderText.value)
+					updateShaderUniforms(true)  // Shader changed - trigger waveform update
+				} catch (e) {
+						elements.errorEl.textContent = '❌ ' + e.message
+					}
+				}
+			}, 300)
+		})
+		
+		// ============================================
+		// SETTINGS
+		// ============================================
+		elements.bufferTime.addEventListener('input', (e) => {
+			const value = parseInt(e.target.value)
+			elements.bufferTimeValue.textContent = value + 'ms'
+			if (shader) {
+				shader.bufferAheadTime = value / 1000
+			}
+		})
+		
+		elements.batchSize.addEventListener('input', (e) => {
+			const value = parseInt(e.target.value)
+			elements.batchSizeValue.textContent = value + 'ms'
+			// This affects how much audio is generated per batch
+			// The actual implementation would need to be in the shader class
+		})
+		
+		// ============================================
+		// MIDI INITIALIZATION
+		// ============================================
+		async function initMIDI() {
+			if (!navigator.requestMIDIAccess) {
+				elements.status.className = 'error'
+				elements.status.textContent = '❌ Web MIDI not supported. Click piano keys to simulate.'
+				return
+			}
+			
+			try {
+				const midiAccess = await navigator.requestMIDIAccess({ sysex: false })
+				const inputs = Array.from(midiAccess.inputs.values())
+				
+				if (inputs.length === 0) {
+					elements.status.className = 'waiting'
+					elements.status.textContent = '⚠️ No MIDI devices found. Click piano keys to simulate.'
+				} else {
+					elements.status.className = 'success'
+					elements.status.textContent = `✅ MIDI Ready - ${inputs.length} device(s): ${inputs.map(i => i.name).join(', ')}`
+				}
+				
+				for (const input of inputs) {
+					input.onmidimessage = handleMIDIMessage
+				}
+				
+				midiAccess.onstatechange = () => {
+					const inputs = Array.from(midiAccess.inputs.values())
+					if (inputs.length === 0) {
+						elements.status.className = 'waiting'
+						elements.status.textContent = '⚠️ No MIDI devices. Click piano keys to simulate.'
+					} else {
+						elements.status.className = 'success'
+						elements.status.textContent = `✅ MIDI Ready - ${inputs.length} device(s): ${inputs.map(i => i.name).join(', ')}`
+					}
+					for (const input of inputs) {
+						input.onmidimessage = handleMIDIMessage
+					}
+				}
+				
+			} catch (err) {
+				elements.status.className = 'error'
+				elements.status.textContent = `❌ MIDI Error: ${err.message}`
+			}
+		}
+		
+		// ============================================
+		// ANIMATION LOOP - Updates note durations
+		// ============================================
+		function updateLoop() {
+			const now = performance.now()
+			midiState.currentTime = now
+			
+			let needsUpdate = false
+			for (let i = 0; i < MAX_NOTES; i++) {
+				if (midiState.notes[i].noteNumber !== -1) {
+					midiState.notes[i].duration = (now - midiState.notes[i].startTime) / 1000
+					needsUpdate = true
+				}
+			}
+			
+			if (needsUpdate) {
+				updateShaderUniforms(false)  // Duration update only - don't trigger waveform
+			}
+			
+			requestAnimationFrame(updateLoop)
+		}
+		
+		// ============================================
+		// START
+		// ============================================
+		buildKeyboard()
+		initMIDI()
+		updateLoop()
+	</script>
+</body>
+</html>
