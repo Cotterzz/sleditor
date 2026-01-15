@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shader Paint</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="tool-group">
+                <label>Brush Size</label>
+                <input type="range" id="brushSize" min="5" max="200" value="50">
+                <span id="brushSizeValue">50</span>
+            </div>
+            <div class="tool-group">
+                <label>Foreground</label>
+                <input type="color" id="fgColor" value="#ffffff">
+            </div>
+            <div class="tool-group">
+                <label>Background</label>
+                <input type="color" id="bgColor" value="#000000">
+            </div>
+            <div class="tool-group">
+                <button id="clearCanvas">Clear Canvas</button>
+                <button id="saveImage">Save Image</button>
+            </div>
+        </div>
+
+        <!-- Main Area -->
+        <div class="main-area">
+            <!-- Canvas -->
+            <div class="canvas-container">
+                <canvas id="paintCanvas" width="800" height="600"></canvas>
+                <div id="brushPreview"></div>
+            </div>
+
+            <!-- Shader Editor Panel -->
+            <div class="shader-panel">
+                <div class="shader-selector">
+                    <label>Brush Shader:</label>
+                    <select id="shaderSelect">
+                        <option value="solidBrush">Solid Brush</option>
+                        <option value="softBrush">Soft Brush</option>
+                        <option value="blur">Blur</option>
+                        <option value="sharpen">Sharpen</option>
+                        <option value="pixelate">Pixelate</option>
+                        <option value="invert">Invert Colors</option>
+                        <option value="saturate">Saturate</option>
+                        <option value="emboss">Emboss</option>
+                        <option value="noise">Noise</option>
+                        <option value="smudge">Smudge</option>
+                        <option value="custom">Custom...</option>
+                    </select>
+                    <button id="addShader">+ Add New</button>
+                </div>
+
+                <div class="shader-editor">
+                    <div class="editor-header">
+                        <span>Fragment Shader</span>
+                        <button id="compileShader">Compile (Ctrl+Enter)</button>
+                    </div>
+                    <textarea id="shaderCode" spellcheck="false"></textarea>
+                    <div id="shaderError" class="shader-error"></div>
+                </div>
+
+                <div class="shader-help">
+                    <details>
+                        <summary>Shader Uniforms Reference</summary>
+                        <pre>
+uniform sampler2D u_canvas;     // Current canvas
+uniform sampler2D u_brushMask;  // Circular brush mask
+uniform vec2 u_resolution;      // Canvas size
+uniform vec2 u_brushPos;        // Brush center (pixels)
+uniform float u_brushSize;      // Brush radius
+uniform vec3 u_fgColor;         // Foreground color
+uniform vec3 u_bgColor;         // Background color
+uniform float u_time;           // Time in seconds
+uniform float u_pressure;       // Pen pressure (0-1)
+
+varying vec2 v_texCoord;        // Texture coordinates
+                        </pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

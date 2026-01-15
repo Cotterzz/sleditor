@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shader Paint</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            height: 100vh;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        
+        #sidebar {
+            width: 400px;
+            background: #2a2a2a;
+            padding: 20px;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        
+        #canvas-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #333;
+        }
+        
+        canvas {
+            background: white;
+            cursor: crosshair;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+        }
+        
+        .control-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        
+        input[type="range"], input[type="color"], select {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+        
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 5px;
+            background: #555;
+            outline: none;
+            border-radius: 3px;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 15px;
+            height: 15px;
+            background: #4CAF50;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        
+        select {
+            background: #3a3a3a;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 300px;
+            background: #1a1a1a;
+            color: #0f0;
+            border: 1px solid #555;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 10px;
+            box-sizing: border-box;
+            border-radius: 3px;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 3px;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        #error {
+            background: #ff4444;
+            color: white;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 3px;
+            display: none;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        
+        .brush-preview {
+            width: 50px;
+            height: 50px;
+            border: 1px solid #555;
+            border-radius: 3px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h2>Shader Paint</h2>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Brush Type</label>
+                <select id="brushSelect">
+                    <option value="basic">Basic Brush</option>
+                    <option value="soft">Soft Brush</option>
+                    <option value="smudge">Smudge</option>
+                    <option value="blur">Blur</option>
+                    <option value="pixelate">Pixelate</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Brush Size: <span id="sizeValue">30</span>px</label>
+                <input type="range" id="brushSize" min="5" max="100" value="30">
+            </div>
+            
+            <div class="control-group">
+                <label>Opacity: <span id="opacityValue">100</span>%</label>
+                <input type="range" id="opacity" min="0" max="100" value="100">
+            </div>
+            
+            <div class="control-group">
+                <label>Foreground Color</label>
+                <input type="color" id="fgColor" value="#000000">
+            </div>
+            
+            <div class="control-group">
+                <label>Background Color</label>
+                <input type="color" id="bgColor" value="#ffffff">
+            </div>
+            
+            <button onclick="clearCanvas()">Clear Canvas</button>
+            <button onclick="saveImage()">Save Image</button>
+        </div>
+        
+        <div class="shader-editor">
+            <label>Fragment Shader (Edit the main() function)</label>
+            <textarea id="shaderCode"></textarea>
+            <button onclick="compileShader()">Apply Shader</button>
+            <div id="error"></div>
+        </div>
+    </div>
+    
+    <div id="canvas-container">
+        <canvas id="canvas" width="800" height="600"></canvas>
+    </div>
+    
+    <script>
+        const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl2', { 
+            preserveDrawingBuffer: true,
+            premultipliedAlpha: false 
+        });
+        
+        if (!gl) {
+            alert('WebGL2 not supported!');
+            throw new Error('WebGL2 not supported');
+        }
+        
+        // Vertex shader - shared by all brushes
+        const vertexShaderSource = `#version 300 es
+            in vec2 a_position;
+            in vec2 a_texCoord;
+            out vec2 v_texCoord;
+            uniform vec2 u_resolution;
+            uniform vec2 u_translation;
+            uniform float u_brushSize;
+            
+            void main() {
+                // Scale position by brush size and translate to brush position
+                vec2 position = a_position * u_brushSize + u_translation;
+                
+                // Convert from pixels to clip space
+                vec2 clipSpace = ((position / u_resolution) * 2.0) - 1.0;
+                gl_Position = vec4(clipSpace * vec2(1, -1), 0, 1);
+                v_texCoord = a_texCoord;
+            }
+        `;
+        
+        // Brush shader templates
+        const brushShaders = {
+            basic: `#version 300 es
+                precision highp float;
+                
+                in vec2 v_texCoord;
+                out vec4 outColor;
+                
+                uniform sampler2D u_canvas;
+                uniform vec2 u_resolution;
+                uniform vec2 u_brushPos;
+                uniform float u_brushSize;
+                uniform vec4 u_foregroundColor;
+                uniform vec4 u_backgroundColor;
+                uniform float u_opacity;
+                
+                // ============= USER EDITABLE SECTION START =============
+                void main() {
+                    // Get current pixel position
+                    vec2 pixelPos = gl_FragCoord.xy;
+                    vec2 brushCenter = u_brushPos;
+                    
+                    // Calculate distance from brush center
+                    float dist = length(pixelPos - brushCenter);
+                    
+                    // Hard edge brush
+                    if (dist <= u_brushSize) {
+                        // Sample existing color
+                        vec2 texCoord = pixelPos / u_resolution;
+                        vec4 existingColor = texture(u_canvas, texCoord);
+                        
+                        // Blend with brush color
+                        outColor = mix(existingColor, u_foregroundColor, u_opacity);
+                    } else {
+                        discard;
+                    }
+                }
+                // ============= USER EDITABLE SECTION END =============
+            `,
+            
+            soft: `#version 300 es
+                precision highp float;
+                
+                in vec2 v_texCoord;
+                out vec4 outColor;
+                
+                uniform sampler2D u_canvas;
+                uniform vec2 u_resolution;
+                uniform vec2 u_brushPos;
+                uniform float u_brushSize;
+                uniform vec4 u_foregroundColor;
+                uniform vec4 u_backgroundColor;
+                uniform float u_opacity;
+                
+                // ============= USER EDITABLE SECTION START =============
+                void main() {
+                    vec2 pixelPos = gl_FragCoord.xy;
+                    vec2 brushCenter = u_brushPos;
+                    
+                    float dist = length(pixelPos - brushCenter);
+                    
+                    if (dist <= u_brushSize) {
+                        vec2 texCoord = pixelPos / u_resolution;
+                        vec4 existingColor = texture(u_canvas, texCoord);
+                        
+                        // Soft falloff
+                        float falloff = 1.0 - (dist / u_brushSize);
+                        falloff = falloff * falloff; // Quadratic falloff
+                        
+                        outColor = mix(existingColor, u_foregroundColor, falloff * u_opacity);
+                    } else {
+                        discard;
+                    }
+                }
+                // ============= USER EDITABLE SECTION END =============
+            `,
+            
+            smudge: `#version 300 es
+                precision highp float;
+                
+                in vec2 v_texCoord;
+                out vec4 outColor;
+                
+                uniform sampler2D u_canvas;
+                uniform vec2 u_resolution;
+                uniform vec2 u_brushPos;
+                uniform float u_brushSize;
+                uniform vec4 u_foregroundColor;
+                uniform vec4 u_backgroundColor;
+                uniform float u_opacity;
+                uniform vec2 u_lastPos;
+                
+                // ============= USER EDITABLE SECTION START =============
+                void main() {
+                    vec2 pixelPos = gl_FragCoord.xy;
+                    vec2 brushCenter = u_brushPos;
+                    
+                    float dist = length(pixelPos - brushCenter);
+                    
+                    if (dist <= u_brushSize) {
+                        vec2 texCoord = pixelPos / u_resolution;
+                        
+                        // Calculate smudge direction
+                        vec2 smudgeDir = u_brushPos - u_lastPos;
+                        vec2 sampleOffset = normalize(smudgeDir) * (dist / u_brushSize) * 10.0;
+                        vec2 sampleCoord = (pixelPos - sampleOffset) / u_resolution;
+                        
+                        // Sample from offset position
+                        vec4 smudgedColor = texture(u_canvas, sampleCoord);
+                        vec4 existingColor = texture(u_canvas, texCoord);
+                        
+                        float falloff = 1.0 - (dist / u_brushSize);
+                        outColor = mix(existingColor, smudgedColor, falloff * u_opacity * 0.5);
+                    } else {
+                        discard;
+                    }
+                }
+                // ============= USER EDITABLE SECTION END =============
+            `,
+            
+            blur: `#version 300 es
+                precision highp float;
+                
+                in vec2 v_texCoord;
+                out vec4 outColor;
+                
+                uniform sampler2D u_canvas;
+                uniform vec2 u_resolution;
+                uniform vec2 u_brushPos;
+                uniform float u_brushSize;
+                uniform vec4 u_foregroundColor;
+                uniform vec4 u_backgroundColor;
+                uniform float u_opacity;
+                
+                // ============= USER EDITABLE SECTION START =============
+                void main() {
+                    vec2 pixelPos = gl_FragCoord.xy;
+                    vec2 brushCenter = u_brushPos;
+                    
+                    float dist = length(pixelPos - brushCenter);
+                    
+                    if (dist <= u_brushSize) {
+                        vec2 texCoord = pixelPos / u_resolution;
+                        vec4 color = vec4(0.0);
+                        
+                        // 9-sample box blur
+                        float blurSize = 2.0;
+                        for(float x = -1.0; x <= 1.0; x++) {
+                            for(float y = -1.0; y <= 1.0; y++) {
+                                vec2 offset = vec2(x, y) * blurSize / u_resolution;
+                                color += texture(u_canvas, texCoord + offset);
+                            }
+                        }
+                        color /= 9.0;
+                        
+                        vec4 existingColor = texture(u_canvas, texCoord);
+                        float falloff = 1.0 - (dist / u_brushSize);
+                        outColor = mix(existingColor, color, falloff * u_opacity);
+                    } else {
+                        discard;
+                    }
+                }
+                // ============= USER EDITABLE SECTION END =============
+            `,
+            
+            pixelate: `#version 300 es
+                precision highp float;
+                
+                in vec2 v_texCoord;
+                out vec4 outColor;
+                
+                uniform sampler2D u_canvas;
+                uniform vec2 u_resolution;
+                uniform vec2 u_brushPos;
+                uniform float u_brushSize;
+                uniform vec4 u_foregroundColor;
+                uniform vec4 u_backgroundColor;
+                uniform float u_opacity;
+                
+                // ============= USER EDITABLE SECTION START =============
+                void main() {
+                    vec2 pixelPos = gl_FragCoord.xy;
+                    vec2 brushCenter = u_brushPos;
+                    
+                    float dist = length(pixelPos - brushCenter);
+                    
+                    if (dist <= u_brushSize) {
+                        vec2 texCoord = pixelPos / u_resolution;
+                        
+                        // Pixelate effect
+                        float pixelSize = 8.0;
+                        vec2 pixelatedCoord = floor(pixelPos / pixelSize) * pixelSize / u_resolution;
+                        vec4 pixelatedColor = texture(u_canvas, pixelatedCoord);
+                        
+                        vec4 existingColor = texture(u_canvas, texCoord);
+                        float falloff = 1.0 - (dist / u_brushSize);
+                        outColor = mix(existingColor, pixelatedColor, falloff * u_opacity);
+                    } else {
+                        discard;
+                    }
+                }
+                // ============= USER EDITABLE SECTION END =============
+            `
+        };
+        
+        let currentBrush = 'basic';
+        let currentProgram = null;
+        let framebuffer = null;
+        let textures = [];
+        let currentTexture = 0;
+        let isDrawing = false;
+        let lastPos = {x: 0, y: 0};
+        
+        // Create shader program
+        function createShader(type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                const error = gl.getShaderInfoLog(shader);
+                gl.deleteShader(shader);
+                throw new Error('Shader compilation error: ' + error);
+            }
+            
+            return shader;
+        }
+        
+        function createProgram(vertexSource, fragmentSource) {
+            const vertexShader = createShader(gl.VERTEX_SHADER, vertexSource);
+            const fragmentShader = createShader(gl.FRAGMENT_SHADER, fragmentSource);
+            
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                const error = gl.getProgramInfoLog(program);
+                gl.deleteProgram(program);
+                throw new Error('Program link error: ' + error);
+            }
+            
+            return program;
+        }
+        
+        // Initialize WebGL
+        function initWebGL() {
+            // Create textures for double buffering
+            for (let i = 0; i < 2; i++) {
+                const texture = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                textures.push(texture);
+            }
+            
+            // Create framebuffer
+            framebuffer = gl.createFramebuffer();
+            
+            // Clear canvas to white
+            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textures[0], 0);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.clearColor(1, 1, 1, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            
+            // Set up vertex buffer (quad for brush area)
+            const positions = new Float32Array([
+                -1, -1,
+                 1, -1,
+                -1,  1,
+                 1,  1,
+            ]);
+            
+            const texCoords = new Float32Array([
+                0, 0,
+                1, 0,
+                0, 1,
+                1, 1,
+            ]);
+            
+            const positionBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+            
+            const texCoordBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+            
+            // Store buffers globally
+            window.glBuffers = { position: positionBuffer, texCoord: texCoordBuffer };
+            
+            // Load initial brush
+            loadBrush(currentBrush);
+            
+            // Initial render
+            renderToScreen();
+        }
+        
+        function loadBrush(brushName) {
+            currentBrush = brushName;
+            const shaderCode = brushShaders[brushName];
+            document.getElementById('shaderCode').value = shaderCode;
+            compileShader();
+        }
+        
+        function compileShader() {
+            const errorDiv = document.getElementById('error');
+            errorDiv.style.display = 'none';
+            
+            try {
+                const fragmentSource = document.getElementById('shaderCode').value;
+                const newProgram = createProgram(vertexShaderSource, fragmentSource);
+                
+                if (currentProgram) {
+                    gl.deleteProgram(currentProgram);
+                }
+                
+                currentProgram = newProgram;
+                
+                // Get uniform locations
+                currentProgram.uniforms = {
+                    resolution: gl.getUniformLocation(currentProgram, 'u_resolution'),
+                    translation: gl.getUniformLocation(currentProgram, 'u_translation'),
+                    brushSize: gl.getUniformLocation(currentProgram, 'u_brushSize'),
+                    brushPos: gl.getUniformLocation(currentProgram, 'u_brushPos'),
+                    canvas: gl.getUniformLocation(currentProgram, 'u_canvas'),
+                    foregroundColor: gl.getUniformLocation(currentProgram, 'u_foregroundColor'),
+                    backgroundColor: gl.getUniformLocation(currentProgram, 'u_backgroundColor'),
+                    opacity: gl.getUniformLocation(currentProgram, 'u_opacity'),
+                    lastPos: gl.getUniformLocation(currentProgram, 'u_lastPos')
+                };
+                
+                // Get attribute locations
+                currentProgram.attributes = {
+                    position: gl.getAttribLocation(currentProgram, 'a_position'),
+                    texCoord: gl.getAttribLocation(currentProgram, 'a_texCoord')
+                };
+                
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            }
+        }
+        
+        function applyBrush(x, y) {
+            if (!currentProgram) return;
+            
+            const brushSize = parseFloat(document.getElementById('brushSize').value);
+            const opacity = parseFloat(document.getElementById('opacity').value) / 100;
+            const fgColor = hexToRgb(document.getElementById('fgColor').value);
+            const bgColor = hexToRgb(document.getElementById('bgColor').value);
+            
+            // Render brush to texture
+            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textures[1 - currentTexture], 0);
+            
+            gl.useProgram(currentProgram);
+            
+            // Set uniforms
+            gl.uniform2f(currentProgram.uniforms.resolution, canvas.width, canvas.height);
+            gl.uniform2f(currentProgram.uniforms.translation, x, y);
+            gl.uniform1f(currentProgram.uniforms.brushSize, brushSize);
+            gl.uniform2f(currentProgram.uniforms.brushPos, x, y);
+            gl.uniform4f(currentProgram.uniforms.foregroundColor, fgColor.r, fgColor.g, fgColor.b, 1);
+            gl.uniform4f(currentProgram.uniforms.backgroundColor, bgColor.r, bgColor.g, bgColor.b, 1);
+            gl.uniform1f(currentProgram.uniforms.opacity, opacity);
+            gl.uniform2f(currentProgram.uniforms.lastPos, lastPos.x, lastPos.y);
+            
+            // Bind current canvas texture
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, textures[currentTexture]);
+            gl.uniform1i(currentProgram.uniforms.canvas, 0);
+            
+            // Set up vertex attributes
+            gl.bindBuffer(gl.ARRAY_BUFFER, window.glBuffers.position);
+            gl.enableVertexAttribArray(currentProgram.attributes.position);
+            gl.vertexAttribPointer(currentProgram.attributes.position, 2, gl.FLOAT, false, 0, 0);
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, window.glBuffers.texCoord);
+            gl.enableVertexAttribArray(currentProgram.attributes.texCoord);
+            gl.vertexAttribPointer(currentProgram.attributes.texCoord, 2, gl.FLOAT, false, 0, 0);
+            
+            // Set viewport to brush area for optimization
+            const left = Math.max(0, x - brushSize);
+            const bottom = Math.max(0, canvas.height - (y + brushSize));
+            const width = Math.min(canvas.width - left, brushSize * 2);
+            const height = Math.min(canvas.height - bottom, brushSize * 2);
+            gl.viewport(left, bottom, width, height);
+            
+            // Enable blending
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            
+            // First, copy the entire current texture to the new texture
+            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textures[1 - currentTexture], 0);
+            
+            // Render full screen quad to copy
+            const copyProgram = getCopyProgram();
+            gl.useProgram(copyProgram);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, textures[currentTexture]);
+            gl.uniform1i(gl.getUniformLocation(copyProgram, 'u_texture'), 0);
+            
+            const copyPosLocation = gl.getAttribLocation(copyProgram, 'a_position');
+            gl.bindBuffer(gl.ARRAY_BUFFER, window.glBuffers.position);
+            gl.enableVertexAttribArray(copyPosLocation);
+            gl.vertexAttribPointer(copyPosLocation, 2, gl.FLOAT, false, 0, 0);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            // Now apply the brush
+            gl.useProgram(currentProgram);
+            gl.viewport(left, bottom, width, height);
+            gl.bindTexture(gl.TEXTURE_2D, textures[currentTexture]);
+            
+            // Re-set attributes for brush program
+            gl.bindBuffer(gl.ARRAY_BUFFER, window.glBuffers.position);
+            gl.enableVertexAttribArray(currentProgram.attributes.position);
+            gl.vertexAttribPointer(currentProgram.attributes.position, 2, gl.FLOAT, false, 0, 0);
+            
+            // Draw the brush
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            
+            // Swap textures
+            currentTexture = 1 - currentTexture;
+            
+            // Render to screen
+            renderToScreen();
+            
+            lastPos = {x, y};
+        }
+        
+        function getCopyProgram() {
+            if (!window.copyProgram) {
+                const vertexShader = `#version 300 es
+                    in vec2 a_position;
+                    out vec2 v_texCoord;
+                    void main() {
+                        gl_Position = vec4(a_position, 0, 1);
+                        v_texCoord = a_position * 0.5 + 0.5;
+                    }
+                `;
+                
+                const fragmentShader = `#version 300 es
+                    precision highp float;
+                    in vec2 v_texCoord;
+                    out vec4 outColor;
+                    uniform sampler2D u_texture;
+                    void main() {
+                        outColor = texture(u_texture, v_texCoord);
+                    }
+                `;
+                
+                window.copyProgram = createProgram(vertexShader, fragmentShader);
+            }
+            return window.copyProgram;
+        }
+        
+        function renderToScreen() {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            
+            const copyProgram = getCopyProgram();
+            gl.useProgram(copyProgram);
+            
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, textures[currentTexture]);
+            gl.uniform1i(gl.getUniformLocation(copyProgram, 'u_texture'), 0);
+            
+            const posLocation = gl.getAttribLocation(copyProgram, 'a_position');
+            gl.bindBuffer(gl.ARRAY_BUFFER, window.glBuffers.position);
+            gl.enableVertexAttribArray(posLocation);
+            gl.vertexAttribPointer(posLocation, 2, gl.FLOAT, false, 0, 0);
+            
+            gl.disable(gl.BLEND);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+        
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16) / 255,
+                g: parseInt(result[2], 16) / 255,
+                b: parseInt(result[3], 16) / 255
+            } : {r: 0, g: 0, b: 0};
+        }
+        
+        function clearCanvas() {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textures[currentTexture], 0);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.clearColor(1, 1, 1, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            renderToScreen();
+        }
+        
+        function saveImage() {
+            canvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'shader-paint.png';
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+        
+        // Event handlers
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            lastPos = {x, y};
+            applyBrush(x, y);
+        });
+        
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                // Interpolate between last position and current for smooth strokes
+                const dx = x - lastPos.x;
+                const dy = y - lastPos.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const steps = Math.max(1, Math.floor(distance / 2)); // Adjust for smoothness
+                
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const px = lastPos.x + dx * t;
+                    const py = lastPos.y + dy * t;
+                    applyBrush(px, py);
+                }
+            }
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+        
+        canvas.addEventListener('mouseleave', () => {
+            isDrawing = false;
+        });
+        
+        // Control event handlers
+        document.getElementById('brushSelect').addEventListener('change', (e) => {
+            loadBrush(e.target.value);
+        });
+        
+        document.getElementById('brushSize').addEventListener('input', (e) => {
+            document.getElementById('sizeValue').textContent = e.target.value;
+        });
+        
+        document.getElementById('opacity').addEventListener('input', (e) => {
+            document.getElementById('opacityValue').textContent = e.target.value;
+        });
+        
+        // Initialize
+        initWebGL();
+    </script>
+</body>
+</html>

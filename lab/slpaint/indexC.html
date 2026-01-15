@@ -1,0 +1,1301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shader Paint</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+        }
+
+        .sidebar {
+            width: 350px;
+            background: #16213e;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        .sidebar h1 {
+            font-size: 1.4em;
+            color: #0f9;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-size: 0.85em;
+            color: #aaa;
+        }
+
+        .brush-selector {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .brush-btn {
+            padding: 8px 12px;
+            background: #0a0a1a;
+            border: 2px solid #333;
+            color: #eee;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+
+        .brush-btn:hover {
+            border-color: #0f9;
+        }
+
+        .brush-btn.active {
+            border-color: #0f9;
+            background: #0f91;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: #0f9;
+        }
+
+        input[type="color"] {
+            width: 60px;
+            height: 35px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .color-inputs {
+            display: flex;
+            gap: 15px;
+        }
+
+        .color-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .shader-editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 300px;
+        }
+
+        .shader-editor-container label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .compile-status {
+            font-size: 0.75em;
+            padding: 3px 8px;
+            border-radius: 3px;
+        }
+
+        .compile-status.success {
+            background: #0f93;
+            color: #0f9;
+        }
+
+        .compile-status.error {
+            background: #f093;
+            color: #f09;
+        }
+
+        #shaderEditor {
+            flex: 1;
+            width: 100%;
+            background: #0a0a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #0f9;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 12px;
+            padding: 10px;
+            resize: none;
+            line-height: 1.5;
+            tab-size: 2;
+        }
+
+        #shaderEditor:focus {
+            outline: none;
+            border-color: #0f9;
+        }
+
+        .error-log {
+            background: #1a0a0a;
+            border: 1px solid #f00;
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 0.75em;
+            color: #f99;
+            max-height: 80px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .error-log.visible {
+            display: block;
+        }
+
+        .canvas-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        #paintCanvas {
+            border: 2px solid #333;
+            border-radius: 8px;
+            cursor: crosshair;
+            background: #fff;
+        }
+
+        .canvas-controls {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .canvas-btn {
+            padding: 8px 16px;
+            background: #16213e;
+            border: 1px solid #333;
+            color: #eee;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.2s;
+        }
+
+        .canvas-btn:hover {
+            border-color: #0f9;
+            background: #1a2a4e;
+        }
+
+        .brush-preview {
+            position: absolute;
+            border: 2px solid rgba(0, 255, 153, 0.5);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            display: none;
+        }
+
+        .stats {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            font-size: 0.75em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h1>🎨 Shader Paint</h1>
+
+        <div class="control-group">
+            <label>Brushes</label>
+            <div class="brush-selector" id="brushSelector"></div>
+        </div>
+
+        <div class="control-group">
+            <label>Brush Size: <span id="sizeValue">50</span>px</label>
+            <input type="range" id="brushSize" min="5" max="200" value="50">
+        </div>
+
+        <div class="control-group">
+            <label>Brush Opacity: <span id="opacityValue">100</span>%</label>
+            <input type="range" id="brushOpacity" min="1" max="100" value="100">
+        </div>
+
+        <div class="control-group">
+            <label>Colors</label>
+            <div class="color-inputs">
+                <div class="color-input-group">
+                    <span style="font-size: 0.8em;">Foreground</span>
+                    <input type="color" id="foregroundColor" value="#000000">
+                </div>
+                <div class="color-input-group">
+                    <span style="font-size: 0.8em;">Background</span>
+                    <input type="color" id="backgroundColor" value="#ffffff">
+                </div>
+            </div>
+        </div>
+
+        <div class="shader-editor-container">
+            <label>
+                Shader Code
+                <span class="compile-status success" id="compileStatus">Compiled ✓</span>
+            </label>
+            <textarea id="shaderEditor" spellcheck="false"></textarea>
+            <div class="error-log" id="errorLog"></div>
+        </div>
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="paintCanvas" width="900" height="700"></canvas>
+        <div class="brush-preview" id="brushPreview"></div>
+        <div class="canvas-controls">
+            <button class="canvas-btn" id="clearBtn">Clear Canvas</button>
+            <button class="canvas-btn" id="saveBtn">Save Image</button>
+        </div>
+        <div class="stats" id="stats"></div>
+    </div>
+
+    <script>
+        // ============================================
+        // BRUSH DEFINITIONS
+        // Each brush has a name and fragment shader
+        // ============================================
+
+        const BRUSHES = {
+            // Simple solid brush with soft edges
+            basicBrush: {
+                name: "Basic Brush",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    // Calculate brush intensity based on distance
+    float intensity = 1.0 - smoothstep(0.0, u_brushSize, dist);
+    
+    // Apply a soft falloff curve
+    intensity = intensity * intensity * (3.0 - 2.0 * intensity);
+    
+    // Mix foreground color with current canvas
+    vec3 brushColor = u_foreground;
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity), 1.0);
+}`
+            },
+
+            // Airbrush - very soft edges
+            airbrush: {
+                name: "Airbrush",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    // Gaussian-like falloff for airbrush effect
+    float sigma = u_brushSize * 0.4;
+    float intensity = exp(-(dist * dist) / (2.0 * sigma * sigma));
+    
+    // Reduce overall intensity for subtle application
+    intensity *= 0.3;
+    
+    vec3 brushColor = u_foreground;
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity), 1.0);
+}`
+            },
+
+            // Blur brush - averages surrounding pixels
+            blur: {
+                name: "Blur",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    float intensity = 1.0 - smoothstep(0.0, u_brushSize, dist);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    // Box blur kernel
+    vec3 blurred = vec3(0.0);
+    float samples = 0.0;
+    float blurRadius = 8.0;
+    
+    for(float x = -8.0; x <= 8.0; x += 2.0) {
+        for(float y = -8.0; y <= 8.0; y += 2.0) {
+            vec2 offset = vec2(x, y) / u_resolution;
+            blurred += texture2D(u_canvas, uv + offset).rgb;
+            samples += 1.0;
+        }
+    }
+    blurred /= samples;
+    
+    vec3 brushColor = blurred;
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity), 1.0);
+}`
+            },
+
+            // Sharpen brush
+            sharpen: {
+                name: "Sharpen",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    float intensity = 1.0 - smoothstep(0.0, u_brushSize, dist);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    // Sharpen kernel: enhances edges
+    vec2 texel = 1.0 / u_resolution;
+    
+    vec3 center = current.rgb * 5.0;
+    vec3 neighbors = 
+        texture2D(u_canvas, uv + vec2(-texel.x, 0.0)).rgb +
+        texture2D(u_canvas, uv + vec2(texel.x, 0.0)).rgb +
+        texture2D(u_canvas, uv + vec2(0.0, -texel.y)).rgb +
+        texture2D(u_canvas, uv + vec2(0.0, texel.y)).rgb;
+    
+    vec3 sharpened = center - neighbors;
+    vec3 brushColor = clamp(sharpened, 0.0, 1.0);
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity), 1.0);
+}`
+            },
+
+            // Smudge brush - pushes pixels in direction of movement
+            smudge: {
+                name: "Smudge",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform vec2 u_lastBrushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    float intensity = 1.0 - smoothstep(0.0, u_brushSize, dist);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    // Calculate smudge direction from brush movement
+    vec2 delta = u_brushPos - u_lastBrushPos;
+    vec2 smudgeDir = delta / u_resolution;
+    
+    // Sample from where the brush was coming from
+    float smudgeAmount = intensity * 0.5;
+    vec2 sampleUV = uv - smudgeDir * smudgeAmount;
+    
+    vec3 smudged = texture2D(u_canvas, sampleUV).rgb;
+    vec3 brushColor = smudged;
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity),  1.0);
+}`
+            },
+
+            // Pixelate brush
+            pixelate: {
+                name: "Pixelate",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    float intensity = 1.0 - smoothstep(0.0, u_brushSize, dist);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    // Pixelation effect
+    float pixelSize = 12.0;
+    vec2 pixelUV = floor(gl_FragCoord.xy / pixelSize) * pixelSize;
+    pixelUV /= u_resolution;
+    
+    vec3 pixelated = texture2D(u_canvas, pixelUV).rgb;
+    vec3 brushColor = pixelated;
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity), 1.0);
+}`
+            },
+
+            // Rainbow brush - color based on position/time
+            rainbow: {
+                name: "Rainbow",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform float u_time;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+// HSV to RGB conversion
+vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    float intensity = 1.0 - smoothstep(0.0, u_brushSize, dist);
+    intensity = intensity * intensity * (3.0 - 2.0 * intensity);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    // Create rainbow color based on angle and time
+    vec2 toPixel = gl_FragCoord.xy - u_brushPos;
+    float angle = atan(toPixel.y, toPixel.x);
+    float hue = fract(angle / 6.28318 + u_time * 0.5);
+    
+    vec3 rainbow = hsv2rgb(vec3(hue, 0.8, 1.0));
+    vec3 brushColor = rainbow;
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity), 1.0);
+}`
+            },
+
+            // Noise brush - adds texture
+            noise: {
+                name: "Noise Texture",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform float u_time;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+// Simple noise function
+float random(vec2 st) {
+    return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+}
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    float intensity = 1.0 - smoothstep(0.0, u_brushSize, dist);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    // Generate noise texture
+    vec2 noiseCoord = gl_FragCoord.xy * 0.1 + u_time * 10.0;
+    float n = random(floor(noiseCoord));
+    
+    // Mix noise with foreground color
+    vec3 noisyColor = u_foreground * (0.5 + n * 0.5);
+    vec3 brushColor = noisyColor;
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity), 1.0);
+}`
+            },
+
+            // Eraser - reveals background color
+            eraser: {
+                name: "Eraser",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    float intensity = 1.0 - smoothstep(0.0, u_brushSize, dist);
+    intensity = intensity * intensity;
+    
+    // Erase to background color
+    vec3 brushColor = u_background;
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity), 1.0);
+}`
+            },
+
+            // Lighten brush
+            lighten: {
+                name: "Lighten",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    float intensity = 1.0 - smoothstep(0.0, u_brushSize, dist);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    // Lighten by moving towards white
+    vec3 lightened = current.rgb + vec3(0.1) * intensity;
+    vec3 brushColor = min(lightened, vec3(1.0));
+    intensity *= 0.5; // Subtle effect
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity), 1.0);
+}`
+            },
+
+            // Darken brush
+            darken: {
+                name: "Darken",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    float intensity = 1.0 - smoothstep(0.0, u_brushSize, dist);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    // Darken by moving towards black
+    vec3 darkened = current.rgb - vec3(0.1) * intensity;
+    vec3 brushColor = max(darkened, vec3(0.0));
+    intensity *= 0.5; // Subtle effect
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity), 1.0);
+}`
+            },
+
+            // Edge detect brush
+            edges: {
+                name: "Edge Detect",
+                shader: `precision highp float;
+
+uniform sampler2D u_canvas;
+uniform vec2 u_brushPos;
+uniform float u_brushSize;
+uniform float u_opacity;
+uniform vec3 u_foreground;
+uniform vec3 u_background;
+uniform vec2 u_resolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / u_resolution;
+    vec4 current = texture2D(u_canvas, uv);
+    
+    float dist = distance(gl_FragCoord.xy, u_brushPos);
+    float intensity = 1.0 - smoothstep(0.0, u_brushSize, dist);
+    
+    // ========== USER EDITABLE SECTION START ==========
+    // Sobel edge detection
+    vec2 texel = 1.0 / u_resolution;
+    
+    float tl = length(texture2D(u_canvas, uv + vec2(-texel.x, texel.y)).rgb);
+    float t  = length(texture2D(u_canvas, uv + vec2(0.0, texel.y)).rgb);
+    float tr = length(texture2D(u_canvas, uv + vec2(texel.x, texel.y)).rgb);
+    float l  = length(texture2D(u_canvas, uv + vec2(-texel.x, 0.0)).rgb);
+    float r  = length(texture2D(u_canvas, uv + vec2(texel.x, 0.0)).rgb);
+    float bl = length(texture2D(u_canvas, uv + vec2(-texel.x, -texel.y)).rgb);
+    float b  = length(texture2D(u_canvas, uv + vec2(0.0, -texel.y)).rgb);
+    float br = length(texture2D(u_canvas, uv + vec2(texel.x, -texel.y)).rgb);
+    
+    float gx = tr + 2.0*r + br - tl - 2.0*l - bl;
+    float gy = tl + 2.0*t + tr - bl - 2.0*b - br;
+    float edge = sqrt(gx*gx + gy*gy);
+    
+    vec3 brushColor = vec3(edge);
+    // ========== USER EDITABLE SECTION END ==========
+    
+    intensity *= u_opacity;
+    gl_FragColor = vec4(mix(current.rgb, brushColor, intensity), 1.0);
+}`
+            }
+        };
+
+        // ============================================
+        // WEBGL SHADER PAINT ENGINE
+        // ============================================
+
+        class ShaderPaint {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.gl = canvas.getContext('webgl', {
+                    preserveDrawingBuffer: true,
+                    antialias: false
+                });
+
+                if (!this.gl) {
+                    throw new Error('WebGL not supported');
+                }
+
+                this.gl.getExtension('OES_standard_derivatives');
+
+                // State
+                this.brushSize = 50;
+                this.opacity = 1.0;
+                this.foregroundColor = [0, 0, 0];
+                this.backgroundColor = [1, 1, 1];
+                this.currentBrush = 'basicBrush';
+                this.currentShader = BRUSHES.basicBrush.shader;
+                this.program = null;
+                this.lastPos = null;
+                this.time = 0;
+                this.isDrawing = false;
+
+                // Initialize
+                this.initGL();
+                this.compileShader(this.currentShader);
+                this.clearCanvas();
+            }
+
+            initGL() {
+                const gl = this.gl;
+
+                // Create textures for ping-pong buffering
+                this.textures = [
+                    this.createTexture(),
+                    this.createTexture()
+                ];
+                this.framebuffers = [
+                    this.createFramebuffer(this.textures[0]),
+                    this.createFramebuffer(this.textures[1])
+                ];
+                this.currentTexture = 0;
+
+                // Full-screen quad vertices
+                const vertices = new Float32Array([
+                    -1, -1,
+                     1, -1,
+                    -1,  1,
+                     1,  1
+                ]);
+
+                this.vertexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+                // Brush quad buffer (will be updated per stroke)
+                this.brushVertexBuffer = gl.createBuffer();
+            }
+
+            createTexture() {
+                const gl = this.gl;
+                const texture = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, texture);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.canvas.width, this.canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                return texture;
+            }
+
+            createFramebuffer(texture) {
+                const gl = this.gl;
+                const fb = gl.createFramebuffer();
+                gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+                return fb;
+            }
+
+            compileShader(fragmentSource) {
+                const gl = this.gl;
+
+                const vertexSource = `
+                    attribute vec2 a_position;
+                    void main() {
+                        gl_Position = vec4(a_position, 0.0, 1.0);
+                    }
+                `;
+
+                // Compile vertex shader
+                const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+                gl.shaderSource(vertexShader, vertexSource);
+                gl.compileShader(vertexShader);
+
+                if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+                    const error = gl.getShaderInfoLog(vertexShader);
+                    gl.deleteShader(vertexShader);
+                    throw new Error('Vertex shader error: ' + error);
+                }
+
+                // Compile fragment shader
+                const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+                gl.shaderSource(fragmentShader, fragmentSource);
+                gl.compileShader(fragmentShader);
+
+                if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+                    const error = gl.getShaderInfoLog(fragmentShader);
+                    gl.deleteShader(vertexShader);
+                    gl.deleteShader(fragmentShader);
+                    throw new Error('Fragment shader error:\n' + error);
+                }
+
+                // Link program
+                const program = gl.createProgram();
+                gl.attachShader(program, vertexShader);
+                gl.attachShader(program, fragmentShader);
+                gl.linkProgram(program);
+
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    const error = gl.getProgramInfoLog(program);
+                    gl.deleteProgram(program);
+                    gl.deleteShader(vertexShader);
+                    gl.deleteShader(fragmentShader);
+                    throw new Error('Program link error: ' + error);
+                }
+
+                // Clean up old program
+                if (this.program) {
+                    gl.deleteProgram(this.program);
+                }
+
+                this.program = program;
+                this.currentShader = fragmentSource;
+
+                // Cache uniform locations
+                this.uniforms = {
+                    canvas: gl.getUniformLocation(program, 'u_canvas'),
+                    brushPos: gl.getUniformLocation(program, 'u_brushPos'),
+                    lastBrushPos: gl.getUniformLocation(program, 'u_lastBrushPos'),
+                    brushSize: gl.getUniformLocation(program, 'u_brushSize'),
+                    opacity: gl.getUniformLocation(program, 'u_opacity'),
+                    foreground: gl.getUniformLocation(program, 'u_foreground'),
+                    background: gl.getUniformLocation(program, 'u_background'),
+                    resolution: gl.getUniformLocation(program, 'u_resolution'),
+                    time: gl.getUniformLocation(program, 'u_time')
+                };
+
+                this.attribPosition = gl.getAttribLocation(program, 'a_position');
+
+                return true;
+            }
+
+            clearCanvas() {
+                const gl = this.gl;
+
+                // Clear both framebuffers to background color
+                for (let i = 0; i < 2; i++) {
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffers[i]);
+                    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+                    gl.clearColor(...this.backgroundColor, 1.0);
+                    gl.clear(gl.COLOR_BUFFER_BIT);
+                }
+
+                // Render to screen
+                this.renderToScreen();
+            }
+
+            applyBrush(x, y) {
+                const gl = this.gl;
+                const size = this.brushSize;
+
+                // Calculate the brush region in clip space
+                const left = (x - size) / this.canvas.width * 2 - 1;
+                const right = (x + size) / this.canvas.width * 2 - 1;
+                const bottom = (y - size) / this.canvas.height * 2 - 1;
+                const top = (y + size) / this.canvas.height * 2 - 1;
+
+                // Update brush quad vertices - only covers brush area
+                const brushVertices = new Float32Array([
+                    left, bottom,
+                    right, bottom,
+                    left, top,
+                    right, top
+                ]);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.brushVertexBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, brushVertices, gl.DYNAMIC_DRAW);
+
+                // Source texture (read from)
+                const srcTexture = this.textures[this.currentTexture];
+                // Destination framebuffer (write to)
+                const dstIndex = 1 - this.currentTexture;
+                const dstFramebuffer = this.framebuffers[dstIndex];
+
+                // First, copy the entire current texture to destination
+                // (We need to preserve areas outside the brush)
+                this.copyTexture(srcTexture, dstFramebuffer);
+
+                // Now apply brush shader only to brush region
+                gl.bindFramebuffer(gl.FRAMEBUFFER, dstFramebuffer);
+
+                // Set scissor to brush region for performance
+                const scissorX = Math.max(0, Math.floor(x - size));
+                const scissorY = Math.max(0, Math.floor(y - size));
+                const scissorW = Math.min(this.canvas.width - scissorX, Math.ceil(size * 2));
+                const scissorH = Math.min(this.canvas.height - scissorY, Math.ceil(size * 2));
+
+                gl.enable(gl.SCISSOR_TEST);
+                gl.scissor(scissorX, scissorY, scissorW, scissorH);
+                gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+
+                gl.useProgram(this.program);
+
+                // Bind source texture
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, srcTexture);
+                gl.uniform1i(this.uniforms.canvas, 0);
+
+                // Set uniforms
+                gl.uniform2f(this.uniforms.brushPos, x, y);
+                gl.uniform2f(this.uniforms.lastBrushPos,
+                    this.lastPos ? this.lastPos.x : x,
+                    this.lastPos ? this.lastPos.y : y
+                );
+                gl.uniform1f(this.uniforms.brushSize, size);
+                gl.uniform1f(this.uniforms.opacity, this.opacity);
+                gl.uniform3fv(this.uniforms.foreground, this.foregroundColor);
+                gl.uniform3fv(this.uniforms.background, this.backgroundColor);
+                gl.uniform2f(this.uniforms.resolution, this.canvas.width, this.canvas.height);
+                gl.uniform1f(this.uniforms.time, this.time);
+
+                // Draw brush quad
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.brushVertexBuffer);
+                gl.enableVertexAttribArray(this.attribPosition);
+                gl.vertexAttribPointer(this.attribPosition, 2, gl.FLOAT, false, 0, 0);
+
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+                gl.disable(gl.SCISSOR_TEST);
+
+                // Swap buffers
+                this.currentTexture = dstIndex;
+
+                // Update last position
+                this.lastPos = { x, y };
+
+                // Render to screen
+                this.renderToScreen();
+            }
+
+            copyTexture(srcTexture, dstFramebuffer) {
+                const gl = this.gl;
+
+                // Simple copy shader (compiled once)
+                if (!this.copyProgram) {
+                    const vertSrc = `
+                        attribute vec2 a_position;
+                        varying vec2 v_texCoord;
+                        void main() {
+                            gl_Position = vec4(a_position, 0.0, 1.0);
+                            v_texCoord = a_position * 0.5 + 0.5;
+                        }
+                    `;
+                    const fragSrc = `
+                        precision highp float;
+                        uniform sampler2D u_texture;
+                        varying vec2 v_texCoord;
+                        void main() {
+                            gl_FragColor = texture2D(u_texture, v_texCoord);
+                        }
+                    `;
+
+                    const vs = gl.createShader(gl.VERTEX_SHADER);
+                    gl.shaderSource(vs, vertSrc);
+                    gl.compileShader(vs);
+
+                    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+                    gl.shaderSource(fs, fragSrc);
+                    gl.compileShader(fs);
+
+                    this.copyProgram = gl.createProgram();
+                    gl.attachShader(this.copyProgram, vs);
+                    gl.attachShader(this.copyProgram, fs);
+                    gl.linkProgram(this.copyProgram);
+
+                    this.copyUniforms = {
+                        texture: gl.getUniformLocation(this.copyProgram, 'u_texture')
+                    };
+                    this.copyAttribPosition = gl.getAttribLocation(this.copyProgram, 'a_position');
+                }
+
+                gl.bindFramebuffer(gl.FRAMEBUFFER, dstFramebuffer);
+                gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+
+                gl.useProgram(this.copyProgram);
+
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, srcTexture);
+                gl.uniform1i(this.copyUniforms.texture, 0);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.enableVertexAttribArray(this.copyAttribPosition);
+                gl.vertexAttribPointer(this.copyAttribPosition, 2, gl.FLOAT, false, 0, 0);
+
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            }
+
+            renderToScreen() {
+                const gl = this.gl;
+
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+                gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+
+                if (!this.copyProgram) {
+                    this.copyTexture(this.textures[this.currentTexture], null);
+                    return;
+                }
+
+                gl.useProgram(this.copyProgram);
+
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, this.textures[this.currentTexture]);
+                gl.uniform1i(this.copyUniforms.texture, 0);
+
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.enableVertexAttribArray(this.copyAttribPosition);
+                gl.vertexAttribPointer(this.copyAttribPosition, 2, gl.FLOAT, false, 0, 0);
+
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            }
+
+            // Interpolate between points for smooth strokes
+            strokeTo(x, y) {
+                if (!this.lastPos) {
+                    this.applyBrush(x, y);
+                    return;
+                }
+
+                const dx = x - this.lastPos.x;
+                const dy = y - this.lastPos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // Spacing based on brush size
+                const spacing = Math.max(2, this.brushSize * 0.15);
+                const steps = Math.ceil(dist / spacing);
+
+                for (let i = 1; i <= steps; i++) {
+                    const t = i / steps;
+                    const px = this.lastPos.x + dx * t;
+                    const py = this.lastPos.y + dy * t;
+                    this.applyBrush(px, py);
+                }
+            }
+        }
+
+        // ============================================
+        // UI INITIALIZATION
+        // ============================================
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('paintCanvas');
+            const paint = new ShaderPaint(canvas);
+
+            const shaderEditor = document.getElementById('shaderEditor');
+            const compileStatus = document.getElementById('compileStatus');
+            const errorLog = document.getElementById('errorLog');
+            const brushSelector = document.getElementById('brushSelector');
+            const brushSizeInput = document.getElementById('brushSize');
+            const brushOpacityInput = document.getElementById('brushOpacity');
+            const foregroundInput = document.getElementById('foregroundColor');
+            const backgroundInput = document.getElementById('backgroundColor');
+            const brushPreview = document.getElementById('brushPreview');
+            const stats = document.getElementById('stats');
+
+            let compileTimeout = null;
+            let strokeCount = 0;
+
+            // Initialize brush buttons
+            Object.keys(BRUSHES).forEach(key => {
+                const btn = document.createElement('button');
+                btn.className = 'brush-btn' + (key === 'basicBrush' ? ' active' : '');
+                btn.textContent = BRUSHES[key].name;
+                btn.dataset.brush = key;
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.brush-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    paint.currentBrush = key;
+                    shaderEditor.value = BRUSHES[key].shader;
+                    tryCompile();
+                });
+                brushSelector.appendChild(btn);
+            });
+
+            // Initialize shader editor
+            shaderEditor.value = BRUSHES.basicBrush.shader;
+
+            // Shader compilation with debounce
+            function tryCompile() {
+                try {
+                    paint.compileShader(shaderEditor.value);
+                    compileStatus.textContent = 'Compiled ✓';
+                    compileStatus.className = 'compile-status success';
+                    errorLog.classList.remove('visible');
+                } catch (e) {
+                    compileStatus.textContent = 'Error ✗';
+                    compileStatus.className = 'compile-status error';
+                    errorLog.textContent = e.message;
+                    errorLog.classList.add('visible');
+                }
+            }
+
+            shaderEditor.addEventListener('input', () => {
+                clearTimeout(compileTimeout);
+                compileTimeout = setTimeout(tryCompile, 500);
+            });
+
+            // Handle tab key in editor
+            shaderEditor.addEventListener('keydown', (e) => {
+                if (e.key === 'Tab') {
+                    e.preventDefault();
+                    const start = shaderEditor.selectionStart;
+                    const end = shaderEditor.selectionEnd;
+                    shaderEditor.value = shaderEditor.value.substring(0, start) + '  ' + shaderEditor.value.substring(end);
+                    shaderEditor.selectionStart = shaderEditor.selectionEnd = start + 2;
+                }
+            });
+
+            // Brush size
+            brushSizeInput.addEventListener('input', () => {
+                paint.brushSize = parseInt(brushSizeInput.value);
+                document.getElementById('sizeValue').textContent = brushSizeInput.value;
+                updateBrushPreview();
+            });
+
+            // Brush opacity
+            brushOpacityInput.addEventListener('input', () => {
+                paint.opacity = parseInt(brushOpacityInput.value) / 100;
+                document.getElementById('opacityValue').textContent = brushOpacityInput.value;
+            });
+
+            // Colors
+            function hexToRgb(hex) {
+                const r = parseInt(hex.slice(1, 3), 16) / 255;
+                const g = parseInt(hex.slice(3, 5), 16) / 255;
+                const b = parseInt(hex.slice(5, 7), 16) / 255;
+                return [r, g, b];
+            }
+
+            foregroundInput.addEventListener('input', () => {
+                paint.foregroundColor = hexToRgb(foregroundInput.value);
+            });
+
+            backgroundInput.addEventListener('input', () => {
+                paint.backgroundColor = hexToRgb(backgroundInput.value);
+            });
+
+            // Canvas controls
+            document.getElementById('clearBtn').addEventListener('click', () => {
+                paint.clearCanvas();
+                strokeCount = 0;
+                updateStats();
+            });
+
+            document.getElementById('saveBtn').addEventListener('click', () => {
+                const link = document.createElement('a');
+                link.download = 'shader-paint.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            });
+
+            // Mouse handling
+            function getCanvasCoords(e) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: e.clientX - rect.left,
+                    y: canvas.height - (e.clientY - rect.top) // Flip Y for WebGL
+                };
+            }
+
+            function updateBrushPreview() {
+                brushPreview.style.width = paint.brushSize * 2 + 'px';
+                brushPreview.style.height = paint.brushSize * 2 + 'px';
+            }
+
+            function updateStats() {
+                stats.textContent = `Strokes: ${strokeCount} | Brush: ${BRUSHES[paint.currentBrush].name}`;
+            }
+
+            canvas.addEventListener('mousedown', (e) => {
+                paint.isDrawing = true;
+                paint.lastPos = null;
+                const pos = getCanvasCoords(e);
+                paint.applyBrush(pos.x, pos.y);
+                strokeCount++;
+                updateStats();
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                const pos = getCanvasCoords(e);
+
+                // Update brush preview
+                brushPreview.style.display = 'block';
+                brushPreview.style.left = e.clientX + 'px';
+                brushPreview.style.top = e.clientY + 'px';
+                updateBrushPreview();
+
+                if (paint.isDrawing) {
+                    paint.time += 0.016; // Approximate frame time
+                    paint.strokeTo(pos.x, pos.y);
+                }
+            });
+
+            canvas.addEventListener('mouseup', () => {
+                paint.isDrawing = false;
+                paint.lastPos = null;
+            });
+
+            canvas.addEventListener('mouseleave', () => {
+                paint.isDrawing = false;
+                paint.lastPos = null;
+                brushPreview.style.display = 'none';
+            });
+
+            // Touch support
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                paint.isDrawing = true;
+                paint.lastPos = null;
+                paint.applyBrush(
+                    touch.clientX - rect.left,
+                    canvas.height - (touch.clientY - rect.top)
+                );
+                strokeCount++;
+                updateStats();
+            });
+
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (!paint.isDrawing) return;
+                const touch = e.touches[0];
+                const rect = canvas.getBoundingClientRect();
+                paint.time += 0.016;
+                paint.strokeTo(
+                    touch.clientX - rect.left,
+                    canvas.height - (touch.clientY - rect.top)
+                );
+            });
+
+            canvas.addEventListener('touchend', () => {
+                paint.isDrawing = false;
+                paint.lastPos = null;
+            });
+
+            updateStats();
+        });
+    </script>
+</body>
+</html>
