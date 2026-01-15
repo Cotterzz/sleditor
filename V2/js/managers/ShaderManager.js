@@ -31,7 +31,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float ring = smoothstep(0.3, 0.28, d) * smoothstep(0.2, 0.22, d);
     col = mix(col, vec3(1.0), ring * 0.5);
     
-    fragColor = vec4(col, 1.0);
+    fragColor = vec4(col, ring);
 }`,
     Common: `// Common code - shared between all passes
 // Functions here are prepended to every shader

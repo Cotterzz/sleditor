@@ -21,6 +21,7 @@ import { registerEditorPanel } from './panels/editor.js';
 import { registerUniformsPanel } from './panels/uniforms.js';
 import { registerTutorialsPanel } from './panels/tutorials.js';
 import { registerShaderInfoPanel } from './panels/shader-info.js';
+import { registerThemeEditorPanel } from './panels/theme-editor.js';
 import * as mediaPanel from './panels/media.js';
 import * as inputsPanel from './panels/inputs.js';
 // Note: shader-controls is not a SLUI panel - it's a lightweight bar managed by preview.js
@@ -88,6 +89,9 @@ export function registerPanels() {
     
     // Inputs panel (mouse, keyboard, webcam, mic, gamepad, midi)
     inputsPanel.register(SLUI);
+    
+    // Theme Editor panel (live theme editing and export)
+    registerThemeEditorPanel(SLUI);
     
     // Future panels:
     // registerGalleryPanel(SLUI);

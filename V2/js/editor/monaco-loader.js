@@ -703,15 +703,22 @@ export function setMonacoTheme(isDark) {
 }
 
 /**
- * Detect if current SLUI theme is dark
+ * Detect if current SLUI theme is dark (for Monaco editor theming)
+ * Note: 'default' is a hybrid theme with light editor, so it uses light Monaco theme
  */
 function isDarkTheme() {
     // Check SLUI state (correct path)
     if (window.SLUI?.state?.theme) {
         const themeName = window.SLUI.state.theme;
-        // Light themes typically have 'light' in name or are known light themes
-        const isLight = themeName.includes('light') || themeName === 'github' || themeName === 'designer';
-        return !isLight;
+        // Themes that use light Monaco editor:
+        // - 'default' is hybrid with light code editor
+        // - 'light' variants
+        // - 'designer', 'architect' are light themes
+        const usesLightEditor = themeName === 'default' || 
+                                 themeName.includes('light') || 
+                                 themeName === 'designer' || 
+                                 themeName === 'architect';
+        return !usesLightEditor;
     }
     // Fall back to system preference
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? true;

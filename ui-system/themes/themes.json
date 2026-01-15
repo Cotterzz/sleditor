@@ -1,98 +1,55 @@
 {
   "themes": {
-    "hacker": {
-      "name": "Hacker",
-      "type": "dark",
+    "default": {
+      "name": "Default",
+      "type": "hybrid",
       "fonts": {
-        "code": "'Fira Code', 'Noto Sans Mono', 'Consolas', monospace",
-        "ui": "'Share Tech Mono', 'Noto Sans JP', 'Courier New', monospace",
-        "content": "'VT323', 'Noto Sans JP', 'Courier New', monospace"
+        "code": "'Cascadia Code', 'Consolas', 'Courier New', monospace",
+        "ui": "'Segoe UI', 'Noto Sans', 'Helvetica Neue', sans-serif",
+        "content": "'Segoe UI', 'Noto Sans', 'Helvetica', sans-serif"
       },
       "colors": {
-        "bg-primary": "#0a0a0a",
-        "bg-secondary": "#0f0f0f",
-        "bg-tertiary": "#1a1a1a",
-        "bg-panel": "#0d0d0d",
-        "bg-hover": "#1f1f1f",
-        "bg-active": "#002200",
+        "bg-primary": "#2b579a",
+        "bg-secondary": "#3a6bb5",
+        "bg-tertiary": "#4a7dc7",
+        "bg-panel": "#1e3f6f",
+        "bg-hover": "#3d6eb8",
+        "bg-active": "#5089d6",
         
-        "text-primary": "#00ff00",
-        "text-secondary": "#00cc00",
-        "text-muted": "#008800",
-        "text-inverse": "#000000",
+        "text-primary": "#ffffff",
+        "text-secondary": "#d0e0f0",
+        "text-muted": "#a0c0e0",
+        "text-inverse": "#1a1a1a",
         
-        "accent": "#00ff00",
-        "accent-hover": "#00cc00",
-        "accent-active": "#009900",
+        "accent": "#ffc83d",
+        "accent-hover": "#ffd966",
+        "accent-active": "#e6b000",
         
-        "border": "#003300",
-        "border-focus": "#00ff00",
+        "border": "#4a7dc7",
+        "border-focus": "#ffc83d",
         
-        "success": "#00ff00",
-        "warning": "#ffff00",
-        "error": "#ff0000",
-        "info": "#00ffff",
+        "success": "#5cb85c",
+        "warning": "#f0ad4e",
+        "error": "#d9534f",
+        "info": "#5bc0de",
         
-        "shadow": "rgba(0, 255, 0, 0.1)",
-        "overlay": "rgba(0, 0, 0, 0.8)",
+        "shadow": "rgba(0, 0, 0, 0.25)",
+        "overlay": "rgba(30, 63, 111, 0.95)",
         
-        "toolbar-bg": "#000000",
-        "window-header": "#001100",
-        "scrollbar": "#003300",
-        "scrollbar-thumb": "#00ff00"
+        "toolbar-bg": "#1a3a6e",
+        "window-header": "#2b579a",
+        "scrollbar": "#1e3f6f",
+        "scrollbar-thumb": "#5089d6",
+        
+        "editor-bg": "#fafafa",
+        "editor-text": "#1a1a1a",
+        "editor-gutter": "#f0f0f0",
+        "editor-line-highlight": "#fff3cd"
       },
       "effects": {
-        "glow": "0 0 10px rgba(0, 255, 0, 0.5)",
-        "border-radius": "0px",
-        "transition": "0.1s"
-      }
-    },
-    
-    "architect": {
-      "name": "Architect",
-      "type": "dark",
-      "fonts": {
-        "code": "'JetBrains Mono', 'Noto Sans Mono', 'Fira Code', monospace",
-        "ui": "'Inter', 'Noto Sans JP', 'Segoe UI', sans-serif",
-        "content": "'IBM Plex Sans', 'Noto Sans JP', 'Helvetica Neue', sans-serif"
-      },
-      "colors": {
-        "bg-primary": "#08090d",
-        "bg-secondary": "#0d0f15",
-        "bg-tertiary": "#12151d",
-        "bg-panel": "#0f1118",
-        "bg-hover": "#181c28",
-        "bg-active": "#1a1f2e",
-        
-        "text-primary": "#e8eaf0",
-        "text-secondary": "#a0a8b8",
-        "text-muted": "#5a6478",
-        "text-inverse": "#08090d",
-        
-        "accent": "#e94560",
-        "accent-hover": "#ff6b6b",
-        "accent-active": "#c73e54",
-        
-        "border": "#1e2233",
-        "border-focus": "#e94560",
-        
-        "success": "#4ade80",
-        "warning": "#fbbf24",
-        "error": "#ef4444",
-        "info": "#38bdf8",
-        
-        "shadow": "rgba(0, 0, 0, 0.5)",
-        "overlay": "rgba(5, 5, 10, 0.9)",
-        
-        "toolbar-bg": "#050608",
-        "window-header": "#0d0f15",
-        "scrollbar": "#1a1f2e",
-        "scrollbar-thumb": "#e94560"
-      },
-      "effects": {
-        "glow": "0 4px 24px rgba(233, 69, 96, 0.2)",
-        "border-radius": "8px",
-        "transition": "0.2s"
+        "glow": "0 2px 8px rgba(0, 120, 212, 0.25)",
+        "border-radius": "4px",
+        "transition": "0.15s"
       }
     },
     
@@ -144,9 +101,392 @@
         "neumorphic-raised": "6px 6px 12px #a8adb8, -6px -6px 12px #e8edf8",
         "neumorphic-inset": "inset 4px 4px 8px #a8adb8, inset -4px -4px 8px #e8edf8"
       }
+    },
+    
+    "architect": {
+      "name": "Architect",
+      "type": "light",
+      "fonts": {
+        "code": "'JetBrains Mono', 'Noto Sans Mono', 'Fira Code', monospace",
+        "ui": "'Inter', 'Noto Sans JP', 'Segoe UI', sans-serif",
+        "content": "'IBM Plex Sans', 'Noto Sans JP', 'Helvetica Neue', sans-serif"
+      },
+      "colors": {
+        "bg-primary": "#d8d4cc",
+        "bg-secondary": "#e2ded6",
+        "bg-tertiary": "#ece8e0",
+        "bg-panel": "#f0ece4",
+        "bg-hover": "#cec8be",
+        "bg-active": "#c4beb4",
+        
+        "text-primary": "#2c2a26",
+        "text-secondary": "#4a4640",
+        "text-muted": "#6e6a62",
+        "text-inverse": "#f5f3f0",
+        
+        "accent": "#e67e22",
+        "accent-hover": "#f39c12",
+        "accent-active": "#d35400",
+        
+        "border": "#b8b4aa",
+        "border-focus": "#e67e22",
+        
+        "success": "#27ae60",
+        "warning": "#f39c12",
+        "error": "#c0392b",
+        "info": "#2980b9",
+        
+        "shadow": "rgba(44, 42, 38, 0.12)",
+        "overlay": "rgba(216, 212, 204, 0.95)",
+        
+        "toolbar-bg": "#ccc8be",
+        "window-header": "#dedad2",
+        "scrollbar": "#c0bab0",
+        "scrollbar-thumb": "#8a8478"
+      },
+      "effects": {
+        "glow": "0 2px 12px rgba(230, 126, 34, 0.15)",
+        "border-radius": "3px",
+        "transition": "0.15s"
+      }
+    },
+    
+    "coder": {
+      "name": "Coder",
+      "type": "dark",
+      "fonts": {
+        "code": "'Fira Code', 'JetBrains Mono', 'Consolas', monospace",
+        "ui": "'Inter', 'Noto Sans', 'Segoe UI', sans-serif",
+        "content": "'Inter', 'Noto Sans', 'Helvetica', sans-serif"
+      },
+      "colors": {
+        "bg-primary": "#0d1117",
+        "bg-secondary": "#161b22",
+        "bg-tertiary": "#1c2128",
+        "bg-panel": "#13171d",
+        "bg-hover": "#21262d",
+        "bg-active": "#263040",
+        
+        "text-primary": "#c9d1d9",
+        "text-secondary": "#8b949e",
+        "text-muted": "#6e7681",
+        "text-inverse": "#0d1117",
+        
+        "accent": "#58a6ff",
+        "accent-hover": "#79b8ff",
+        "accent-active": "#388bfd",
+        
+        "border": "#30363d",
+        "border-focus": "#58a6ff",
+        
+        "success": "#3fb950",
+        "warning": "#d29922",
+        "error": "#f85149",
+        "info": "#58a6ff",
+        
+        "shadow": "rgba(0, 0, 0, 0.4)",
+        "overlay": "rgba(13, 17, 23, 0.9)",
+        
+        "toolbar-bg": "#010409",
+        "window-header": "#161b22",
+        "scrollbar": "#21262d",
+        "scrollbar-thumb": "#58a6ff"
+      },
+      "effects": {
+        "glow": "0 0 20px rgba(88, 166, 255, 0.25)",
+        "border-radius": "6px",
+        "transition": "0.15s"
+      }
+    },
+    
+    "hacker": {
+      "name": "Hacker",
+      "type": "dark",
+      "fonts": {
+        "code": "'Fira Code', 'Noto Sans Mono', 'Consolas', monospace",
+        "ui": "'Share Tech Mono', 'Noto Sans JP', 'Courier New', monospace",
+        "content": "'VT323', 'Noto Sans JP', 'Courier New', monospace"
+      },
+      "colors": {
+        "bg-primary": "#0a0a0a",
+        "bg-secondary": "#0f0f0f",
+        "bg-tertiary": "#1a1a1a",
+        "bg-panel": "#0d0d0d",
+        "bg-hover": "#1f1f1f",
+        "bg-active": "#002200",
+        
+        "text-primary": "#00ff00",
+        "text-secondary": "#00cc00",
+        "text-muted": "#008800",
+        "text-inverse": "#000000",
+        
+        "accent": "#00ff00",
+        "accent-hover": "#00cc00",
+        "accent-active": "#009900",
+        
+        "border": "#003300",
+        "border-focus": "#00ff00",
+        
+        "success": "#00ff00",
+        "warning": "#ffff00",
+        "error": "#ff0000",
+        "info": "#00ffff",
+        
+        "shadow": "rgba(0, 255, 0, 0.1)",
+        "overlay": "rgba(0, 0, 0, 0.8)",
+        
+        "toolbar-bg": "#000000",
+        "window-header": "#001100",
+        "scrollbar": "#003300",
+        "scrollbar-thumb": "#00ff00"
+      },
+      "effects": {
+        "glow": "0 0 10px rgba(0, 255, 0, 0.5)",
+        "border-radius": "0px",
+        "transition": "0.1s"
+      }
+    },
+    
+    "engineer": {
+      "name": "Engineer",
+      "type": "dark",
+      "fonts": {
+        "code": "'JetBrains Mono', 'Noto Sans Mono', 'Fira Code', monospace",
+        "ui": "'Inter', 'Noto Sans JP', 'Segoe UI', sans-serif",
+        "content": "'IBM Plex Sans', 'Noto Sans JP', 'Helvetica Neue', sans-serif"
+      },
+      "colors": {
+        "bg-primary": "#1e1e1e",
+        "bg-secondary": "#252526",
+        "bg-tertiary": "#2d2d30",
+        "bg-panel": "#222224",
+        "bg-hover": "#3c3c3c",
+        "bg-active": "#4a4a4a",
+        
+        "text-primary": "#d4d4d4",
+        "text-secondary": "#a0a0a0",
+        "text-muted": "#6e6e6e",
+        "text-inverse": "#1e1e1e",
+        
+        "accent": "#e67e22",
+        "accent-hover": "#f39c12",
+        "accent-active": "#d35400",
+        
+        "border": "#3c3c3c",
+        "border-focus": "#e67e22",
+        
+        "success": "#4ec9b0",
+        "warning": "#dcdcaa",
+        "error": "#f14c4c",
+        "info": "#9cdcfe",
+        
+        "shadow": "rgba(0, 0, 0, 0.5)",
+        "overlay": "rgba(30, 30, 30, 0.95)",
+        
+        "toolbar-bg": "#181818",
+        "window-header": "#252526",
+        "scrollbar": "#3c3c3c",
+        "scrollbar-thumb": "#e67e22"
+      },
+      "effects": {
+        "glow": "0 2px 12px rgba(230, 126, 34, 0.2)",
+        "border-radius": "4px",
+        "transition": "0.15s"
+      }
+    },
+    
+    "minimal-light": {
+      "name": "Minimal Light",
+      "type": "light",
+      "fonts": {
+        "code": "'SF Mono', 'Menlo', 'Consolas', monospace",
+        "ui": "system-ui, -apple-system, sans-serif",
+        "content": "system-ui, -apple-system, sans-serif"
+      },
+      "colors": {
+        "bg-primary": "#ffffff",
+        "bg-secondary": "#fafafa",
+        "bg-tertiary": "#f5f5f5",
+        "bg-panel": "#ffffff",
+        "bg-hover": "#f0f0f0",
+        "bg-active": "#e8e8e8",
+        
+        "text-primary": "#333333",
+        "text-secondary": "#666666",
+        "text-muted": "#999999",
+        "text-inverse": "#ffffff",
+        
+        "accent": "#666666",
+        "accent-hover": "#444444",
+        "accent-active": "#333333",
+        
+        "border": "#e0e0e0",
+        "border-focus": "#666666",
+        
+        "success": "#22863a",
+        "warning": "#b08800",
+        "error": "#cb2431",
+        "info": "#0366d6",
+        
+        "shadow": "rgba(0, 0, 0, 0.05)",
+        "overlay": "rgba(255, 255, 255, 0.95)",
+        
+        "toolbar-bg": "#f8f8f8",
+        "window-header": "#fafafa",
+        "scrollbar": "#e8e8e8",
+        "scrollbar-thumb": "#c0c0c0"
+      },
+      "effects": {
+        "glow": "none",
+        "border-radius": "2px",
+        "transition": "0.1s"
+      }
+    },
+    
+    "minimal-dark": {
+      "name": "Minimal Dark",
+      "type": "dark",
+      "fonts": {
+        "code": "'SF Mono', 'Menlo', 'Consolas', monospace",
+        "ui": "system-ui, -apple-system, sans-serif",
+        "content": "system-ui, -apple-system, sans-serif"
+      },
+      "colors": {
+        "bg-primary": "#1a1a1a",
+        "bg-secondary": "#222222",
+        "bg-tertiary": "#2a2a2a",
+        "bg-panel": "#1e1e1e",
+        "bg-hover": "#333333",
+        "bg-active": "#404040",
+        
+        "text-primary": "#e0e0e0",
+        "text-secondary": "#a0a0a0",
+        "text-muted": "#666666",
+        "text-inverse": "#1a1a1a",
+        
+        "accent": "#a0a0a0",
+        "accent-hover": "#c0c0c0",
+        "accent-active": "#e0e0e0",
+        
+        "border": "#333333",
+        "border-focus": "#a0a0a0",
+        
+        "success": "#4caf50",
+        "warning": "#ff9800",
+        "error": "#f44336",
+        "info": "#2196f3",
+        
+        "shadow": "rgba(0, 0, 0, 0.3)",
+        "overlay": "rgba(26, 26, 26, 0.95)",
+        
+        "toolbar-bg": "#141414",
+        "window-header": "#1e1e1e",
+        "scrollbar": "#2a2a2a",
+        "scrollbar-thumb": "#505050"
+      },
+      "effects": {
+        "glow": "none",
+        "border-radius": "2px",
+        "transition": "0.1s"
+      }
+    },
+    
+    "minimal-light-hc": {
+      "name": "Minimal Light (High Contrast)",
+      "type": "light",
+      "fonts": {
+        "code": "'SF Mono', 'Menlo', 'Consolas', monospace",
+        "ui": "system-ui, -apple-system, sans-serif",
+        "content": "system-ui, -apple-system, sans-serif"
+      },
+      "colors": {
+        "bg-primary": "#ffffff",
+        "bg-secondary": "#ffffff",
+        "bg-tertiary": "#f0f0f0",
+        "bg-panel": "#ffffff",
+        "bg-hover": "#e0e0e0",
+        "bg-active": "#d0d0d0",
+        
+        "text-primary": "#000000",
+        "text-secondary": "#1a1a1a",
+        "text-muted": "#404040",
+        "text-inverse": "#ffffff",
+        
+        "accent": "#000000",
+        "accent-hover": "#1a1a1a",
+        "accent-active": "#333333",
+        
+        "border": "#000000",
+        "border-focus": "#0000ff",
+        
+        "success": "#006600",
+        "warning": "#996600",
+        "error": "#cc0000",
+        "info": "#0000cc",
+        
+        "shadow": "none",
+        "overlay": "rgba(255, 255, 255, 0.98)",
+        
+        "toolbar-bg": "#f0f0f0",
+        "window-header": "#e8e8e8",
+        "scrollbar": "#cccccc",
+        "scrollbar-thumb": "#000000"
+      },
+      "effects": {
+        "glow": "none",
+        "border-radius": "0px",
+        "transition": "0s"
+      }
+    },
+    
+    "minimal-dark-hc": {
+      "name": "Minimal Dark (High Contrast)",
+      "type": "dark",
+      "fonts": {
+        "code": "'SF Mono', 'Menlo', 'Consolas', monospace",
+        "ui": "system-ui, -apple-system, sans-serif",
+        "content": "system-ui, -apple-system, sans-serif"
+      },
+      "colors": {
+        "bg-primary": "#000000",
+        "bg-secondary": "#000000",
+        "bg-tertiary": "#0a0a0a",
+        "bg-panel": "#000000",
+        "bg-hover": "#1a1a1a",
+        "bg-active": "#2a2a2a",
+        
+        "text-primary": "#ffffff",
+        "text-secondary": "#f0f0f0",
+        "text-muted": "#c0c0c0",
+        "text-inverse": "#000000",
+        
+        "accent": "#ffffff",
+        "accent-hover": "#f0f0f0",
+        "accent-active": "#e0e0e0",
+        
+        "border": "#ffffff",
+        "border-focus": "#ffff00",
+        
+        "success": "#00ff00",
+        "warning": "#ffff00",
+        "error": "#ff4444",
+        "info": "#44aaff",
+        
+        "shadow": "none",
+        "overlay": "rgba(0, 0, 0, 0.98)",
+        
+        "toolbar-bg": "#0a0a0a",
+        "window-header": "#0a0a0a",
+        "scrollbar": "#333333",
+        "scrollbar-thumb": "#ffffff"
+      },
+      "effects": {
+        "glow": "none",
+        "border-radius": "0px",
+        "transition": "0s"
+      }
     }
   },
   
-  "defaultTheme": "architect"
+  "defaultTheme": "default"
 }
-
