@@ -1,0 +1,198 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #1a1a2e;
+    color: #eee;
+    overflow: hidden;
+    height: 100vh;
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Toolbar */
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 20px;
+    background: #16213e;
+    border-bottom: 1px solid #0f3460;
+}
+
+.tool-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tool-group label {
+    font-size: 12px;
+    color: #aaa;
+}
+
+.tool-group input[type="range"] {
+    width: 100px;
+}
+
+.tool-group button {
+    padding: 8px 16px;
+    background: #0f3460;
+    border: none;
+    color: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.tool-group button:hover {
+    background: #e94560;
+}
+
+/* Main Area */
+.main-area {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Canvas */
+.canvas-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0a0a0a;
+    position: relative;
+    overflow: hidden;
+}
+
+#paintCanvas {
+    border: 1px solid #333;
+    cursor: none;
+}
+
+#brushPreview {
+    position: absolute;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    display: none;
+}
+
+.canvas-container:hover #brushPreview {
+    display: block;
+}
+
+/* Shader Panel */
+.shader-panel {
+    width: 450px;
+    background: #16213e;
+    border-left: 1px solid #0f3460;
+    display: flex;
+    flex-direction: column;
+}
+
+.shader-selector {
+    padding: 15px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    border-bottom: 1px solid #0f3460;
+}
+
+.shader-selector select {
+    flex: 1;
+    padding: 8px;
+    background: #0f3460;
+    border: none;
+    color: #fff;
+    border-radius: 4px;
+}
+
+.shader-selector button {
+    padding: 8px 12px;
+    background: #e94560;
+    border: none;
+    color: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.shader-editor {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background: #0f3460;
+}
+
+.editor-header button {
+    padding: 6px 12px;
+    background: #e94560;
+    border: none;
+    color: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+#shaderCode {
+    flex: 1;
+    background: #0d1b2a;
+    color: #00ff88;
+    border: none;
+    padding: 15px;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+}
+
+.shader-error {
+    padding: 10px 15px;
+    background: #ff4444;
+    color: #fff;
+    font-size: 12px;
+    display: none;
+}
+
+.shader-error.visible {
+    display: block;
+}
+
+.shader-help {
+    padding: 15px;
+    border-top: 1px solid #0f3460;
+}
+
+.shader-help summary {
+    cursor: pointer;
+    color: #aaa;
+}
+
+.shader-help pre {
+    margin-top: 10px;
+    padding: 10px;
+    background: #0d1b2a;
+    font-size: 11px;
+    overflow-x: auto;
+    color: #888;
+}

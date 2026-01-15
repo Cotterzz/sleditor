@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shader Paint V2</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="app">
+        <aside class="sidebar">
+            <div class="title">
+                <h1>Shader Paint V2</h1>
+                <div class="subtitle">WebGL2 brush shaders</div>
+            </div>
+
+            <div class="control-group">
+                <label for="brushSelect">Brush</label>
+                <select id="brushSelect"></select>
+            </div>
+
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="brushSize">Size</label>
+                    <input type="range" id="brushSize" min="5" max="200" value="50">
+                    <span id="brushSizeValue">50</span>
+                </div>
+                <div class="control-group">
+                    <label for="brushOpacity">Opacity</label>
+                    <input type="range" id="brushOpacity" min="1" max="100" value="100">
+                    <span id="brushOpacityValue">100%</span>
+                </div>
+            </div>
+
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="foregroundColor">Foreground</label>
+                    <input type="color" id="foregroundColor" value="#000000">
+                </div>
+                <div class="control-group">
+                    <label for="backgroundColor">Background</label>
+                    <input type="color" id="backgroundColor" value="#ffffff">
+                </div>
+            </div>
+
+            <div class="button-row">
+                <button id="compileBtn">Compile (Ctrl+Enter)</button>
+                <button id="clearBtn">Clear</button>
+                <button id="saveBtn">Save</button>
+            </div>
+
+            <div class="editor-header">
+                <span>Fragment Shader</span>
+                <span id="compileStatus" class="compile-status">Ready</span>
+            </div>
+            <div id="editor" class="editor"></div>
+            <div id="errorLog" class="error-log"></div>
+        </aside>
+
+        <main class="canvas-area">
+            <div class="canvas-container" id="canvasContainer">
+                <canvas id="paintCanvas"></canvas>
+                <div id="brushPreview" class="brush-preview"></div>
+                <div class="stats" id="stats"></div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
