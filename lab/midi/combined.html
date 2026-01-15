@@ -326,12 +326,12 @@
 				<h3>⚙️ Audio Settings</h3>
 				<div class="slider-row">
 					<label>Buffer ahead:</label>
-					<input type="range" id="bufferTime" min="50" max="1000" value="500" step="50">
+					<input type="range" id="bufferTime" min="50" max="1000" value="500" step="5">
 					<span class="value" id="bufferTimeValue">500ms</span>
 				</div>
 				<div class="slider-row">
 					<label>Sample batch:</label>
-					<input type="range" id="batchSize" min="20" max="200" value="100" step="10">
+					<input type="range" id="batchSize" min="10" max="200" value="100" step="1">
 					<span class="value" id="batchSizeValue">100ms</span>
 				</div>
 			</div>
@@ -372,11 +372,15 @@ vec2 mainSound(int samp, float time) {
 			
 			// Phase calculation using fract to avoid float precision issues
 			// This wraps smoothly at each cycle without clicks
-			float phase = fract(float(samp) * freq / iSampleRate);
+			int period = int(iSampleRate);  // Use sample rate as period
+ 			int sampMod = samp % period;
+			float phase = fract(float(sampMod) * freq / iSampleRate);
 			
 			// Simple sustained tone - no envelope decay
 			// This avoids clicks from duration changing between batches
-			float envelope = 1.0;
+            float at = 50.;
+            float de = 1./vel;
+			float envelope = (1.0 - exp(-dur*at))*exp(-dur*de);
 			
 			// Sine wave
 			float wave = sin(6.2831 * phase);
@@ -482,7 +486,7 @@ vec2 mainSound(int samp, float time) {
 		// MIDI FUNCTIONS
 		// ============================================
 		function noteToFrequency(note) {
-			return 440 * Math.pow(2, (note - 69) / 12)
+			return Math.floor(440 * Math.pow(2, (note - 69) / 12))
 		}
 		
 		function noteToName(noteNumber) {
