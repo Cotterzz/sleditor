@@ -13,7 +13,8 @@ export class WebGLAudioShader {
     this.shaderCode = null
     this.scheduledSources = []
     this.maxTextureSize = 4096
-    this.bufferAheadTime = 0.5
+    this.bufferAheadTime = 0.1
+    this.batchDuration = 0.035
     this.generating = false
     this.gainNode = null
     
@@ -678,8 +679,7 @@ export class WebGLAudioShader {
       this.generating = true
 
       const sampleRate = this.audioContext.sampleRate
-      const samplesToGenerate = Math.min(Math.floor(sampleRate * 0.1), this.maxTextureSize)
-
+      const samplesToGenerate = Math.min(Math.floor(sampleRate * this.batchDuration), this.maxTextureSize);
       this.renderWorker.postMessage({
         type: 'render',
         numSamples: samplesToGenerate,
@@ -1034,7 +1034,10 @@ export class WebGLAudioShader {
       this.requestWaveformUpdate()
     }
   }
-
+setBatchDuration(ms) {
+  const clamped = Math.max(20, Math.min(200, ms));
+  this.batchDuration = clamped / 1000;
+}
   start() {
     if (this.isRunning) return
 
