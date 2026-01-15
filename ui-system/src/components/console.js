@@ -3,16 +3,36 @@
  * 
  * A simple, traditional console panel that displays log messages.
  * Minimal design - looks like a real terminal/console.
+ * 
+ * STYLING: Console uses FIXED terminal colors (not themeable) for consistency.
+ * Exception: "hacker" theme gets green text via CSS override.
  */
 
-// Type colors only - no icons, no backgrounds
+// Fixed terminal colors - same across all themes
+const TERMINAL_COLORS = {
+    bg: '#0c0c0c',           // True black terminal background
+    toolbarBg: '#1a1a1a',    // Slightly lighter for toolbar
+    text: '#cccccc',         // Light grey text
+    textMuted: '#6e7681',    // Muted grey for timestamps
+    border: '#333333',       // Dark border
+    
+    // Log type colors - vibrant for visibility on dark bg
+    info: '#58a6ff',         // Blue
+    warn: '#d29922',         // Orange/amber
+    error: '#f85149',        // Red
+    debug: '#6e7681',        // Grey
+    success: '#3fb950',      // Green
+    system: '#a371f7'        // Purple
+};
+
+// Type colors for log entries
 const TYPE_CONFIG = {
-    info:    { color: 'var(--console-info, #58a6ff)' },
-    warn:    { color: 'var(--console-warn, #d29922)' },
-    error:   { color: 'var(--console-error, #f85149)' },
-    debug:   { color: 'var(--console-debug, #6e7681)' },
-    success: { color: 'var(--console-success, #3fb950)' },
-    system:  { color: 'var(--console-system, #a371f7)' }
+    info:    { color: TERMINAL_COLORS.info },
+    warn:    { color: TERMINAL_COLORS.warn },
+    error:   { color: TERMINAL_COLORS.error },
+    debug:   { color: TERMINAL_COLORS.debug },
+    success: { color: TERMINAL_COLORS.success },
+    system:  { color: TERMINAL_COLORS.system }
 };
 
 /**
@@ -42,22 +62,15 @@ function createLogEntry(message, options = {}) {
     entry.dataset.origin = message.origin;
     
     // Single line, no wrap, horizontal scroll if needed
+    // Use fixed colors - CSS class can override for hacker theme
     entry.style.cssText = `
         font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
         font-size: 12px;
         line-height: 1.5;
         padding: 1px 8px;
         white-space: pre;
-        color: var(--console-text, #c9d1d9);
+        color: ${TERMINAL_COLORS.text};
     `;
-    
-    // Build the line as text
-    let line = '';
-    
-    // Timestamp
-    if (showTimestamp) {
-        line += `[${formatTime(message.timestamp)}] `;
-    }
     
     // Origin:SubOrigin in color
     const originText = `[${message.origin}:${message.subOrigin}]`;
@@ -66,7 +79,7 @@ function createLogEntry(message, options = {}) {
     const countText = message.count > 1 ? ` (×${message.count})` : '';
     
     // Create as innerHTML for color support
-    entry.innerHTML = `<span style="color: var(--console-time, #6e7681);">${showTimestamp ? `[${formatTime(message.timestamp)}] ` : ''}</span><span style="color: ${config.color};">${originText}</span> ${escapeHtml(message.text)}${countText ? `<span style="color: var(--console-time, #6e7681);">${countText}</span>` : ''}`;
+    entry.innerHTML = `<span class="slui-console-time" style="color: ${TERMINAL_COLORS.textMuted};">${showTimestamp ? `[${formatTime(message.timestamp)}] ` : ''}</span><span class="slui-console-origin" style="color: ${config.color};">${originText}</span> <span class="slui-console-message">${escapeHtml(message.text)}</span>${countText ? `<span class="slui-console-count" style="color: ${TERMINAL_COLORS.textMuted};">${countText}</span>` : ''}`;
     
     return entry;
 }
@@ -100,7 +113,7 @@ export function Console(options = {}) {
     let isAutoScroll = autoScroll;
     let unsubscribe = null;
     
-    // Create main container
+    // Create main container - FIXED terminal styling
     const wrapper = document.createElement('div');
     wrapper.className = 'slui-console';
     wrapper.style.cssText = `
@@ -108,7 +121,7 @@ export function Console(options = {}) {
         flex-direction: column;
         height: 100%;
         max-height: ${maxHeight};
-        background: var(--console-bg, #0d1117);
+        background: ${TERMINAL_COLORS.bg};
         border-radius: 6px;
         overflow: hidden;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
@@ -124,8 +137,8 @@ export function Console(options = {}) {
             align-items: center;
             gap: 6px;
             padding: 4px 8px;
-            background: var(--console-toolbar-bg, #161b22);
-            border-bottom: 1px solid var(--console-border, rgba(255,255,255,0.1));
+            background: ${TERMINAL_COLORS.toolbarBg};
+            border-bottom: 1px solid ${TERMINAL_COLORS.border};
             flex-shrink: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         `;
@@ -136,10 +149,10 @@ export function Console(options = {}) {
             filterSelect.className = 'slui-console-filter-select';
             filterSelect.style.cssText = `
                 padding: 2px 6px;
-                border: 1px solid var(--console-border, rgba(255,255,255,0.2));
+                border: 1px solid ${TERMINAL_COLORS.border};
                 border-radius: 3px;
-                background: var(--console-input-bg, #0d1117);
-                color: var(--console-text, #c9d1d9);
+                background: ${TERMINAL_COLORS.bg};
+                color: ${TERMINAL_COLORS.text};
                 font-size: 11px;
                 font-family: inherit;
                 cursor: pointer;
@@ -175,10 +188,10 @@ export function Console(options = {}) {
         search.className = 'slui-console-search';
         search.style.cssText = `
             padding: 4px 8px;
-            border: 1px solid var(--console-border, rgba(255,255,255,0.1));
+            border: 1px solid ${TERMINAL_COLORS.border};
             border-radius: 4px;
-            background: var(--console-input-bg, #0d1117);
-            color: var(--console-text, #c9d1d9);
+            background: ${TERMINAL_COLORS.bg};
+            color: ${TERMINAL_COLORS.text};
             font-size: 11px;
             width: 120px;
             outline: none;
@@ -195,10 +208,10 @@ export function Console(options = {}) {
         clearBtn.title = 'Clear console';
         clearBtn.style.cssText = `
             padding: 2px 8px;
-            border: 1px solid var(--console-border, rgba(255,255,255,0.2));
+            border: 1px solid ${TERMINAL_COLORS.border};
             border-radius: 3px;
             background: transparent;
-            color: var(--console-text, #c9d1d9);
+            color: ${TERMINAL_COLORS.text};
             cursor: pointer;
             font-size: 10px;
             font-family: inherit;
@@ -222,7 +235,7 @@ export function Console(options = {}) {
     entries.style.cssText = `
         flex: 1;
         overflow: auto;
-        background: var(--console-bg, #0d1117);
+        background: ${TERMINAL_COLORS.bg};
     `;
     
     wrapper.appendChild(entries);
@@ -232,11 +245,11 @@ export function Console(options = {}) {
     statusBar.className = 'slui-console-status';
     statusBar.style.cssText = `
         padding: 2px 8px;
-        background: var(--console-toolbar-bg, #161b22);
-        border-top: 1px solid var(--console-border, rgba(255,255,255,0.1));
+        background: ${TERMINAL_COLORS.toolbarBg};
+        border-top: 1px solid ${TERMINAL_COLORS.border};
         font-size: 10px;
         font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-        color: var(--console-time, #6e7681);
+        color: ${TERMINAL_COLORS.textMuted};
         flex-shrink: 0;
     `;
     statusBar.textContent = '0 lines';
@@ -253,7 +266,7 @@ export function Console(options = {}) {
             empty.style.cssText = `
                 padding: 20px;
                 text-align: center;
-                color: var(--console-time, #6e7681);
+                color: ${TERMINAL_COLORS.textMuted};
                 font-size: 12px;
             `;
             empty.textContent = 'No logger connected';

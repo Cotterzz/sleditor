@@ -470,8 +470,12 @@ export function registerEditorPanel(SLUI) {
     if (SLUI.on) {
         SLUI.on('theme-change', (data) => {
             const themeName = data?.theme || '';
-            const isLight = themeName.includes('light') || themeName === 'github' || themeName === 'designer';
-            setMonacoTheme(!isLight);
+            // 'default' is a hybrid theme that uses light editor
+            const usesLightEditor = themeName === 'default' || 
+                                     themeName.includes('light') || 
+                                     themeName === 'designer' || 
+                                     themeName === 'architect';
+            setMonacoTheme(!usesLightEditor);
         });
     }
     

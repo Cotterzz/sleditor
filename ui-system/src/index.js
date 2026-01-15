@@ -46,6 +46,7 @@ import { Tooltip } from './components/tooltip.js';
 import { TabPane } from './components/tabpane.js';
 import { Console } from './components/console.js';
 import { Select } from './components/select.js';
+import { ThemeEditor } from './components/theme-editor.js';
 
 /**
  * Initialize the UI system
@@ -761,6 +762,9 @@ const SLUI = {
     
     // Console
     Console,
+    
+    // Theme Editor
+    ThemeEditor,
     
     // Tabbed Windows
     createTabbedWindow,

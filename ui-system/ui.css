@@ -1891,6 +1891,66 @@ body {
    THEME-SPECIFIC OVERRIDES
    ======================================== */
 
+/* Default theme: hybrid (blue UI, light editor, dark console) */
+[data-theme="default"] {
+    /* Force variable definitions for editor */
+    --editor-bg: #fafafa;
+    --editor-text: #1a1a1a;
+    --editor-gutter: #f0f0f0;
+    --editor-line-highlight: #fff3cd;
+}
+
+/* Editor panel styling for default hybrid theme - light background */
+[data-theme="default"] [data-panel-id="editor"] .v2-editor-wrapper,
+[data-theme="default"] .monaco-editor,
+[data-theme="default"] .v2-editor-host .v2-editor-wrapper {
+    background: var(--editor-bg) !important;
+}
+
+/* Editor controls should stay with the UI blue theme */
+[data-theme="default"] .v2-editor-controls,
+[data-theme="default"] .v2-editor-host > div:first-child,
+[data-theme="default"] .v2-editor-host > div:last-child {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+}
+
+/* ========================================
+   CONSOLE - Fixed terminal styling
+   Console uses hardcoded terminal colors for consistency.
+   Only hacker theme overrides with green text.
+   ======================================== */
+
+/* Console scrollbar - always dark terminal style */
+.slui-console ::-webkit-scrollbar-track {
+    background: #1a1a1a !important;
+}
+
+.slui-console ::-webkit-scrollbar-thumb {
+    background: #444444 !important;
+}
+
+.slui-console ::-webkit-scrollbar-thumb:hover {
+    background: #555555 !important;
+}
+
+/* Hacker theme: green terminal text */
+[data-theme="hacker"] .slui-console-entry,
+[data-theme="hacker"] .slui-console-message {
+    color: #00ff00 !important;
+}
+
+[data-theme="hacker"] .slui-console-time,
+[data-theme="hacker"] .slui-console-count,
+[data-theme="hacker"] .slui-console-status {
+    color: #00aa00 !important;
+}
+
+/* Hacker theme keeps colored origins for visibility */
+[data-theme="hacker"] .slui-console-origin {
+    /* Keep original colors for type differentiation */
+}
+
 /* Hacker theme: scanlines effect */
 [data-theme="hacker"] .sl-app::after {
     content: '';
