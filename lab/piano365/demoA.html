@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Piano Lesson Player</title>
+   <style>
+       * {
+           margin: 0;
+           padding: 0;
+           box-sizing: border-box;
+       }
+       
+       body {
+           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+           min-height: 100vh;
+           padding: 20px;
+       }
+       
+       .container {
+           max-width: 1200px;
+           margin: 0 auto;
+           background: white;
+           border-radius: 20px;
+           padding: 30px;
+           box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+       }
+       
+       .header {
+           text-align: center;
+           margin-bottom: 30px;
+       }
+       
+       h1 {
+           color: #333;
+           margin-bottom: 10px;
+       }
+       
+       .controls {
+           display: flex;
+           gap: 20px;
+           margin-bottom: 30px;
+           align-items: center;
+           justify-content: center;
+           flex-wrap: wrap;
+       }
+       
+       select, button {
+           padding: 10px 20px;
+           font-size: 16px;
+           border-radius: 8px;
+           border: 2px solid #667eea;
+           background: white;
+           cursor: pointer;
+           transition: all 0.3s;
+       }
+       
+       button {
+           background: #667eea;
+           color: white;
+       }
+       
+       button:hover:not(:disabled) {
+           background: #764ba2;
+           transform: translateY(-2px);
+       }
+       
+       button:disabled {
+           opacity: 0.5;
+           cursor: not-allowed;
+       }
+       
+       .lesson-info {
+           background: #f7f7f7;
+           padding: 20px;
+           border-radius: 10px;
+           margin-bottom: 30px;
+       }
+       
+       .lesson-info h2 {
+           color: #667eea;
+           margin-bottom: 10px;
+       }
+       
+       .status {
+           text-align: center;
+           padding: 15px;
+           border-radius: 10px;
+           margin-bottom: 20px;
+           font-weight: bold;
+       }
+       
+       .status.waiting {
+           background: #fff3cd;
+           color: #856404;
+       }
+       
+       .status.playing {
+           background: #d1ecf1;
+           color: #0c5460;
+       }
+       
+       .status.success {
+           background: #d4edda;
+           color: #155724;
+       }
+       
+       .status.error {
+           background: #f8d7da;
+           color: #721c24;
+       }
+       
+       .piano-roll-container {
+           background: #2a2a2a;
+           border-radius: 10px;
+           padding: 20px;
+           margin-bottom: 30px;
+           position: relative;
+           overflow: hidden;
+       }
+       
+       #pianoRoll {
+           height: 300px;
+           position: relative;
+           overflow-x: auto;
+           overflow-y: hidden;
+           background: linear-gradient(180deg, #3a3a3a 0%, #2a2a2a 100%);
+           border-radius: 5px;
+       }
+       
+       .note-bar {
+           position: absolute;
+           background: #667eea;
+           border: 1px solid #fff;
+           border-radius: 3px;
+           opacity: 0.9;
+           display: flex;
+           align-items: center;
+           justify-content: center;
+           color: white;
+           font-size: 12px;
+           font-weight: bold;
+           box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+       }
+       
+       .note-bar.chord {
+           background: #764ba2;
+       }
+       
+       .note-bar.played {
+           background: #4CAF50 !important;
+       }
+       
+       .note-bar.missed {
+           background: #f44336 !important;
+       }
+       
+       .playhead {
+           position: absolute;
+           top: 0;
+           bottom: 0;
+           width: 2px;
+           background: #FFD700;
+           box-shadow: 0 0 10px #FFD700;
+           z-index: 100;
+           transition: left 0.05s linear;
+       }
+       
+       .piano-container {
+           background: #1a1a1a;
+           border-radius: 10px;
+           padding: 20px;
+           margin-bottom: 20px;
+       }
+       
+       #piano {
+           display: flex;
+           height: 120px;
+           position: relative;
+           user-select: none;
+           gap: 2px;
+       }
+       
+       .key {
+           position: relative;
+           transition: all 0.1s;
+       }
+       
+       .key.white {
+           flex: 1;
+           background: white;
+           border: 1px solid #ccc;
+           border-radius: 0 0 5px 5px;
+       }
+       
+       .key.black {
+           position: absolute;
+           width: 60%;
+           height: 60%;
+           background: #2a2a2a;
+           border-radius: 0 0 3px 3px;
+           z-index: 2;
+           margin-left: -30%;
+       }
+       
+       .key.active {
+           background: #FFD700 !important;
+           transform: translateY(2px);
+       }
+       
+       .key-label {
+           position: absolute;
+           bottom: 10px;
+           left: 50%;
+           transform: translateX(-50%);
+           font-size: 11px;
+           color: #333;
+           font-weight: bold;
+       }
+       
+       .black .key-label {
+           color: #fff;
+           bottom: 5px;
+           font-size: 9px;
+       }
+       
+       .stats {
+           display: flex;
+           gap: 20px;
+           justify-content: center;
+           margin-top: 20px;
+       }
+       
+       .stat {
+           text-align: center;
+           padding: 10px 20px;
+           background: #f7f7f7;
+           border-radius: 8px;
+       }
+       
+       .stat-value {
+           font-size: 24px;
+           font-weight: bold;
+           color: #667eea;
+       }
+       
+       .stat-label {
+           font-size: 12px;
+           color: #666;
+           margin-top: 5px;
+       }
+   </style>
+</head>
+<body>
+   <div class="container">
+       <div class="header">
+           <h1>🎹 Piano Lesson Player</h1>
+           <p>Connect your MIDI keyboard and practice!</p>
+       </div>
+       
+       <div class="controls">
+           <select id="lessonSelect">
+               <option value="">Select a lesson...</option>
+           </select>
+           <button id="initMidiBtn">Initialize MIDI</button>
+           <button id="startBtn" disabled>Start Lesson</button>
+           <button id="resetBtn" disabled>Reset</button>
+       </div>
+       
+       <div id="status" class="status waiting">
+           Please initialize MIDI and select a lesson
+       </div>
+       
+       <div id="lessonInfo" class="lesson-info" style="display: none;">
+           <h2 id="lessonTitle"></h2>
+           <p id="lessonIntro"></p>
+           <p><strong>Tempo:</strong> <span id="lessonTempo"></span> BPM | 
+              <strong>Time Signature:</strong> <span id="lessonTime"></span></p>
+       </div>
+       
+       <div class="piano-roll-container">
+           <h3 style="color: white; margin-bottom: 10px;">Piano Roll</h3>
+           <div id="pianoRoll">
+               <div class="playhead" style="display: none;"></div>
+           </div>
+       </div>
+       
+       <div class="piano-container">
+           <h3 style="color: white; margin-bottom: 10px;">Virtual Piano</h3>
+           <div id="piano"></div>
+       </div>
+       
+       <div class="stats" id="stats" style="display: none;">
+           <div class="stat">
+               <div class="stat-value" id="correctNotes">0</div>
+               <div class="stat-label">Correct Notes</div>
+           </div>
+           <div class="stat">
+               <div class="stat-value" id="accuracy">0%</div>
+               <div class="stat-label">Accuracy</div>
+           </div>
+           <div class="stat">
+               <div class="stat-value" id="timing">--</div>
+               <div class="stat-label">Timing</div>
+           </div>
+       </div>
+   </div>
+
+   <script>
+       class PianoLessonApp {
+           constructor() {
+               this.midiAccess = null;
+               this.activeNotes = new Map();
+               this.lessons = [];
+               this.currentLesson = null;
+               this.lessonStartTime = null;
+               this.isPlaying = false;
+               this.playheadInterval = null;
+               this.notesPlayed = new Set();
+               this.correctNotes = 0;
+               this.totalNotes = 0;
+               
+               this.initializeElements();
+               this.loadLessons();
+               this.createPiano();
+           }
+           
+           initializeElements() {
+               this.elements = {
+                   lessonSelect: document.getElementById('lessonSelect'),
+                   initMidiBtn: document.getElementById('initMidiBtn'),
+                   startBtn: document.getElementById('startBtn'),
+                   resetBtn: document.getElementById('resetBtn'),
+                   status: document.getElementById('status'),
+                   lessonInfo: document.getElementById('lessonInfo'),
+                   lessonTitle: document.getElementById('lessonTitle'),
+                   lessonIntro: document.getElementById('lessonIntro'),
+                   lessonTempo: document.getElementById('lessonTempo'),
+                   lessonTime: document.getElementById('lessonTime'),
+                   pianoRoll: document.getElementById('pianoRoll'),
+                   piano: document.getElementById('piano'),
+                   stats: document.getElementById('stats'),
+                   correctNotes: document.getElementById('correctNotes'),
+                   accuracy: document.getElementById('accuracy'),
+                   timing: document.getElementById('timing')
+               };
+               
+               this.elements.initMidiBtn.addEventListener('click', () => this.initMIDI());
+               this.elements.lessonSelect.addEventListener('change', () => this.selectLesson());
+               this.elements.startBtn.addEventListener('click', () => this.startLesson());
+               this.elements.resetBtn.addEventListener('click', () => this.resetLesson());
+           }
+           
+           async loadLessons() {
+               // For demo purposes, using embedded lessons
+               this.lessons = [
+                   {
+                       id: 1,
+                       day: 1,
+                       title: "Your First Note",
+                       introduction: "Welcome to piano! Today we'll play middle C four times. Place your right thumb on the white key just to the left of the manufacturer's logo (usually center of the keyboard). Press firmly and evenly.",
+                       tempo: 60,
+                       timeSignature: "4/4",
+                       notes: [
+                           { pitch: 60, startBeat: 1.0, duration: 1.0, velocity: 80, finger: "RH1" },
+                           { pitch: 60, startBeat: 2.0, duration: 1.0, velocity: 80, finger: "RH1" },
+                           { pitch: 60, startBeat: 3.0, duration: 1.0, velocity: 80, finger: "RH1" },
+                           { pitch: 60, startBeat: 4.0, duration: 1.0, velocity: 80, finger: "RH1" }
+                       ]
+                   },
+                   {
+                       id: 2,
+                       day: 2,
+                       title: "Two Neighbors: C and D",
+                       introduction: "Today we'll use two fingers - your thumb on C and your index finger on D (the white key just to the right of C). Keep both fingers curved and touching their keys. We'll alternate between them slowly and evenly, like a seesaw.",
+                       tempo: 60,
+                       timeSignature: "4/4",
+                       notes: [
+                           { pitch: 60, startBeat: 1.0, duration: 1.0, velocity: 80, finger: "RH1" },
+                           { pitch: 62, startBeat: 2.0, duration: 1.0, velocity: 80, finger: "RH2" },
+                           { pitch: 60, startBeat: 3.0, duration: 1.0, velocity: 80, finger: "RH1" },
+                           { pitch: 62, startBeat: 4.0, duration: 1.0, velocity: 80, finger: "RH2" },
+                           { pitch: 60, startBeat: 5.0, duration: 1.0, velocity: 80, finger: "RH1" },
+                           { pitch: 62, startBeat: 6.0, duration: 1.0, velocity: 80, finger: "RH2" },
+                           { pitch: 60, startBeat: 7.0, duration: 1.0, velocity: 80, finger: "RH1" },
+                           { pitch: 62, startBeat: 8.0, duration: 1.0, velocity: 80, finger: "RH2" }
+                       ]
+                   },
+                   {
+                       id: 7,
+                       day: 7,
+                       title: "Five Finger Scale",
+                       introduction: "You've learned all five fingers! Now let's play them in order, going up from C to G, then back down. Keep your hand relaxed and curved, like you're holding a small ball. Play each note clearly and evenly.",
+                       tempo: 70,
+                       timeSignature: "4/4",
+                       notes: [
+                           { pitch: 60, startBeat: 1.0, duration: 1.0, velocity: 85, finger: "RH1" },
+                           { pitch: 62, startBeat: 2.0, duration: 1.0, velocity: 85, finger: "RH2" },
+                           { pitch: 64, startBeat: 3.0, duration: 1.0, velocity: 85, finger: "RH3" },
+                           { pitch: 65, startBeat: 4.0, duration: 1.0, velocity: 85, finger: "RH4" },
+                           { pitch: 67, startBeat: 5.0, duration: 1.0, velocity: 85, finger: "RH5" },
+                           { pitch: 65, startBeat: 6.0, duration: 1.0, velocity: 85, finger: "RH4" },
+                           { pitch: 64, startBeat: 7.0, duration: 1.0, velocity: 85, finger: "RH3" },
+                           { pitch: 62, startBeat: 8.0, duration: 1.0, velocity: 85, finger: "RH2" },
+                           { pitch: 60, startBeat: 9.0, duration: 1.0, velocity: 85, finger: "RH1" }
+                       ]
+                   }
+               ];
+               
+               // Populate lesson select
+               this.lessons.forEach(lesson => {
+                   const option = document.createElement('option');
+                   option.value = lesson.id;
+                   option.textContent = `Day ${lesson.day}: ${lesson.title}`;
+                   this.elements.lessonSelect.appendChild(option);
+               });
+           }
+           
+           createPiano() {
+               const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+               const startNote = 48; // C3
+               const endNote = 83; // B5
+               
+               for (let note = startNote; note <= endNote; note++) {
+                   const noteName = noteNames[note % 12];
+                   const isBlack = noteName.includes('#');
+                   
+                   const key = document.createElement('div');
+                   key.className = `key ${isBlack ? 'black' : 'white'}`;
+                   key.dataset.note = note;
+                   
+                   if (!isBlack) {
+                       const label = document.createElement('div');
+                       label.className = 'key-label';
+                       label.textContent = noteName + Math.floor(note / 12 - 1);
+                       key.appendChild(label);
+                       this.elements.piano.appendChild(key);
+                   }
+               }
+               
+               // Add black keys
+               for (let note = startNote; note <= endNote; note++) {
+                   const noteName = noteNames[note % 12];
+                   if (noteName.includes('#')) {
+                       const key = document.createElement('div');
+                       key.className = 'key black';
+                       key.dataset.note = note;
+                       
+                       const label = document.createElement('div');
+                       label.className = 'key-label';
+                       label.textContent = noteName;
+                       key.appendChild(label);
+                       
+                       // Position black key
+                       const whiteKeysBefore = Array.from({length: note - startNote + 1})
+                           .filter((_, i) => !noteNames[(startNote + i) % 12].includes('#')).length - 1;
+                       key.style.left = `${whiteKeysBefore * (100 / 36) + 1.7}%`;
+                       
+                       this.elements.piano.appendChild(key);
+                   }
+               }
+           }
+           
+           async initMIDI() {
+               try {
+                   this.midiAccess = await navigator.requestMIDIAccess();
+                   
+                   for (const input of this.midiAccess.inputs.values()) {
+                       input.onmidimessage = (msg) => this.handleMIDIMessage(msg);
+                   }
+                   
+                   this.updateStatus('MIDI initialized! Select a lesson to begin.', 'waiting');
+                   this.elements.startBtn.disabled = false;
+               } catch (err) {
+                   this.updateStatus('Failed to initialize MIDI. Please check your connection.', 'error');
+                   console.error('MIDI initialization failed:', err);
+               }
+           }
+           
+           handleMIDIMessage(message) {
+               const [status, note, velocity] = message.data;
+               const command = status >> 4;
+               
+               if (command === 9 && velocity > 0) { // Note On
+                   this.noteOn(note, velocity);
+               } else if (command === 8 || (command === 9 && velocity === 0)) { // Note Off
+                   this.noteOff(note);
+               }
+           }
+           
+           noteOn(note, velocity) {
+               // Track active notes
+               this.activeNotes.set(note, {
+                   startTime: performance.now(),
+                   velocity: velocity
+               });
+               
+               // Visual feedback on piano
+               const key = document.querySelector(`.key[data-note="${note}"]`);
+               if (key) key.classList.add('active');
+               
+               // Start lesson on first note
+               if (this.isPlaying && !this.lessonStartTime) {
+                   this.lessonStartTime = performance.now();
+                   this.startPlayhead();
+                   this.updateStatus('Lesson started! Keep playing...', 'playing');
+               }
+               
+               // Check if note is correct
+               if (this.isPlaying && this.lessonStartTime) {
+                   this.checkNote(note, velocity);
+               }
+           }
+           
+           noteOff(note) {
+               if (this.activeNotes.has(note)) {
+                   const noteData = this.activeNotes.get(note);
+                   const duration = performance.now() - noteData.startTime;
+                   this.activeNotes.delete(note);
+                   
+                   // Visual feedback
+                   const key = document.querySelector(`.key[data-note="${note}"]`);
+                   if (key) key.classList.remove('active');
+               }
+           }
+           
+           selectLesson() {
+               const lessonId = parseInt(this.elements.lessonSelect.value);
+               this.currentLesson = this.lessons.find(l => l.id === lessonId);
+               
+               if (this.currentLesson) {
+                   this.elements.lessonInfo.style.display = 'block';
+                   this.elements.lessonTitle.textContent = this.currentLesson.title;
+                   this.elements.lessonIntro.textContent = this.currentLesson.introduction;
+                   this.elements.lessonTempo.textContent = this.currentLesson.tempo;
+                   this.elements.lessonTime.textContent = this.currentLesson.timeSignature;
+                   
+                   this.drawPianoRoll();
+                   this.elements.startBtn.disabled = !this.midiAccess;
+               }
+           }
+           
+           drawPianoRoll() {
+               // Clear existing notes
+               this.elements.pianoRoll.innerHTML = '<div class="playhead" style="display: none;"></div>';
+               
+               if (!this.currentLesson) return;
+               
+               const pixelsPerBeat = 100;
+               const noteHeight = 20;
+               const minNote = Math.min(...this.currentLesson.notes.map(n => 
+                   Array.isArray(n.pitch) ? Math.min(...n.pitch) : n.pitch
+               )) - 2;
+               const maxNote = Math.max(...this.currentLesson.notes.map(n => 
+                   Array.isArray(n.pitch) ? Math.max(...n.pitch) : n.pitch
+               )) + 2;
+               const noteRange = maxNote - minNote;
+               
+               // Set width based on total beats
+               const totalBeats = Math.max(...this.currentLesson.notes.map(n => 
+                   n.startBeat + n.duration
+               ));
+               this.elements.pianoRoll.style.width = `${totalBeats * pixelsPerBeat + 100}px`;
+               
+               // Draw notes
+               this.currentLesson.notes.forEach((note, index) => {
+                   if (Array.isArray(note.pitch)) {
+                       // Chord
+                       note.pitch.forEach(pitch => {
+                           this.drawNoteBar(pitch, note, index, minNote, noteRange, pixelsPerBeat, noteHeight, true);
+                       });
+                   } else {
+                       // Single note
+                       this.drawNoteBar(note.pitch, note, index, minNote, noteRange, pixelsPerBeat, noteHeight, false);
+                   }
+               });
+               
+               // Count total notes for scoring
+               this.totalNotes = this.currentLesson.notes.reduce((count, note) => {
+                   return count + (Array.isArray(note.pitch) ? note.pitch.length : 1);
+               }, 0);
+           }
+           
+           drawNoteBar(pitch, note, index, minNote, noteRange, pixelsPerBeat, noteHeight, isChord) {
+               const noteBar = document.createElement('div');
+               noteBar.className = `note-bar ${isChord ? 'chord' : ''}`;
+               noteBar.dataset.index = index;
+               noteBar.dataset.pitch = pitch;
+               
+               const left = (note.startBeat - 1) * pixelsPerBeat;
+               const width = note.duration * pixelsPerBeat - 4;
+               const top = (1 - (pitch - minNote) / noteRange) * (this.elements.pianoRoll.clientHeight - noteHeight);
+               
+               noteBar.style.left = `${left}px`;
+               noteBar.style.width = `${width}px`;
+               noteBar.style.top = `${top}px`;
+               noteBar.style.height = `${noteHeight}px`;
+               
+               const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+               noteBar.textContent = noteNames[pitch % 12];
+               
+               this.elements.pianoRoll.appendChild(noteBar);
+           }
+           
+           startLesson() {
+               this.isPlaying = true;
+               this.lessonStartTime = null;
+               this.notesPlayed.clear();
+               this.correctNotes = 0;
+               
+               this.elements.startBtn.disabled = true;
+               this.elements.resetBtn.disabled = false;
+               this.elements.stats.style.display = 'flex';
+               
+               this.updateStatus('Play the first note to begin...', 'waiting');
+               this.updateStats();
+           }
+           
+           startPlayhead() {
+               const playhead = this.elements.pianoRoll.querySelector('.playhead');
+               playhead.style.display = 'block';
+               playhead.style.left = '0px';
+               
+               const pixelsPerBeat = 100;
+               const beatDuration = 60000 / this.currentLesson.tempo; // ms per beat
+               
+               this.playheadInterval = setInterval(() => {
+                   const elapsed = performance.now() - this.lessonStartTime;
+                   const beats = elapsed / beatDuration;
+                   playhead.style.left = `${beats * pixelsPerBeat}px`;
+                   
+                   // Check if lesson is complete
+                   const totalBeats = Math.max(...this.currentLesson.notes.map(n => 
+                       n.startBeat + n.duration
+                   ));
+                   
+                   if (beats > totalBeats) {
+                       this.endLesson();
+                   }
+               }, 50);
+           }
+           
+           checkNote(pitch, velocity) {
+               if (!this.lessonStartTime) return;
+               
+               const elapsed = performance.now() - this.lessonStartTime;
+               const beatDuration = 60000 / this.currentLesson.tempo;
+               const currentBeat = (elapsed / beatDuration) + 1;
+               
+               // Find notes that should be playing now (with tolerance)
+               const tolerance = 0.25; // quarter beat tolerance
+               const expectedNotes = this.currentLesson.notes.filter(note => {
+                   const noteStart = note.startBeat;
+                   const noteEnd = note.startBeat + note.duration;
+                   return currentBeat >= noteStart - tolerance && currentBeat <= noteEnd + tolerance;
+               });
+               
+               // Check if played note matches any expected note
+               let isCorrect = false;
+               expectedNotes.forEach(note => {
+                   const pitches = Array.isArray(note.pitch) ? note.pitch : [note.pitch];
+                   if (pitches.includes(pitch)) {
+                       isCorrect = true;
+                       const noteKey = `${note.startBeat}-${pitch}`;
+                       if (!this.notesPlayed.has(noteKey)) {
+                           this.notesPlayed.add(noteKey);
+                           this.correctNotes++;
+                           
+                           // Mark note as played in piano roll
+                           const noteBar = document.querySelector(`.note-bar[data-pitch="${pitch}"]`);
+                           if (noteBar) noteBar.classList.add('played');
+                       }
+                   }
+               });
+               
+               this.updateStats();
+               
+               // Update timing indicator
+               if (isCorrect) {
+                   this.elements.timing.textContent = 'Good!';
+                   this.elements.timing.style.color = '#155724';
+               } else {
+                   this.elements.timing.textContent = 'Early/Late';
+                   this.elements.timing.style.color = '#721c24';
+               }
+           }
+           
+           updateStats() {
+               this.elements.correctNotes.textContent = this.correctNotes;
+               const accuracy = this.totalNotes > 0 ? 
+                   Math.round((this.correctNotes / this.totalNotes) * 100) : 0;
+               this.elements.accuracy.textContent = `${accuracy}%`;
+           }
+           
+           endLesson() {
+               this.isPlaying = false;
+               clearInterval(this.playheadInterval);
+               
+               const accuracy = Math.round((this.correctNotes / this.totalNotes) * 100);
+               let message = '';
+               if (accuracy >= 90) {
+                   message = `Excellent! You scored ${accuracy}%!`;
+               } else if (accuracy >= 70) {
+                   message = `Good job! You scored ${accuracy}%. Try again to improve!`;
+               } else {
+                   message = `Keep practicing! You scored ${accuracy}%.`;
+               }
+               
+               this.updateStatus(message, 'success');
+               this.elements.startBtn.disabled = false;
+           }
+           
+           resetLesson() {
+               this.isPlaying = false;
+               this.lessonStartTime = null;
+               clearInterval(this.playheadInterval);
+               
+               const playhead = this.elements.pianoRoll.querySelector('.playhead');
+               if (playhead) {
+                   playhead.style.display = 'none';
+                   playhead.style.left = '0px';
+               }
+               
+               // Reset note colors
+               document.querySelectorAll('.note-bar').forEach(bar => {
+                   bar.classList.remove('played', 'missed');
+               });
+               
+               this.notesPlayed.clear();
+               this.correctNotes = 0;
+               this.updateStats();
+               
+               this.elements.startBtn.disabled = false;
+               this.elements.resetBtn.disabled = true;
+               this.elements.stats.style.display = 'none';
+               
+               this.updateStatus('Lesson reset. Click Start to try again.', 'waiting');
+           }
+           
+           updateStatus(message, type) {
+               this.elements.status.textContent = message;
+               this.elements.status.className = `status ${type}`;
+           }
+       }
+       
+       // Initialize the app
+       const app = new PianoLessonApp();
+   </script>
+</body>
+</html>

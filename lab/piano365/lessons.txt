@@ -1,0 +1,116 @@
+Human
+
+So I have a web app that receives midi input, tracks what notes are down, how long they've been pressed and their initial velocity.
+
+It's occurred to me I could turn it into a piano tutor app, by giving instructions and asking the student to repeat them on the keyboard, then monitoring the input and giving the student a score.
+
+If you wanted to give 365 daily lessons, each slightly more complex than the last, assuming the student can't play the piano to begin with (and forgetting theory, just playing)
+
+What typically would be exercise number 1?
+What would day 2 look like?
+Day 7?
+Day 31?
+Day 365?
+A
+Great concept! Here's a practical progression focusing purely on playing skills:
+
+Day 1: Single Note Recognition
+Exercise: "Press Middle C"
+Student finds and presses middle C when prompted
+App shows visual indicator of correct key
+Repeat with 5-10 presses to build muscle memory
+Success criteria: Correct key, any velocity/duration
+Day 2: Two White Keys
+Exercise: Alternate between C and D
+Pattern: C-D-C-D (4 times)
+Still single finger, but introducing movement
+Success criteria: Correct sequence, timing not critical
+Day 7: Five-Finger Position
+Exercise: C-D-E-F-G played sequentially up and down
+Introduction to using all five fingers (C position)
+Play: C-D-E-F-G-F-E-D-C
+Focus on one finger per key
+Success criteria: Correct notes, beginning to monitor evenness
+Day 31: Simple Chord Progressions
+Exercise: C major triad - E minor - F major - G major
+Playing 3-note chords with proper fingering
+Whole notes (4 beats each)
+Both hands separately, then together
+Success criteria: All notes sound together, smooth transitions
+Day 365: Intermediate Repertoire Piece
+Exercise: Full performance of something like:
+Bach Invention No. 8 in F major, or
+Chopin Waltz in A minor (B.150), or
+First movement of a Mozart Sonatina
+Hands together, proper tempo
+Dynamic expression (pp to ff)
+Success criteria: Correct notes, steady tempo, velocity variations match the score, pedaling if applicable
+Each day would build incrementally - adding black keys around day 10, two-hand coordination by day 20, scales by day 40, arpeggios by day 60, and gradually increasing tempo, complexity and expression requirements.
+
+B
+Progressive Piano Curriculum Design
+Day 1: Single Key Introduction
+Exercise: Press middle C (note 60) four times, evenly spaced.
+
+What you're measuring:
+
+Can they find the right key?
+Basic rhythmic consistency (timing between presses)
+Pass criteria: Correct pitch, within generous timing tolerance (±300ms)
+
+Day 2: Two Adjacent Keys
+Exercise: Alternate between C and D (notes 60, 62), four times each: C-D-C-D-C-D-C-D
+
+What you're adding:
+
+Finger independence (index and middle finger)
+Maintaining position while moving
+Day 7: Five-Finger Position
+Exercise: Play C-D-E-F-G ascending, then G-F-E-D-C descending. Quarter notes at 70 BPM.
+
+What you're adding:
+
+All five fingers of one hand
+Following a tempo (your app shows a pulse)
+Smoother transitions
+By now they've likely covered:
+
+Days 3-4: Adding E, then F, then G individually
+Days 5-6: Three and four note sequences
+Day 31: Simple Melody + Basic Dynamics
+Exercise: Play "Mary Had a Little Lamb" (E-D-C-D-E-E-E, D-D-D, E-G-G, E-D-C-D-E-E-E-E-D-D-E-D-C)
+
+With a twist: First phrase mezzoforte, second phrase piano (soft)
+
+What you're adding:
+
+Velocity control (your app tracks this!)
+Musical phrasing
+Memorizing longer sequences
+By day 31 they've likely covered:
+
+Weeks 2-3: Longer five-finger patterns, simple tunes
+Week 4: Introduction to playing softly vs loudly
+Day 365: Two-Hand Coordination with Chord Accompaniment
+Exercise: Play a simplified arrangement—right hand plays the melody of "Ode to Joy" while left hand plays half-note C and G major triads on the chord changes. Tempo: 90 BPM. With crescendo in the final phrase.
+
+What you're measuring:
+
+Hand independence
+Chord accuracy (multiple simultaneous notes)
+Sustained timing over a full piece
+Dynamic shaping over time
+Rough Curriculum Arc
+Phase	Days	Focus
+1	1-14	Single hand, single notes, building to 5-finger position
+2	15-45	Simple melodies, rhythm variety, dynamics
+3	46-90	Left hand introduction, very simple two-hand
+4	91-180	Hand coordination, basic chords, major keys
+5	181-270	Minor keys, arpeggios, more complex rhythms
+6	271-365	Full simple pieces, expression, independence
+Implementation Thought
+Since you're tracking velocity and duration, you could provide nuanced feedback:
+
+"Correct notes! But your D was much louder than the others—aim for consistent volume."
+"Good rhythm, but you released the half-notes too early. Hold them for the full beat."
+Would you like me to sketch out a more detailed week-by-week breakdown for any particular phase?
