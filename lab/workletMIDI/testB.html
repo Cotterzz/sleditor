@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIDI to AudioWorklet Latency Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        h1 {
+            text-align: center;
+            color: #4CAF50;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 15px;
+            background: #333;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .active-notes {
+            padding: 15px;
+            background: #333;
+            border-radius: 5px;
+            min-height: 100px;
+        }
+        .note {
+            display: inline-block;
+            padding: 8px 15px;
+            margin: 5px;
+            background: #4CAF50;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        .info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #1a4d1a;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .latency {
+            font-size: 24px;
+            color: #4CAF50;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px 0;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        .value-display {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎹 MIDI to AudioWorklet Latency Test</h1>
+    <div class="container">
+        <button id="startBtn">Start Audio & Enable MIDI</button>
+        
+        <div class="status">
+            <strong>Status:</strong> <span id="status">Not started</span><br>
+            <strong>MIDI Device:</strong> <span id="midiDevice">None</span>
+        </div>
+
+        <div class="controls">
+            <label>
+                Master Volume: <span class="value-display" id="volumeValue">50%</span>
+            </label>
+            <input type="range" id="volume" min="0" max="100" value="50">
+            
+            <label>
+                Attack Time: <span class="value-display" id="attackValue">0.005s</span>
+            </label>
+            <input type="range" id="attack" min="1" max="100" value="5">
+            
+            <label>
+                Release Time: <span class="value-display" id="releaseValue">0.05s</span>
+            </label>
+            <input type="range" id="release" min="1" max="200" value="50">
+        </div>
+
+        <div class="latency" id="latency">Latency: -- ms</div>
+
+        <div class="active-notes">
+            <strong>Active Notes:</strong>
+            <div id="notes"></div>
+        </div>
+
+        <div class="info">
+            <strong>Instructions:</strong><br>
+            1. Click "Start Audio & Enable MIDI"<br>
+            2. Grant MIDI access permission<br>
+            3. Play notes on your MIDI keyboard<br>
+            4. Watch for latency measurements and active notes<br>
+            <br>
+            <strong>Features:</strong><br>
+            • Phase-continuous synthesis (no clicks/pops)<br>
+            • Smooth attack/release envelopes<br>
+            • Polyphonic (multiple notes simultaneously)<br>
+            • Real-time latency measurement
+        </div>
+    </div>
+
+    <script>
+        // AudioWorklet Processor code as a string
+        const processorCode = `
+class MIDISynthProcessor extends AudioWorkletProcessor {
+    constructor() {
+        super();
+        this.notes = new Map(); // Map of note number to note state
+        this.sampleRate = 48000; // Will be updated
+        this.attack = 0.005;
+        this.release = 0.05;
+        this.masterVolume = 0.5;
+        
+        this.port.onmessage = (e) => {
+            const { type, note, velocity, attack, release, volume } = e.data;
+            
+            if (type === 'noteOn') {
+                this.noteOn(note, velocity);
+            } else if (type === 'noteOff') {
+                this.noteOff(note);
+            } else if (type === 'attack') {
+                this.attack = attack;
+            } else if (type === 'release') {
+                this.release = release;
+            } else if (type === 'volume') {
+                this.masterVolume = volume;
+            }
+        };
+    }
+    
+    noteOn(note, velocity) {
+        const frequency = 440 * Math.pow(2, (note - 69) / 12);
+        
+        // If note is already playing, keep its phase
+        if (this.notes.has(note)) {
+            const existingNote = this.notes.get(note);
+            this.notes.set(note, {
+                frequency,
+                phase: existingNote.phase,
+                velocity: velocity / 127,
+                envelope: existingNote.envelope,
+                state: 'attack',
+                stateTime: 0
+            });
+        } else {
+            this.notes.set(note, {
+                frequency,
+                phase: 0,
+                velocity: velocity / 127,
+                envelope: 0,
+                state: 'attack',
+                stateTime: 0
+            });
+        }
+    }
+    
+    noteOff(note) {
+        if (this.notes.has(note)) {
+            const noteData = this.notes.get(note);
+            noteData.state = 'release';
+            noteData.stateTime = 0;
+        }
+    }
+    
+    process(inputs, outputs, parameters) {
+        const output = outputs[0];
+        const channel = output[0];
+        
+        if (!channel) return true;
+        
+        const blockSize = channel.length;
+        const sampleRate = this.sampleRate || sampleRate;
+        
+        // Clear output buffer
+        for (let i = 0; i < blockSize; i++) {
+            channel[i] = 0;
+        }
+        
+        // Process each active note
+        const notesToDelete = [];
+        
+        for (const [noteNum, note] of this.notes) {
+            for (let i = 0; i < blockSize; i++) {
+                // Generate sine wave
+                const sample = Math.sin(2 * Math.PI * note.phase) * note.velocity;
+                
+                // Apply envelope
+                let envelopeValue = note.envelope;
+                
+                if (note.state === 'attack') {
+                    const attackSamples = this.attack * sampleRate;
+                    envelopeValue = Math.min(1, note.stateTime / attackSamples);
+                    note.envelope = envelopeValue;
+                    note.stateTime++;
+                    
+                    if (envelopeValue >= 1) {
+                        note.state = 'sustain';
+                    }
+                } else if (note.state === 'sustain') {
+                    envelopeValue = 1;
+                    note.envelope = envelopeValue;
+                } else if (note.state === 'release') {
+                    const releaseSamples = this.release * sampleRate;
+                    envelopeValue = Math.max(0, 1 - (note.stateTime / releaseSamples));
+                    note.envelope = envelopeValue;
+                    note.stateTime++;
+                    
+                    if (envelopeValue <= 0) {
+                        notesToDelete.push(noteNum);
+                        break;
+                    }
+                }
+                
+                // Add to output with envelope and master volume
+                channel[i] += sample * envelopeValue * this.masterVolume * 0.3;
+                
+                // Update phase
+                note.phase += note.frequency / sampleRate;
+                if (note.phase >= 1) {
+                    note.phase -= 1;
+                }
+            }
+        }
+        
+        // Remove finished notes
+        for (const noteNum of notesToDelete) {
+            this.notes.delete(noteNum);
+        }
+        
+        return true;
+    }
+}
+
+registerProcessor('midi-synth-processor', MIDISynthProcessor);
+`;
+
+        // Main application code
+        let audioContext;
+        let synthNode;
+        let midiAccess;
+        const activeNotes = new Set();
+        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+        function getNoteNameFromMIDI(midiNote) {
+            const octave = Math.floor(midiNote / 12) - 1;
+            const noteName = noteNames[midiNote % 12];
+            return `${noteName}${octave}`;
+        }
+
+        function updateActiveNotes() {
+            const notesDiv = document.getElementById('notes');
+            if (activeNotes.size === 0) {
+                notesDiv.innerHTML = '<span style="color: #666;">No notes playing</span>';
+            } else {
+                notesDiv.innerHTML = Array.from(activeNotes)
+                    .sort((a, b) => a - b)
+                    .map(note => `<span class="note">${getNoteNameFromMIDI(note)}</span>`)
+                    .join('');
+            }
+        }
+
+        function updateLatency() {
+            if (audioContext) {
+                const latency = (audioContext.baseLatency + audioContext.outputLatency) * 1000;
+                document.getElementById('latency').textContent = `Latency: ${latency.toFixed(2)} ms`;
+            }
+        }
+
+        async function startAudio() {
+            try {
+                // Create AudioContext
+                audioContext = new AudioContext();
+                
+                // Create blob URL for processor
+                const blob = new Blob([processorCode], { type: 'application/javascript' });
+                const processorURL = URL.createObjectURL(blob);
+                
+                // Load AudioWorklet module
+                await audioContext.audioWorklet.addModule(processorURL);
+                
+                // Create synth node
+                synthNode = new AudioWorkletNode(audioContext, 'midi-synth-processor');
+                synthNode.connect(audioContext.destination);
+                
+                // Update status
+                document.getElementById('status').textContent = 'Audio started';
+                updateLatency();
+                setInterval(updateLatency, 1000);
+                
+                // Request MIDI access
+                await setupMIDI();
+                
+                document.getElementById('startBtn').disabled = true;
+                
+            } catch (error) {
+                console.error('Error starting audio:', error);
+                document.getElementById('status').textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function setupMIDI() {
+            try {
+                midiAccess = await navigator.requestMIDIAccess();
+                document.getElementById('status').textContent = 'MIDI enabled';
+                
+                // List MIDI inputs
+                const inputs = Array.from(midiAccess.inputs.values());
+                if (inputs.length === 0) {
+                    document.getElementById('midiDevice').textContent = 'No MIDI devices found';
+                } else {
+                    document.getElementById('midiDevice').textContent = inputs.map(i => i.name).join(', ');
+                }
+                
+                // Setup MIDI message handling
+                for (const input of inputs) {
+                    input.onmidimessage = handleMIDIMessage;
+                }
+                
+            } catch (error) {
+                console.error('MIDI Error:', error);
+                document.getElementById('status').textContent = `MIDI Error: ${error.message}`;
+            }
+        }
+
+        function handleMIDIMessage(event) {
+            const [status, note, velocity] = event.data;
+            const command = status >> 4;
+            const timestamp = performance.now();
+            
+            // Note On (9) with velocity > 0
+            if (command === 9 && velocity > 0) {
+                synthNode.port.postMessage({
+                    type: 'noteOn',
+                    note,
+                    velocity,
+                    timestamp
+                });
+                activeNotes.add(note);
+                updateActiveNotes();
+            }
+            // Note Off (8) or Note On with velocity 0
+            else if (command === 8 || (command === 9 && velocity === 0)) {
+                synthNode.port.postMessage({
+                    type: 'noteOff',
+                    note,
+                    timestamp
+                });
+                activeNotes.delete(note);
+                updateActiveNotes();
+            }
+        }
+
+        // Event listeners
+        document.getElementById('startBtn').addEventListener('click', startAudio);
+
+        document.getElementById('volume').addEventListener('input', (e) => {
+            const value = e.target.value / 100;
+            document.getElementById('volumeValue').textContent = `${e.target.value}%`;
+            if (synthNode) {
+                synthNode.port.postMessage({ type: 'volume', volume: value });
+            }
+        });
+
+        document.getElementById('attack').addEventListener('input', (e) => {
+            const value = e.target.value / 1000;
+            document.getElementById('attackValue').textContent = `${value.toFixed(3)}s`;
+            if (synthNode) {
+                synthNode.port.postMessage({ type: 'attack', attack: value });
+            }
+        });
+
+        document.getElementById('release').addEventListener('input', (e) => {
+            const value = e.target.value / 1000;
+            document.getElementById('releaseValue').textContent = `${value.toFixed(3)}s`;
+            if (synthNode) {
+                synthNode.port.postMessage({ type: 'release', release: value });
+            }
+        });
+
+        // Initialize display
+        updateActiveNotes();
+    </script>
+</body>
+</html>
