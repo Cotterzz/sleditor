@@ -11,11 +11,18 @@
             padding: 0;
         }
 
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent page scrolling */
+        }
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #1a1a2e;
             color: #eee;
-            min-height: 100vh;
+            height: 100vh;
             display: flex;
             flex-direction: column;
         }
@@ -100,7 +107,8 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            overflow: hidden; /* Prevent scrolling, flexbox handles layout */
+            min-height: 0; /* Allow flex children to shrink */
         }
 
         .piano-roll-container {
@@ -108,19 +116,33 @@
             position: relative;
             overflow: hidden;
             background: #0d0d1a;
-            min-height: 300px;
+            min-height: 0;
+            max-height: 100%;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: stretch;
         }
 
         #pianoRoll {
-            width: 100%;
             height: 100%;
+            display: block;
+            margin: 0;
+            padding: 0;
+            /* Width will be set by JavaScript to match piano width */
         }
 
         .piano-container {
             background: #111;
-            padding: 10px 0;
+            padding: 0;
+            margin: 0;
             display: flex;
             justify-content: center;
+            align-items: flex-start;
+            position: relative;
+            z-index: 20;
+            flex-shrink: 0;
+            width: 100%;
         }
 
         .piano {
@@ -136,22 +158,21 @@
         }
 
         .key.white {
-            width: 36px;
             height: 120px;
             background: linear-gradient(to bottom, #f8f8f8, #e8e8e8);
             border: 1px solid #888;
             border-radius: 0 0 5px 5px;
             z-index: 1;
+            flex-shrink: 0;
         }
 
         .key.black {
-            width: 24px;
             height: 75px;
             background: linear-gradient(to bottom, #333, #111);
             border-radius: 0 0 4px 4px;
-            margin-left: -12px;
-            margin-right: -12px;
             z-index: 2;
+            position: absolute;
+            flex-shrink: 0;
         }
 
         .key.white.active {
@@ -232,6 +253,24 @@
             box-shadow: 0 0 10px #e94560;
             z-index: 10;
         }
+        
+        .key.white:hover {
+            background: linear-gradient(to bottom, #fff, #f0f0f0);
+        }
+        
+        .key.black:hover {
+            background: linear-gradient(to bottom, #444, #222);
+        }
+        
+        @keyframes noteHit {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .key.active {
+            animation: noteHit 0.2s ease;
+        }
     </style>
 </head>
 <body>
@@ -270,9 +309,15 @@
     <script>
         // Configuration
         const LESSONS_URL = 'lessons.json';
-        const LOWEST_NOTE = 48;  // C3
-        const HIGHEST_NOTE = 84; // C6
+        const LOWEST_NOTE = 21;  // A0
+        const HIGHEST_NOTE = 108; // C8
         const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        
+        // Piano key dimensions
+        const WHITE_KEY_WIDTH = 20; // Base width for white keys (will scale)
+        const BLACK_KEY_WIDTH = 12; // Base width for black keys (will scale)
+        const BLACK_KEY_HEIGHT = 75;
+        const WHITE_KEY_HEIGHT = 120;
 
         // State
         let lessons = [];
@@ -286,6 +331,10 @@
         let score = 0;
         let totalNotes = 0;
         let hitNotes = new Set();
+        
+        // Piano layout cache
+        let keyPositions = new Map(); // Maps MIDI note to {x, width, isBlack}
+        let pianoWidth = 0;
 
         // DOM Elements
         const lessonSelect = document.getElementById('lessonSelect');
@@ -305,9 +354,22 @@
         // Initialize
         async function init() {
             await loadLessons();
-            buildPiano();
-            resizeCanvas();
-            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas(); // This will build piano and set canvas width
+            
+            // Resize on window resize
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    resizeCanvas(); // Rebuild and resize on window resize
+                }, 100);
+            });
+            
+            // Also trigger resize after a short delay to ensure DOM is ready
+            setTimeout(() => {
+                resizeCanvas();
+            }, 100);
+            
             requestAnimationFrame(render);
         }
 
@@ -334,55 +396,116 @@
             });
         }
 
-        // Build piano keyboard
+        // Helper: Check if a note is a black key
+        function isBlackKey(note) {
+            const noteInOctave = note % 12;
+            return [1, 3, 6, 8, 10].includes(noteInOctave);
+        }
+        
+        // Build piano keyboard (88 keys: A0 to C8)
         function buildPiano() {
             pianoDiv.innerHTML = '';
+            keyPositions.clear();
+            
+            // Count white keys first to calculate scaling
+            let whiteKeyCount = 0;
+            for (let note = LOWEST_NOTE; note <= HIGHEST_NOTE; note++) {
+                if (!isBlackKey(note)) whiteKeyCount++;
+            }
+            
+            // Calculate available width - use the piano roll container width
+            const pianoRollContainer = pianoRollCanvas.parentElement;
+            const containerWidth = pianoRollContainer.offsetWidth || window.innerWidth;
+            // Use full width, no padding
+            const availableWidth = Math.min(containerWidth, 2000); // Max 2000px
+            const whiteKeyWidth = Math.floor(availableWidth / whiteKeyCount);
+            const blackKeyWidth = Math.floor(whiteKeyWidth * 0.6);
+            
+            // Build white keys first
+            let whiteKeyIndex = 0;
+            let currentX = 0;
             
             for (let note = LOWEST_NOTE; note <= HIGHEST_NOTE; note++) {
-                const noteInOctave = note % 12;
-                const isBlack = [1, 3, 6, 8, 10].includes(noteInOctave);
-                
-                if (isBlack) continue; // Add black keys separately
+                if (isBlackKey(note)) continue;
                 
                 const key = document.createElement('div');
                 key.className = 'key white';
                 key.dataset.note = note;
+                key.style.width = whiteKeyWidth + 'px';
                 
                 const label = document.createElement('span');
                 label.className = 'key-label';
                 const octave = Math.floor(note / 12) - 1;
-                label.textContent = NOTE_NAMES[noteInOctave] + octave;
+                const noteName = NOTE_NAMES[note % 12];
+                // Only show labels on some keys to avoid clutter
+                if (note % 12 === 0 || (note === LOWEST_NOTE) || (note === HIGHEST_NOTE)) {
+                    label.textContent = noteName + octave;
+                }
                 key.appendChild(label);
                 
                 pianoDiv.appendChild(key);
+                
+                // Store position
+                keyPositions.set(note, {
+                    x: currentX,
+                    width: whiteKeyWidth,
+                    isBlack: false
+                });
+                
+                currentX += whiteKeyWidth;
+                whiteKeyIndex++;
             }
-
-            // Add black keys
-            const whiteKeys = pianoDiv.querySelectorAll('.key.white');
-            let whiteIndex = 0;
             
+            pianoWidth = currentX;
+            
+            // Set piano div width - no margin, will be centered by parent
+            pianoDiv.style.width = pianoWidth + 'px';
+            pianoDiv.style.margin = '0';
+            pianoDiv.style.padding = '0';
+            
+            // Add black keys positioned over white keys
+            // We need to track white key positions to place black keys correctly
+            const whiteKeyPositions = new Map();
+            let whiteX = 0;
             for (let note = LOWEST_NOTE; note <= HIGHEST_NOTE; note++) {
-                const noteInOctave = note % 12;
-                const isBlack = [1, 3, 6, 8, 10].includes(noteInOctave);
+                if (!isBlackKey(note)) {
+                    whiteKeyPositions.set(note, whiteX);
+                    whiteX += whiteKeyWidth;
+                }
+            }
+            
+            // Now position black keys
+            for (let note = LOWEST_NOTE; note <= HIGHEST_NOTE; note++) {
+                if (!isBlackKey(note)) continue;
                 
-                if (!isBlack) {
-                    whiteIndex++;
-                    continue;
+                // Find the white key to the left (previous white key)
+                let leftWhiteKeyNote = note - 1;
+                while (leftWhiteKeyNote >= LOWEST_NOTE && isBlackKey(leftWhiteKeyNote)) {
+                    leftWhiteKeyNote--;
                 }
                 
-                const key = document.createElement('div');
-                key.className = 'key black';
-                key.dataset.note = note;
-                
-                const whiteKey = whiteKeys[whiteIndex - 1];
-                if (whiteKey) {
-                    const rect = whiteKey.getBoundingClientRect();
-                    const pianoRect = pianoDiv.getBoundingClientRect();
-                    key.style.position = 'absolute';
-                    key.style.left = (whiteIndex * 36 - 12) + 'px';
+                if (leftWhiteKeyNote >= LOWEST_NOTE) {
+                    const leftWhiteX = whiteKeyPositions.get(leftWhiteKeyNote);
+                    // Position black key to the right of the left white key
+                    const blackKeyX = leftWhiteX + whiteKeyWidth - blackKeyWidth / 2;
+                    
+                    const key = document.createElement('div');
+                    key.className = 'key black';
+                    key.dataset.note = note;
+                    key.style.width = blackKeyWidth + 'px';
+                    key.style.height = BLACK_KEY_HEIGHT + 'px';
+                    key.style.left = blackKeyX + 'px';
+                    key.style.top = '0px';
+                    
+                    pianoDiv.appendChild(key);
+                    
+                    // Store position
+                    keyPositions.set(note, {
+                        x: blackKeyX,
+                        width: blackKeyWidth,
+                        isBlack: true
+                    });
                 }
-                
-                pianoDiv.appendChild(key);
             }
         }
 
@@ -469,6 +592,11 @@
                 }
             }
         }
+        
+        // Performance optimization: throttle rendering if needed
+        let lastRenderTime = 0;
+        const targetFPS = 60;
+        const frameTime = 1000 / targetFPS;
 
         // Lesson handling
         function selectLesson(lessonId) {
@@ -526,14 +654,56 @@
 
         // Canvas rendering
         function resizeCanvas() {
-            pianoRollCanvas.width = pianoRollCanvas.offsetWidth * window.devicePixelRatio;
-            pianoRollCanvas.height = pianoRollCanvas.offsetHeight * window.devicePixelRatio;
+            // First build piano to get the correct width
+            if (pianoDiv.children.length === 0 || pianoWidth === 0) {
+                buildPiano();
+            }
+            
+            // Get container dimensions
+            const container = pianoRollCanvas.parentElement;
+            const containerWidth = container.offsetWidth;
+            
+            // Set canvas width to match piano width exactly
+            pianoRollCanvas.style.width = pianoWidth + 'px';
+            // Height is handled by CSS (100%), get the actual container height
+            const containerHeight = container.offsetHeight;
+            
+            // Set canvas height to match container exactly (no gap)
+            pianoRollCanvas.style.height = containerHeight + 'px';
+            
+            // Set actual canvas dimensions (for high DPI)
+            pianoRollCanvas.width = pianoWidth * window.devicePixelRatio;
+            pianoRollCanvas.height = containerHeight * window.devicePixelRatio;
+            
+            // Reset transform and scale
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
             ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            
+            // Rebuild piano if container width changed significantly
+            if (Math.abs(pianoWidth - containerWidth) > 10 && containerWidth > 0) {
+                buildPiano();
+                // Update canvas dimensions again after rebuild
+                pianoRollCanvas.style.width = pianoWidth + 'px';
+                const newContainerHeight = container.offsetHeight;
+                pianoRollCanvas.style.height = newContainerHeight + 'px';
+                pianoRollCanvas.width = pianoWidth * window.devicePixelRatio;
+                pianoRollCanvas.height = newContainerHeight * window.devicePixelRatio;
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            }
+        }
+        
+        // Get key position for a MIDI note (for piano roll alignment)
+        function getKeyPosition(note) {
+            return keyPositions.get(note) || { x: 0, width: 0, isBlack: false };
         }
 
         function render() {
-            const width = pianoRollCanvas.offsetWidth;
-            const height = pianoRollCanvas.offsetHeight;
+            // Use the actual canvas dimensions for rendering
+            const width = pianoWidth || pianoRollCanvas.offsetWidth;
+            // Get height from container to ensure it matches exactly (no gap)
+            const container = pianoRollCanvas.parentElement;
+            const height = container.offsetHeight || pianoRollCanvas.offsetHeight;
             
             // Clear canvas
             ctx.fillStyle = '#0d0d1a';
@@ -550,21 +720,24 @@
             }
 
             const currentBeat = getCurrentBeat();
-            const beatsVisible = 8;
+            const beatsVisible = 12; // Show more beats ahead
             const msPerBeat = (60 / currentLesson.tempo) * 1000;
             const pixelsPerBeat = height / beatsVisible;
-            const playLineY = height - 80;
+            
+            // Play line is at the bottom (where piano is)
+            // Notes scroll down and disappear behind the piano
+            const playLineY = height;
 
-            // Calculate note width based on piano display
-            const noteRange = HIGHEST_NOTE - LOWEST_NOTE + 1;
-            const noteWidth = width / noteRange;
-
-            // Draw grid lines
+            // Draw grid lines (horizontal beat lines)
             ctx.strokeStyle = '#222';
             ctx.lineWidth = 1;
             for (let beat = 0; beat <= beatsVisible * 2; beat++) {
                 const y = playLineY - (beat - (currentBeat % 1)) * pixelsPerBeat;
                 if (y >= 0 && y <= height) {
+                    // Make whole beats more prominent
+                    const isWholeBeat = Math.abs(beat - Math.floor(beat)) < 0.01;
+                    ctx.strokeStyle = isWholeBeat ? '#333' : '#222';
+                    ctx.lineWidth = isWholeBeat ? 1.5 : 1;
                     ctx.beginPath();
                     ctx.moveTo(0, y);
                     ctx.lineTo(width, y);
@@ -572,14 +745,30 @@
                 }
             }
 
-            // Draw vertical lines for notes
+            // Draw vertical lines aligned with piano keys
             ctx.strokeStyle = '#1a1a2a';
+            ctx.lineWidth = 1;
+            
+            // Draw white key separators
             for (let note = LOWEST_NOTE; note <= HIGHEST_NOTE; note++) {
-                const x = (note - LOWEST_NOTE) * noteWidth;
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, height);
-                ctx.stroke();
+                if (isBlackKey(note)) continue;
+                const pos = getKeyPosition(note);
+                if (pos.x >= 0 && pos.x <= width) {
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, 0);
+                    ctx.lineTo(pos.x, height);
+                    ctx.stroke();
+                }
+            }
+            
+            // Draw subtle background for black keys
+            ctx.fillStyle = '#0a0a15';
+            for (let note = LOWEST_NOTE; note <= HIGHEST_NOTE; note++) {
+                if (!isBlackKey(note)) continue;
+                const pos = getKeyPosition(note);
+                if (pos.x >= 0 && pos.x + pos.width <= width) {
+                    ctx.fillRect(pos.x, 0, pos.width, height);
+                }
             }
 
             // Clear expected notes
@@ -595,24 +784,47 @@
                 const noteDuration = note.duration;
                 const noteEndBeat = noteStartBeat + noteDuration;
                 
-                // Calculate Y position (notes fall from top)
+                // Calculate Y position (notes scroll down from top to bottom)
+                // Notes appear at top and scroll down, disappearing at playLineY
                 const yTop = playLineY - (noteStartBeat - currentBeat) * pixelsPerBeat;
                 const yBottom = playLineY - (noteEndBeat - currentBeat) * pixelsPerBeat;
                 const noteHeight = yTop - yBottom;
 
-                // Skip if off screen
+                // Skip if completely off screen (above or below)
                 if (yTop < -50 || yBottom > height + 50) return;
 
                 pitches.forEach(pitch => {
                     if (pitch < LOWEST_NOTE || pitch > HIGHEST_NOTE) return;
 
-                    const x = (pitch - LOWEST_NOTE) * noteWidth + 2;
-                    const w = noteWidth - 4;
+                    // Get key position from piano layout
+                    const keyPos = getKeyPosition(pitch);
+                    if (!keyPos || keyPos.width === 0) return;
+                    
+                    const x = keyPos.x;
+                    const w = keyPos.width;
+                    
+                    // Adjust for visual padding
+                    const padding = keyPos.isBlack ? 1 : 2;
+                    const noteX = x + padding;
+                    const noteW = w - (padding * 2);
 
                     // Determine color based on timing
                     const isUpcoming = noteStartBeat > currentBeat;
                     const isActive = currentBeat >= noteStartBeat && currentBeat <= noteEndBeat;
                     const isPast = currentBeat > noteEndBeat;
+                    
+                    // Clip note if it goes below play line (behind piano)
+                    let drawYTop = yTop;
+                    let drawYBottom = yBottom;
+                    let drawHeight = noteHeight;
+                    
+                    if (drawYBottom > playLineY) {
+                        drawYBottom = playLineY;
+                        drawHeight = drawYTop - drawYBottom;
+                    }
+                    
+                    // Skip if note is completely behind piano
+                    if (drawHeight <= 0 || drawYTop < 0) return;
 
                     // Velocity to color brightness
                     const brightness = Math.floor((note.velocity / 127) * 40 + 60);
@@ -630,7 +842,12 @@
 
                     // Draw note rectangle
                     ctx.beginPath();
-                    ctx.roundRect(x, yBottom, w, Math.max(noteHeight, 10), 4);
+                    if (ctx.roundRect) {
+                        ctx.roundRect(noteX, drawYBottom, noteW, Math.max(drawHeight, 3), 3);
+                    } else {
+                        // Fallback for browsers without roundRect
+                        ctx.rect(noteX, drawYBottom, noteW, Math.max(drawHeight, 3));
+                    }
                     ctx.fill();
 
                     // Draw note border
@@ -639,32 +856,51 @@
                     ctx.stroke();
 
                     // Draw finger hint
-                    if (note.finger && noteHeight > 20) {
-                        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-                        ctx.font = '10px sans-serif';
+                    if (note.finger && drawHeight > 15) {
+                        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                        ctx.font = 'bold 10px sans-serif';
                         ctx.textAlign = 'center';
-                        ctx.fillText(note.finger, x + w / 2, yBottom + 15);
+                        ctx.fillText(note.finger, noteX + noteW / 2, drawYBottom + Math.min(drawHeight / 2, 15));
                     }
                 });
             });
 
-            // Draw play line
+            // Draw play line at bottom (where piano is)
             ctx.strokeStyle = '#e94560';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             ctx.shadowColor = '#e94560';
-            ctx.shadowBlur = 10;
+            ctx.shadowBlur = 15;
             ctx.beginPath();
             ctx.moveTo(0, playLineY);
             ctx.lineTo(width, playLineY);
             ctx.stroke();
             ctx.shadowBlur = 0;
+            
+            // Draw subtle gradient fade at bottom (behind piano)
+            const gradient = ctx.createLinearGradient(0, playLineY - 30, 0, playLineY);
+            gradient.addColorStop(0, 'rgba(13, 13, 26, 0)');
+            gradient.addColorStop(1, 'rgba(13, 13, 26, 1)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, playLineY - 30, width, 30);
 
-            // Draw beat counter
+            // Draw beat counter and progress
             if (isPlaying) {
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 24px sans-serif';
                 ctx.textAlign = 'left';
                 ctx.fillText(`Beat: ${Math.floor(currentBeat) + 1}`, 20, 40);
+                
+                // Draw progress bar
+                if (currentLesson.notes.length > 0) {
+                    const lastNote = currentLesson.notes[currentLesson.notes.length - 1];
+                    const totalBeats = lastNote.startBeat + lastNote.duration;
+                    const progress = Math.min(currentBeat / totalBeats, 1);
+                    
+                    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                    ctx.fillRect(20, 50, width - 40, 6);
+                    ctx.fillStyle = '#4CAF50';
+                    ctx.fillRect(20, 50, (width - 40) * progress, 6);
+                }
             } else if (currentLesson) {
                 ctx.fillStyle = '#888';
                 ctx.font = '16px sans-serif';
@@ -703,8 +939,19 @@
         startButton.addEventListener('click', () => {
             if (isPlaying) {
                 resetLesson();
+            } else {
+                startLesson();
             }
-            startLesson();
+        });
+        
+        // Add click handlers to piano keys for testing
+        pianoDiv.addEventListener('click', (e) => {
+            const key = e.target.closest('.key');
+            if (key && key.dataset.note) {
+                const note = parseInt(key.dataset.note);
+                noteOn(note, 80);
+                setTimeout(() => noteOff(note), 200);
+            }
         });
 
         // Keyboard fallback for testing without MIDI
