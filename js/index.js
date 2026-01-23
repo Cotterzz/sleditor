@@ -1341,20 +1341,17 @@ async function init() {
     state.isRunning = true;
     ui.restart();
     
-    // Only auto-start playback if AudioContext is running (not suspended)
-    // If suspended, the audio start overlay will handle starting playback
-
-
-    state.isPlaying = true;
+    // Check if this shader needs user interaction (audio/video input or audio output)
+    const hasMediaChannels = channels.hasMediaChannels();
+    const hasAudioOutput = state.activeTabs?.includes('audio_glsl') || 
+                           state.activeTabs?.includes('audio_worklet') ||
+                           state.activeTabs?.includes('audio_gpu');
+    const needsInteraction = hasMediaChannels || hasAudioOutput;
     
-    if (state.audioContext?.state === 'running') {
-
-        ui.updatePlayPauseButton();
-    } else {
-        // Keep paused until user interacts with overlay
-        state.isPlaying = false;
-        ui.updatePlayPauseButton();
-    }
+    // Visual-only shaders should always autoplay
+    // Audio shaders wait for user interaction via the overlay
+    state.isPlaying = !needsInteraction;
+    ui.updatePlayPauseButton();
     
     // Mark initialization complete - now dirty tracking can start
     // Small delay to ensure all initial setValue calls have completed
