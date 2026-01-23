@@ -35,8 +35,9 @@ uniform vec4 iMouse;
 uniform vec4 iDate;
 uniform float iSampleRate;
 
-// Glass mode control
-uniform float uGlassMode;
+// Sleditor-specific uniforms
+uniform float uGlassMode;  // Glass mode control (transparent background)
+uniform int iTheme;        // Current theme ID (0=default, 1=designer, 2=architect, 3=coder, 4=hacker, 5=engineer)
 
 out vec4 fragColor;
 
@@ -135,6 +136,9 @@ export function createRenderer(canvas, options = {}) {
     
     // Colorspace mode (false = sRGB/Shadertoy, true = Linear/compute.toys)
     let linearColorspace = false;
+    
+    // Current theme ID for iTheme uniform (0=default, 1=designer, etc.)
+    let currentThemeId = 0;
     
     // ========================================================================
     // Initialization
@@ -443,7 +447,8 @@ void main() {
             iMouse: gl.getUniformLocation(program, 'iMouse'),
             iDate: gl.getUniformLocation(program, 'iDate'),
             iSampleRate: gl.getUniformLocation(program, 'iSampleRate'),
-            uGlassMode: gl.getUniformLocation(program, 'uGlassMode')
+            uGlassMode: gl.getUniformLocation(program, 'uGlassMode'),
+            iTheme: gl.getUniformLocation(program, 'iTheme')
         };
     }
     
@@ -532,6 +537,7 @@ void main() {
             date.getHours() * 3600 + date.getMinutes() * 60 + date.getSeconds());
         gl.uniform1f(u.iSampleRate, 44100);
         gl.uniform1f(u.uGlassMode, glassMode);
+        gl.uniform1i(u.iTheme, currentThemeId);
         
         // Set custom uniforms
         applyCustomUniforms(pass.program);
@@ -629,14 +635,16 @@ void main() {
         lastFrameTime = now;
         const time = (now - startTime) / 1000;
         
-        // FPS tracking
+        // FPS tracking (calculated once per second)
         fpsFrames++;
         if (now - fpsTime >= 1000) {
             fps = fpsFrames;
             fpsFrames = 0;
             fpsTime = now;
-            events.emit(EVENTS.RENDER_FRAME, { fps, frame, time });
         }
+        
+        // Emit frame event every frame (for timeline/UI updates)
+        events.emit(EVENTS.RENDER_FRAME, { fps, frame, time });
         
         // Resize handling
         const width = canvas.clientWidth;
@@ -845,6 +853,37 @@ void main() {
             logger.debug('Render', 'Playback', 'Restarted');
         },
         
+        /**
+         * Seek to a specific time in seconds
+         * Adjusts startTime so that elapsed time equals the target
+         * @param {number} targetSeconds - Time to seek to
+         */
+        seek(targetSeconds) {
+            targetSeconds = Math.max(0, targetSeconds);
+            const targetMs = targetSeconds * 1000;
+            
+            if (isPlaying) {
+                // Adjust startTime so (now - startTime) = targetMs
+                startTime = performance.now() - targetMs;
+            } else {
+                // If paused, adjust both startTime and pauseTime
+                pauseTime = performance.now();
+                startTime = pauseTime - targetMs;
+                // Render a single frame to show the new position
+                const time = targetSeconds;
+                for (const passId of passOrder) {
+                    renderPass(passId, time, 0);
+                }
+                blitToCanvas(selectedDisplayChannel);
+            }
+            
+            // Emit frame event to update UI
+            const time = targetSeconds;
+            events.emit(EVENTS.RENDER_FRAME, { fps, frame, time });
+            
+            logger.debug('Render', 'Seek', `Seeked to ${targetSeconds.toFixed(2)}s`);
+        },
+        
         setMouse(x, y, down = false, click = false) {
             mouse.x = x;
             mouse.y = y;
@@ -857,6 +896,21 @@ void main() {
         
         setGlassMode(enabled) {
             glassMode = enabled ? 1.0 : 0.0;
+        },
+        
+        /**
+         * Set theme ID for iTheme uniform
+         * @param {number} themeId - Theme ID (0=default, 1=designer, 2=architect, 3=coder, 4=hacker, 5=engineer)
+         */
+        setThemeId(themeId) {
+            currentThemeId = themeId;
+        },
+        
+        /**
+         * Get current theme ID
+         */
+        getThemeId() {
+            return currentThemeId;
         },
         
         /**

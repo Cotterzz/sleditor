@@ -685,6 +685,12 @@ function registerLanguages() {
     `;
     document.head.appendChild(errorStyles);
     
+    // Apply current SLUI theme to Monaco now that Monaco is loaded
+    const currentTheme = window.SLUI?.getTheme?.();
+    if (currentTheme) {
+        applyMonacoThemeFromSLUI(currentTheme);
+    }
+    
     logger.debug('Editor', 'Monaco', 'Languages registered: GLSL, WGSL');
 }
 
@@ -693,13 +699,51 @@ function registerLanguages() {
 // ============================================================================
 
 /**
- * Set Monaco editor theme based on dark/light mode
+ * Set Monaco editor theme based on dark/light mode (legacy method)
  */
 export function setMonacoTheme(isDark) {
     if (!window.monaco) return;
     const theme = isDark ? 'sleditor-dark' : 'sleditor-light';
     window.monaco.editor.setTheme(theme);
     logger.debug('Editor', 'Theme', `Set Monaco theme to ${theme}`);
+}
+
+/**
+ * Apply Monaco theme from SLUI theme name
+ * This registers the theme from theme data if available, then applies it
+ * @param {string} themeName - SLUI theme name
+ */
+export function applyMonacoThemeFromSLUI(themeName) {
+    if (!window.monaco) return;
+    
+    // Try to get theme data from SLUI
+    const themeData = window.SLUI?.getThemeData?.(themeName);
+    const monacoThemeName = `sleditor-${themeName}`;
+    
+    if (themeData?.monaco?.base) {
+        // Register the theme from SLUI theme data
+        try {
+            window.monaco.editor.defineTheme(monacoThemeName, {
+                base: themeData.monaco.base,
+                inherit: true,
+                rules: themeData.monaco.rules || [],
+                colors: themeData.monaco.colors || {}
+            });
+            window.monaco.editor.setTheme(monacoThemeName);
+            logger.debug('Editor', 'Theme', `Applied Monaco theme: ${monacoThemeName}`);
+        } catch (e) {
+            logger.warn('Editor', 'Theme', `Failed to apply Monaco theme: ${e.message}`);
+            // Fall back to default
+            const isDark = themeData.type === 'dark';
+            window.monaco.editor.setTheme(isDark ? 'sleditor-dark' : 'sleditor-light');
+        }
+    } else {
+        // No SLUI theme data, use legacy dark/light detection
+        const isDark = themeName === 'hacker' || themeName === 'coder' || themeName === 'engineer';
+        const theme = isDark ? 'sleditor-dark' : 'sleditor-light';
+        window.monaco.editor.setTheme(theme);
+        logger.debug('Editor', 'Theme', `Applied fallback Monaco theme: ${theme}`);
+    }
 }
 
 /**
@@ -725,6 +769,72 @@ function isDarkTheme() {
 }
 
 // ============================================================================
+// Font Size Management
+// ============================================================================
+
+// Font size levels: 5 steps with default (13px) in the middle
+const FONT_SIZES = [10, 12, 13, 14, 16];
+let currentFontSizeIndex = 2; // Default = 13px (middle)
+
+/**
+ * Get current editor font size
+ * @returns {number} Current font size in pixels
+ */
+export function getEditorFontSize() {
+    return FONT_SIZES[currentFontSizeIndex];
+}
+
+/**
+ * Set editor font size by index (0-4)
+ * @param {number} index - Font size index (0=smallest, 2=default, 4=largest)
+ */
+export function setEditorFontSizeIndex(index) {
+    currentFontSizeIndex = Math.max(0, Math.min(FONT_SIZES.length - 1, index));
+    const fontSize = FONT_SIZES[currentFontSizeIndex];
+    
+    // Update all Monaco editors
+    if (window.monaco) {
+        const models = window.monaco.editor.getModels();
+        const editors = window.monaco.editor.getEditors();
+        editors.forEach(editor => {
+            editor.updateOptions({ fontSize });
+        });
+    }
+    
+    // Save preference
+    localStorage.setItem('sl-editor-fontsize-index', String(currentFontSizeIndex));
+    
+    logger.debug('Editor', 'FontSize', `Set font size to ${fontSize}px (index ${currentFontSizeIndex})`);
+    return fontSize;
+}
+
+/**
+ * Get font size options for UI
+ * @returns {{ sizes: number[], current: number, currentIndex: number }}
+ */
+export function getFontSizeOptions() {
+    return {
+        sizes: FONT_SIZES,
+        current: FONT_SIZES[currentFontSizeIndex],
+        currentIndex: currentFontSizeIndex
+    };
+}
+
+/**
+ * Load saved font size preference
+ */
+export function loadFontSizePreference() {
+    const saved = localStorage.getItem('sl-editor-fontsize-index');
+    if (saved !== null) {
+        const index = parseInt(saved, 10);
+        if (!isNaN(index) && index >= 0 && index < FONT_SIZES.length) {
+            currentFontSizeIndex = index;
+        }
+    }
+    return FONT_SIZES[currentFontSizeIndex];
+}
+
+// ============================================================================
 // Editor Creation
 // ============================================================================
 
@@ -737,14 +847,18 @@ export function createMonacoEditor(container, options = {}) {
         return null;
     }
     
+    // Get current SLUI theme for Monaco - use dynamic theme name if available
+    const currentTheme = window.SLUI?.getTheme?.();
+    const monacoTheme = currentTheme ? `sleditor-${currentTheme}` : (isDarkTheme() ? 'sleditor-dark' : 'sleditor-light');
+    
     const defaultOptions = {
         language: 'glsl',
-        theme: isDarkTheme() ? 'sleditor-dark' : 'sleditor-light',
+        theme: monacoTheme,
         value: '',
         automaticLayout: true,
         minimap: { enabled: false },
         scrollBeyondLastLine: false,
-        fontSize: 13,
+        fontSize: loadFontSizePreference(),
         fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
         fontLigatures: true,
         lineNumbers: 'on',

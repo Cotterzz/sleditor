@@ -64,21 +64,15 @@ function getCurrentTabs() {
  * Create "Add Tab" button with dropdown
  */
 function createAddTabButton() {
-    const addTabBtn = document.createElement('button');
-    addTabBtn.textContent = '+ Add Channel';
-    addTabBtn.className = 'sl-button';
-    addTabBtn.style.cssText = `
-        padding: 4px 12px;
-        border: 1px solid var(--border, rgba(255,255,255,0.2));
-        border-radius: 4px;
-        background: var(--bg-secondary);
-        color: var(--text-primary);
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        position: relative;
-        margin-left: auto;
-    `;
+    // Use SLUI Button with dropdown container behavior
+    const addTabBtn = SLUI.Button({
+        icon: '+',
+        label: 'Add Channel',
+        variant: 'default',
+        size: 'small'
+    });
+    addTabBtn.style.position = 'relative';
+    addTabBtn.style.marginLeft = 'auto';
     
     const dropdown = document.createElement('div');
     dropdown.className = 'sl-dropdown-menu';
@@ -495,17 +489,11 @@ function createTextureSelector(tabId) {
                     urlRow1.appendChild(sourceSelect);
                     
                     // Load button
-                    const loadBtn = document.createElement('button');
-                    loadBtn.textContent = 'Load';
-                    loadBtn.style.cssText = `
-                        background: var(--bg-secondary, #161b22);
-                        color: var(--text-primary, #c9d1d9);
-                        border: 1px solid var(--border, rgba(255,255,255,0.1));
-                        border-radius: 4px;
-                        padding: 4px 12px;
-                        font-size: 11px;
-                        cursor: pointer;
-                    `;
+                    const loadBtn = SLUI.Button({
+                        label: 'Load',
+                        variant: 'default',
+                        size: 'small'
+                    });
                     urlRow1.appendChild(loadBtn);
                     
                     urlSection.appendChild(urlRow1);

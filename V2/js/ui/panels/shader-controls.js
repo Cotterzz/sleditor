@@ -30,6 +30,14 @@ let frameDisplay = null;
 let resDisplay = null;
 let fpsDisplay = null;
 let channelSelect = null;
+let timelineSlider = null;
+let backendLogo = null;
+let snapshotBtn = null;
+let recordBtn = null;
+let recordSettingsBtn = null;
+
+// Backend logo state (cycles through: webgl, webgpu, webgpu-notext)
+let currentBackend = 'webgl'; // 'webgl' | 'webgpu' | 'webgpu-notext'
 
 // Colorspace state
 let isLinearColorspace = false;
@@ -63,39 +71,56 @@ function createControlsBar() {
         border-bottom: 1px solid var(--border, rgba(255,255,255,0.05));
     `;
     
+    // Get SLUI for button creation
+    const SLUI = getSLUI();
+    
     // Play/Pause button
-    playBtn = createButton('▶', 'Play/Pause (Space)', () => {
-        const renderer = getRenderer();
-        if (!renderer) return;
-        const state = renderer.getState();
-        if (state.isPlaying) {
-            renderer.pause();
-        } else {
-            renderer.play();
+    playBtn = SLUI.CtrlButton({
+        icon: '▶',
+        tooltip: 'Play/Pause (Space)',
+        onClick: () => {
+            const renderer = getRenderer();
+            if (!renderer) return;
+            const state = renderer.getState();
+            if (state.isPlaying) {
+                renderer.pause();
+            } else {
+                renderer.play();
+            }
         }
     });
     buttonsRow.appendChild(playBtn);
     
     // Restart button
-    const restartBtn = createButton('↻', 'Restart (R)', () => {
-        const renderer = getRenderer();
-        if (renderer) renderer.restart();
+    const restartBtn = SLUI.CtrlButton({
+        icon: '↻',
+        tooltip: 'Restart (R)',
+        onClick: () => {
+            const renderer = getRenderer();
+            if (renderer) renderer.restart();
+            // Reset timeline to initial duration
+            if (timelineSlider && timelineSlider.reset) {
+                timelineSlider.reset();
+            }
+        }
     });
     buttonsRow.appendChild(restartBtn);
     
     buttonsRow.appendChild(createSeparator());
     
     // Glass mode toggle
-    glassBtn = createButton('◐', 'Glass mode - transparent background', () => {
-        setGlassMode(!isGlassModeEnabled());
+    glassBtn = SLUI.CtrlButton({
+        icon: '◐',
+        tooltip: 'Glass mode - transparent background',
+        onClick: () => setGlassMode(!isGlassModeEnabled())
     });
     buttonsRow.appendChild(glassBtn);
     
     // Colorspace toggle (sRGB / Linear)
-    colorspaceBtn = createIconButton(
-        createSrgbIcon(),
-        'Color space: sRGB (click for Linear)',
-        () => {
+    colorspaceBtn = SLUI.CtrlButton({
+        icon: createSrgbIcon(),
+        tooltip: 'Color space: sRGB (click for Linear)',
+        onClick: () => {
             isLinearColorspace = !isLinearColorspace;
             updateColorspaceButton();
             // Update renderer
@@ -105,8 +130,43 @@ function createControlsBar() {
             }
             events.emit(EVENTS.RENDER_COLORSPACE_CHANGED, { linear: isLinearColorspace });
         }
-    );
+    });
     buttonsRow.appendChild(colorspaceBtn);
+    
+    buttonsRow.appendChild(createSeparator());
+    
+    // Snapshot button (placeholder)
+    snapshotBtn = SLUI.CtrlButton({
+        icon: '📷',
+        tooltip: 'Take snapshot',
+        onClick: () => {
+            console.log('[Shader Controls] Snapshot - placeholder');
+            // TODO: Implement snapshot functionality
+        }
+    });
+    buttonsRow.appendChild(snapshotBtn);
+    
+    // Record button (placeholder)
+    recordBtn = SLUI.CtrlButton({
+        icon: '⏺',
+        tooltip: 'Record',
+        onClick: () => {
+            console.log('[Shader Controls] Record - placeholder');
+            // TODO: Implement record functionality
+        }
+    });
+    buttonsRow.appendChild(recordBtn);
+    
+    // Record settings button (placeholder)
+    recordSettingsBtn = SLUI.CtrlButton({
+        icon: '⚙',
+        tooltip: 'Recording settings',
+        onClick: () => {
+            console.log('[Shader Controls] Record settings - placeholder');
+            // TODO: Implement record settings dialog
+        }
+    });
+    buttonsRow.appendChild(recordSettingsBtn);
     
     // Spacer
     const buttonsSpacer = document.createElement('div');
@@ -114,41 +174,162 @@ function createControlsBar() {
     buttonsRow.appendChild(buttonsSpacer);
     
     // Fullscreen toggle
-    fullscreenBtn = createButton('⛶', 'Fullscreen (F)', () => {
-        fullscreen.toggle();
+    fullscreenBtn = SLUI.CtrlButton({
+        icon: '⛶',
+        tooltip: 'Fullscreen (F)',
+        onClick: () => fullscreen.toggle()
     });
     buttonsRow.appendChild(fullscreenBtn);
     
     // Dock/Undock toggle
-    dockBtn = createButton('↗', 'Float controls', () => {
-        if (isDocked) {
-            undockControls();
-            dockBtn.textContent = '↙';
-            dockBtn.title = 'Dock controls';
-        } else {
-            dockControls();
-            dockBtn.textContent = '↗';
-            dockBtn.title = 'Float controls';
+    dockBtn = SLUI.CtrlButton({
+        icon: '↗',
+        tooltip: 'Float controls',
+        onClick: () => {
+            if (isDocked) {
+                undockControls();
+                dockBtn.setIcon('↙');
+                dockBtn.setTooltip('Dock controls');
+            } else {
+                dockControls();
+                dockBtn.setIcon('↗');
+                dockBtn.setTooltip('Float controls');
+            }
         }
     });
     buttonsRow.appendChild(dockBtn);
     
     container.appendChild(buttonsRow);
     
-    // ========== Row 2: Info ==========
-    const infoRow = document.createElement('div');
-    infoRow.style.cssText = `
+    // ========== Row 2: Info + Timeline (combined) ==========
+    // Layout: T:1:54  F:5436  740x413  @60fps
+    //         0:00 --------o-------- 4:00
+    const infoTimelineRow = document.createElement('div');
+    infoTimelineRow.className = 'v2-shader-controls-info-timeline';
+    infoTimelineRow.style.cssText = `
         display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 4px 10px;
+        flex-direction: column;
+        gap: 2px;
+        padding: 4px 10px 6px;
     `;
     
-    // Channel viewer dropdown (monospace variant for channel numbers)
-    const SLUI = getSLUI();
+    // Top line: stats
+    const statsRow = document.createElement('div');
+    statsRow.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 10px;
+        color: var(--text-muted, #8b949e);
+    `;
+    
+    // Time display (T:0:00.00)
+    timeDisplay = document.createElement('span');
+    timeDisplay.textContent = 'T:0:00';
+    statsRow.appendChild(timeDisplay);
+    
+    // Frame display (F:0)
+    frameDisplay = document.createElement('span');
+    frameDisplay.textContent = 'F:0';
+    statsRow.appendChild(frameDisplay);
+    
+    // Resolution display
+    resDisplay = document.createElement('span');
+    resDisplay.textContent = '0×0';
+    statsRow.appendChild(resDisplay);
+    
+    // FPS display
+    fpsDisplay = document.createElement('span');
+    fpsDisplay.style.color = 'var(--console-success, #3fb950)';
+    fpsDisplay.textContent = '@0fps';
+    statsRow.appendChild(fpsDisplay);
+    
+    // Spacer
+    const statsSpacer = document.createElement('div');
+    statsSpacer.style.flex = '1';
+    statsRow.appendChild(statsSpacer);
+    
+    // Backend logo (WebGL/WebGPU) - clickable to cycle
+    backendLogo = document.createElement('img');
+    backendLogo.src = 'ui-system/icons/WebGL_Logo.svg';
+    backendLogo.alt = 'WebGL';
+    backendLogo.title = 'Backend: WebGL (click to cycle)';
+    backendLogo.style.cssText = `
+        height: 12px;
+        width: auto;
+        cursor: pointer;
+        opacity: 0.7;
+        transition: opacity 0.15s;
+    `;
+    backendLogo.addEventListener('mouseenter', () => { backendLogo.style.opacity = '1'; });
+    backendLogo.addEventListener('mouseleave', () => { backendLogo.style.opacity = '0.7'; });
+    backendLogo.addEventListener('click', () => {
+        // Cycle through: webgl -> webgpu -> webgpu-notext -> webgl
+        if (currentBackend === 'webgl') {
+            currentBackend = 'webgpu';
+            backendLogo.src = 'ui-system/icons/webgpu-horizontal.svg';
+            backendLogo.alt = 'WebGPU';
+            backendLogo.title = 'Backend: WebGPU (click to cycle)';
+        } else if (currentBackend === 'webgpu') {
+            currentBackend = 'webgpu-notext';
+            backendLogo.src = 'ui-system/icons/webgpu-notext.svg';
+            backendLogo.alt = 'WebGPU';
+            backendLogo.title = 'Backend: WebGPU Compact (click to cycle)';
+        } else {
+            currentBackend = 'webgl';
+            backendLogo.src = 'ui-system/icons/WebGL_Logo.svg';
+            backendLogo.alt = 'WebGL';
+            backendLogo.title = 'Backend: WebGL (click to cycle)';
+        }
+    });
+    statsRow.appendChild(backendLogo);
+    
+    infoTimelineRow.appendChild(statsRow);
+    
+    // Bottom line: timeline slider
+    timelineSlider = SLUI.TimelineSlider({
+        duration: 60,
+        value: 0,
+        autoExtend: true,
+        compact: true,
+        onChange: (time) => {
+            // User is seeking - update renderer
+            const renderer = getRenderer();
+            if (renderer && typeof renderer.seek === 'function') {
+                renderer.seek(time);
+            }
+        }
+    });
+    infoTimelineRow.appendChild(timelineSlider);
+    
+    container.appendChild(infoTimelineRow);
+    
+    // ========== Row 3: Channel dropdown, Volume, Pixel Size ==========
+    const settingsRow = document.createElement('div');
+    settingsRow.className = 'v2-shader-controls-settings';
+    settingsRow.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 4px 10px 6px;
+        border-top: 1px solid var(--border, rgba(255,255,255,0.05));
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 10px;
+        color: var(--text-muted, #8b949e);
+    `;
+    
+    // Channel dropdown
+    const channelGroup = document.createElement('div');
+    channelGroup.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+    
+    const channelLabel = document.createElement('span');
+    channelLabel.textContent = 'Ch:';
+    channelGroup.appendChild(channelLabel);
+    
     if (SLUI && SLUI.Select) {
         channelSelect = SLUI.Select({
-            items: [{ value: '0', label: 'Main' }], // Will be populated by refreshChannelDropdown
+            items: [{ value: '0', label: 'Main' }],
             value: '0',
             variant: 'monospace',
             onChange: (value) => {
@@ -159,7 +340,6 @@ function createControlsBar() {
             }
         });
     } else {
-        // Fallback if SLUI not available (shouldn't happen)
         channelSelect = document.createElement('select');
         channelSelect.className = 'sl-select sl-select-monospace';
         channelSelect.innerHTML = '<option value="0">Main</option>';
@@ -171,62 +351,46 @@ function createControlsBar() {
         });
     }
     channelSelect.title = 'Display channel';
-    infoRow.appendChild(channelSelect);
+    channelGroup.appendChild(channelSelect);
+    settingsRow.appendChild(channelGroup);
     
-    infoRow.appendChild(createSeparator());
+    // Volume slider (placeholder) - using SLUI.IconSlider
+    const volumeSlider = SLUI.IconSlider({
+        icon: '🔊',
+        min: 0,
+        max: 100,
+        value: 100,
+        step: 1,
+        isInt: true,
+        compact: true,
+        onChange: (val) => {
+            console.log('[Shader Controls] Volume:', val);
+            // TODO: Implement volume control
+        }
+    });
+    volumeSlider.title = 'Volume (placeholder)';
+    volumeSlider.style.flex = '1';
+    settingsRow.appendChild(volumeSlider);
     
-    // Time display
-    timeDisplay = document.createElement('span');
-    timeDisplay.textContent = '0:00.00';
-    timeDisplay.style.cssText = `
-        font-family: 'JetBrains Mono', 'Fira Code', monospace;
-        font-size: 11px;
-        min-width: 55px;
-        color: var(--text-muted, #8b949e);
-    `;
-    infoRow.appendChild(timeDisplay);
+    // Pixel size slider (placeholder) - using SLUI.IconSlider
+    const pixelSlider = SLUI.IconSlider({
+        icon: '⊞',
+        min: 1,
+        max: 8,
+        value: 1,
+        step: 1,
+        isInt: true,
+        compact: true,
+        onChange: (val) => {
+            console.log('[Shader Controls] Pixel size:', val + 'x');
+            // TODO: Implement pixel size / resolution divider
+        }
+    });
+    pixelSlider.title = 'Pixel size / resolution divider (placeholder)';
+    pixelSlider.style.flex = '1';
+    settingsRow.appendChild(pixelSlider);
     
-    // Frame display
-    frameDisplay = document.createElement('span');
-    frameDisplay.textContent = 'F:0';
-    frameDisplay.style.cssText = `
-        font-family: 'JetBrains Mono', 'Fira Code', monospace;
-        font-size: 11px;
-        min-width: 50px;
-        color: var(--text-muted, #8b949e);
-    `;
-    infoRow.appendChild(frameDisplay);
-    
-    // Spacer
-    const infoSpacer = document.createElement('div');
-    infoSpacer.style.flex = '1';
-    infoRow.appendChild(infoSpacer);
-    
-    // Resolution display
-    resDisplay = document.createElement('span');
-    resDisplay.textContent = '0×0';
-    resDisplay.style.cssText = `
-        font-family: 'JetBrains Mono', 'Fira Code', monospace;
-        font-size: 10px;
-        color: var(--text-muted, #6e7681);
-    `;
-    infoRow.appendChild(resDisplay);
-    
-    infoRow.appendChild(createSeparator());
-    
-    // FPS display
-    fpsDisplay = document.createElement('span');
-    fpsDisplay.textContent = '0 fps';
-    fpsDisplay.style.cssText = `
-        font-family: 'JetBrains Mono', 'Fira Code', monospace;
-        font-size: 11px;
-        min-width: 50px;
-        text-align: right;
-        color: var(--console-success, #3fb950);
-    `;
-    infoRow.appendChild(fpsDisplay);
-    
-    container.appendChild(infoRow);
+    container.appendChild(settingsRow);
     
     return container;
 }
@@ -278,54 +442,35 @@ function createLinearIcon() {
 function updateColorspaceButton() {
     if (!colorspaceBtn) return;
     
-    // Clear current icon
-    colorspaceBtn.innerHTML = '';
-    
     if (isLinearColorspace) {
-        colorspaceBtn.appendChild(createLinearIcon());
-        colorspaceBtn.title = 'Color space: Linear (click for sRGB)';
+        colorspaceBtn.setIcon(createLinearIcon());
+        colorspaceBtn.setTooltip('Color space: Linear (click for sRGB)');
     } else {
-        colorspaceBtn.appendChild(createSrgbIcon());
-        colorspaceBtn.title = 'Color space: sRGB (click for Linear)';
+        colorspaceBtn.setIcon(createSrgbIcon());
+        colorspaceBtn.setTooltip('Color space: sRGB (click for Linear)');
     }
 }
 
-/**
- * Create a button with an SVG icon instead of text
- */
-function createIconButton(iconElement, title, onClick) {
-    const btn = document.createElement('button');
-    btn.title = title;
-    btn.style.cssText = `
-        width: 28px;
-        height: 24px;
-        border: 1px solid var(--border, rgba(255,255,255,0.2));
-        border-radius: 4px;
-        background: var(--bg-secondary, #30363d);
-        color: var(--text-primary, #c9d1d9);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: background 0.15s;
-    `;
-    btn.appendChild(iconElement);
-    btn.addEventListener('mouseenter', () => btn.style.background = 'var(--bg-tertiary, #484f58)');
-    btn.addEventListener('mouseleave', () => btn.style.background = 'var(--bg-secondary, #30363d)');
-    btn.addEventListener('click', onClick);
-    return btn;
-}
 
 /**
  * Setup reactive event listeners
  */
 function setupReactiveBindings() {
-    // Update play button based on render state
+    // Update all displays every frame
     events.on(EVENTS.RENDER_FRAME, (data) => {
-        if (timeDisplay) timeDisplay.textContent = formatTime(data.time);
+        // Time display (T:0:00)
+        if (timeDisplay) {
+            const mins = Math.floor(data.time / 60);
+            const secs = Math.floor(data.time % 60);
+            timeDisplay.textContent = `T:${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // Frame display (F:0)
         if (frameDisplay) frameDisplay.textContent = `F:${data.frame}`;
+        
+        // FPS display (@60fps)
         if (fpsDisplay) {
-            fpsDisplay.textContent = `${data.fps} fps`;
+            fpsDisplay.textContent = `@${data.fps}fps`;
             // Color based on performance
             if (data.fps >= 55) {
                 fpsDisplay.style.color = 'var(--console-success, #3fb950)';
@@ -336,18 +481,23 @@ function setupReactiveBindings() {
             }
         }
         
+        // Update timeline slider (auto-extends when reaching end)
+        if (timelineSlider && timelineSlider.setTime) {
+            timelineSlider.setTime(data.time);
+        }
+        
         // Update play button icon
         if (playBtn) {
-            playBtn.textContent = '⏸';
-            playBtn.title = 'Pause';
+            playBtn.setIcon('⏸');
+            playBtn.setTooltip('Pause');
         }
     });
     
     // Update play button when render stops
     events.on(EVENTS.RENDER_STOP, () => {
         if (playBtn) {
-            playBtn.textContent = '▶';
-            playBtn.title = 'Play';
+            playBtn.setIcon('▶');
+            playBtn.setTooltip('Play');
         }
     });
     
@@ -359,7 +509,7 @@ function setupReactiveBindings() {
     // Update glass button based on glass mode state
     events.on(EVENTS.PREVIEW_GLASS_MODE, ({ enabled }) => {
         if (glassBtn) {
-            glassBtn.textContent = enabled ? '◑' : '◐';
+            glassBtn.setIcon(enabled ? '◑' : '◐');
         }
     });
     
@@ -545,30 +695,6 @@ export function isDockedState() {
 }
 
 // Helper functions
-function createButton(text, title, onClick) {
-    const btn = document.createElement('button');
-    btn.textContent = text;
-    btn.title = title;
-    btn.style.cssText = `
-        width: 28px;
-        height: 24px;
-        border: 1px solid var(--border, rgba(255,255,255,0.2));
-        border-radius: 4px;
-        background: var(--bg-secondary, #30363d);
-        color: var(--text-primary, #c9d1d9);
-        font-size: 12px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: background 0.15s;
-    `;
-    btn.addEventListener('mouseenter', () => btn.style.background = 'var(--bg-tertiary, #484f58)');
-    btn.addEventListener('mouseleave', () => btn.style.background = 'var(--bg-secondary, #30363d)');
-    btn.addEventListener('click', onClick);
-    return btn;
-}
-
 function createSeparator() {
     const sep = document.createElement('div');
     sep.style.cssText = `

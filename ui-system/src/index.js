@@ -6,7 +6,7 @@
 // Core modules
 import { state, panels, panelConfigs, resetLayoutState } from './core/state.js';
 import { on, off, emit, once, EVENTS } from './core/events.js';
-import { setTheme, getTheme, getThemes, loadThemes } from './core/theme.js';
+import { setTheme, getTheme, getThemes, getThemeData, loadThemes } from './core/theme.js';
 import { t, setLanguage, getLanguage, loadLanguage, updateAllText } from './core/i18n.js';
 import { isMobileDevice, detectOrientation, updateDeviceMode, setForceMode, setupDeviceListeners } from './core/device.js';
 
@@ -39,7 +39,7 @@ import {
     PresetManager,
     VectorSliderStack
 } from './components/slider.js';
-import { Button, ToggleButton } from './components/buttons.js';
+import { Button, ToggleButton, IconButton, CtrlButton } from './components/buttons.js';
 import { SlideToggle } from './components/slide-toggle.js';
 import { ColorInput, ColorUniform } from './components/color-input.js';
 import { Tooltip } from './components/tooltip.js';
@@ -673,6 +673,7 @@ const SLUI = {
     setTheme,
     getTheme,
     getThemes,
+    getThemeData,
     
     // i18n
     t,
@@ -749,6 +750,8 @@ const SLUI = {
     // Buttons
     Button,
     ToggleButton,
+    IconButton,
+    CtrlButton,
     SlideToggle,
     
     // Form Controls

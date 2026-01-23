@@ -15,8 +15,9 @@
 import { logger } from '../../core/logger.js';
 import { events, EVENTS } from '../../core/events.js';
 import { state } from '../../core/state.js';
-import { loadMonaco, createMonacoEditor, setMonacoTheme } from '../../editor/monaco-loader.js';
+import { loadMonaco, createMonacoEditor, setMonacoTheme, applyMonacoThemeFromSLUI, getFontSizeOptions, setEditorFontSizeIndex } from '../../editor/monaco-loader.js';
 import { shaderManager } from '../../managers/ShaderManager.js';
+import { getSLUI } from '../index.js';
 
 // ========== GLOBAL STATE ==========
 
@@ -293,26 +294,21 @@ function createEditorHost(windowId) {
     `;
     
     // Compile button
-    const compileBtn = document.createElement('button');
-    compileBtn.textContent = '▶ Compile';
-    compileBtn.title = 'Compile shader (Ctrl+S)';
-    compileBtn.style.cssText = `
-        padding: 4px 12px;
-        border: 1px solid var(--border, rgba(255,255,255,0.2));
-        border-radius: 4px;
-        background: var(--accent, #58a6ff);
-        color: var(--bg-primary, #0d1117);
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-    `;
-    compileBtn.addEventListener('click', () => {
-        const data = windowEditors.get(windowId);
-        if (data?.activeTabId) {
-            saveModelToState(data.activeTabId);
+    const SLUI = getSLUI();
+    const compileBtn = SLUI.Button({
+        icon: '▶',
+        label: 'Compile',
+        variant: 'primary',
+        size: 'small',
+        tooltip: 'Compile shader (Ctrl+S)',
+        onClick: () => {
+            const data = windowEditors.get(windowId);
+            if (data?.activeTabId) {
+                saveModelToState(data.activeTabId);
+            }
+            logger.info('Editor', 'Compile', 'Manual compile');
+            events.emit(EVENTS.COMPILE_REQUEST);
         }
-        logger.info('Editor', 'Compile', 'Manual compile');
-        events.emit(EVENTS.COMPILE_REQUEST);
     });
     controlsBar.appendChild(compileBtn);
     
@@ -399,6 +395,53 @@ function createEditorHost(windowId) {
     barSpacer.style.flex = '1';
     statusBar.appendChild(barSpacer);
     
+    // Font size slider (5 levels: 10, 12, 13, 14, 16)
+    const fontSizeContainer = document.createElement('div');
+    fontSizeContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    `;
+    
+    const fontSizeLabel = document.createElement('span');
+    fontSizeLabel.textContent = 'A';
+    fontSizeLabel.style.cssText = 'font-size: 9px; opacity: 0.7;';
+    fontSizeContainer.appendChild(fontSizeLabel);
+    
+    const fontSizeSlider = document.createElement('input');
+    fontSizeSlider.type = 'range';
+    fontSizeSlider.min = '0';
+    fontSizeSlider.max = '4';
+    const fontOpts = getFontSizeOptions();
+    fontSizeSlider.value = String(fontOpts.currentIndex);
+    fontSizeSlider.title = `Font size: ${fontOpts.current}px`;
+    fontSizeSlider.style.cssText = `
+        width: 50px;
+        height: 4px;
+        cursor: pointer;
+        accent-color: var(--accent, #58a6ff);
+    `;
+    fontSizeSlider.addEventListener('input', () => {
+        const newSize = setEditorFontSizeIndex(parseInt(fontSizeSlider.value, 10));
+        fontSizeSlider.title = `Font size: ${newSize}px`;
+        fontSizeLabelLarge.style.opacity = fontSizeSlider.value === '4' ? '1' : '0.7';
+        fontSizeLabel.style.opacity = fontSizeSlider.value === '0' ? '1' : '0.7';
+    });
+    fontSizeContainer.appendChild(fontSizeSlider);
+    
+    const fontSizeLabelLarge = document.createElement('span');
+    fontSizeLabelLarge.textContent = 'A';
+    fontSizeLabelLarge.style.cssText = 'font-size: 13px; opacity: 0.7;';
+    fontSizeContainer.appendChild(fontSizeLabelLarge);
+    
+    statusBar.appendChild(fontSizeContainer);
+    
+    // Separator
+    const separator = document.createElement('span');
+    separator.style.cssText = 'color: var(--border); margin: 0 4px;';
+    separator.textContent = '│';
+    statusBar.appendChild(separator);
+    
     const langInfo = document.createElement('span');
     langInfo.textContent = 'GLSL';
     statusBar.appendChild(langInfo);
@@ -470,12 +513,8 @@ export function registerEditorPanel(SLUI) {
     if (SLUI.on) {
         SLUI.on('theme-change', (data) => {
             const themeName = data?.theme || '';
-            // 'default' is a hybrid theme that uses light editor
-            const usesLightEditor = themeName === 'default' || 
-                                     themeName.includes('light') || 
-                                     themeName === 'designer' || 
-                                     themeName === 'architect';
-            setMonacoTheme(!usesLightEditor);
+            // Use new theme-aware Monaco theming from SLUI theme data
+            applyMonacoThemeFromSLUI(themeName);
         });
     }
     

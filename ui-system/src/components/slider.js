@@ -713,65 +713,229 @@ export function IconSlider(options = {}) {
 // TIMELINE SLIDER - Time scrubber
 // ========================================
 
+/**
+ * TimelineSlider - Playback timeline with auto-extending duration
+ * 
+ * When playback reaches the end, the duration doubles automatically.
+ * Compact mode layout: 0:00 -------o------- 1:00
+ * Shows tooltip with seek time when dragging.
+ * 
+ * @param {Object} options
+ * @param {number} options.duration - Initial duration in seconds (default: 60)
+ * @param {number} options.value - Initial time position in seconds (default: 0)
+ * @param {boolean} options.autoExtend - Auto-extend duration when reaching end (default: true)
+ * @param {boolean} options.compact - Use compact single-row layout (default: false)
+ * @param {Function} options.onChange - Called when user seeks (time) => {}
+ * @param {Function} options.onSeekStart - Called when drag starts
+ * @param {Function} options.onSeekEnd - Called when drag ends
+ */
 export function TimelineSlider(options = {}) {
-    const { duration = 60, value = 0, onChange = null, onSeekStart = null, onSeekEnd = null } = options;
+    const {
+        duration = 60,
+        value = 0,
+        autoExtend = true,
+        compact = false,
+        onChange = null,
+        onSeekStart = null,
+        onSeekEnd = null
+    } = options;
     
     let currentTime = Math.max(0, Math.min(duration, value));
     let currentDuration = duration;
+    let initialDuration = duration;
+    let isDragging = false;
     
     const container = document.createElement('div');
-    container.className = 'sl-timeline-slider';
+    container.className = `sl-timeline-slider${compact ? ' sl-timeline-compact' : ''}`;
     
-    const trackContainer = document.createElement('div');
-    trackContainer.className = 'sl-timeline-track-container';
+    // Elements
+    let startTimeEl, endTimeEl, track, trackBg, fill, thumb, tooltip;
     
-    const currentTimeEl = document.createElement('div');
-    currentTimeEl.className = 'sl-timeline-current';
-    currentTimeEl.textContent = formatTime(currentTime);
-    trackContainer.appendChild(currentTimeEl);
+    if (compact) {
+        // Compact layout: 0:00 -------o------- 1:00
+        const row = document.createElement('div');
+        row.className = 'sl-timeline-row';
+        
+        startTimeEl = document.createElement('span');
+        startTimeEl.className = 'sl-timeline-time sl-timeline-start';
+        startTimeEl.textContent = '0:00';
+        row.appendChild(startTimeEl);
+        
+        // Track wrapper for positioning
+        const trackWrapper = document.createElement('div');
+        trackWrapper.className = 'sl-timeline-track-wrapper';
+        
+        track = document.createElement('div');
+        track.className = 'sl-timeline-track';
+        
+        trackBg = document.createElement('div');
+        trackBg.className = 'sl-timeline-track-bg';
+        
+        fill = document.createElement('div');
+        fill.className = 'sl-timeline-track-fill';
+        
+        thumb = document.createElement('div');
+        thumb.className = 'sl-timeline-thumb';
+        
+        // Tooltip for seek time
+        tooltip = document.createElement('div');
+        tooltip.className = 'sl-timeline-tooltip';
+        tooltip.textContent = '0:00';
+        thumb.appendChild(tooltip);
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        trackWrapper.appendChild(track);
+        row.appendChild(trackWrapper);
+        
+        endTimeEl = document.createElement('span');
+        endTimeEl.className = 'sl-timeline-time sl-timeline-end';
+        endTimeEl.textContent = formatTime(currentDuration);
+        row.appendChild(endTimeEl);
+        
+        container.appendChild(row);
+    } else {
+        // Full layout with floating current time above
+        const trackContainer = document.createElement('div');
+        trackContainer.className = 'sl-timeline-track-container';
+        
+        tooltip = document.createElement('div');
+        tooltip.className = 'sl-timeline-current';
+        tooltip.textContent = formatTime(currentTime);
+        trackContainer.appendChild(tooltip);
+        
+        track = document.createElement('div');
+        track.className = 'sl-timeline-track';
+        
+        trackBg = document.createElement('div');
+        trackBg.className = 'sl-timeline-track-bg';
+        
+        fill = document.createElement('div');
+        fill.className = 'sl-timeline-track-fill';
+        
+        thumb = document.createElement('div');
+        thumb.className = 'sl-timeline-thumb';
+        
+        trackBg.appendChild(fill);
+        trackBg.appendChild(thumb);
+        track.appendChild(trackBg);
+        trackContainer.appendChild(track);
+        container.appendChild(trackContainer);
+        
+        const timesRow = document.createElement('div');
+        timesRow.className = 'sl-timeline-times';
+        startTimeEl = document.createElement('span');
+        startTimeEl.className = 'sl-timeline-start';
+        startTimeEl.textContent = '0:00';
+        endTimeEl = document.createElement('span');
+        endTimeEl.className = 'sl-timeline-end';
+        endTimeEl.textContent = formatTime(currentDuration);
+        timesRow.appendChild(startTimeEl);
+        timesRow.appendChild(endTimeEl);
+        container.appendChild(timesRow);
+    }
     
-    const track = document.createElement('div');
-    track.className = 'sl-slider-track';
-    track.style.cursor = 'pointer';
+    // Pointer events for seeking
+    track.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        isDragging = true;
+        container.classList.add('dragging');
+        if (onSeekStart) onSeekStart();
+        handlePointer(e);
+        
+        const onMove = (ev) => handlePointer(ev);
+        const onUp = () => {
+            isDragging = false;
+            container.classList.remove('dragging');
+            if (onSeekEnd) onSeekEnd();
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+        };
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+    });
     
-    const trackBg = document.createElement('div');
-    trackBg.className = 'sl-slider-track-bg';
-    const fill = document.createElement('div');
-    fill.className = 'sl-slider-track-fill';
-    const thumb = document.createElement('div');
-    thumb.className = 'sl-slider-thumb';
-    thumb.style.cursor = 'pointer';
+    function handlePointer(e) {
+        const rect = trackBg.getBoundingClientRect();
+        const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        currentTime = ratio * currentDuration;
+        updateVisuals();
+        if (onChange) onChange(currentTime);
+    }
     
-    trackBg.appendChild(fill);
-    trackBg.appendChild(thumb);
-    track.appendChild(trackBg);
-    trackContainer.appendChild(track);
-    container.appendChild(trackContainer);
+    function formatTime(s) {
+        const sec = Math.floor(s);
+        const mins = Math.floor(sec / 60);
+        const secs = sec % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
     
-    const timesRow = document.createElement('div');
-    timesRow.className = 'sl-timeline-times';
-    const startTimeEl = document.createElement('span');
-    startTimeEl.className = 'sl-timeline-start';
-    startTimeEl.textContent = formatTime(0);
-    const endTimeEl = document.createElement('span');
-    endTimeEl.className = 'sl-timeline-end';
-    endTimeEl.textContent = formatTime(currentDuration);
-    timesRow.appendChild(startTimeEl);
-    timesRow.appendChild(endTimeEl);
-    container.appendChild(timesRow);
+    function updateVisuals() {
+        const p = currentDuration > 0 ? (currentTime / currentDuration) * 100 : 0;
+        
+        fill.style.width = `${p}%`;
+        thumb.style.left = `${p}%`;
+        
+        // Update tooltip with current seek time
+        if (tooltip) {
+            tooltip.textContent = formatTime(currentTime);
+            if (!compact) {
+                tooltip.style.left = `${p}%`;
+            }
+        }
+    }
     
-    function formatTime(s) { const sec = Math.ceil(s); return `${Math.floor(sec / 60)}:${(sec % 60).toString().padStart(2, '0')}`; }
-    function update() { const p = currentDuration > 0 ? (currentTime / currentDuration) * 100 : 0; fill.style.width = `${p}%`; thumb.style.left = `${p}%`; currentTimeEl.textContent = formatTime(currentTime); currentTimeEl.style.left = `${p}%`; }
+    function updateDurationDisplay() {
+        if (endTimeEl) {
+            endTimeEl.textContent = formatTime(currentDuration);
+        }
+    }
     
-    function handlePointer(e) { const r = trackBg.getBoundingClientRect(); currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * currentDuration; update(); if (onChange) onChange(currentTime); }
-    track.addEventListener('pointerdown', (e) => { e.preventDefault(); container.classList.add('dragging'); track.classList.add('dragging'); if (onSeekStart) onSeekStart(); handlePointer(e); const m = (e) => handlePointer(e); const u = () => { container.classList.remove('dragging'); track.classList.remove('dragging'); if (onSeekEnd) onSeekEnd(); document.removeEventListener('pointermove', m); document.removeEventListener('pointerup', u); }; document.addEventListener('pointermove', m); document.addEventListener('pointerup', u); });
+    updateVisuals();
     
-    update();
-    
+    // Public API
     container.getTime = () => currentTime;
-    container.setTime = (t) => { currentTime = Math.max(0, Math.min(currentDuration, t)); update(); };
     container.getDuration = () => currentDuration;
-    container.setDuration = (d) => { currentDuration = Math.max(0, d); endTimeEl.textContent = formatTime(currentDuration); currentTime = Math.min(currentTime, currentDuration); update(); };
+    container.isDragging = () => isDragging;
+    
+    /**
+     * Set current time - called every frame from render loop
+     * Implements auto-extending: when time reaches duration, double it
+     */
+    container.setTime = (t) => {
+        if (isDragging) return; // Don't update while user is seeking
+        
+        // Auto-extend: if we've reached the end, double duration
+        if (autoExtend && t >= currentDuration) {
+            currentDuration *= 2;
+            updateDurationDisplay();
+        }
+        
+        currentTime = Math.max(0, Math.min(currentDuration, t));
+        updateVisuals();
+    };
+    
+    /**
+     * Manually set duration (also resets to this as initial duration)
+     */
+    container.setDuration = (d) => {
+        currentDuration = Math.max(0, d);
+        initialDuration = currentDuration;
+        updateDurationDisplay();
+        currentTime = Math.min(currentTime, currentDuration);
+        updateVisuals();
+    };
+    
+    /**
+     * Reset to initial duration (called on shader restart)
+     */
+    container.reset = () => {
+        currentDuration = initialDuration;
+        currentTime = 0;
+        updateDurationDisplay();
+        updateVisuals();
+    };
     
     return container;
 }

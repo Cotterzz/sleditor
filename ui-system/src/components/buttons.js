@@ -1,6 +1,12 @@
 /**
  * SLUI Button Components
  * Ported from monolithic ui.js for API compatibility.
+ * 
+ * Components:
+ * - Button: Full-featured button with icon, label, i18n support
+ * - ToggleButton: Two-state button (play/pause, etc.)
+ * - IconButton: Minimal icon-only button for toolbars/control bars
+ * - CtrlButton: Compact control bar button (shader controls, playback bars)
  */
 
 import { t } from '../core/i18n.js';
@@ -287,3 +293,191 @@ export function ToggleButton(options = {}) {
     return btn;
 }
 
+/**
+ * IconButton - Minimal icon-only button for toolbars and control bars
+ * 
+ * Use this instead of raw document.createElement('button') when you need
+ * a simple, themeable button. This provides:
+ * - Consistent CSS class for theming (.sl-icon-btn)
+ * - No inline styles (themeable via CSS)
+ * - Simple API for common toolbar use cases
+ * 
+ * @param {Object} options
+ * @param {string|HTMLElement} options.icon - Text emoji, Unicode symbol, or DOM element (e.g., SVG)
+ * @param {string} options.tooltip - Tooltip text
+ * @param {Function} options.onClick - Click handler
+ * @param {string} options.variant - Style variant: 'default', 'ghost', 'toolbar' (default: 'toolbar')
+ * @param {string} options.className - Additional CSS classes
+ * @returns {HTMLButtonElement} Button element with setIcon(), setTooltip(), setDisabled() methods
+ * 
+ * @example
+ * // Text icon
+ * const playBtn = IconButton({ icon: '▶', tooltip: 'Play', onClick: () => play() });
+ * 
+ * // SVG icon
+ * const svgBtn = IconButton({ icon: mySvgElement, tooltip: 'Action', onClick: handler });
+ * 
+ * // Update later
+ * playBtn.setIcon('⏸');
+ * playBtn.setTooltip('Pause');
+ */
+export function IconButton(options = {}) {
+    const {
+        icon = null,
+        tooltip = null,
+        tooltipKey = null,
+        onClick = null,
+        variant = 'toolbar',
+        className = '',
+        disabled = false
+    } = options;
+
+    const btn = document.createElement('button');
+    btn.className = `sl-icon-btn sl-icon-btn-${variant} ${className}`.trim();
+    btn.disabled = disabled;
+
+    const resolvedTooltip = tooltipKey ? t(tooltipKey) : tooltip;
+    if (resolvedTooltip) {
+        btn.title = resolvedTooltip;
+    }
+
+    // Set icon (text or element)
+    function applyIcon(iconValue) {
+        btn.innerHTML = '';
+        if (!iconValue) return;
+        
+        if (iconValue instanceof HTMLElement || iconValue instanceof SVGElement) {
+            btn.appendChild(iconValue);
+        } else if (typeof iconValue === 'string') {
+            if (iconValue.startsWith('<')) {
+                btn.innerHTML = iconValue;
+            } else {
+                btn.textContent = iconValue;
+            }
+        }
+    }
+
+    applyIcon(icon);
+
+    if (onClick) {
+        btn.addEventListener('click', (e) => {
+            if (!btn.disabled) onClick(e);
+        });
+    }
+
+    // i18n support
+    let currentTooltipKey = tooltipKey;
+    function onLangChange() {
+        if (currentTooltipKey) {
+            btn.title = t(currentTooltipKey);
+        }
+    }
+    if (tooltipKey) {
+        document.addEventListener('sl-lang-change', onLangChange);
+    }
+
+    // Public API
+    btn.setIcon = (newIcon) => applyIcon(newIcon);
+    btn.setTooltip = (newTooltip) => { btn.title = newTooltip || ''; };
+    btn.setTooltipKey = (newKey) => {
+        currentTooltipKey = newKey;
+        if (newKey) btn.title = t(newKey);
+    };
+    btn.setDisabled = (isDisabled) => { btn.disabled = isDisabled; };
+    btn.destroy = () => {
+        document.removeEventListener('sl-lang-change', onLangChange);
+    };
+
+    return btn;
+}
+
+/**
+ * CtrlButton - Compact control bar button for shader controls, playback bars, etc.
+ * 
+ * Matches the existing .v2-shader-ctrl-btn style but as a proper SLUI component.
+ * Use this for compact control bars where space is limited.
+ * 
+ * @param {Object} options
+ * @param {string|HTMLElement} options.icon - Text emoji, Unicode symbol, or DOM element (e.g., SVG)
+ * @param {string} options.tooltip - Tooltip text
+ * @param {Function} options.onClick - Click handler
+ * @param {boolean} options.active - Whether button is in active/pressed state
+ * @param {string} options.className - Additional CSS classes
+ * @returns {HTMLButtonElement} Button element with setIcon(), setTooltip(), setActive(), setDisabled() methods
+ * 
+ * @example
+ * const playBtn = CtrlButton({ icon: '▶', tooltip: 'Play', onClick: () => play() });
+ * playBtn.setIcon('⏸');
+ * playBtn.setActive(true);
+ */
+export function CtrlButton(options = {}) {
+    const {
+        icon = null,
+        tooltip = null,
+        tooltipKey = null,
+        onClick = null,
+        active = false,
+        className = '',
+        disabled = false
+    } = options;
+
+    const btn = document.createElement('button');
+    btn.className = `sl-ctrl-btn ${active ? 'active' : ''} ${className}`.trim();
+    btn.disabled = disabled;
+
+    const resolvedTooltip = tooltipKey ? t(tooltipKey) : tooltip;
+    if (resolvedTooltip) {
+        btn.title = resolvedTooltip;
+    }
+
+    // Set icon (text or element)
+    function applyIcon(iconValue) {
+        btn.innerHTML = '';
+        if (!iconValue) return;
+        
+        if (iconValue instanceof HTMLElement || iconValue instanceof SVGElement) {
+            btn.appendChild(iconValue.cloneNode(true));
+        } else if (typeof iconValue === 'string') {
+            if (iconValue.startsWith('<')) {
+                btn.innerHTML = iconValue;
+            } else {
+                btn.textContent = iconValue;
+            }
+        }
+    }
+
+    applyIcon(icon);
+
+    if (onClick) {
+        btn.addEventListener('click', (e) => {
+            if (!btn.disabled) onClick(e);
+        });
+    }
+
+    // i18n support
+    let currentTooltipKey = tooltipKey;
+    function onLangChange() {
+        if (currentTooltipKey) {
+            btn.title = t(currentTooltipKey);
+        }
+    }
+    if (tooltipKey) {
+        document.addEventListener('sl-lang-change', onLangChange);
+    }
+
+    // Public API
+    btn.setIcon = (newIcon) => applyIcon(newIcon);
+    btn.setTooltip = (newTooltip) => { btn.title = newTooltip || ''; };
+    btn.setTooltipKey = (newKey) => {
+        currentTooltipKey = newKey;
+        if (newKey) btn.title = t(newKey);
+    };
+    btn.setActive = (isActive) => { btn.classList.toggle('active', isActive); };
+    btn.isActive = () => btn.classList.contains('active');
+    btn.setDisabled = (isDisabled) => { btn.disabled = isDisabled; };
+    btn.destroy = () => {
+        document.removeEventListener('sl-lang-change', onLangChange);
+    };
+
+    return btn;
+}

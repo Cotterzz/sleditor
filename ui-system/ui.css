@@ -129,7 +129,12 @@ body {
    ======================================== */
 
 .sl-toolbar {
-    background: var(--toolbar-bg);
+    background-color: var(--toolbar-bg);
+    background-image: var(--toolbar-bg-image, none);
+    background-size: var(--toolbar-bg-size, cover);
+    background-position: var(--toolbar-bg-position, center);
+    background-repeat: var(--toolbar-bg-repeat, no-repeat);
+    background-blend-mode: var(--toolbar-bg-blend, normal);
     display: flex;
     align-items: center;
     gap: 4px;
@@ -691,7 +696,7 @@ body {
 .sl-window-content {
     flex: 1;
     overflow: auto;
-    padding: 12px;
+    padding: var(--content-padding, 12px);
 }
 
 /* ========================================
@@ -973,6 +978,100 @@ body {
 
 .sl-btn-group .sl-btn:last-child {
     border-radius: 0 var(--border-radius) var(--border-radius) 0;
+}
+
+/* ========================================
+   ICON BUTTON - Minimal toolbar/control bar button
+   Use SLUI.IconButton() instead of document.createElement('button')
+   ======================================== */
+
+.sl-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.sl-icon-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--accent);
+}
+
+.sl-icon-btn:active:not(:disabled) {
+    background: var(--bg-active);
+}
+
+.sl-icon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Toolbar variant - more compact, fits in toolbars */
+.sl-icon-btn-toolbar {
+    min-width: 26px;
+    height: 26px;
+    padding: 2px 6px;
+    font-size: 13px;
+}
+
+/* Ghost variant - no border until hover */
+.sl-icon-btn-ghost {
+    background: transparent;
+    border-color: transparent;
+}
+
+.sl-icon-btn-ghost:hover:not(:disabled) {
+    background: var(--bg-hover);
+    border-color: var(--border);
+}
+
+/* ========================================
+   CTRL BUTTON - Compact control bar button
+   Use SLUI.CtrlButton() for shader controls, playback bars, etc.
+   ======================================== */
+
+.sl-ctrl-btn {
+    width: 28px;
+    height: 24px;
+    border: 1px solid var(--border, rgba(255,255,255,0.2));
+    border-radius: 4px;
+    background: var(--bg-secondary, #30363d);
+    color: var(--text-primary, #c9d1d9);
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+.sl-ctrl-btn:hover:not(:disabled) {
+    background: var(--bg-hover, #484f58);
+    border-color: var(--border-focus, var(--accent));
+}
+
+.sl-ctrl-btn:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+.sl-ctrl-btn.active {
+    background: var(--accent, #58a6ff);
+    color: var(--text-inverse, #fff);
+    border-color: var(--accent, #58a6ff);
+}
+
+.sl-ctrl-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .sl-btn-group .sl-btn:not(:last-child) {
@@ -1381,9 +1480,9 @@ body {
 }
 
 .sl-select:focus {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
+    outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
 }
 
 /* Compact variant (media panels, inline forms) */
@@ -1946,10 +2045,7 @@ body {
     color: #00aa00 !important;
 }
 
-/* Hacker theme keeps colored origins for visibility */
-[data-theme="hacker"] .slui-console-origin {
-    /* Keep original colors for type differentiation */
-}
+/* Hacker theme keeps colored origins for visibility - no override needed */
 
 /* Hacker theme: scanlines effect */
 [data-theme="hacker"] .sl-app::after {
@@ -2521,6 +2617,7 @@ body {
     text-align: center;
     opacity: 0;
     pointer-events: none;
+    appearance: textfield;
     -moz-appearance: textfield;
 }
 
@@ -2837,6 +2934,113 @@ body {
 
 .sl-timeline-slider:hover .sl-timeline-current,
 .sl-timeline-slider.dragging .sl-timeline-current {
+    opacity: 1;
+}
+
+/* Compact timeline layout - single row */
+.sl-timeline-compact {
+    padding: 0;
+    width: 100%;
+}
+
+.sl-timeline-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.sl-timeline-compact .sl-timeline-time {
+    color: var(--text-muted, #8b949e);
+    font-family: var(--font-code, monospace);
+    font-size: 10px;
+    min-width: 32px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.sl-timeline-compact .sl-timeline-start {
+    text-align: left;
+}
+
+.sl-timeline-compact .sl-timeline-end {
+    text-align: right;
+}
+
+.sl-timeline-track-wrapper {
+    flex: 1;
+    position: relative;
+    height: 16px;
+    display: flex;
+    align-items: center;
+}
+
+.sl-timeline-track {
+    width: 100%;
+    height: 16px;
+    position: relative;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.sl-timeline-track-bg {
+    width: 100%;
+    height: 4px;
+    background: var(--border, #3c3c3c);
+    border-radius: 2px;
+    position: relative;
+}
+
+.sl-timeline-track-fill {
+    height: 100%;
+    background: var(--accent, #58a6ff);
+    border-radius: 2px;
+    pointer-events: none;
+}
+
+.sl-timeline-thumb {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: var(--accent, #58a6ff);
+    border: 2px solid var(--bg-primary, #0d1117);
+    border-radius: 50%;
+    transform: translateX(-50%);
+    top: 50%;
+    margin-top: -6px;
+    cursor: pointer;
+    z-index: 2;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.sl-timeline-thumb:hover,
+.sl-timeline-slider.dragging .sl-timeline-thumb {
+    transform: translateX(-50%) scale(1.2);
+    box-shadow: 0 0 8px var(--accent, #58a6ff);
+}
+
+/* Tooltip on thumb - shows seek time when dragging */
+.sl-timeline-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 2px 6px;
+    background: var(--bg-secondary, #1e1e1e);
+    border: 1px solid var(--border, #3c3c3c);
+    border-radius: 3px;
+    color: var(--text-primary, #c9d1d9);
+    font-family: var(--font-code, monospace);
+    font-size: 10px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    margin-bottom: 4px;
+    transition: opacity 0.1s;
+}
+
+.sl-timeline-slider.dragging .sl-timeline-tooltip {
     opacity: 1;
 }
 
@@ -3687,7 +3891,12 @@ body {
 .sl-tabs-bar {
     display: flex;
     gap: 2px;
-    background: var(--bg-secondary);
+    background-color: var(--toolbar-bg);
+    background-image: var(--toolbar-bg-image, none);
+    background-size: var(--toolbar-bg-size, cover);
+    background-position: var(--toolbar-bg-position, center);
+    background-repeat: var(--toolbar-bg-repeat, no-repeat);
+    background-blend-mode: var(--toolbar-bg-blend, normal);
     padding: 4px;
     border-radius: var(--border-radius) var(--border-radius) 0 0;
     overflow-x: auto;
@@ -3719,7 +3928,7 @@ body {
     align-items: center;
     gap: 6px;
     padding: 8px 12px;
-    background: transparent;
+    background: var(--bg-tertiary);
     border: none;
     border-radius: calc(var(--border-radius) * 0.5);
     color: var(--text-muted);
@@ -3896,7 +4105,12 @@ body {
     align-items: center;
     gap: 2px;
     padding: 4px 4px 0 4px;
-    background: var(--bg-tertiary);
+    background-color: var(--toolbar-bg);
+    background-image: var(--toolbar-bg-image, none);
+    background-size: var(--toolbar-bg-size, cover);
+    background-position: var(--toolbar-bg-position, center);
+    background-repeat: var(--toolbar-bg-repeat, no-repeat);
+    background-blend-mode: var(--toolbar-bg-blend, normal);
     border-bottom: 1px solid var(--border);
     min-height: 32px;
     position: relative;
@@ -3908,7 +4122,7 @@ body {
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
-    background: transparent;
+    background: var(--bg-tertiary);
     border: none;
     border-radius: var(--border-radius) var(--border-radius) 0 0;
     color: var(--text-muted);
@@ -4036,7 +4250,7 @@ body {
 }
 
 .sl-tabpane.drop-target .sl-tabpane-bar {
-    background: var(--bg-active);
+    background-color: var(--bg-active);
 }
 
 /* Body state during tab drag */
@@ -4069,9 +4283,7 @@ body.sl-tab-dragging * {
    TABBED WINDOW - Window with integrated TabPane
    ======================================== */
 
-.sl-tabbed-window {
-    /* Same as regular window, but content area is modified */
-}
+/* .sl-tabbed-window inherits from .sl-window - no additional styles needed */
 
 .sl-tabbed-window-body {
     display: flex;
@@ -4094,7 +4306,7 @@ body.sl-tab-dragging * {
 
 .sl-tabbed-window-content .sl-tabpane-bar {
     border-radius: 0;
-    background: var(--bg-secondary);
+    /* Inherit toolbar-bg and image from base .sl-tabpane-bar */
 }
 
 .sl-tabbed-window-content .sl-tabpane-content {
@@ -4109,7 +4321,7 @@ body.sl-tab-dragging * {
 }
 
 .sl-tabbed-window-body.tab-drop-ready .sl-tabpane-bar {
-    background: var(--bg-active);
+    background-color: var(--bg-active);
 }
 
 /* Theme-specific styles */
@@ -4137,3 +4349,58 @@ body.sl-tab-dragging * {
     box-shadow: var(--neumorphic-raised);
 }
 
+/* ========================================
+   SHADER CONTROLS BAR (V2)
+   ======================================== */
+
+.v2-shader-controls-bar {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-tertiary, #21262d);
+    font-size: 12px;
+    color: var(--text-primary, #c9d1d9);
+    border-top: 1px solid var(--border, rgba(255,255,255,0.1));
+    user-select: none;
+}
+
+.v2-shader-controls-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+}
+
+.v2-shader-controls-row:first-child {
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.05));
+}
+
+/* .v2-shader-ctrl-btn has been replaced by .sl-ctrl-btn (see CTRL BUTTON section) */
+
+.v2-shader-controls-separator {
+    width: 1px;
+    height: 18px;
+    background: var(--border, rgba(255,255,255,0.15));
+    margin: 0 4px;
+}
+
+.v2-shader-controls-info {
+    font-size: 11px;
+    font-family: var(--font-code, monospace);
+    color: var(--text-secondary, #8b949e);
+    padding: 2px 6px;
+    background: var(--bg-primary, #0d1117);
+    border-radius: 3px;
+    min-width: 50px;
+    text-align: center;
+}
+
+.v2-shader-controls-info-row {
+    gap: 8px;
+    padding: 4px 10px;
+}
+
+.v2-shader-controls-info-row span {
+    font-family: var(--font-code, 'JetBrains Mono', monospace);
+    font-size: 11px;
+    color: var(--text-muted, #8b949e);
+}

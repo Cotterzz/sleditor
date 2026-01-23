@@ -255,31 +255,17 @@ function updatePanel(uniforms) {
     }
     
     // Add reset button
-    const resetBtn = document.createElement('button');
-    resetBtn.className = 'sl-button';
-    resetBtn.textContent = 'Reset to Defaults';
-    resetBtn.style.cssText = `
-        margin-top: 12px;
-        width: 100%;
-        padding: 8px;
-        background: var(--bg-tertiary, #21262d);
-        border: 1px solid var(--border, #30363d);
-        border-radius: 4px;
-        color: var(--text-primary, #c9d1d9);
-        cursor: pointer;
-        font-size: 12px;
-    `;
-    resetBtn.addEventListener('click', () => {
-        uniformManager.resetToDefaults();
-        // Re-render with current uniforms
-        updatePanel(uniformManager.getDetectedUniforms());
+    const resetBtn = SLUI.Button({
+        label: 'Reset to Defaults',
+        variant: 'default',
+        className: 'sl-fullwidth',
+        onClick: () => {
+            uniformManager.resetToDefaults();
+            // Re-render with current uniforms
+            updatePanel(uniformManager.getDetectedUniforms());
+        }
     });
-    resetBtn.addEventListener('mouseenter', () => {
-        resetBtn.style.background = 'var(--bg-hover, #30363d)';
-    });
-    resetBtn.addEventListener('mouseleave', () => {
-        resetBtn.style.background = 'var(--bg-tertiary, #21262d)';
-    });
+    resetBtn.style.marginTop = '12px';
     panelContainer.appendChild(resetBtn);
 }
 
@@ -321,7 +307,7 @@ function createPanelContent() {
         padding: 10px;
         height: 100%;
         overflow-y: auto;
-        background: var(--bg-primary, #0d1117);
+        background: var(--bg-panel, #161b22);
     `;
     
     panelContainer = container;

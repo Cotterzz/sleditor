@@ -1343,8 +1343,12 @@ async function init() {
     
     // Only auto-start playback if AudioContext is running (not suspended)
     // If suspended, the audio start overlay will handle starting playback
+
+
+    state.isPlaying = true;
+    
     if (state.audioContext?.state === 'running') {
-        state.isPlaying = true;
+
         ui.updatePlayPauseButton();
     } else {
         // Keep paused until user interacts with overlay

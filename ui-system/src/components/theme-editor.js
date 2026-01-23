@@ -185,6 +185,174 @@ function createTextEditor(key, value, onChange) {
 }
 
 /**
+ * Create a CSS rule editor (selector -> properties)
+ */
+function createCSSRuleEditor(selector, styles, onChange) {
+    const container = document.createElement('div');
+    container.className = 'te-css-rule';
+    container.style.cssText = `
+        margin-bottom: 12px;
+        padding: 8px;
+        background: #0d0d0d;
+        border: 1px solid #333;
+        border-radius: 6px;
+    `;
+    
+    // Header with selector
+    const header = document.createElement('div');
+    header.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    `;
+    
+    const selectorLabel = document.createElement('code');
+    selectorLabel.textContent = selector;
+    selectorLabel.style.cssText = `
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        color: #58a6ff;
+        flex: 1;
+        word-break: break-all;
+    `;
+    
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = '🗑';
+    deleteBtn.title = 'Delete rule';
+    deleteBtn.style.cssText = `
+        padding: 2px 6px;
+        background: transparent;
+        border: 1px solid #444;
+        border-radius: 4px;
+        color: #888;
+        font-size: 10px;
+        cursor: pointer;
+    `;
+    deleteBtn.addEventListener('click', () => {
+        if (confirm(`Delete CSS rule for "${selector}"?`)) {
+            onChange(selector, null);
+        }
+    });
+    
+    header.appendChild(selectorLabel);
+    header.appendChild(deleteBtn);
+    container.appendChild(header);
+    
+    // Properties list
+    const propsContainer = document.createElement('div');
+    propsContainer.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+    
+    const currentStyles = { ...styles };
+    
+    function renderProps() {
+        propsContainer.innerHTML = '';
+        
+        for (const [prop, value] of Object.entries(currentStyles)) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+            
+            const propInput = document.createElement('input');
+            propInput.type = 'text';
+            propInput.value = prop;
+            propInput.placeholder = 'property';
+            propInput.style.cssText = `
+                width: 100px;
+                padding: 3px 6px;
+                background: #1a1a1a;
+                border: 1px solid #333;
+                border-radius: 3px;
+                color: #f0883e;
+                font-family: 'JetBrains Mono', monospace;
+                font-size: 10px;
+            `;
+            
+            const colonSpan = document.createElement('span');
+            colonSpan.textContent = ':';
+            colonSpan.style.color = '#666';
+            
+            const valueInput = document.createElement('input');
+            valueInput.type = 'text';
+            valueInput.value = value;
+            valueInput.placeholder = 'value';
+            valueInput.style.cssText = `
+                flex: 1;
+                padding: 3px 6px;
+                background: #1a1a1a;
+                border: 1px solid #333;
+                border-radius: 3px;
+                color: #a5d6ff;
+                font-family: 'JetBrains Mono', monospace;
+                font-size: 10px;
+            `;
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = '×';
+            removeBtn.style.cssText = `
+                padding: 2px 6px;
+                background: transparent;
+                border: none;
+                color: #666;
+                cursor: pointer;
+                font-size: 14px;
+            `;
+            removeBtn.addEventListener('click', () => {
+                delete currentStyles[prop];
+                onChange(selector, currentStyles);
+                renderProps();
+            });
+            
+            // Update on change
+            propInput.addEventListener('change', () => {
+                const oldProp = prop;
+                const newProp = propInput.value.trim();
+                if (newProp && newProp !== oldProp) {
+                    delete currentStyles[oldProp];
+                    currentStyles[newProp] = valueInput.value;
+                    onChange(selector, currentStyles);
+                }
+            });
+            
+            valueInput.addEventListener('change', () => {
+                currentStyles[propInput.value] = valueInput.value;
+                onChange(selector, currentStyles);
+            });
+            
+            row.appendChild(propInput);
+            row.appendChild(colonSpan);
+            row.appendChild(valueInput);
+            row.appendChild(removeBtn);
+            propsContainer.appendChild(row);
+        }
+        
+        // Add property button
+        const addPropBtn = document.createElement('button');
+        addPropBtn.textContent = '+ property';
+        addPropBtn.style.cssText = `
+            margin-top: 4px;
+            padding: 3px 8px;
+            background: transparent;
+            border: 1px dashed #333;
+            border-radius: 3px;
+            color: #666;
+            font-size: 10px;
+            cursor: pointer;
+        `;
+        addPropBtn.addEventListener('click', () => {
+            currentStyles['new-property'] = 'value';
+            onChange(selector, currentStyles);
+            renderProps();
+        });
+        propsContainer.appendChild(addPropBtn);
+    }
+    
+    renderProps();
+    container.appendChild(propsContainer);
+    
+    return container;
+}
+
+/**
  * Create a font selector with preview and Google Fonts integration
  */
 function createFontEditor(key, value, onChange, onBrowseFonts) {
@@ -615,16 +783,320 @@ export function ThemeEditor(options = {}) {
             }
         }
         
-        // ===== EFFECTS =====
-        if (editingTheme.effects) {
-            const { section, content } = createSection('Effects');
+        // ===== EFFECTS (CSS Variables) =====
+        {
+            const { section, content } = createSection('Effects (CSS Variables)');
             
-            for (const [key, value] of Object.entries(editingTheme.effects)) {
-                content.appendChild(createTextEditor(key, value, (k, v) => {
-                    editingTheme.effects[k] = v;
-                    markDirty();
-                }));
+            if (editingTheme.effects && Object.keys(editingTheme.effects).length > 0) {
+                for (const [key, value] of Object.entries(editingTheme.effects)) {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display: flex; align-items: center; gap: 4px; margin-bottom: 4px;';
+                    
+                    const editor = createTextEditor(key, value, (k, v) => {
+                        editingTheme.effects[k] = v;
+                        markDirty();
+                    });
+                    editor.style.flex = '1';
+                    
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = '×';
+                    deleteBtn.title = 'Delete effect';
+                    deleteBtn.style.cssText = `
+                        padding: 4px 8px;
+                        background: transparent;
+                        border: 1px solid #444;
+                        border-radius: 4px;
+                        color: #888;
+                        cursor: pointer;
+                        font-size: 14px;
+                    `;
+                    deleteBtn.addEventListener('click', () => {
+                        delete editingTheme.effects[key];
+                        markDirty();
+                        renderEditor();
+                    });
+                    
+                    row.appendChild(editor);
+                    row.appendChild(deleteBtn);
+                    content.appendChild(row);
+                }
+            } else {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.textContent = 'No effects defined. Add CSS variables like glow, border-radius, neumorphic-raised, etc.';
+                emptyMsg.style.cssText = 'color: #666; font-size: 11px; font-style: italic; padding: 8px 0;';
+                content.appendChild(emptyMsg);
             }
+            
+            // Add Effect button
+            const addEffectBtn = document.createElement('button');
+            addEffectBtn.textContent = '+ Add Effect';
+            addEffectBtn.style.cssText = `
+                margin-top: 8px;
+                padding: 6px 12px;
+                background: transparent;
+                border: 1px dashed #444;
+                border-radius: 4px;
+                color: #888;
+                font-size: 11px;
+                cursor: pointer;
+                width: 100%;
+            `;
+            addEffectBtn.addEventListener('click', () => {
+                const name = prompt('Enter effect name (e.g., neumorphic-raised, custom-glow):');
+                if (!name || name.trim() === '') return;
+                
+                if (!editingTheme.effects) editingTheme.effects = {};
+                editingTheme.effects[name.trim()] = '';
+                markDirty();
+                renderEditor();
+            });
+            content.appendChild(addEffectBtn);
+            
+            scrollArea.appendChild(section);
+        }
+        
+        // ===== MONACO EDITOR THEME =====
+        {
+            const { section, content } = createSection('Monaco Editor Theme');
+            
+            // Initialize monaco if not present
+            if (!editingTheme.monaco) {
+                editingTheme.monaco = {
+                    base: editingTheme.type === 'dark' ? 'vs-dark' : 'vs',
+                    rules: [],
+                    colors: {}
+                };
+            }
+            
+            // Base theme selector
+            const baseRow = document.createElement('div');
+            baseRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 12px;';
+            
+            const baseLabel = document.createElement('span');
+            baseLabel.textContent = 'Base Theme:';
+            baseLabel.style.cssText = 'font-size: 11px; color: #ccc;';
+            baseRow.appendChild(baseLabel);
+            
+            const baseSelect = document.createElement('select');
+            baseSelect.innerHTML = `
+                <option value="vs">Light (vs)</option>
+                <option value="vs-dark">Dark (vs-dark)</option>
+                <option value="hc-black">High Contrast Dark</option>
+                <option value="hc-light">High Contrast Light</option>
+            `;
+            baseSelect.value = editingTheme.monaco.base || 'vs-dark';
+            baseSelect.style.cssText = 'padding: 4px 8px; background: #1a1a1a; border: 1px solid #333; border-radius: 4px; color: #ccc;';
+            baseSelect.addEventListener('change', () => {
+                editingTheme.monaco.base = baseSelect.value;
+                markDirty();
+            });
+            baseRow.appendChild(baseSelect);
+            content.appendChild(baseRow);
+            
+            // Monaco Editor Colors
+            const monacoColorLabel = document.createElement('div');
+            monacoColorLabel.textContent = 'Editor Colors:';
+            monacoColorLabel.style.cssText = 'font-size: 11px; color: #888; margin: 12px 0 8px; font-weight: bold;';
+            content.appendChild(monacoColorLabel);
+            
+            const MONACO_EDITOR_COLORS = [
+                'editor.background',
+                'editor.foreground',
+                'editorLineNumber.foreground',
+                'editorLineNumber.activeForeground',
+                'editor.selectionBackground',
+                'editor.inactiveSelectionBackground',
+                'editorCursor.foreground',
+                'editor.lineHighlightBackground',
+                'editorBracketHighlight.foreground1',
+                'editorBracketHighlight.foreground2',
+                'editorBracketHighlight.foreground3',
+                'editorBracketHighlight.foreground4',
+                'editorBracketHighlight.foreground5',
+                'editorBracketHighlight.foreground6'
+            ];
+            
+            if (!editingTheme.monaco.colors) editingTheme.monaco.colors = {};
+            
+            for (const colorKey of MONACO_EDITOR_COLORS) {
+                const value = editingTheme.monaco.colors[colorKey] || '';
+                const row = document.createElement('div');
+                row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 4px;';
+                
+                const colorInput = document.createElement('input');
+                colorInput.type = 'color';
+                colorInput.value = parseColorToHex(value || '#000000');
+                colorInput.style.cssText = 'width: 24px; height: 20px; border: 1px solid #444; border-radius: 3px; cursor: pointer; background: none; padding: 0;';
+                
+                const label = document.createElement('span');
+                label.textContent = colorKey;
+                label.style.cssText = 'flex: 1; font-family: monospace; font-size: 10px; color: #aaa;';
+                
+                const textInput = document.createElement('input');
+                textInput.type = 'text';
+                textInput.value = value;
+                textInput.placeholder = 'inherit';
+                textInput.style.cssText = 'width: 80px; padding: 3px 6px; background: #1a1a1a; border: 1px solid #333; border-radius: 3px; color: #ccc; font-family: monospace; font-size: 10px;';
+                
+                colorInput.addEventListener('input', () => {
+                    textInput.value = colorInput.value;
+                    editingTheme.monaco.colors[colorKey] = colorInput.value;
+                    markDirty();
+                });
+                textInput.addEventListener('input', () => {
+                    if (textInput.value) {
+                        try { colorInput.value = parseColorToHex(textInput.value); } catch (e) {}
+                        editingTheme.monaco.colors[colorKey] = textInput.value;
+                    } else {
+                        delete editingTheme.monaco.colors[colorKey];
+                    }
+                    markDirty();
+                });
+                
+                row.appendChild(colorInput);
+                row.appendChild(label);
+                row.appendChild(textInput);
+                content.appendChild(row);
+            }
+            
+            // Syntax Token Rules
+            const tokenLabel = document.createElement('div');
+            tokenLabel.textContent = 'Syntax Highlighting:';
+            tokenLabel.style.cssText = 'font-size: 11px; color: #888; margin: 16px 0 8px; font-weight: bold;';
+            content.appendChild(tokenLabel);
+            
+            const SYNTAX_TOKENS = [
+                { token: 'keyword', desc: 'Keywords (if, for, return)' },
+                { token: 'keyword.directive', desc: 'Directives (#include, @)' },
+                { token: 'type', desc: 'Types (vec3, float)' },
+                { token: 'support.function', desc: 'Built-in functions' },
+                { token: 'support.class', desc: 'Library classes (sl.)' },
+                { token: 'number', desc: 'Numbers' },
+                { token: 'number.float', desc: 'Floats (1.0, .5)' },
+                { token: 'comment', desc: 'Comments' },
+                { token: 'string', desc: 'Strings' },
+                { token: 'operator', desc: 'Operators (+, -, *)' },
+                { token: 'variable', desc: 'Variables' }
+            ];
+            
+            if (!editingTheme.monaco.rules) editingTheme.monaco.rules = [];
+            
+            // Create a map for quick lookup
+            const rulesMap = new Map();
+            for (const rule of editingTheme.monaco.rules) {
+                rulesMap.set(rule.token, rule);
+            }
+            
+            for (const { token, desc } of SYNTAX_TOKENS) {
+                const existingRule = rulesMap.get(token) || { token, foreground: '' };
+                
+                const row = document.createElement('div');
+                row.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 4px;';
+                
+                const colorInput = document.createElement('input');
+                colorInput.type = 'color';
+                colorInput.value = existingRule.foreground ? `#${existingRule.foreground}` : '#888888';
+                colorInput.style.cssText = 'width: 24px; height: 20px; border: 1px solid #444; border-radius: 3px; cursor: pointer; background: none; padding: 0;';
+                
+                const label = document.createElement('span');
+                label.textContent = desc;
+                label.title = token;
+                label.style.cssText = 'flex: 1; font-size: 10px; color: #aaa;';
+                
+                const textInput = document.createElement('input');
+                textInput.type = 'text';
+                textInput.value = existingRule.foreground || '';
+                textInput.placeholder = 'hex (no #)';
+                textInput.style.cssText = 'width: 60px; padding: 3px 6px; background: #1a1a1a; border: 1px solid #333; border-radius: 3px; color: #ccc; font-family: monospace; font-size: 10px;';
+                
+                const boldCheck = document.createElement('input');
+                boldCheck.type = 'checkbox';
+                boldCheck.checked = existingRule.fontStyle === 'bold';
+                boldCheck.title = 'Bold';
+                
+                const updateRule = () => {
+                    // Remove old rule
+                    editingTheme.monaco.rules = editingTheme.monaco.rules.filter(r => r.token !== token);
+                    
+                    // Add updated rule if has color
+                    const fg = textInput.value.replace('#', '');
+                    if (fg) {
+                        const newRule = { token, foreground: fg };
+                        if (boldCheck.checked) newRule.fontStyle = 'bold';
+                        editingTheme.monaco.rules.push(newRule);
+                    }
+                    markDirty();
+                };
+                
+                colorInput.addEventListener('input', () => {
+                    textInput.value = colorInput.value.replace('#', '');
+                    updateRule();
+                });
+                textInput.addEventListener('input', () => {
+                    if (textInput.value) {
+                        try { colorInput.value = `#${textInput.value.replace('#', '')}`; } catch (e) {}
+                    }
+                    updateRule();
+                });
+                boldCheck.addEventListener('change', updateRule);
+                
+                row.appendChild(colorInput);
+                row.appendChild(label);
+                row.appendChild(textInput);
+                row.appendChild(boldCheck);
+                content.appendChild(row);
+            }
+            
+            scrollArea.appendChild(section);
+        }
+        
+        // ===== CUSTOM CSS =====
+        {
+            const { section, content } = createSection('Custom CSS Rules');
+            
+            if (editingTheme.css && Object.keys(editingTheme.css).length > 0) {
+                for (const [selector, styles] of Object.entries(editingTheme.css)) {
+                    content.appendChild(createCSSRuleEditor(selector, styles, (sel, newStyles) => {
+                        if (newStyles === null) {
+                            // Delete rule
+                            delete editingTheme.css[sel];
+                        } else {
+                            editingTheme.css[sel] = newStyles;
+                        }
+                        markDirty();
+                    }));
+                }
+            } else {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.textContent = 'No custom CSS rules. Add rules to customize this theme beyond colors.';
+                emptyMsg.style.cssText = 'color: #666; font-size: 11px; font-style: italic; padding: 8px 0;';
+                content.appendChild(emptyMsg);
+            }
+            
+            // Add CSS Rule button
+            const addCssBtn = document.createElement('button');
+            addCssBtn.textContent = '+ Add CSS Rule';
+            addCssBtn.style.cssText = `
+                margin-top: 8px;
+                padding: 6px 12px;
+                background: transparent;
+                border: 1px dashed #444;
+                border-radius: 4px;
+                color: #888;
+                font-size: 11px;
+                cursor: pointer;
+                width: 100%;
+            `;
+            addCssBtn.addEventListener('click', () => {
+                const selector = prompt('Enter CSS selector (e.g., .sl-btn, .v2-shader-controls-bar button):');
+                if (!selector || selector.trim() === '') return;
+                
+                if (!editingTheme.css) editingTheme.css = {};
+                editingTheme.css[selector.trim()] = {};
+                markDirty();
+                renderEditor();
+            });
+            content.appendChild(addCssBtn);
             
             scrollArea.appendChild(section);
         }
@@ -897,9 +1369,19 @@ export function ThemeEditor(options = {}) {
             selectBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 
-                // Build font stack
-                const fallback = key === 'code' ? 'monospace' : 'sans-serif';
-                const fontStack = `'${fontName}', ${fallback}`;
+                // Preserve fallback chain - replace only the primary font
+                const currentStack = editingTheme.fonts[key] || '';
+                const fallbackParts = currentStack.split(',').slice(1).map(s => s.trim());
+                
+                // If no existing fallbacks, use defaults
+                let fallbacks;
+                if (fallbackParts.length > 0) {
+                    fallbacks = fallbackParts.join(', ');
+                } else {
+                    fallbacks = key === 'code' ? 'monospace' : 'sans-serif';
+                }
+                
+                const fontStack = `'${fontName}', ${fallbacks}`;
                 
                 editingTheme.fonts[key] = fontStack;
                 markDirty();
@@ -928,8 +1410,21 @@ export function ThemeEditor(options = {}) {
                 return;
             }
         }
-        loadTheme(themeSelect.value);
+        const selectedTheme = themeSelect.value;
+        loadTheme(selectedTheme);
+        // Apply the theme immediately so user sees it
+        setTheme(selectedTheme);
     });
+    
+    // Listen for external theme changes (e.g., settings panel)
+    if (typeof window !== 'undefined' && window.SLUI && window.SLUI.on) {
+        window.SLUI.on('theme-change', (data) => {
+            const newTheme = data?.theme;
+            if (newTheme && newTheme !== editingThemeName && !isDirty) {
+                loadTheme(newTheme);
+            }
+        });
+    }
     
     // ========== INITIALIZE ==========
     

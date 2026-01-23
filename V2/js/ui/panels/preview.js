@@ -269,6 +269,27 @@ function createPreviewContent(SLUI) {
                 renderer.play();
             }
         });
+        
+        // Initialize theme ID from current SLUI theme
+        updateThemeId();
+        
+        // Listen for theme changes to update iTheme uniform
+        if (window.SLUI?.on) {
+            window.SLUI.on('theme-change', updateThemeId);
+        }
+    }
+    
+    /**
+     * Update the renderer's theme ID from current SLUI theme
+     */
+    function updateThemeId(eventData) {
+        if (!renderer) return;
+        
+        const themeName = eventData?.theme || window.SLUI?.getTheme?.();
+        const themeData = window.SLUI?.getThemeData?.(themeName);
+        const themeId = themeData?.id ?? 0;
+        
+        renderer.setThemeId(themeId);
     }
     
     return container;
