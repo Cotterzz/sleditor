@@ -221,10 +221,37 @@ export function init(rendererInstance) {
     events.on(EVENTS.COMPILE_SUCCESS, async () => {
         // Get the current shader code from state (dynamic import to avoid circular deps)
         const { state } = await import('../core/state.js');
-        const code = state.shader?.code?.Image || '';
+        const shaderCode = state.shader?.code || {};
         
-        // Parse and detect uniforms
-        detectedUniforms = parseUniforms(code);
+        // Collect all code sources to parse: Common, Image, and all buffers
+        const codeSources = [];
+        
+        // Common is most important - uniforms there are shared across all passes
+        if (shaderCode.Common?.trim()) {
+            codeSources.push(shaderCode.Common);
+        }
+        
+        // Get code from all passes defined in state.project.code
+        for (const codeEl of state.project.code) {
+            const passId = codeEl.id;
+            if (shaderCode[passId]?.trim()) {
+                codeSources.push(shaderCode[passId]);
+            }
+        }
+        
+        // Parse uniforms from all code sources, deduplicating by name
+        const uniformMap = new Map();
+        for (const code of codeSources) {
+            const uniforms = parseUniforms(code);
+            for (const uniform of uniforms) {
+                // First declaration wins (Common takes precedence)
+                if (!uniformMap.has(uniform.name)) {
+                    uniformMap.set(uniform.name, uniform);
+                }
+            }
+        }
+        
+        detectedUniforms = Array.from(uniformMap.values());
         initializeDefaults(detectedUniforms);
         
         // Sync values to renderer

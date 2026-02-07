@@ -17,13 +17,16 @@ import { CONFIG } from '../core/config.js';
 import { registerConsolePanel } from './panels/console.js';
 import { registerSettingsPanel } from './panels/settings.js';
 import { registerPreviewPanel } from './panels/preview.js';
-import { registerEditorPanel } from './panels/editor.js';
+// OLD separate panels - replaced by unified-editor
+// import { registerEditorPanel } from './panels/editor.js';
+// import * as mediaPanel from './panels/media.js';
+// import * as inputsPanel from './panels/inputs.js';
+// NEW unified editor with project sidebar
+import { registerUnifiedEditorPanel } from './panels/unified-editor.js';
 import { registerUniformsPanel } from './panels/uniforms.js';
 import { registerTutorialsPanel } from './panels/tutorials.js';
 import { registerShaderInfoPanel } from './panels/shader-info.js';
 import { registerThemeEditorPanel } from './panels/theme-editor.js';
-import * as mediaPanel from './panels/media.js';
-import * as inputsPanel from './panels/inputs.js';
 // Note: shader-controls is not a SLUI panel - it's a lightweight bar managed by preview.js
 
 let SLUI = null;
@@ -72,8 +75,14 @@ export function registerPanels() {
     registerPreviewPanel(SLUI);
     // Note: Shader controls bar is created by preview.js, not a separate SLUI panel
     
-    // Editor panel (tabbed code editor)
-    registerEditorPanel(SLUI);
+    // NEW: Unified Editor panel (replaces separate editor, media, inputs panels)
+    // Contains project sidebar + tabbed content for code, media, and inputs
+    registerUnifiedEditorPanel(SLUI);
+    
+    // OLD separate panels - replaced by unified-editor
+    // registerEditorPanel(SLUI);
+    // mediaPanel.register(SLUI);
+    // inputsPanel.register(SLUI);
     
     // Uniforms panel (auto-generated uniform controls)
     registerUniformsPanel(SLUI);
@@ -83,12 +92,6 @@ export function registerPanels() {
     
     // Shader Info panel (title, author, description, license, comments)
     registerShaderInfoPanel(SLUI);
-    
-    // Media panel (textures, audio, video, cubemaps, volumes)
-    mediaPanel.register(SLUI);
-    
-    // Inputs panel (mouse, keyboard, webcam, mic, gamepad, midi)
-    inputsPanel.register(SLUI);
     
     // Theme Editor panel (live theme editing and export)
     registerThemeEditorPanel(SLUI);
@@ -161,10 +164,8 @@ export function setupReactiveBindings() {
         // Will update auth UI when we have it
     });
     
-    // Example: compile error → show in console (already automatic via logger)
-    events.on(EVENTS.COMPILE_ERROR, (error) => {
-        logger.error('Compiler', 'Error', error.message || String(error));
-    });
+    // Compile errors are logged with details in webgl.js
+    // This handler can be used for additional UI notifications if needed
     
     logger.debug('UI', 'Bindings', 'Reactive bindings ready');
 }

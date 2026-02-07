@@ -776,6 +776,53 @@ function isDarkTheme() {
 const FONT_SIZES = [10, 12, 13, 14, 16];
 let currentFontSizeIndex = 2; // Default = 13px (middle)
 
+// Editor preference state (persisted to localStorage)
+let editorWordWrap = 'on';  // 'on' or 'off'
+let editorMinimapEnabled = false;
+
+// Unicode/control character highlighting preferences
+let renderControlCharacters = false;  // Default: off
+let unicodeAmbiguous = true;          // Default: on
+let unicodeInvisible = true;          // Default: on
+let unicodeNonBasicASCII = true;      // Default: on
+
+// Load saved editor preferences
+function loadEditorPreferences() {
+    const savedWordWrap = localStorage.getItem('sl-editor-wordwrap');
+    if (savedWordWrap === 'on' || savedWordWrap === 'off') {
+        editorWordWrap = savedWordWrap;
+    }
+    
+    const savedMinimap = localStorage.getItem('sl-editor-minimap');
+    if (savedMinimap !== null) {
+        editorMinimapEnabled = savedMinimap === 'true';
+    }
+    
+    // Unicode/control character settings
+    const savedControlChars = localStorage.getItem('sl-editor-control-chars');
+    if (savedControlChars !== null) {
+        renderControlCharacters = savedControlChars === 'true';
+    }
+    
+    const savedAmbiguous = localStorage.getItem('sl-editor-unicode-ambiguous');
+    if (savedAmbiguous !== null) {
+        unicodeAmbiguous = savedAmbiguous === 'true';
+    }
+    
+    const savedInvisible = localStorage.getItem('sl-editor-unicode-invisible');
+    if (savedInvisible !== null) {
+        unicodeInvisible = savedInvisible === 'true';
+    }
+    
+    const savedNonBasicASCII = localStorage.getItem('sl-editor-unicode-nonbasic');
+    if (savedNonBasicASCII !== null) {
+        unicodeNonBasicASCII = savedNonBasicASCII === 'true';
+    }
+}
+
+// Initialize preferences on module load
+loadEditorPreferences();
+
 /**
  * Get current editor font size
  * @returns {number} Current font size in pixels
@@ -856,7 +903,7 @@ export function createMonacoEditor(container, options = {}) {
         theme: monacoTheme,
         value: '',
         automaticLayout: true,
-        minimap: { enabled: false },
+        minimap: { enabled: editorMinimapEnabled },
         scrollBeyondLastLine: false,
         fontSize: loadFontSizePreference(),
         fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
@@ -865,10 +912,17 @@ export function createMonacoEditor(container, options = {}) {
         renderWhitespace: 'selection',
         tabSize: 4,
         insertSpaces: true,
-        wordWrap: 'on',
+        wordWrap: editorWordWrap,
         folding: true,
         bracketPairColorization: { enabled: true },
-        guides: { indentation: true }
+        guides: { indentation: true },
+        // Unicode/control character highlighting
+        renderControlCharacters: renderControlCharacters,
+        unicodeHighlight: {
+            ambiguousCharacters: unicodeAmbiguous,
+            invisibleCharacters: unicodeInvisible,
+            nonBasicASCII: unicodeNonBasicASCII
+        }
     };
     
     const editor = window.monaco.editor.create(container, {
@@ -876,7 +930,247 @@ export function createMonacoEditor(container, options = {}) {
         ...options
     });
     
+    // Add custom context menu actions
+    addCustomActions(editor);
+    
     return editor;
 }
 
-export default { loadMonaco, createMonacoEditor, setMonacoTheme };
+/**
+ * Add custom context menu actions to an editor instance
+ */
+function addCustomActions(editor) {
+    const monaco = window.monaco;
+    
+    // 1. Toggle Word Wrap (persisted globally)
+    editor.addAction({
+        id: 'sleditor.toggleWordWrap',
+        label: 'Toggle Word Wrap',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.5,
+        run: () => {
+            toggleWordWrap();
+        }
+    });
+    
+    // 2. Select All (useful on mobile)
+    editor.addAction({
+        id: 'sleditor.selectAll',
+        label: 'Select All',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyA],
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.6,
+        run: (ed) => {
+            const model = ed.getModel();
+            if (model) {
+                const fullRange = model.getFullModelRange();
+                ed.setSelection(fullRange);
+            }
+        }
+    });
+    
+    // 3. Toggle Minimap (persisted globally)
+    editor.addAction({
+        id: 'sleditor.toggleMinimap',
+        label: 'Toggle Minimap',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.7,
+        run: () => {
+            toggleMinimap();
+        }
+    });
+    
+    // 4. Toggle Control Characters (tabs, etc.)
+    editor.addAction({
+        id: 'sleditor.toggleControlChars',
+        label: 'Toggle Control Characters',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 2.0,
+        run: () => {
+            toggleControlCharacters();
+        }
+    });
+    
+    // 5. Toggle Ambiguous Unicode
+    editor.addAction({
+        id: 'sleditor.toggleAmbiguousUnicode',
+        label: 'Toggle Ambiguous Unicode Highlight',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 2.1,
+        run: () => {
+            toggleAmbiguousUnicode();
+        }
+    });
+    
+    // 6. Toggle Invisible Unicode
+    editor.addAction({
+        id: 'sleditor.toggleInvisibleUnicode',
+        label: 'Toggle Invisible Unicode Highlight',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 2.2,
+        run: () => {
+            toggleInvisibleUnicode();
+        }
+    });
+    
+    // 7. Toggle Non-Basic ASCII
+    editor.addAction({
+        id: 'sleditor.toggleNonBasicASCII',
+        label: 'Toggle Non-Basic ASCII Highlight',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 2.3,
+        run: () => {
+            toggleNonBasicASCII();
+        }
+    });
+}
+
+/**
+ * Toggle word wrap for all editors (persisted)
+ */
+export function toggleWordWrap() {
+    editorWordWrap = editorWordWrap === 'on' ? 'off' : 'on';
+    localStorage.setItem('sl-editor-wordwrap', editorWordWrap);
+    
+    // Apply to all existing editors
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({ wordWrap: editorWordWrap });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Word wrap: ${editorWordWrap}`);
+    return editorWordWrap;
+}
+
+/**
+ * Toggle minimap for all editors (persisted)
+ */
+export function toggleMinimap() {
+    editorMinimapEnabled = !editorMinimapEnabled;
+    localStorage.setItem('sl-editor-minimap', String(editorMinimapEnabled));
+    
+    // Apply to all existing editors
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({ minimap: { enabled: editorMinimapEnabled } });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Minimap: ${editorMinimapEnabled ? 'on' : 'off'}`);
+    return editorMinimapEnabled;
+}
+
+/**
+ * Toggle control character rendering for all editors (persisted)
+ */
+export function toggleControlCharacters() {
+    renderControlCharacters = !renderControlCharacters;
+    localStorage.setItem('sl-editor-control-chars', String(renderControlCharacters));
+    
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({ renderControlCharacters });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Control characters: ${renderControlCharacters ? 'on' : 'off'}`);
+    return renderControlCharacters;
+}
+
+/**
+ * Toggle ambiguous unicode highlighting for all editors (persisted)
+ */
+export function toggleAmbiguousUnicode() {
+    unicodeAmbiguous = !unicodeAmbiguous;
+    localStorage.setItem('sl-editor-unicode-ambiguous', String(unicodeAmbiguous));
+    
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({
+                unicodeHighlight: {
+                    ambiguousCharacters: unicodeAmbiguous,
+                    invisibleCharacters: unicodeInvisible,
+                    nonBasicASCII: unicodeNonBasicASCII
+                }
+            });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Ambiguous unicode: ${unicodeAmbiguous ? 'on' : 'off'}`);
+    return unicodeAmbiguous;
+}
+
+/**
+ * Toggle invisible unicode highlighting for all editors (persisted)
+ */
+export function toggleInvisibleUnicode() {
+    unicodeInvisible = !unicodeInvisible;
+    localStorage.setItem('sl-editor-unicode-invisible', String(unicodeInvisible));
+    
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({
+                unicodeHighlight: {
+                    ambiguousCharacters: unicodeAmbiguous,
+                    invisibleCharacters: unicodeInvisible,
+                    nonBasicASCII: unicodeNonBasicASCII
+                }
+            });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Invisible unicode: ${unicodeInvisible ? 'on' : 'off'}`);
+    return unicodeInvisible;
+}
+
+/**
+ * Toggle non-basic ASCII highlighting for all editors (persisted)
+ */
+export function toggleNonBasicASCII() {
+    unicodeNonBasicASCII = !unicodeNonBasicASCII;
+    localStorage.setItem('sl-editor-unicode-nonbasic', String(unicodeNonBasicASCII));
+    
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({
+                unicodeHighlight: {
+                    ambiguousCharacters: unicodeAmbiguous,
+                    invisibleCharacters: unicodeInvisible,
+                    nonBasicASCII: unicodeNonBasicASCII
+                }
+            });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Non-basic ASCII: ${unicodeNonBasicASCII ? 'on' : 'off'}`);
+    return unicodeNonBasicASCII;
+}
+
+/**
+ * Get current editor preferences
+ */
+export function getEditorPreferences() {
+    return {
+        wordWrap: editorWordWrap,
+        minimapEnabled: editorMinimapEnabled,
+        fontSize: FONT_SIZES[currentFontSizeIndex],
+        renderControlCharacters,
+        unicodeAmbiguous,
+        unicodeInvisible,
+        unicodeNonBasicASCII
+    };
+}
+
+export default { 
+    loadMonaco, 
+    createMonacoEditor, 
+    setMonacoTheme, 
+    toggleWordWrap, 
+    toggleMinimap,
+    toggleControlCharacters,
+    toggleAmbiguousUnicode,
+    toggleInvisibleUnicode,
+    toggleNonBasicASCII,
+    getEditorPreferences 
+};

@@ -20,6 +20,9 @@ import { state } from '../core/state.js';
 const channels = new Map();
 let nextChannelNumber = 1;
 
+// Track freed channel numbers that can be reused
+const freedChannels = new Set();
+
 // Map passId to channelNumber (e.g., 'BufferA' → 1)
 const passToChannel = new Map();
 
@@ -53,6 +56,24 @@ export function init() {
 // ============================================================================
 
 /**
+ * Get next available channel number
+ * Reuses freed channels first, otherwise increments counter
+ */
+function allocateChannelNumber() {
+    // First check if we have any freed channels to reuse
+    if (freedChannels.size > 0) {
+        // Get the lowest freed channel number
+        const sortedFreed = Array.from(freedChannels).sort((a, b) => a - b);
+        const reused = sortedFreed[0];
+        freedChannels.delete(reused);
+        logger.debug('ChannelManager', 'Alloc', `Reusing freed channel: ch${reused}`);
+        return reused;
+    }
+    // Otherwise allocate a new one
+    return nextChannelNumber++;
+}
+
+/**
  * Create a channel for a buffer pass
  * @param {string} passId - 'BufferA', 'BufferB', etc.
  * @returns {number} Allocated channel number
@@ -63,7 +84,7 @@ export function createBufferChannel(passId) {
         return passToChannel.get(passId);
     }
     
-    const channelNumber = nextChannelNumber++;
+    const channelNumber = allocateChannelNumber();
     
     channels.set(channelNumber, {
         type: 'buffer',
@@ -92,7 +113,7 @@ export function createBufferChannel(passId) {
  * @returns {number} Allocated channel number
  */
 export function createMediaChannel(type, source) {
-    const channelNumber = nextChannelNumber++;
+    const channelNumber = allocateChannelNumber();
     
     channels.set(channelNumber, {
         type: type,
@@ -133,7 +154,10 @@ export function removeChannel(channelNumber) {
     channels.delete(channelNumber);
     delete state.channels[`iChannel${channelNumber}`];
     
-    logger.info('ChannelManager', 'Remove', `Channel removed: ch${channelNumber}`);
+    // Track this channel number as freed so it can be reused
+    freedChannels.add(channelNumber);
+    
+    logger.info('ChannelManager', 'Remove', `Channel removed: ch${channelNumber} (available for reuse)`);
     events.emit(EVENTS.CHANNEL_CLEARED, { index: channelNumber });
     
     return true;
@@ -247,7 +271,9 @@ export function reset() {
         }
     }
     
+    // Reset channel allocation
     nextChannelNumber = 1;
+    freedChannels.clear();
     
     // Reset state
     state.channels = {

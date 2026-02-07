@@ -18,10 +18,10 @@ import { state } from '../core/state.js';
 const DEFAULT_SHADER_CODE = {
     Image: `// Sleditor V2 - Default Shader
 // Shadertoy-compatible format
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
-    vec2 uv = fragCoord / iResolution.xy;
 
-    if (iTheme == 0) {
+void mainImage0(out vec4 fragColor, in vec2 fragCoord) {
+
+        vec2 uv = fragCoord / iResolution.xy;
     vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx + vec3(0, 2, 4));
     vec2 p = fragCoord;
     p*=1.5;
@@ -34,6 +34,22 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
     col = d>0.?vec3(0.2, 0.4, 0.8):col;
     fragColor = vec4(col, d>0.?0.:1.);
+
+}
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord / iResolution.xy;
+
+    if (iTheme == 0) {
+    float s = 8., k;
+    vec2 j = vec2(.5);
+    fragColor = vec4(0);
+    vec4 c;
+    mainImage0(c, fragCoord);
+    for (k = s; k-- > .5; ) {
+        mainImage0(c, fragCoord + j - .5);
+        fragColor += c;
+        j = fract(j + vec2(.755, .57).yx);
+    };fragColor /= s;
     return;
     } else if (iTheme == 1) {
         fragColor = texture(iChannel1,uv);
@@ -494,6 +510,7 @@ wave += sin((uv.x+(iTime*0.5))*247.0)/4.0;
 
 void mainImage(out vec4 o, vec2 u) 
 { 
+    if (iTheme == 1) {
     float s = 4., k; 
     vec2 j = vec2(.5); 
     o = vec4(0); 
@@ -505,7 +522,11 @@ void mainImage(out vec4 o, vec2 u)
         j = fract(j + vec2(.755, .57).yx); 
     };o /= s;
     o=gdist>0.?tanh(o*1.9):tanh(o*1.4);
+    } else {
+        o=vec4(1);
+    }
 }
+
 `,
     BufferB: `// BufferB - Render pass
 // Output: iChannel2
@@ -513,6 +534,7 @@ void mainImage(out vec4 o, vec2 u)
 #define MODE 0  // 0 = outside/around letters, 1 = inside letters only
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    if (iTheme == 4) {
     vec2 uv = fragCoord / iResolution.xy;
     vec3 col = vec3(0.0);
     
@@ -589,6 +611,9 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     col = max(col, prevCol * 0.9);
     
     fragColor = vec4(col, col.g);
+    } else {
+        fragColor=vec4(1);
+    }
 }`,
     BufferC: `
 // --- 2D SDF Letters ---
@@ -856,19 +881,24 @@ void mainImage0(out vec4 fragColor, in vec2 fragCoord){
     fragColor = vec4(col, hitLetters);
 }
 
-void mainImage(out vec4 o, vec2 u) 
-{ 
-    float s = 4., k; 
-    vec2 j = vec2(.5); 
-    o = vec4(0); 
-    vec4 c; 
-    mainImage0(c, u); 
-    for (k = s; k-- > .5; ) { 
-        mainImage0(c, u + j - .5); 
-        o += c; 
-        j = fract(j + vec2(.755, .57).yx); 
+void mainImage(out vec4 o, vec2 u)
+{
+    if (iTheme == 3) {
+    float s = 4., k;
+    vec2 j = vec2(.5);
+    o = vec4(0);
+    vec4 c;
+    mainImage0(c, u);
+    for (k = s; k-- > .5; ) {
+        mainImage0(c, u + j - .5);
+        o += c;
+        j = fract(j + vec2(.755, .57).yx);
     };o /= s;
+    } else {
+        o=vec4(1);
+    }
 }
+
 `,
     BufferD: `// BufferB - Engineer Theme Render Pass
 // Output: iChannel2 (self-buffering for trails)
@@ -949,7 +979,7 @@ float hexGrid(vec2 uv, float scale) {
     return edge;
 }
 
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+void mainImage0(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = fragCoord / iResolution.xy;
     vec2 centered = (fragCoord - 0.5 * iResolution.xy) / iResolution.y;
     float aspect = iResolution.x / iResolution.y;
@@ -1159,6 +1189,25 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     col = clamp(col, 0.0, 1.0);
     
     fragColor = vec4(col, col.r);
+}
+
+
+void mainImage(out vec4 o, vec2 u)
+{
+    if (iTheme == 5) {
+    float s = 4., k;
+    vec2 j = vec2(.5);
+    o = vec4(0);
+    vec4 c;
+    mainImage0(c, u);
+    for (k = s; k-- > .5; ) {
+        mainImage0(c, u + j - .5);
+        o += c;
+        j = fract(j + vec2(.755, .57).yx);
+    };o /= s;
+    } else {
+        o=vec4(1);
+    }
 }`,
     BufferE: `
 
@@ -1282,7 +1331,7 @@ float regMark(vec2 p, float size) {
     return d;
 }
 
-void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+void mainImage0(out vec4 fragColor, in vec2 fragCoord) {
     vec2 uv = fragCoord / iResolution.xy;
     vec2 p = fragCoord;
     p *= 1.5;
@@ -1296,13 +1345,14 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float time = iTime;
     
     // === ENGINEER THEME COLORS ===
-    vec3 bgDark = vec3(0.8);       // Near black
+    vec3 bgDark = vec3(0.6);       // Near black
     vec3 bgMid = vec3(0.6);        // Dark grey
-    vec3 gridCol = vec3(0.18, 0.18, 0.20);      // Subtle grid grey
+    vec3 gridCol = vec3(0.18, 0.18, 0.50);      // Subtle grid grey
     vec3 traceGrey = vec3(0.5);      // Mid grey for traces
-    vec3 brightGrey = vec3(0.8);    // Light grey
-    vec3 orange = vec3(1.0, 0.5, 0.2);          // Cursor orange
-    vec3 orangeDim = vec3(0.8, 0.35, 0.1);      // Dimmer orange
+    vec3 brightGrey = vec3(0.6);    // Light grey
+    
+    vec3 orange = vec3(0.55, 0.3, 0.1).bgr;
+    vec3 orangeDim = orange-0.1;
     vec3 white = vec3(0.2);        // Off-white
     
     // === BACKGROUND ===
@@ -1415,6 +1465,24 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     alpha = max(alpha, 0.5);
     
     fragColor = vec4(col, alpha);
+}
+    
+void mainImage(out vec4 o, vec2 u)
+{
+    if (iTheme == 2) {
+    float s = 4., k;
+    vec2 j = vec2(.5);
+    o = vec4(0);
+    vec4 c;
+    mainImage0(c, u);
+    for (k = s; k-- > .5; ) {
+        mainImage0(c, u + j - .5);
+        o += c;
+        j = fract(j + vec2(.755, .57).yx);
+    };o /= s;
+    } else {
+        o=vec4(1);
+    }
 }`
 };
 
@@ -1439,6 +1507,202 @@ export function init(rendererInstance) {
         logger.debug('ShaderManager', 'Compile', 'COMPILE_REQUEST received');
         clearTimeout(compileTimeout); // Cancel any pending auto-compile
         compileNow();
+    });
+    
+    // Listen for channel cleared events (when elements are deleted)
+    // This ensures the renderer's internal channel state is cleaned up
+    events.on(EVENTS.CHANNEL_CLEARED, ({ index, all }) => {
+        if (!renderer) return;
+        
+        if (all) {
+            // Clear all channels (except main which is always 0)
+            logger.debug('ShaderManager', 'Channel', 'Clearing all channels');
+            // Recompile to reset state
+            compileNow();
+        } else if (index !== undefined && index !== 0) {
+            logger.info('ShaderManager', 'Channel', `Clearing renderer channel ${index}`);
+            renderer.clearChannel(index);
+            // Emit event so UI components (shader-controls dropdown) can refresh
+            // This needs to happen AFTER the renderer clears the channel
+            events.emit(EVENTS.RENDER_CHANNEL_CHANGED, { channel: index, cleared: true });
+        }
+    });
+    
+    // Listen for media selection events (texture from catalog)
+    events.on(EVENTS.MEDIA_SELECTED, async (data) => {
+        if (!renderer) return;
+        
+        const { elementId, texture, type, channel, options = {} } = data;
+        if (type !== 'texture' || channel === undefined) return;
+        
+        // Build the full URL path - catalog paths are relative to V2 root (e.g., "media/textures/foo.jpg")
+        let url = texture.path || texture.thumb;
+        
+        // Use element's texture options or defaults
+        const textureOptions = {
+            filter: 'mipmap',
+            wrap: 'repeat',
+            vflip: true,
+            anisotropic: false,
+            ...options
+        };
+        
+        if (url) {
+            logger.info('ShaderManager', 'Media', `Loading texture to iChannel${channel}: ${texture.name}`);
+            const success = await renderer.loadTexture(channel, url, textureOptions);
+            if (success) {
+                logger.success('ShaderManager', 'Media', `Texture loaded: ${texture.name}`);
+            }
+        }
+    });
+    
+    // Listen for URL import events (custom texture URL)
+    events.on(EVENTS.MEDIA_URL_IMPORT, async (data) => {
+        if (!renderer) return;
+        
+        const { elementId, url, channel, options = {} } = data;
+        if (!url || channel === undefined) return;
+        
+        // Merge with default options
+        const textureOptions = {
+            filter: 'mipmap',
+            wrap: 'repeat',
+            vflip: true,
+            anisotropic: false,
+            ...options
+        };
+        
+        logger.info('ShaderManager', 'Media', `Loading texture from URL to iChannel${channel}`);
+        const success = await renderer.loadTexture(channel, url, textureOptions);
+        if (success) {
+            logger.success('ShaderManager', 'Media', `Texture loaded from URL`);
+        }
+    });
+    
+    // Listen for texture options changes (filter, wrap, vflip, anisotropic)
+    events.on(EVENTS.MEDIA_OPTIONS_CHANGED, async (data) => {
+        if (!renderer) return;
+        
+        const { channel, options } = data;
+        if (channel === undefined || !options) return;
+        
+        logger.info('ShaderManager', 'Media', `Updating texture options for iChannel${channel}`);
+        const success = await renderer.updateTextureOptions(channel, options);
+        if (success) {
+            logger.success('ShaderManager', 'Media', `Texture options updated`);
+        }
+    });
+    
+    // Listen for video selection events (video from catalog)
+    events.on(EVENTS.VIDEO_SELECTED, async (data) => {
+        if (!renderer) return;
+        
+        const { elementId, video, url, channel, options = {} } = data;
+        if (!url || channel === undefined) return;
+        
+        // Video options
+        const videoOptions = {
+            loop: true,
+            vflip: true,
+            ...options
+        };
+        
+        logger.info('ShaderManager', 'Video', `Loading video to iChannel${channel}: ${video?.name || url}`);
+        const success = await renderer.loadVideo(channel, url, videoOptions);
+        if (success) {
+            logger.success('ShaderManager', 'Video', `Video loaded to iChannel${channel}`);
+        }
+    });
+    
+    // Listen for video URL import events
+    events.on(EVENTS.VIDEO_URL_IMPORT, async (data) => {
+        if (!renderer) return;
+        
+        const { elementId, url, channel, options = {} } = data;
+        if (!url || channel === undefined) return;
+        
+        const videoOptions = {
+            loop: true,
+            vflip: true,
+            ...options
+        };
+        
+        logger.info('ShaderManager', 'Video', `Loading video from URL to iChannel${channel}`);
+        const success = await renderer.loadVideo(channel, url, videoOptions);
+        if (success) {
+            logger.success('ShaderManager', 'Video', `Video loaded from URL`);
+        }
+    });
+    
+    // Listen for video loop changes
+    events.on(EVENTS.VIDEO_LOOP_CHANGED, (data) => {
+        if (!renderer) return;
+        
+        const { channel, loop } = data;
+        if (channel === undefined) return;
+        
+        renderer.setVideoLoop(channel, loop);
+    });
+    
+    // Listen for audio selection events
+    events.on(EVENTS.AUDIO_SELECTED, async (data) => {
+        if (!renderer) return;
+        
+        const { elementId, audio, url, channel, options = {} } = data;
+        if (!url || channel === undefined) return;
+        
+        const audioOptions = {
+            mode: 'shadertoy',
+            loop: true,
+            ...options
+        };
+        
+        logger.info('ShaderManager', 'Audio', `Loading audio to iChannel${channel}: ${audio?.name || url}`);
+        const success = await renderer.loadAudio(channel, url, audioOptions);
+        if (success) {
+            logger.success('ShaderManager', 'Audio', `Audio loaded to iChannel${channel}`);
+        }
+    });
+    
+    // Listen for audio URL import events
+    events.on(EVENTS.AUDIO_URL_IMPORT, async (data) => {
+        if (!renderer) return;
+        
+        const { elementId, url, channel, options = {} } = data;
+        if (!url || channel === undefined) return;
+        
+        const audioOptions = {
+            mode: 'shadertoy',
+            loop: true,
+            ...options
+        };
+        
+        logger.info('ShaderManager', 'Audio', `Loading audio from URL to iChannel${channel}`);
+        const success = await renderer.loadAudio(channel, url, audioOptions);
+        if (success) {
+            logger.success('ShaderManager', 'Audio', `Audio loaded from URL`);
+        }
+    });
+    
+    // Listen for audio mode changes
+    events.on(EVENTS.AUDIO_MODE_CHANGED, async (data) => {
+        if (!renderer) return;
+        
+        const { channel, mode } = data;
+        if (channel === undefined || !mode) return;
+        
+        logger.info('ShaderManager', 'Audio', `Changing audio mode to ${mode} for iChannel${channel}`);
+        await renderer.setAudioMode(channel, mode);
+    });
+    
+    // Listen for audio loop changes
+    events.on(EVENTS.AUDIO_LOOP_CHANGED, (data) => {
+        if (!renderer) return;
+        
+        const { channel, loop } = data;
+        if (channel === undefined) return;
+        
+        renderer.setAudioLoop(channel, loop);
     });
     
     logger.info('ShaderManager', 'Init', 'Shader manager initialized');
@@ -1482,9 +1746,11 @@ export function compileNow() {
         codeMap.Common = code.Common;
     }
     
-    // Include buffers that have code
-    const bufferIds = ['BufferA', 'BufferB', 'BufferC', 'BufferD', 'BufferE', 'BufferF'];
-    for (const bufferId of bufferIds) {
+    // Include buffers that exist in project and have code
+    // Get buffer IDs dynamically from state.project.code instead of hardcoded list
+    const bufferElements = state.project.code.filter(c => c.type === 'buffer');
+    for (const bufferEl of bufferElements) {
+        const bufferId = bufferEl.id;
         if (code[bufferId]?.trim()) {
             codeMap[bufferId] = code[bufferId];
         }
@@ -1744,27 +2010,30 @@ export function removeBuffer(bufferId) {
 
 /**
  * Get list of active passes (for UI)
+ * Returns passes from state.project.code with their actual channel assignments
  */
 export function getActivePasses() {
     const code = state.shader.code || {};
     const passes = [];
     
-    // Image is always first
-    passes.push({ id: 'Image', label: 'Image', channel: 0, type: 'main' });
-    
-    // Buffers in order
-    const bufferIds = ['BufferA', 'BufferB', 'BufferC', 'BufferD', 'BufferE', 'BufferF'];
-    let channelNum = 1;
-    for (const bufferId of bufferIds) {
-        if (code[bufferId]?.trim()) {
+    // Get passes from project.code (which has actual channel assignments)
+    for (const codeEl of state.project.code) {
+        // Skip Common - it's not a pass, just shared code
+        if (codeEl.type === 'common') continue;
+        
+        // Only include if there's actual code
+        if (code[codeEl.id]?.trim()) {
             passes.push({
-                id: bufferId,
-                label: bufferId.replace('Buffer', 'Buf '),
-                channel: channelNum++,
-                type: 'buffer'
+                id: codeEl.id,
+                label: codeEl.label,
+                channel: codeEl.channel ?? 0,
+                type: codeEl.type
             });
         }
     }
+    
+    // Sort by channel number (Main=0 first, then buffers in channel order)
+    passes.sort((a, b) => a.channel - b.channel);
     
     return passes;
 }

@@ -124,6 +124,7 @@ export const EVENTS = {
     RENDER_START: 'render:start',
     RENDER_STOP: 'render:stop',
     RENDER_FRAME: 'render:frame',
+    RENDER_FRAME_REQUESTED: 'render:frame:requested',  // Request single frame (even when paused)
     RENDER_RESOLUTION: 'render:resolution',
     RENDER_ERROR: 'render:error',
     RENDER_CHANNEL_CHANGED: 'render:channel:changed',
@@ -147,11 +148,21 @@ export const EVENTS = {
     EDITOR_CODE_CHANGED: 'editor:code-changed',
     EDITOR_CURSOR_CHANGED: 'editor:cursor-changed',
     
-    // Tabs
+    // Tabs (legacy - kept for compatibility)
     TAB_SWITCHED: 'tab:switched',
     TAB_ADDED: 'tab:added',
     TAB_REMOVED: 'tab:removed',
     TAB_RENAMED: 'tab:renamed',
+    
+    // Project elements (unified editor)
+    PROJECT_ELEMENT_CREATED: 'project:element:created',   // { id, category, element }
+    PROJECT_ELEMENT_DELETED: 'project:element:deleted',   // { id, category }
+    PROJECT_ELEMENT_UPDATED: 'project:element:updated',   // { id, category, changes }
+    PROJECT_TAB_OPENED: 'project:tab:opened',             // { elementId }
+    PROJECT_TAB_CLOSED: 'project:tab:closed',             // { elementId }
+    PROJECT_TAB_ACTIVATED: 'project:tab:activated',       // { elementId }
+    PROJECT_SIDEBAR_TOGGLED: 'project:sidebar:toggled',   // { collapsed }
+    PROJECT_RESET: 'project:reset',                       // (no data)
     
     // Channels
     CHANNEL_CREATED: 'channel:created',
@@ -164,6 +175,14 @@ export const EVENTS = {
     MEDIA_TAB_ADDED: 'media:tab:added',
     MEDIA_TAB_REMOVED: 'media:tab:removed',
     MEDIA_URL_IMPORT: 'media:url:import',
+    MEDIA_OPTIONS_CHANGED: 'media:options:changed',
+    VIDEO_SELECTED: 'video:selected',
+    VIDEO_URL_IMPORT: 'video:url:import',
+    VIDEO_LOOP_CHANGED: 'video:loop:changed',
+    AUDIO_SELECTED: 'audio:selected',
+    AUDIO_URL_IMPORT: 'audio:url:import',
+    AUDIO_MODE_CHANGED: 'audio:mode:changed',
+    AUDIO_LOOP_CHANGED: 'audio:loop:changed',
     
     // Inputs
     INPUT_WEBCAM_ENABLED: 'input:webcam:enabled',
