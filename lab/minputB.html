@@ -1,0 +1,1930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Sensor Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2em;
+            background: linear-gradient(135deg, #00d2ff, #7a5cff, #ff6ec7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+
+        .permission-bar {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .permission-bar button {
+            padding: 10px 20px;
+            border: 1px solid #7a5cff;
+            background: rgba(122, 92, 255, 0.1);
+            color: #7a5cff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+
+        .permission-bar button:hover {
+            background: rgba(122, 92, 255, 0.3);
+        }
+
+        .permission-bar button.granted {
+            background: rgba(0, 210, 100, 0.2);
+            border-color: #00d264;
+            color: #00d264;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .sensor-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 24px;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sensor-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent, #7a5cff), transparent);
+        }
+
+        .sensor-card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .sensor-card.unavailable {
+            opacity: 0.4;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title .icon {
+            font-size: 1.5em;
+        }
+
+        .card-title h2 {
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.7em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-active {
+            background: rgba(0, 210, 100, 0.15);
+            color: #00d264;
+        }
+
+        .status-unavailable {
+            background: rgba(255, 60, 60, 0.15);
+            color: #ff3c3c;
+        }
+
+        .status-pending {
+            background: rgba(255, 200, 0, 0.15);
+            color: #ffc800;
+        }
+
+        .sensor-data {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .data-label {
+            color: #888;
+            font-size: 0.85em;
+        }
+
+        .data-value {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #fff;
+            font-size: 0.95em;
+        }
+
+        .bar-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin-top: 6px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+            background: linear-gradient(90deg, var(--bar-color, #7a5cff), var(--bar-color-end, #00d2ff));
+        }
+
+        .visualization {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 15px 0;
+        }
+
+        .cube-container {
+            perspective: 400px;
+            width: 100px;
+            height: 100px;
+        }
+
+        .cube {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.1s ease-out;
+        }
+
+        .cube-face {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            border: 2px solid rgba(122, 92, 255, 0.5);
+            background: rgba(122, 92, 255, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7em;
+            color: #7a5cff;
+            border-radius: 4px;
+        }
+
+        .cube-face.front  { transform: translateZ(50px); }
+        .cube-face.back   { transform: rotateY(180deg) translateZ(50px); }
+        .cube-face.right  { transform: rotateY(90deg) translateZ(50px); }
+        .cube-face.left   { transform: rotateY(-90deg) translateZ(50px); }
+        .cube-face.top    { transform: rotateX(90deg) translateZ(50px); }
+        .cube-face.bottom { transform: rotateX(-90deg) translateZ(50px); }
+
+        .compass {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 110, 199, 0.4);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .compass-needle {
+            width: 4px;
+            height: 50px;
+            background: linear-gradient(to top, #ff3c3c, #ff6ec7);
+            border-radius: 2px;
+            transform-origin: bottom center;
+            position: absolute;
+            top: 10px;
+            transition: transform 0.2s ease-out;
+        }
+
+        .compass-label {
+            position: absolute;
+            font-size: 0.7em;
+            color: #666;
+        }
+
+        .compass-label.n { top: 4px; }
+        .compass-label.s { bottom: 4px; }
+        .compass-label.e { right: 6px; }
+        .compass-label.w { left: 6px; }
+
+        .compass-center {
+            width: 8px;
+            height: 8px;
+            background: #ff6ec7;
+            border-radius: 50%;
+            z-index: 2;
+        }
+
+        .gravity-dot-container {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            border: 2px solid rgba(0, 210, 255, 0.3);
+            position: relative;
+            background: rgba(0, 210, 255, 0.02);
+        }
+
+        .gravity-dot {
+            width: 14px;
+            height: 14px;
+            background: radial-gradient(circle, #00d2ff, #0088cc);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.15s ease-out;
+            box-shadow: 0 0 12px rgba(0, 210, 255, 0.5);
+        }
+
+        .gravity-crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            height: 100%;
+        }
+
+        .gravity-crosshair::before,
+        .gravity-crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(0, 210, 255, 0.1);
+        }
+
+        .gravity-crosshair::before {
+            top: 0; bottom: 0; left: 50%;
+            width: 1px;
+        }
+
+        .gravity-crosshair::after {
+            left: 0; right: 0; top: 50%;
+            height: 1px;
+        }
+
+        .light-indicator {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #ffd700, #ff8c00);
+            transition: all 0.5s;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
+        }
+
+        .proximity-indicator {
+            display: flex;
+            gap: 4px;
+            align-items: flex-end;
+        }
+
+        .proximity-bar {
+            width: 10px;
+            background: rgba(0, 210, 100, 0.3);
+            border-radius: 3px;
+            transition: all 0.3s;
+        }
+
+        .proximity-bar.active {
+            background: #00d264;
+            box-shadow: 0 0 8px rgba(0, 210, 100, 0.4);
+        }
+
+        .gamepad-visual {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stick {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 200, 0, 0.3);
+            position: relative;
+            background: rgba(255, 200, 0, 0.02);
+        }
+
+        .stick-dot {
+            width: 12px;
+            height: 12px;
+            background: #ffc800;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: all 0.05s;
+        }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 4px;
+        }
+
+        .gp-btn {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 200, 0, 0.3);
+            transition: all 0.1s;
+        }
+
+        .gp-btn.pressed {
+            background: #ffc800;
+            box-shadow: 0 0 8px rgba(255, 200, 0, 0.5);
+        }
+
+        .network-bars {
+            display: flex;
+            gap: 3px;
+            align-items: flex-end;
+            height: 40px;
+        }
+
+        .net-bar {
+            width: 8px;
+            background: rgba(122, 92, 255, 0.3);
+            border-radius: 2px;
+            transition: all 0.3s;
+        }
+
+        .net-bar.active {
+            background: #7a5cff;
+        }
+
+        .battery-visual {
+            width: 200px;
+            height: 40px;
+            border: 2px solid rgba(0, 210, 100, 0.4);
+            border-radius: 8px;
+            padding: 4px;
+            position: relative;
+        }
+
+        .battery-visual::after {
+            content: '';
+            position: absolute;
+            right: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 6px;
+            height: 16px;
+            background: rgba(0, 210, 100, 0.4);
+            border-radius: 0 3px 3px 0;
+        }
+
+        .battery-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: all 1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8em;
+            font-weight: 700;
+            color: #000;
+        }
+
+        .memory-ring {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: conic-gradient(
+                #7a5cff var(--used-percent, 0%),
+                rgba(122, 92, 255, 0.1) var(--used-percent, 0%)
+            );
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .memory-ring-inner {
+            width: 74px;
+            height: 74px;
+            border-radius: 50%;
+            background: #0a0a1a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .memory-ring-inner .value {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: #7a5cff;
+        }
+
+        .memory-ring-inner .label {
+            font-size: 0.6em;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.5em;
+            }
+        }
+
+        .log-area {
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75em;
+            color: #666;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+
+        .log-area div {
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+
+        .data-row.sub-row {
+            margin-left: 12px;
+            background: rgba(0,0,0,0.1);
+            border-left: 2px solid rgba(122, 92, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <h1>🛰️ Browser Sensor Dashboard</h1>
+    <p class="subtitle">Real-time sensor data available through Web APIs</p>
+
+    <div class="permission-bar">
+        <button id="btn-motion" onclick="requestMotionPermission()">📱 Request Motion Access</button>
+        <button id="btn-sensors" onclick="requestGenericSensors()">🔬 Request Sensor Access</button>
+        <button id="btn-geo" onclick="requestGeolocation()">📍 Request Location</button>
+    </div>
+
+    <div class="dashboard">
+
+        <!-- Device Orientation -->
+        <div class="sensor-card" id="card-orientation" style="--accent: #ff6ec7;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🧭</span>
+                    <h2>Device Orientation</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-orientation">Waiting</span>
+            </div>
+            <div class="visualization">
+                <div class="cube-container">
+                    <div class="cube" id="orientation-cube">
+                        <div class="cube-face front">Front</div>
+                        <div class="cube-face back">Back</div>
+                        <div class="cube-face right">Right</div>
+                        <div class="cube-face left">Left</div>
+                        <div class="cube-face top">Top</div>
+                        <div class="cube-face bottom">Btm</div>
+                    </div>
+                </div>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Alpha (Z-axis)</span>
+                    <span class="data-value" id="orient-alpha">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Beta (X-axis)</span>
+                    <span class="data-value" id="orient-beta">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Gamma (Y-axis)</span>
+                    <span class="data-value" id="orient-gamma">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Absolute</span>
+                    <span class="data-value" id="orient-absolute">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Compass / Absolute Orientation -->
+        <div class="sensor-card" id="card-compass" style="--accent: #ff6ec7;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🔻</span>
+                    <h2>Compass Heading</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-compass">Waiting</span>
+            </div>
+            <div class="visualization">
+                <div class="compass">
+                    <span class="compass-label n">N</span>
+                    <span class="compass-label s">S</span>
+                    <span class="compass-label e">E</span>
+                    <span class="compass-label w">W</span>
+                    <div class="compass-needle" id="compass-needle"></div>
+                    <div class="compass-center"></div>
+                </div>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Heading</span>
+                    <span class="data-value" id="compass-heading">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Direction</span>
+                    <span class="data-value" id="compass-direction">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Motion / Accelerometer -->
+        <div class="sensor-card" id="card-motion" style="--accent: #00d2ff;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">📐</span>
+                    <h2>Accelerometer</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-motion">Waiting</span>
+            </div>
+            <div class="visualization">
+                <div class="gravity-dot-container">
+                    <div class="gravity-crosshair"></div>
+                    <div class="gravity-dot" id="accel-dot"></div>
+                </div>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">X</span>
+                    <span class="data-value" id="accel-x">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Y</span>
+                    <span class="data-value" id="accel-y">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Z</span>
+                    <span class="data-value" id="accel-z">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Incl. Gravity X</span>
+                    <span class="data-value" id="accel-gx">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Incl. Gravity Y</span>
+                    <span class="data-value" id="accel-gy">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Incl. Gravity Z</span>
+                    <span class="data-value" id="accel-gz">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Interval (ms)</span>
+                    <span class="data-value" id="accel-interval">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gyroscope -->
+        <div class="sensor-card" id="card-gyro" style="--accent: #00d2ff;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🌀</span>
+                    <h2>Gyroscope</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-gyro">Waiting</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Alpha (°/s)</span>
+                    <span class="data-value" id="gyro-alpha">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Beta (°/s)</span>
+                    <span class="data-value" id="gyro-beta">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Gamma (°/s)</span>
+                    <span class="data-value" id="gyro-gamma">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generic Sensor API: Accelerometer -->
+        <div class="sensor-card" id="card-gen-accel" style="--accent: #00aaff;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">⚡</span>
+                    <h2>Accelerometer (Generic)</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-gen-accel">Checking</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">X (m/s²)</span>
+                    <span class="data-value" id="gen-accel-x">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Y (m/s²)</span>
+                    <span class="data-value" id="gen-accel-y">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Z (m/s²)</span>
+                    <span class="data-value" id="gen-accel-z">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Timestamp</span>
+                    <span class="data-value" id="gen-accel-ts">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gravity Sensor -->
+        <div class="sensor-card" id="card-gravity" style="--accent: #00ccaa;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🍎</span>
+                    <h2>Gravity Sensor</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-gravity">Checking</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">X (m/s²)</span>
+                    <span class="data-value" id="gravity-x">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Y (m/s²)</span>
+                    <span class="data-value" id="gravity-y">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Z (m/s²)</span>
+                    <span class="data-value" id="gravity-z">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Linear Acceleration -->
+        <div class="sensor-card" id="card-linear" style="--accent: #00ddff;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">➡️</span>
+                    <h2>Linear Acceleration</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-linear">Checking</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">X (m/s²)</span>
+                    <span class="data-value" id="linear-x">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Y (m/s²)</span>
+                    <span class="data-value" id="linear-y">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Z (m/s²)</span>
+                    <span class="data-value" id="linear-z">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generic Gyroscope -->
+        <div class="sensor-card" id="card-gen-gyro" style="--accent: #aa77ff;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🔄</span>
+                    <h2>Gyroscope (Generic)</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-gen-gyro">Checking</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">X (rad/s)</span>
+                    <span class="data-value" id="gen-gyro-x">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Y (rad/s)</span>
+                    <span class="data-value" id="gen-gyro-y">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Z (rad/s)</span>
+                    <span class="data-value" id="gen-gyro-z">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Absolute Orientation Sensor -->
+        <div class="sensor-card" id="card-abs-orient" style="--accent: #ff77aa;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🌐</span>
+                    <h2>Absolute Orientation</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-abs-orient">Checking</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Quaternion X</span>
+                    <span class="data-value" id="abs-qx">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Quaternion Y</span>
+                    <span class="data-value" id="abs-qy">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Quaternion Z</span>
+                    <span class="data-value" id="abs-qz">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Quaternion W</span>
+                    <span class="data-value" id="abs-qw">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Relative Orientation Sensor -->
+        <div class="sensor-card" id="card-rel-orient" style="--accent: #ff99cc;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">📱</span>
+                    <h2>Relative Orientation</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-rel-orient">Checking</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Quaternion X</span>
+                    <span class="data-value" id="rel-qx">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Quaternion Y</span>
+                    <span class="data-value" id="rel-qy">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Quaternion Z</span>
+                    <span class="data-value" id="rel-qz">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Quaternion W</span>
+                    <span class="data-value" id="rel-qw">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Magnetometer -->
+        <div class="sensor-card" id="card-magnet" style="--accent: #ff4488;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🧲</span>
+                    <h2>Magnetometer</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-magnet">Checking</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">X (µT)</span>
+                    <span class="data-value" id="mag-x">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Y (µT)</span>
+                    <span class="data-value" id="mag-y">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Z (µT)</span>
+                    <span class="data-value" id="mag-z">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ambient Light -->
+        <div class="sensor-card" id="card-light" style="--accent: #ffd700;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">💡</span>
+                    <h2>Ambient Light</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-light">Checking</span>
+            </div>
+            <div class="visualization">
+                <div class="light-indicator" id="light-indicator"></div>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Illuminance (lux)</span>
+                    <span class="data-value" id="light-lux">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Level</span>
+                    <span class="data-value" id="light-level">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Proximity -->
+        <div class="sensor-card" id="card-proximity" style="--accent: #00d264;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">📏</span>
+                    <h2>Proximity</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-proximity">Checking</span>
+            </div>
+            <div class="visualization">
+                <div class="proximity-indicator" id="proximity-visual">
+                    <div class="proximity-bar" style="height:15px"></div>
+                    <div class="proximity-bar" style="height:25px"></div>
+                    <div class="proximity-bar" style="height:35px"></div>
+                    <div class="proximity-bar" style="height:45px"></div>
+                    <div class="proximity-bar" style="height:55px"></div>
+                </div>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Near</span>
+                    <span class="data-value" id="prox-near">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Distance (cm)</span>
+                    <span class="data-value" id="prox-distance">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Max (cm)</span>
+                    <span class="data-value" id="prox-max">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Battery -->
+        <div class="sensor-card" id="card-battery" style="--accent: #00d264;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🔋</span>
+                    <h2>Battery Status</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-battery">Checking</span>
+            </div>
+            <div class="visualization">
+                <div class="battery-visual">
+                    <div class="battery-fill" id="battery-fill" style="width: 0%; background: #00d264;"></div>
+                </div>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Level</span>
+                    <span class="data-value" id="bat-level">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Charging</span>
+                    <span class="data-value" id="bat-charging">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Charge Time</span>
+                    <span class="data-value" id="bat-chargetime">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Discharge Time</span>
+                    <span class="data-value" id="bat-dischargetime">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Network Info -->
+        <div class="sensor-card" id="card-network" style="--accent: #7a5cff;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">📶</span>
+                    <h2>Network Information</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-network">Checking</span>
+            </div>
+            <div class="visualization">
+                <div class="network-bars" id="network-bars">
+                    <div class="net-bar" style="height:10px"></div>
+                    <div class="net-bar" style="height:18px"></div>
+                    <div class="net-bar" style="height:26px"></div>
+                    <div class="net-bar" style="height:34px"></div>
+                    <div class="net-bar" style="height:42px"></div>
+                </div>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Online</span>
+                    <span class="data-value" id="net-online">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Type</span>
+                    <span class="data-value" id="net-type">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Effective Type</span>
+                    <span class="data-value" id="net-effective">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Downlink (Mbps)</span>
+                    <span class="data-value" id="net-downlink">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">RTT (ms)</span>
+                    <span class="data-value" id="net-rtt">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Save Data</span>
+                    <span class="data-value" id="net-savedata">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Geolocation -->
+        <div class="sensor-card" id="card-geo" style="--accent: #ff8800;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">📍</span>
+                    <h2>Geolocation</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-geo">Waiting</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Latitude</span>
+                    <span class="data-value" id="geo-lat">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Longitude</span>
+                    <span class="data-value" id="geo-lng">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Accuracy (m)</span>
+                    <span class="data-value" id="geo-accuracy">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Altitude (m)</span>
+                    <span class="data-value" id="geo-alt">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Alt. Accuracy (m)</span>
+                    <span class="data-value" id="geo-altacc">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Speed (m/s)</span>
+                    <span class="data-value" id="geo-speed">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Heading (°)</span>
+                    <span class="data-value" id="geo-heading">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Device Memory & Hardware -->
+        <div class="sensor-card" id="card-hardware" style="--accent: #7a5cff;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🖥️</span>
+                    <h2>Hardware Info</h2>
+                </div>
+                <span class="status-badge status-active" id="status-hardware">Active</span>
+            </div>
+            <div class="visualization">
+                <div class="memory-ring" id="memory-ring">
+                    <div class="memory-ring-inner">
+                        <span class="value" id="memory-ring-value">—</span>
+                        <span class="label">GB RAM</span>
+                    </div>
+                </div>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Device Memory</span>
+                    <span class="data-value" id="hw-memory">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Logical Cores</span>
+                    <span class="data-value" id="hw-cores">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Max Touch Points</span>
+                    <span class="data-value" id="hw-touch">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Screen Resolution</span>
+                    <span class="data-value" id="hw-screen">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Pixel Ratio</span>
+                    <span class="data-value" id="hw-dpr">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Color Depth</span>
+                    <span class="data-value" id="hw-color">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Color Gamut</span>
+                    <span class="data-value" id="hw-gamut">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">HDR Support</span>
+                    <span class="data-value" id="hw-hdr">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Platform</span>
+                    <span class="data-value" id="hw-platform">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance / Timing -->
+        <div class="sensor-card" id="card-perf" style="--accent: #ff6ec7;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">⏱️</span>
+                    <h2>Performance Memory</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-perf">Checking</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">JS Heap Used</span>
+                    <span class="data-value" id="perf-heap-used">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">JS Heap Total</span>
+                    <span class="data-value" id="perf-heap-total">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">JS Heap Limit</span>
+                    <span class="data-value" id="perf-heap-limit">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Storage Estimate -->
+        <div class="sensor-card" id="card-storage" style="--accent: #aa88ff;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">💾</span>
+                    <h2>Storage Estimate</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-storage">Checking</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Quota</span>
+                    <span class="data-value" id="storage-quota">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Usage</span>
+                    <span class="data-value" id="storage-usage">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Usage %</span>
+                    <span class="data-value" id="storage-percent">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Gamepad -->
+        <div class="sensor-card" id="card-gamepad" style="--accent: #ffc800;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🎮</span>
+                    <h2>Gamepad</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-gamepad">Waiting</span>
+            </div>
+            <div class="visualization">
+                <div class="gamepad-visual" id="gamepad-visual">
+                    <div>
+                        <div class="stick">
+                            <div class="stick-dot" id="gp-stick-l"></div>
+                        </div>
+                        <div style="text-align:center;font-size:0.65em;color:#666;margin-top:4px">L</div>
+                    </div>
+                    <div class="button-grid" id="gp-buttons"></div>
+                    <div>
+                        <div class="stick">
+                            <div class="stick-dot" id="gp-stick-r"></div>
+                        </div>
+                        <div style="text-align:center;font-size:0.65em;color:#666;margin-top:4px">R</div>
+                    </div>
+                </div>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Connected</span>
+                    <span class="data-value" id="gp-connected">None</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">ID</span>
+                    <span class="data-value" id="gp-id" style="font-size:0.7em">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Axes</span>
+                    <span class="data-value" id="gp-axes">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Buttons</span>
+                    <span class="data-value" id="gp-btn-count">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Media Capabilities / Display -->
+        <div class="sensor-card" id="card-display" style="--accent: #44ddff;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🖥️</span>
+                    <h2>Display & Media</h2>
+                </div>
+                <span class="status-badge status-active">Active</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Orientation</span>
+                    <span class="data-value" id="disp-orientation">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Orientation Angle</span>
+                    <span class="data-value" id="disp-angle">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Prefers Color Scheme</span>
+                    <span class="data-value" id="disp-scheme">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Prefers Reduced Motion</span>
+                    <span class="data-value" id="disp-motion">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Prefers Contrast</span>
+                    <span class="data-value" id="disp-contrast">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Forced Colors</span>
+                    <span class="data-value" id="disp-forced">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Inverted Colors</span>
+                    <span class="data-value" id="disp-inverted">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Display Mode</span>
+                    <span class="data-value" id="disp-mode">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Misc Browser Signals -->
+        <div class="sensor-card" id="card-misc" style="--accent: #88aaff;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🔍</span>
+                    <h2>Misc Browser Signals</h2>
+                </div>
+                <span class="status-badge status-active">Active</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">Language</span>
+                    <span class="data-value" id="misc-lang">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Languages</span>
+                    <span class="data-value" id="misc-langs" style="font-size:0.75em">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Timezone</span>
+                    <span class="data-value" id="misc-tz">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Do Not Track</span>
+                    <span class="data-value" id="misc-dnt">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Cookies Enabled</span>
+                    <span class="data-value" id="misc-cookies">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">PDF Viewer</span>
+                    <span class="data-value" id="misc-pdf">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">WebDriver</span>
+                    <span class="data-value" id="misc-webdriver">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Page Visibility</span>
+                    <span class="data-value" id="misc-visibility">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Focus</span>
+                    <span class="data-value" id="misc-focus">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bluetooth (if available) -->
+        <div class="sensor-card" id="card-bluetooth" style="--accent: #0082fc;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">📡</span>
+                    <h2>Bluetooth Availability</h2>
+                </div>
+                <span class="status-badge status-pending" id="status-bluetooth">Checking</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">API Available</span>
+                    <span class="data-value" id="bt-api">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Adapter Present</span>
+                    <span class="data-value" id="bt-available">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- USB -->
+        <div class="sensor-card" id="card-usb" style="--accent: #ff8844;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">🔌</span>
+                    <h2>USB / HID / Serial</h2>
+                </div>
+                <span class="status-badge status-active">Info</span>
+            </div>
+            <div class="sensor-data">
+                <div class="data-row">
+                    <span class="data-label">WebUSB API</span>
+                    <span class="data-value" id="usb-api">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">WebHID API</span>
+                    <span class="data-value" id="hid-api">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Web Serial API</span>
+                    <span class="data-value" id="serial-api">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Web NFC API</span>
+                    <span class="data-value" id="nfc-api">—</span>
+                </div>
+                <div class="data-row">
+                    <span class="data-label">Web MIDI API</span>
+                    <span class="data-value" id="midi-api">—</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sensor Event Log -->
+        <div class="sensor-card" id="card-log" style="--accent: #666; grid-column: 1 / -1;">
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="icon">📋</span>
+                    <h2>Event Log</h2>
+                </div>
+                <button onclick="document.getElementById('log-area').innerHTML=''" 
+                    style="background:none;border:1px solid #444;color:#888;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:0.8em">
+                    Clear
+                </button>
+            </div>
+            <div class="log-area" id="log-area"></div>
+        </div>
+
+    </div>
+
+    <script>
+        // ─── Utility ──────────────────────────────────
+        const $ = id => document.getElementById(id);
+        const fmt = (v, d = 2) => v != null ? Number(v).toFixed(d) : '—';
+        const fmtBytes = b => {
+            if (b == null) return '—';
+            if (b > 1e9) return (b / 1e9).toFixed(2) + ' GB';
+            if (b > 1e6) return (b / 1e6).toFixed(2) + ' MB';
+            if (b > 1e3) return (b / 1e3).toFixed(2) + ' KB';
+            return b + ' B';
+        };
+
+        function log(msg) {
+            const area = $('log-area');
+            const d = document.createElement('div');
+            const ts = new Date().toLocaleTimeString();
+            d.textContent = `[${ts}] ${msg}`;
+            area.prepend(d);
+            if (area.children.length > 200) area.lastChild.remove();
+        }
+
+        function setStatus(id, status) {
+            const el = $(`status-${id}`);
+            if (!el) return;
+            el.className = 'status-badge';
+            if (status === 'active') { el.classList.add('status-active'); el.textContent = 'Active'; }
+            else if (status === 'unavailable') { el.classList.add('status-unavailable'); el.textContent = 'N/A'; }
+            else if (status === 'error') { el.classList.add('status-unavailable'); el.textContent = 'Error'; }
+            else { el.classList.add('status-pending'); el.textContent = status || 'Waiting'; }
+        }
+
+        // ─── Device Orientation ───────────────────────
+        function initDeviceOrientation() {
+            window.addEventListener('deviceorientation', e => {
+                setStatus('orientation', 'active');
+                setStatus('compass', 'active');
+
+                $('orient-alpha').textContent = fmt(e.alpha) + '°';
+                $('orient-beta').textContent = fmt(e.beta) + '°';
+                $('orient-gamma').textContent = fmt(e.gamma) + '°';
+                $('orient-absolute').textContent = e.absolute ? 'Yes' : 'No';
+
+                // 3D cube
+                const cube = $('orientation-cube');
+                if (cube) {
+                    cube.style.transform = `rotateX(${e.beta || 0}deg) rotateY(${e.gamma || 0}deg) rotateZ(${e.alpha || 0}deg)`;
+                }
+
+                // Compass
+                const heading = e.alpha != null ? (360 - e.alpha) % 360 : null;
+                if (heading != null) {
+                    $('compass-heading').textContent = fmt(heading) + '°';
+                    $('compass-needle').style.transform = `rotate(${heading}deg)`;
+                    const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+                    $('compass-direction').textContent = dirs[Math.round(heading / 45) % 8];
+                }
+            });
+        }
+
+        // ─── Device Motion ────────────────────────────
+        function initDeviceMotion() {
+            window.addEventListener('devicemotion', e => {
+                setStatus('motion', 'active');
+                setStatus('gyro', 'active');
+
+                const a = e.acceleration || {};
+                const ag = e.accelerationIncludingGravity || {};
+                const r = e.rotationRate || {};
+
+                $('accel-x').textContent = fmt(a.x) + ' m/s²';
+                $('accel-y').textContent = fmt(a.y) + ' m/s²';
+                $('accel-z').textContent = fmt(a.z) + ' m/s²';
+                $('accel-gx').textContent = fmt(ag.x) + ' m/s²';
+                $('accel-gy').textContent = fmt(ag.y) + ' m/s²';
+                $('accel-gz').textContent = fmt(ag.z) + ' m/s²';
+                $('accel-interval').textContent = fmt(e.interval, 1);
+
+                // Gravity dot
+                const dot = $('accel-dot');
+                if (dot && ag.x != null) {
+                    const maxG = 10;
+                    const px = Math.max(-1, Math.min(1, (ag.x || 0) / maxG));
+                    const py = Math.max(-1, Math.min(1, (ag.y || 0) / maxG));
+                    dot.style.left = (50 + px * 45) + '%';
+                    dot.style.top = (50 + py * 45) + '%';
+                }
+
+                $('gyro-alpha').textContent = fmt(r.alpha) + '°/s';
+                $('gyro-beta').textContent = fmt(r.beta) + '°/s';
+                $('gyro-gamma').textContent = fmt(r.gamma) + '°/s';
+            });
+        }
+
+        // ─── iOS Permission ──────────────────────────
+        async function requestMotionPermission() {
+            try {
+                if (typeof DeviceOrientationEvent !== 'undefined' &&
+                    typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    const perm = await DeviceOrientationEvent.requestPermission();
+                    log('Orientation permission: ' + perm);
+                    if (perm === 'granted') $('btn-motion').classList.add('granted');
+                }
+                if (typeof DeviceMotionEvent !== 'undefined' &&
+                    typeof DeviceMotionEvent.requestPermission === 'function') {
+                    const perm = await DeviceMotionEvent.requestPermission();
+                    log('Motion permission: ' + perm);
+                }
+                initDeviceOrientation();
+                initDeviceMotion();
+                $('btn-motion').textContent = '✅ Motion Granted';
+                $('btn-motion').classList.add('granted');
+            } catch (err) {
+                log('Motion permission error: ' + err.message);
+                // Still try on non-iOS
+                initDeviceOrientation();
+                initDeviceMotion();
+            }
+        }
+
+        // Auto-init on non-iOS
+        if (typeof DeviceOrientationEvent !== 'undefined' &&
+            typeof DeviceOrientationEvent.requestPermission !== 'function') {
+            initDeviceOrientation();
+            initDeviceMotion();
+        }
+
+        // ─── Generic Sensor API ──────────────────────
+        function tryGenericSensor(SensorClass, name, statusId, callback) {
+            if (!SensorClass) {
+                setStatus(statusId, 'unavailable');
+                log(`${name}: API not available`);
+                return null;
+            }
+            try {
+                const sensor = new SensorClass({ frequency: 30 });
+                sensor.addEventListener('reading', () => callback(sensor));
+                sensor.addEventListener('activate', () => {
+                    setStatus(statusId, 'active');
+                    log(`${name}: activated`);
+                });
+                sensor.addEventListener('error', e => {
+                    setStatus(statusId, 'error');
+                    log(`${name} error: ${e.error.message}`);
+                });
+                sensor.start();
+                return sensor;
+            } catch (e) {
+                setStatus(statusId, 'unavailable');
+                log(`${name}: ${e.message}`);
+                return null;
+            }
+        }
+
+        function requestGenericSensors() {
+            log('Attempting to start generic sensors...');
+
+            // Accelerometer
+            tryGenericSensor(window.Accelerometer, 'Accelerometer(G)', 'gen-accel', s => {
+                $('gen-accel-x').textContent = fmt(s.x);
+                $('gen-accel-y').textContent = fmt(s.y);
+                $('gen-accel-z').textContent = fmt(s.z);
+                $('gen-accel-ts').textContent = fmt(s.timestamp, 0);
+            });
+
+            // GravitySensor
+            tryGenericSensor(window.GravitySensor, 'GravitySensor', 'gravity', s => {
+                $('gravity-x').textContent = fmt(s.x);
+                $('gravity-y').textContent = fmt(s.y);
+                $('gravity-z').textContent = fmt(s.z);
+            });
+
+            // LinearAccelerationSensor
+            tryGenericSensor(window.LinearAccelerationSensor, 'LinearAcceleration', 'linear', s => {
+                $('linear-x').textContent = fmt(s.x);
+                $('linear-y').textContent = fmt(s.y);
+                $('linear-z').textContent = fmt(s.z);
+            });
+
+            // Gyroscope
+            tryGenericSensor(window.Gyroscope, 'Gyroscope(G)', 'gen-gyro', s => {
+                $('gen-gyro-x').textContent = fmt(s.x, 4);
+                $('gen-gyro-y').textContent = fmt(s.y, 4);
+                $('gen-gyro-z').textContent = fmt(s.z, 4);
+            });
+
+            // AbsoluteOrientationSensor
+            tryGenericSensor(window.AbsoluteOrientationSensor, 'AbsoluteOrientation', 'abs-orient', s => {
+                const q = s.quaternion;
+                if (q) {
+                    $('abs-qx').textContent = fmt(q[0], 4);
+                    $('abs-qy').textContent = fmt(q[1], 4);
+                    $('abs-qz').textContent = fmt(q[2], 4);
+                    $('abs-qw').textContent = fmt(q[3], 4);
+                }
+            });
+
+            // RelativeOrientationSensor
+            tryGenericSensor(window.RelativeOrientationSensor, 'RelativeOrientation', 'rel-orient', s => {
+                const q = s.quaternion;
+                if (q) {
+                    $('rel-qx').textContent = fmt(q[0], 4);
+                    $('rel-qy').textContent = fmt(q[1], 4);
+                    $('rel-qz').textContent = fmt(q[2], 4);
+                    $('rel-qw').textContent = fmt(q[3], 4);
+                }
+            });
+
+            // Magnetometer
+            tryGenericSensor(window.Magnetometer, 'Magnetometer', 'magnet', s => {
+                $('mag-x').textContent = fmt(s.x);
+                $('mag-y').textContent = fmt(s.y);
+                $('mag-z').textContent = fmt(s.z);
+            });
+
+            // AmbientLightSensor
+            tryGenericSensor(window.AmbientLightSensor, 'AmbientLight', 'light', s => {
+                const lux = s.illuminance;
+                $('light-lux').textContent = fmt(lux, 0) + ' lux';
+                const level = lux < 50 ? 'Dark' : lux < 200 ? 'Dim' : lux < 1000 ? 'Normal' : 'Bright';
+                $('light-level').textContent = level;
+                const ind = $('light-indicator');
+                const brightness = Math.min(1, lux / 2000);
+                ind.style.opacity = 0.2 + brightness * 0.8;
+                ind.style.boxShadow = `0 0 ${brightness * 60}px rgba(255,215,0,${brightness * 0.6})`;
+            });
+
+            $('btn-sensors').textContent = '✅ Sensors Requested';
+            $('btn-sensors').classList.add('granted');
+        }
+
+        // ─── Proximity (legacy event) ─────────────────
+        if ('ondeviceproximity' in window || 'onuserproximity' in window) {
+            window.addEventListener('deviceproximity', e => {
+                setStatus('proximity', 'active');
+                $('prox-near').textContent = '—';
+                $('prox-distance').textContent = fmt(e.value, 1);
+                $('prox-max').textContent = fmt(e.max, 1);
+            });
+            window.addEventListener('userproximity', e => {
+                $('prox-near').textContent = e.near ? 'Yes' : 'No';
+            });
+        } else {
+            // Try ProximitySensor (unlikely but worth trying)
+            if (window.ProximitySensor) {
+                tryGenericSensor(window.ProximitySensor, 'Proximity', 'proximity', s => {
+                    $('prox-distance').textContent = fmt(s.distance, 1);
+                    $('prox-near').textContent = s.near ? 'Yes' : 'No';
+                    $('prox-max').textContent = fmt(s.max, 1);
+                });
+            } else {
+                setStatus('proximity', 'unavailable');
+            }
+        }
+
+        // ─── Battery ──────────────────────────────────
+        async function initBattery() {
+            if (!navigator.getBattery) {
+                setStatus('battery', 'unavailable');
+                log('Battery API not available');
+                return;
+            }
+            try {
+                const bat = await navigator.getBattery();
+                setStatus('battery', 'active');
+
+                function updateBattery() {
+                    const pct = Math.round(bat.level * 100);
+                    $('bat-level').textContent = pct + '%';
+                    $('bat-charging').textContent = bat.charging ? '⚡ Yes' : 'No';
+                    $('bat-chargetime').textContent = bat.chargingTime === Infinity ? '∞' : (bat.chargingTime || '—') + 's';
+                    $('bat-dischargetime').textContent = bat.dischargingTime === Infinity ? '∞' : (bat.dischargingTime || '—') + 's';
+
+                    const fill = $('battery-fill');
+                    fill.style.width = pct + '%';
+                    fill.textContent = pct + '%';
+                    if (pct > 50) fill.style.background = '#00d264';
+                    else if (pct > 20) fill.style.background = '#ffc800';
+                    else fill.style.background = '#ff3c3c';
+                }
+
+                updateBattery();
+                bat.addEventListener('levelchange', updateBattery);
+                bat.addEventListener('chargingchange', updateBattery);
+                bat.addEventListener('chargingtimechange', updateBattery);
+                bat.addEventListener('dischargingtimechange', updateBattery);
+                log('Battery connected');
+            } catch (e) {
+                setStatus('battery', 'error');
+                log('Battery error: ' + e.message);
+            }
+        }
+        initBattery();
+
+        // ─── Network ──────────────────────────────────
+        function updateNetwork() {
+            $('net-online').textContent = navigator.onLine ? '✅ Yes' : '❌ No';
+
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (conn) {
+                setStatus('network', 'active');
+                $('net-type').textContent = conn.type || '—';
+                $('net-effective').textContent = conn.effectiveType || '—';
+                $('net-downlink').textContent = conn.downlink != null ? conn.downlink : '—';
+                $('net-rtt').textContent = conn.rtt != null ? conn.rtt : '—';
+                $('net-savedata').textContent = conn.saveData ? 'Yes' : 'No';
+
+                // Visual bars
+                const speeds = { 'slow-2g': 1, '2g': 2, '3g': 3, '4g': 4 };
+                const level = speeds[conn.effectiveType] || 0;
+                const bars = document.querySelectorAll('#network-bars .net-bar');
+                bars.forEach((b, i) => b.classList.toggle('active', i < level));
+            } else {
+                setStatus('network', 'unavailable');
+            }
+        }
+        updateNetwork();
+        window.addEventListener('online', () => { updateNetwork(); log('Went online'); });
+        window.addEventListener('offline', () => { updateNetwork(); log('Went offline'); });
+        if (navigator.connection) {
+            navigator.connection.addEventListener('change', () => { updateNetwork(); log('Network changed'); });
+        }
+
+        // ─── Geolocation ─────────────────────────────
+        let geoWatchId = null;
+        function requestGeolocation() {
+            if (!navigator.geolocation) {
+                setStatus('geo', 'unavailable');
+                log('Geolocation not available');
+                return;
+            }
+
+            setStatus('geo', 'Requesting...');
+            geoWatchId = navigator.geolocation.watchPosition(
+                pos => {
+                    setStatus('geo', 'active');
+                    const c = pos.coords;
+                    $('geo-lat').textContent = fmt(c.latitude, 6) + '°';
+                    $('geo-lng').textContent = fmt(c.longitude, 6) + '°';
+                    $('geo-accuracy').textContent = fmt(c.accuracy, 1);
+                    $('geo-alt').textContent = c.altitude != null ? fmt(c.altitude, 1) : '—';
+                    $('geo-altacc').textContent = c.altitudeAccuracy != null ? fmt(c.altitudeAccuracy, 1) : '—';
+                    $('geo-speed').textContent = c.speed != null ? fmt(c.speed, 2) : '—';
+                    $('geo-heading').textContent = c.heading != null ? fmt(c.heading, 1) + '°' : '—';
+                },
+                err => {
+                    setStatus('geo', 'error');
+                    log('Geo error: ' + err.message);
+                },
+                { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+            );
+
+            $('btn-geo').textContent = '✅ Location Watching';
+            $('btn-geo').classList.add('granted');
+            log('Geolocation watching started');
+        }
+
+        // ─── Hardware Info ────────────────────────────
+        function initHardware() {
+            const mem = navigator.deviceMemory;
+            $('hw-memory').textContent = mem ? mem + ' GB' : 'N/A';
+            $('memory-ring-value').textContent = mem || '?';
+
+            $('hw-cores').textContent = navigator.hardwareConcurrency || 'N/A';
+            $('hw-touch').textContent = navigator.maxTouchPoints || '0';
+            $('hw-screen').textContent = `${screen.width}×${screen.height}`;
+            $('hw-dpr').textContent = window.devicePixelRatio || '1';
+            $('hw-color').textContent = screen.colorDepth + '-bit';
+            $('hw-platform').textContent = navigator.userAgentData?.platform || navigator.platform || '—';
+
+            // Color gamut
+            if (matchMedia('(color-gamut: p3)').matches) $('hw-gamut').textContent = 'P3';
+            else if (matchMedia('(color-gamut: srgb)').matches) $('hw-gamut').textContent = 'sRGB';
+            else $('hw-gamut').textContent = '—';
+
+            // HDR
+            if (matchMedia('(dynamic-range: high)').matches) $('hw-hdr').textContent = 'Yes';
+            else $('hw-hdr').textContent = 'No';
+
+            // Memory ring
+            if (mem) {
+                const pct = Math.min(100, (mem / 16) * 100);
+                $('memory-ring').style.setProperty('--used-percent', pct + '%');
+            }
+        }
+        initHardware();
+
+        // ─── Performance Memory ───────────────────────
+        function updatePerf() {
+            const mem = performance?.memory;
+            if (mem) {
+                setStatus('perf', 'active');
+                $('perf-heap-used').textContent = fmtBytes(mem.usedJSHeapSize);
+                $('perf-heap-total').textContent = fmtBytes(mem.totalJSHeapSize);
+                $('perf-heap-limit').textContent = fmtBytes(mem.jsHeapSizeLimit);
+            } else {
+                setStatus('perf', 'unavailable');
+            }
+        }
+        updatePerf();
+        setInterval(updatePerf, 2000);
+
+        // ─── Storage ──────────────────────────────────
+        async function initStorage() {
+            if (!navigator.storage?.estimate) {
+                setStatus('storage', 'unavailable');
+                return;
+            }
+            try {
+                const est = await navigator.storage.estimate();
+                setStatus('storage', 'active');
+                $('storage-quota').textContent = fmtBytes(est.quota);
+                $('storage-usage').textContent = fmtBytes(est.usage);
+                $('storage-percent').textContent = ((est.usage / est.quota) * 100).toFixed(3) + '%';
+            } catch (e) {
+                setStatus('storage', 'error');
+            }
+        }
+        initStorage();
+
+        // ─── Display / Media Queries ──────────────────
+        function updateDisplay() {
+            const so = screen.orientation;
+            $('disp-orientation').textContent = so?.type || '—';
+            $('disp-angle').textContent = so?.angle != null ? so.angle + '°' : '—';
+
+            $('disp-scheme').textContent = matchMedia('(prefers-color-scheme: dark)').matches ? 'Dark' :
+                                            matchMedia('(prefers-color-scheme: light)').matches ? 'Light' : '—';
+            $('disp-motion').textContent = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'Yes' : 'No';
+            $('disp-contrast').textContent = matchMedia('(prefers-contrast: more)').matches ? 'More' :
+                                              matchMedia('(prefers-contrast: less)').matches ? 'Less' : 'No Pref';
+            $('disp-forced').textContent = matchMedia('(forced-colors: active)').matches ? 'Yes' : 'No';
+            $('disp-inverted').textContent = matchMedia('(inverted-colors: inverted)').matches ? 'Yes' : 'No';
+
+            const modes = ['fullscreen', 'standalone', 'minimal-ui', 'browser'];
+            const mode = modes.find(m => matchMedia(`(display-mode: ${m})`).matches);
+            $('disp-mode').textContent = mode || '—';
+        }
+        updateDisplay();
+        if (screen.orientation) screen.orientation.addEventListener('change', updateDisplay);
+        matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateDisplay);
+
+        // ─── Misc Signals ─────────────────────────────
+        function updateMisc() {
+            $('misc-lang').textContent = navigator.language || '—';
+            $('misc-langs').textContent = (navigator.languages || []).join(', ') || '—';
+            $('misc-tz').textContent = Intl.DateTimeFormat().resolvedOptions().timeZone || '—';
+            $('misc-dnt').textContent = navigator.doNotTrack === '1' ? 'Yes' : navigator.doNotTrack === '0' ? 'No' : 'Unset';
+            $('misc-cookies').textContent = navigator.cookieEnabled ? 'Yes' : 'No';
+            $('misc-pdf').textContent = navigator.pdfViewerEnabled != null ? (navigator.pdfViewerEnabled ? 'Yes' : 'No') : '—';
+            $('misc-webdriver').textContent = navigator.webdriver ? 'Yes' : 'No';
+            $('misc-visibility').textContent = document.visibilityState || '—';
+            $('misc-focus').textContent = document.hasFocus() ? 'Yes' : 'No';
+        }
+        updateMisc();
+        document.addEventListener('visibilitychange', updateMisc);
+        window.addEventListener('focus', updateMisc);
+        window.addEventListener('blur', updateMisc);
+
+        // ─── Gamepad ──────────────────────────────────
+        let gamepadInterval = null;
+
+        function initGamepadButtons(count) {
+            const grid = $('gp-buttons');
+            grid.innerHTML = '';
+            for (let i = 0; i < Math.min(count, 16); i++) {
+                const btn = document.createElement('div');
+                btn.className = 'gp-btn';
+                btn.id = `gp-b-${i}`;
+                grid.appendChild(btn);
+            }
+        }
+
+        function pollGamepads() {
+            const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+            let found = false;
+
+            for (const gp of gamepads) {
+                if (!gp) continue;
+                found = true;
+                setStatus('gamepad', 'active');
+                $('gp-connected').textContent = 'Yes';
+                $('gp-id').textContent = gp.id || '—';
+                $('gp-axes').textContent = gp.axes.map(a => fmt(a, 2)).join(', ');
+                $('gp-btn-count').textContent = gp.buttons.length;
+
+                // Sticks
+                if (gp.axes.length >= 2) {
+                    const sl = $('gp-stick-l');
+                    sl.style.left = (50 + gp.axes[0] * 40) + '%';
+                    sl.style.top = (50 + gp.axes[1] * 40) + '%';
+                }
+                if (gp.axes.length >= 4) {
+                    const sr = $('gp-stick-r');
+                    sr.style.left = (50 + gp.axes[2] * 40) + '%';
+                    sr.style.top = (50 + gp.axes[3] * 40) + '%';
+                }
+
+                // Buttons
+                if ($('gp-buttons').children.length !== gp.buttons.length) {
+                    initGamepadButtons(gp.buttons.length);
+                }
+                gp.buttons.forEach((b, i) => {
+                    const el = $(`gp-b-${i}`);
+                    if (el) el.classList.toggle('pressed', b.pressed);
+                });
+
+                break; // Just show the first one
+            }
+
+            if (!found) {
+                $('gp-connected').textContent = 'None';
+            }
+        }
+
+        window.addEventListener('gamepadconnected', e => {
+            log('Gamepad connected: ' + e.gamepad.id);
+            if (!gamepadInterval) gamepadInterval = setInterval(pollGamepads, 50);
+        });
+        window.addEventListener('gamepaddisconnected', e => {
+            log('Gamepad disconnected: ' + e.gamepad.id);
+            setStatus('gamepad', 'Waiting');
+        });
+        // Poll in case already connected
+        if (navigator.getGamepads) {
+            const existing = Array.from(navigator.getGamepads()).filter(Boolean);
+            if (existing.length) gamepadInterval = setInterval(pollGamepads, 50);
+        }
+
+        // ─── Bluetooth ───────────────────────────────
+        async function initBluetooth() {
+            $('bt-api').textContent = navigator.bluetooth ? 'Yes' : 'No';
+            if (navigator.bluetooth?.getAvailability) {
+                try {
+                    const avail = await navigator.bluetooth.getAvailability();
+                    $('bt-available').textContent = avail ? 'Yes' : 'No';
+                    setStatus('bluetooth', avail ? 'active' : 'unavailable');
+                } catch (e) {
+                    $('bt-available').textContent = 'Error';
+                    setStatus('bluetooth', 'error');
+                }
+            } else {
+                $('bt-available').textContent = 'N/A';
+                setStatus('bluetooth', navigator.bluetooth ? 'active' : 'unavailable');
+            }
+        }
+        initBluetooth();
+
+        // ─── USB / HID / Serial / NFC / MIDI ─────────
+        $('usb-api').textContent = navigator.usb ? '✅ Yes' : '❌ No';
+        $('hid-api').textContent = navigator.hid ? '✅ Yes' : '❌ No';
+        $('serial-api').textContent = navigator.serial ? '✅ Yes' : '❌ No';
+        $('nfc-api').textContent = ('NDEFReader' in window) ? '✅ Yes' : '❌ No';
+        $('midi-api').textContent = navigator.requestMIDIAccess ? '✅ Yes' : '❌ No';
+
+        // ─── Ambient Light (legacy event) ────────────
+        if ('ondevicelight' in window) {
+            window.addEventListener('devicelight', e => {
+                setStatus('light', 'active');
+                $('light-lux').textContent = fmt(e.value, 0) + ' lux';
+                log('Legacy ambient light: ' + e.value);
+            });
+        }
+
+        // ─── Startup log ─────────────────────────────
+        log('Dashboard initialized');
+        log('User Agent: ' + navigator.userAgent.substring(0, 80) + '...');
+        log(`Screen: ${screen.width}×${screen.height} @${devicePixelRatio}x, ${screen.colorDepth}-bit`);
+        if (navigator.deviceMemory) log('Device memory: ' + navigator.deviceMemory + ' GB');
+        log('Cores: ' + (navigator.hardwareConcurrency || 'unknown'));
+    </script>
+</body>
+</html>

@@ -1,0 +1,1234 @@
+
+
+
+
+🧑
+Human
+
+Problem - I have four bitmap fonts on my shadertoy -like site.
+Without thinking I included helvetica and quicksand, but they arent monospace, so if you use those textures the characters poorly aligned on the x axis.
+the challenge is how to provide the extra data to render text in those fonts.
+the font textures have four empty spaces, which might be enough for extra data.
+so two challenges - how to modify the utility that creates those textures, and secondly how to use that data in a shader.
+What are your thoughts?
+🤖
+assistant
+
+Proportional Font Metrics in a Bitmap Font Texture
+The Core Problem
+With monospace fonts you can find which character a fragment belongs to with simple division: charIndex = floor(x / cellWidth). With proportional fonts, each character has a different advance width, so you need that width data available in the shader.
+
+What Data to Store
+At minimum: advance width per character, normalized to cell width (0.0–1.0).
+
+Optionally using extra channels:
+
+R → advance width (fraction of cell width)
+G → left bearing / x-offset of glyph within cell
+B → actual glyph width within cell
+Advance width alone gets you 90% of the way there.
+
+Encoding Layout
+95 printable ASCII characters (32–126) means 95 pixels of data. With 4 empty cells of even modest size (say 8×12 each = 384 pixels), you have plenty of room.
+
+Store linearly: pixel index i corresponds to ASCII i + 32. Read left-to-right, top-to-bottom across your data cells.
+
+Texture Generator Side
+Assuming you're rendering glyphs with Canvas 2D:
+
+javascript
+function encodeWidthData(ctx, textureCanvas, fontSpec, cellW, cellH, dataCells) {
+  // dataCells: [{x, y}, ...] — top-left corners of the 4 empty cells in pixel coords
+
+  const measureCtx = document.createElement('canvas').getContext('2d');
+  measureCtx.font = fontSpec;
+
+  // Flatten the data cell pixels into a linear sequence of positions
+  const dataPixels = [];
+  for (const cell of dataCells) {
+    for (let row = 0; row < cellH; row++) {
+      for (let col = 0; col < cellW; col++) {
+        dataPixels.push({ x: cell.x + col, y: cell.y + row });
+      }
+    }
+  }
+
+  // Write one pixel per printable ASCII character
+  const imgData = ctx.getImageData(0, 0, textureCanvas.width, textureCanvas.height);
+  const d = imgData.data;
+
+  for (let ascii = 32; ascii <= 126; ascii++) {
+    const char = String.fromCharCode(ascii);
+    const metrics = measureCtx.measureText(char);
+
+    const advance = metrics.width / cellW;                        // fraction of cell
+    const leftBearing = (metrics.actualBoundingBoxLeft ?? 0) / cellW;
+    const glyphWidth = ((metrics.actualBoundingBoxLeft ?? 0) 
+                      + (metrics.actualBoundingBoxRight ?? metrics.width)) / cellW;
+
+    const idx = ascii - 32;
+    const px = dataPixels[idx].x;
+    const py = dataPixels[idx].y;
+    const offset = (py * textureCanvas.width + px) * 4;
+
+    d[offset + 0] = Math.round(Math.min(advance, 1.0) * 255);    // R = advance
+    d[offset + 1] = Math.round(Math.min(leftBearing, 1.0) * 255);// G = left bearing
+    d[offset + 2] = Math.round(Math.min(glyphWidth, 1.0) * 255); // B = glyph width
+    d[offset + 3] = 255;
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+Also worth noting: left-align your glyph rendering within each cell rather than centering. This simplifies the shader UV math significantly.
+
+Shader Side
+Reading the width data
+glsl
+// These would be uniforms or constants matching your texture layout
+// dataCellOrigin: UV of the first data cell's top-left corner
+// dataCellSize: UV size of one cell
+// dataCols: how many data cells in a row (or total pixel columns in data region)
+
+float getAdvanceWidth(int ascii) {
+    int idx = ascii - 32;
+    // Convert linear index to pixel position within the data region
+    int px = idx mod int(cellPixelWidth);  // column within first data cell row
+    int py = idx / int(cellPixelWidth);    // row
+    // If your data cells aren't contiguous, you need the mapping
+    // but if they are, this works directly:
+    vec2 uv = (dataRegionTopLeft + vec2(float(px), float(py)) + 0.5) / textureSize;
+    return texture(fontTex, uv).r;  // normalized advance width
+}
+Text layout with proportional spacing
+The big change: you can't just divide to find which character you're in. You iterate and accumulate:
+
+glsl
+vec4 renderPropText(vec2 uv, vec2 origin, float scale, int len) {
+    float xCursor = 0.0;
+    float fragX = (uv.x - origin.x) / scale;
+    float fragY = (uv.y - origin.y) / scale;
+
+    // Early Y rejection (same as monospace)
+    if (fragY < 0.0 || fragY >= 1.0) return vec4(0.0);
+
+    for (int i = 0; i < MAX_STR_LEN; i++) {
+        if (i >= len) break;
+
+        int charCode = getCharAt(i);  // however you supply string data
+        float advW = getAdvanceWidth(charCode);  // 0.0–1.0 of cell width
+
+        float localX = fragX - xCursor;
+
+        if (localX >= 0.0 && localX < advW) {
+            // This fragment is within this character's bounds
+            // Map to UV within the character's cell in the font atlas
+            // localX is 0..advW, map directly to cell UV (glyph is left-aligned)
+            vec2 cellBase = getCellUV(charCode);  // base UV of this char's cell
+            vec2 cellSize = vec2(1.0, 1.0) / gridSize;  // UV size of one cell
+            vec2 sampleUV = cellBase + vec2(localX, fragY) * cellSize;
+
+            return texture(fontTex, sampleUV);
+        }
+
+        xCursor += advW;
+    }
+    return vec4(0.0);
+}
+Key insight: localX ranges from 0 to advW (not 0 to 1), and since the glyph is left-aligned in the cell, you can use localX directly as the U coordinate within the cell. The character 'i' in Helvetica might have advW = 0.3, so you only sample the left 30% of that cell — which is exactly where the glyph sits.
+
+Trade-offs
+Iteration cost — proportional text is O(n) per fragment per string. For short strings (labels, HUD) this is fine. For a full text editor, you'd want a different approach.
+
+8-bit precision — encoding width in one byte gives you 1/255 cell-width resolution. Probably fine for display text, but if you need more, you could spread across two channels (R for high bits, G for low bits) giving 16-bit precision.
+
+Alternative: if you only have a few short strings, you could precompute character x-positions on the CPU side and pass them via a uniform array, avoiding the texture lookup and iteration entirely. But the texture approach scales better and is more self-contained.
+
+🧑
+Human
+
+Ok, this is the utility I currently use, it looks like its already doing some measuring and centering based on width.
+also, not sure its clear from this, but the unused spaces come out as chars 32, 127, 160 and 173 (zero indexed)
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>fontpage</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        padding: 16px;
+        background: #888;
+        color: #fff;
+      }
+      #controls {
+        margin-bottom: 12px;
+      }
+      #canvasHost canvas {
+        max-width: 100%;
+        border: 1px solid rgba(255,255,255,0.3);
+      }
+      label {
+        margin-right: 8px;
+      }
+      select {
+        padding: 4px 8px;
+      }
+      @font-face {
+        font-family: 'UbuntuMonoRegular';
+        src: url('umr.ttf') format('truetype');
+      }
+      @font-face {
+        font-family: 'JetBrainsMonoRegular';
+        src: url('JetBrainsMono-Regular.ttf') format('truetype');
+      }
+      @font-face {
+        font-family: 'QuicksandRegular';
+        src: url('Quicksand-Regular.ttf') format('truetype');
+      }
+    </style>
+  </head>
+  <body>
+    <div id="controls">
+      <label for="fontSelector">Font</label>
+      <select id="fontSelector"></select>
+    </div>
+    <div id="canvasHost"></div>
+
+    <script type="text/javascript">
+      const FONT_OPTIONS = [
+        { label: 'Ubuntu Mono', value: '"UbuntuMonoRegular"' },
+        { label: 'JetBrains Mono', value: '"JetBrainsMonoRegular"' },
+        { label: 'Quicksand', value: '"QuicksandRegular"' }
+      ];
+
+      function loadCustomFonts() {
+        if (!document.fonts || !document.fonts.load) {
+          return Promise.resolve();
+        }
+        const loadPromises = FONT_OPTIONS.map(opt => document.fonts.load(`32px ${opt.value}`));
+        loadPromises.push(document.fonts.ready);
+        return Promise.allSettled(loadPromises);
+      }
+
+      symbols = ["⏮⏪⏴⏺⏹⏵⏸⏩⏭♩♪♫♬♭♮♯",
+        "←↑→↓↔↕↖↗↘↙↺↻★☻  ",
+        "αβγδεθλμξπρστφψω",
+        "ΓΔΘΛΠΣΦΨΩ∞ƒ∘∫∂∇√"];
+        // "αβγδεθλμξπρστφψω"
+        // "ΓΔΘΛΠΣΦΨΩ"
+        // "∇√∞∘∫"
+        // "⏮⏪⏴⏺⏹⏸⏵⏩⏭"
+        // "📷📹📽🕨🕪🖮"
+        // "☀☁☂☃⇦⇧⇨⇩"
+        // "♡♥"
+
+
+      // 2048, div 4.0, 3 downsamples, gradPrecision 8
+      sourceSize = 64 | 0;
+      divisions = 1.0;
+      downSamples = 0;
+      gradPrecision = 1 | 0;
+
+      cellSize = 64 | 0;
+      targetSize = 1024 | 0;
+
+      tileCount = (targetSize / cellSize) | 0;
+      var myImageData;
+      var newImg;
+      var finalImage;
+      function createTextCanvas(color, font) {
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+        finalImage = ctx.createImageData(targetSize, targetSize);
+        var fontFamily = font || '"UbuntuMonoRegular"';
+        var fontStrA = 'bold ' + ((sourceSize * 0.9218) + 'px ') + fontFamily;
+        var fontStrB = 'bold ' + ((sourceSize * 0.78125) + 'px ') + fontFamily;
+        var fontStrC = '' + ((sourceSize - 14) + 'px ') + (font || 'Symbola');
+        var fontStrD = '' + ((sourceSize - 14) + 'px ') + (font || 'Apple Symbols');
+        canvas.width = sourceSize;
+        canvas.height = sourceSize;
+        canvas.style.backgroundColor = 'rgba(100, 40, 60, 1.0)';
+        ctx.fillRect(0, 0, sourceSize, sourceSize);
+        for (var y = 0; y < tileCount; y++) {
+          for (var x = 0; x < tileCount; x++) {
+            ctx.fillRect((x+1)*sourceSize-1,0,1,canvas.width);
+            ctx.fillRect(0, (y+1)*sourceSize-1, canvas.width, 1);
+          }
+        }
+        ctx.fillStyle = color || 'white';
+        for (var y = 0; y < tileCount; y++) {
+          for (var x = 0; x < tileCount; x++) {
+            console.log("x: " + x + " y: " + y);
+            ctx.font = fontStrB;
+            var text = String.fromCharCode(x + y * tileCount)
+            if (y <= 1) text = symbols[y][x];
+            if ((y==8) || (y==9)) text = symbols[y-6][x];
+            if ((y==1) && (x==13)) ctx.font = fontStrD;
+            if ((y==1) && (x==14)) text = "🕨";
+            if ((y==1) && (x==15)) text = "🕪";
+            var xoff = sourceSize * 0.2656 //17;
+            var posx = xoff;
+            var posy = sourceSize / 2 + sourceSize / 3.75;
+            if ((y==1) && (x<10)) {
+              ctx.font = fontStrA;
+              posy += sourceSize * 0.0625;
+              if (x == 4) posy -= sourceSize * 0.09375;
+            }
+            if ((y==1) && (x==13)) {
+              posy += sourceSize * 0.046875;
+            }
+            if ((y==0) && (x<9)) {
+              ctx.font = fontStrC;
+              // posy -= sourceSize * 0.046875;
+            }
+            mw = ctx.measureText(text).width;
+            if (y <= 1) posx = (sourceSize-mw) / 2;  // Center symbols
+            if ((y==1) && (x==13)) posx += sourceSize * 0.046875;
+            //ctx.fillStyle = color || 'black';
+            ctx.fillStyle="#000000";
+            ctx.fillRect(0, 0, sourceSize, sourceSize);
+            ctx.fillStyle = color || 'white';
+            ctx.fillText(text, posx, posy);
+
+            // ----------------------------------------------------------
+            newImg = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            bufferF2 = new Float32Array(newImg.width * newImg.height);
+            widthF2 = newImg.width;
+            heightF2 = newImg.height;
+            for (var sy = 0; sy < heightF2; sy++) {
+              for (var sx = 0; sx < widthF2; sx++) {
+                var f2 = GetPixelR(newImg, sx, sy);
+                bufferF2[sx + sy * widthF2] = f2;
+              }
+            }
+            for (var i = 0; i < downSamples; i++) {
+              DownSampleF2();
+              newImg = DownSample(newImg, ctx);
+            }
+
+            bufferF = new Float32Array(newImg.width * newImg.height);
+            widthF = newImg.width;
+            heightF = newImg.height;
+
+            var pointsOnLinePairs = VectorizeF2(newImg);
+            var pointsOnLines = [];
+            for (var i = 0; i < pointsOnLinePairs.length; i++) {
+              for (var sub = 0; sub < divisions; sub++) {
+                var posA = [pointsOnLinePairs[i][0], pointsOnLinePairs[i][1]];
+                var posB = [pointsOnLinePairs[i][2], pointsOnLinePairs[i][3]];
+                var current = Lerp2(posA, posB, sub*1.0 / divisions);
+                pointsOnLines.push(current);
+              }
+            }
+            FillDistancePrecise(newImg, pointsOnLines);
+
+            // Calc gradients from floating point distances
+            for (var gy = 0; gy < newImg.height; gy++) {
+              for (var gx = 0; gx < newImg.width; gx++) {
+                var grad = CalcGradF(gx, gy);
+                // var localCellSize = ((newImg.width >> downCount) / 4) | 0;
+                var gradScale = newImg.width * (253.0/256.0);  // Don't go so far that we clamp. Important thing is good directionality.
+                var gradX = (grad[0] * gradScale) | 0;
+                var gradY = (grad[1] * gradScale) | 0;
+                // gradX /= 2;
+                // gradY /= 2;
+                gradX += 128;
+                gradY += 128;
+                // gradY = (gradY - 130) * 32;
+                gradX = Math.min(255, Math.max(0, gradX));
+                gradY = Math.min(255, Math.max(0, gradY));
+                SetPixelG(newImg, gx, gy, gradX);
+                SetPixelB(newImg, gx, gy, gradY);
+              }
+            }
+            CopyInToA(newImg);
+
+            while (newImg.width != cellSize) {
+              newImg = DownSample(newImg, ctx);
+            }
+            CopyToFinal(finalImage, newImg, x, y);
+          }
+        }
+
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        // ctx.putImageData(newImg, 0, 0);
+        ctx.putImageData(finalImage, 0, 0);
+
+        // ctx.strokeStyle = '#ffffff';
+        // for (let pixel of pointsOnLinePairs) {
+        //   var tx = 3;
+        //   var ty = 0;
+        //   var x0 = ((pixel[0] - cellSize*tx) * (16 >> downCount)) | 0;
+        //   var y0 = ((pixel[1] - cellSize*ty) * (16 >> downCount)) | 0;
+        //   var x1 = ((pixel[2] - cellSize*tx) * (16 >> downCount)) | 0;
+        //   var y1 = ((pixel[3] - cellSize*ty) * (16 >> downCount)) | 0;
+        //   ctx.beginPath();
+        //   ctx.moveTo(x0,y0);
+        //   ctx.lineTo(x1,y1);
+        //   ctx.stroke();
+        // }
+
+        return canvas;
+      }
+
+      function CopyToFinal(target, source, tx, ty) {
+        for (var y = 0; y < source.height; y++) {
+          for (var x = 0; x < source.width; x++) {
+            var r = GetPixelR(source, x, y);
+            SetPixelR(target, x + tx * cellSize, y + ty * cellSize, r);
+            var g = GetPixelG(source, x, y);
+            SetPixelG(target, x + tx * cellSize, y + ty * cellSize, g);
+            var b = GetPixelB(source, x, y);
+            SetPixelB(target, x + tx * cellSize, y + ty * cellSize, b);
+            var a = GetPixelA(source, x, y);
+            SetPixelA(target, x + tx * cellSize, y + ty * cellSize, a);
+          }
+        }
+      }
+
+      function FillDistancePrecise(imageData, borderLines) {
+        // Clear image to max value.
+        for (var i = 0; i < widthF * heightF; i++) {
+          bufferF[i] = imageData.height * 1.5 * imageData.height * 1.5;
+        }
+        // For every border pixel, draw a cone of distance from it. Only draw if smaller than existing
+        // pixels so we get minimum distance everywhere.
+        var total = 0;
+        for (let pixel of borderLines) {
+          if ((total % 512) == 0) console.log("percent finished: " + (total*100.0 / borderLines.length));
+          total++;
+          var posx = pixel[0] * 1.0;
+          var posy = pixel[1] * 1.0;
+          // var pix00 = GetPixelR(imageData, posx | 0, posy | 0);
+          // SetPixelG(imageData, posx | 0, posy | 0, 255);
+          for (var dy = 0; dy < imageData.height; dy++) {
+            var pixy = dy;
+            var rindex = pixy*(imageData.width*4);
+            for (var dx = 0; dx < imageData.width; dx++) {
+              var pixx = dx;
+              rindex += 4;
+              var distSquared = ((posx-pixx) * (posx-pixx) + (posy-pixy)*(posy-pixy));
+              var findex = pixy*widthF + pixx;
+              var current = bufferF[findex];
+              // var current = GetPixelF(pixx, pixy);
+              if (distSquared < current) {
+                bufferF[findex] = distSquared;
+                // SetPixelF(pixx, pixy, distSquared);
+              }
+            }
+          }
+        }
+        var scaler = cellSize*1.0 / imageData.width;//(Math.pow(2, downCount))
+        // Negate inside of letter for signed distance function.
+        for (var y = 0; y < imageData.height; y++) {
+          for (var x = 0; x < imageData.width; x++) {
+            // var currentSign = GetPixelR(imageData, x, y) >= 128 ? -1 : 1;
+            var currentSign = GetPixelF2Unsafe(x, y) >= 128 ? -1 : 1;
+            var current = GetPixelF(x, y);
+            current = Math.sqrt(current);
+            current *= scaler;
+            if (currentSign == -1) {
+              SetPixelF(x, y, -current);
+            } else {
+              SetPixelF(x, y, current);
+            }
+          }
+        }
+      }
+
+      function DownSample(imageData, ctx) {
+        var w2 = (imageData.width / 2) | 0;
+        var h2 = (imageData.height / 2) | 0;
+        // var buf2 = new Uint8ClampedArray(w2 * h2);
+        var buf2 = ctx.createImageData(w2, h2);
+        for (var y = 0; y < h2; y++) {
+          for (var x = 0; x < w2; x++) {
+            var f0 = GetPixelR(imageData, x * 2, y * 2);
+            f0 += GetPixelR(imageData, x * 2 + 1, y * 2);
+            f0 += GetPixelR(imageData, x * 2, y * 2 + 1);
+            f0 += GetPixelR(imageData, x * 2 + 1, y * 2 + 1);
+            f0 *= 0.25;
+            // buf2[y*w2 + x] = f0 | 0;
+            SetPixelR(buf2, x, y, f0 | 0);
+
+            f0 = GetPixelG(imageData, x * 2, y * 2);
+            f0 += GetPixelG(imageData, x * 2 + 1, y * 2);
+            f0 += GetPixelG(imageData, x * 2, y * 2 + 1);
+            f0 += GetPixelG(imageData, x * 2 + 1, y * 2 + 1);
+            f0 *= 0.25;
+            // buf2[y*w2 + x] = f0 | 0;
+            SetPixelG(buf2, x, y, f0 | 0);
+
+            f0 = GetPixelB(imageData, x * 2, y * 2);
+            f0 += GetPixelB(imageData, x * 2 + 1, y * 2);
+            f0 += GetPixelB(imageData, x * 2, y * 2 + 1);
+            f0 += GetPixelB(imageData, x * 2 + 1, y * 2 + 1);
+            f0 *= 0.25;
+            // buf2[y*w2 + x] = f0 | 0;
+            SetPixelB(buf2, x, y, f0 | 0);
+
+            f0 = GetPixelA(imageData, x * 2, y * 2);
+            f0 += GetPixelA(imageData, x * 2 + 1, y * 2);
+            f0 += GetPixelA(imageData, x * 2, y * 2 + 1);
+            f0 += GetPixelA(imageData, x * 2 + 1, y * 2 + 1);
+            f0 *= 0.25;
+            // buf2[y*w2 + x] = f0 | 0;
+            SetPixelA(buf2, x, y, f0 | 0);
+          }
+        }
+        // downCount -= 1;
+        // cellSize = (cellSize / 2) | 0;
+        // sourceSize = (sourceSize / 2) | 0;
+        return buf2;
+      }
+      function DownSampleF() {
+        var w2 = (widthF / 2) | 0;
+        var h2 = (heightF / 2) | 0;
+        var buf2 = new Float32Array(w2 * h2);
+        for (var y = 0; y < h2; y++) {
+          for (var x = 0; x < w2; x++) {
+            var f0 = GetPixelF(x * 2, y * 2);
+            f0 += GetPixelF(x * 2 + 1, y * 2);
+            f0 += GetPixelF(x * 2, y * 2 + 1);
+            f0 += GetPixelF(x * 2 + 1, y * 2 + 1);
+            f0 *= 0.25;
+            buf2[y*w2 + x] = f0;
+          }
+        }
+        bufferF = buf2;
+        widthF = w2;
+        heightF = h2;
+      }
+      function DownSampleF2() {
+        var w2 = (widthF2 / 2) | 0;
+        var h2 = (heightF2 / 2) | 0;
+        var buf2 = new Float32Array(w2 * h2);
+        for (var y = 0; y < h2; y++) {
+          for (var x = 0; x < w2; x++) {
+            var f0 = GetPixelF2Unsafe(x * 2, y * 2);
+            f0 += GetPixelF2Unsafe(x * 2 + 1, y * 2);
+            f0 += GetPixelF2Unsafe(x * 2, y * 2 + 1);
+            f0 += GetPixelF2Unsafe(x * 2 + 1, y * 2 + 1);
+            f0 *= 0.25;
+            buf2[y*w2 + x] = f0;
+          }
+        }
+        bufferF2 = buf2;
+        widthF2 = w2;
+        heightF2 = h2;
+      }
+      function CopyInToA(imageData) {
+        for (var y = 0; y < heightF; y++) {
+          for (var x = 0; x < widthF; x++) {
+            var pix = GetPixelF(x, y);
+            pix = Math.sqrt(Math.abs(pix)) * Math.sign(pix);
+            pix *= 16.0;
+            pix = pix | 0;
+            pix += 128;
+            pix = Math.min(255, Math.max(0, pix));
+            pix = Math.min(255, Math.max(0, pix));
+            SetPixelA(imageData, x, y, pix);
+            // SetPixelB(imageData, x, y, pix);
+            // SetPixelR(imageData, x, y, pix);
+            // SetPixelA(imageData, x, y, 255);
+          }
+        }
+      }
+      function CopyInToG(imageData) {
+        for (var y = 0; y < heightF; y++) {
+          for (var x = 0; x < widthF; x++) {
+            var pix = GetPixelF(x, y);
+            pix *= 4.0;
+            pix = pix | 0;
+            pix += 128;
+            pix = Math.min(255, Math.max(0, pix));
+            SetPixelG(imageData, x, y, pix);
+          }
+        }
+      }
+
+      function CalcGradF(x, y) {
+        var pix00 = GetPixelFClamp(x, y, widthF);
+        var pixP0 = GetPixelFClamp(x + gradPrecision, y, widthF);
+        var pixN0 = GetPixelFClamp(x - gradPrecision, y, widthF);
+        var pix0P = GetPixelFClamp(x, y + gradPrecision, widthF);
+        var pix0N = GetPixelFClamp(x, y - gradPrecision, widthF);
+        var gradX = 0;
+        var gradY = 0;
+        gradX = pixN0 - pixP0;
+        gradY = pix0N - pix0P;
+        return [-gradX*1.0/gradPrecision, -gradY*1.0/gradPrecision];
+      }
+      function CalcMomentF(imageData, x, y) {
+        var scale = 2;
+        var xmoment = 0.0;
+        var ymoment = 0.0;
+        for (var dy = -scale; dy <= scale; dy++) {
+          for (var dx = -scale; dx <= scale; dx++) {
+            var pix00 = GetPixelRTile(imageData, x, y, x + dx, y + dy)
+            pix00 -= 128;
+            xmoment += pix00 * dx;
+            ymoment += pix00 * dy;
+          }
+        }
+        var dim = scale*2+1;
+        var gradX = xmoment / (256.0*scale*scale);
+        var gradY = ymoment / (256.0*scale*scale);
+        return [gradX, gradY];
+      }
+      function Blur(x, y) {
+        var scale = 1;
+        var total = 0.0;
+        for (var dy = -scale; dy <= scale; dy++) {
+          for (var dx = -scale; dx <= scale; dx++) {
+            var pix00 = GetPixelFTile(x, y, x + dx, y + dy)
+            total += pix00;
+          }
+        }
+        var dim = scale*2+1;
+        total /= dim * dim;
+        return total;
+      }
+      function InRange(imageData, x, y) {
+        if (x < 0) return false;
+        if (y < 0) return false;
+        if (x >= imageData.width) return false;
+        if (y >= imageData.height) return false;
+        return true;
+      }
+      function GetPixelBilinear(imageData, x, y) {
+        if (!InRange(imageData, x, y)) return 0;
+
+        var floorX = x | 0;
+        var floorY = y | 0;
+        var remainderX = x - floorX;
+        var remainderY = y - floorY;
+        var pix00 = GetPixelR(imageData, floorX, floorY);
+        var pix10 = GetPixelR(imageData, floorX + 1, floorY);
+        var pix01 = GetPixelR(imageData, floorX, floorY + 1);
+        var pix11 = GetPixelR(imageData, floorX + 1, floorY + 1);
+
+        var pixX0 = pix10 * remainderX + pix00 * (1.0 - remainderX);
+        var pixX1 = pix11 * remainderX + pix01 * (1.0 - remainderX);
+        var pixY = pixX1 * remainderY + pixX0 * (1.0 - remainderY);
+        return pixY;
+      }
+      function GetPixelBilinearXPos(imageData, x, y) {
+        var floorX = x | 0;
+        var floorY = y | 0;
+        var remainderX = x - floorX;
+        var pix00 = GetPixelR(imageData, floorX, floorY);
+        var pix10 = GetPixelR(imageData, floorX + 1, floorY);
+
+        var pixX0 = pix10 * remainderX + pix00 * (1.0 - remainderX);
+        return pixX0;
+      }
+      function GetPixelR(imageData, x, y) {
+        if (!InRange(imageData, x, y)) return 0;
+        return imageData.data[((y*(imageData.width*4)) + (x*4)) + 0];
+      }
+      function GetPixelG(imageData, x, y) {
+        if (!InRange(imageData, x, y)) return 0;
+        return imageData.data[((y*(imageData.width*4)) + (x*4)) + 1];
+      }
+      function GetPixelB(imageData, x, y) {
+        if (!InRange(imageData, x, y)) return 0;
+        return imageData.data[((y*(imageData.width*4)) + (x*4)) + 2];
+      }
+      function GetPixelA(imageData, x, y) {
+        if (!InRange(imageData, x, y)) return 0;
+        return imageData.data[((y*(imageData.width*4)) + (x*4)) + 3];
+      }
+      function SetPixelR(imageData, x, y, pix) {
+        imageData.data[((y*(imageData.width*4)) + (x*4)) + 0] = pix;
+      }
+      function SetPixelG(imageData, x, y, pix) {
+        imageData.data[((y*(imageData.width*4)) + (x*4)) + 1] = pix;
+      }
+      function SetPixelB(imageData, x, y, pix) {
+        imageData.data[((y*(imageData.width*4)) + (x*4)) + 2] = pix;
+      }
+      function SetPixelA(imageData, x, y, pix) {
+        imageData.data[((y*(imageData.width*4)) + (x*4)) + 3] = pix;
+      }
+      function SetPixelF(x, y, pix) {
+        bufferF[y*widthF + x] = pix;
+      }
+      function GetPixelF(x, y) {
+        if (x < 0) return 0.0;
+        if (y < 0) return 0.0;
+        if (x >= widthF) return 0.0;
+        if (y >= heightF) return 0.0;
+        return bufferF[y*widthF + x];
+      }
+      function GetPixelF2Unsafe(x, y) {
+        return bufferF2[y*widthF2 + x];
+      }
+      function GetPixelFClamp(x, y, size) {
+        var left = 0;
+        var top = 0;
+        var right = size;
+        var bottom = size;
+        if (x < left) x = left;
+        if (y < top) y = top;
+        if (x >= right) x = right - 1;
+        if (y >= bottom) y = bottom - 1;
+        return bufferF[y*widthF + x];
+      }
+      function GetPixelFTile(tx, ty, x, y) {
+        var left = ((tx / cellSize) | 0) * cellSize;
+        var top = ((ty / cellSize) | 0) * cellSize;
+        var right = ((tx / cellSize) | 0) * cellSize + cellSize - 1;
+        var bottom = ((ty / cellSize) | 0) * cellSize + cellSize - 1;
+        if (x < left) x = left;
+        if (y < top) y = top;
+        if (x > right) x = right;
+        if (y > bottom) y = bottom;
+        return bufferF[y*widthF + x];
+      }
+      function GetPixelRTile(imageData, tx, ty, x, y) {
+        var left = ((tx / cellSize) | 0) * cellSize;
+        var top = ((ty / cellSize) | 0) * cellSize;
+        var right = ((tx / cellSize) | 0) * cellSize + cellSize - 1;
+        var bottom = ((ty / cellSize) | 0) * cellSize + cellSize - 1;
+        if (x < left) x = left;
+        if (y < top) y = top;
+        if (x > right) x = right;
+        if (y > bottom) y = bottom;
+        return imageData.data[((y*(imageData.width*4)) + (x*4)) + 0];
+      }
+
+      function Lerp2(x, y, a) {
+        var result = [0, 0];
+        result[0] = y[0] * a + x[0] * (1.0 - a);
+        result[1] = y[1] * a + x[1] * (1.0 - a);
+        return result;
+      }
+      // These arrays tell the program which of the 4 edges need to be interpolated to make
+      // a line. They are pairs because they represent the line end points.
+      var lineIndex1 = [[-1,-1], [3,0], [0,1], [3,1], [1,2], [3,0], [0,2], [3,2],
+                        [2,3], [2,0], [0,1], [2,1], [1,3], [1,0], [0,3], [-1,-1]];
+      // It is possible (in 2 cases) that one block will make 2 lines. This array defines
+      // the second line.
+      var lineIndex2 = [[-1,-1], [-1,-1], [-1,-1], [-1,-1], [-1,-1], [1,2], [-1,-1], [-1,-1],
+                        [-1,-1], [-1,-1], [2,3], [-1,-1], [-1,-1], [-1,-1], [-1,-1], [-1,-1]];
+
+
+      function Vectorize(imageData) {
+        var threshold = 128 | 0;
+        //List<float4> v = new List<float4>();
+        var v = [];
+        //float2[] vertList = new float2[4];
+        var vertList = [[0,0],[0,0],[0,0],[0,0]];
+        for (var y = 0; y < imageData.height - 1; y++)
+        {
+          for (var x = 0; x < imageData.width - 1; x++)
+          {
+            var pixIndexR = ((y*(imageData.width*4)) + (x*4)) + 0;
+            var pix00 = imageData.data[pixIndexR] | 0;// GetPixelR(imageData, x, y);
+            var pix10 = imageData.data[pixIndexR + 4] | 0;// GetPixelR(imageData, x + 1, y);
+            var pix01 = imageData.data[pixIndexR + imageData.width*4] | 0;// GetPixelR(imageData, x, y + 1);
+            var pix11 = imageData.data[pixIndexR + imageData.width*4 + 4] | 0;// GetPixelR(imageData, x + 1, y + 1);
+
+            var squareIndex = 0 | 0;
+            if (pix00 < threshold) squareIndex |= 1;
+            if (pix10 < threshold) squareIndex |= 2;
+            if (pix11 < threshold) squareIndex |= 4;
+            if (pix01 < threshold) squareIndex |= 8;
+            if ((squareIndex == 0) || (squareIndex == 0xf)) continue;
+
+            // middle of the pixel is in upper left. is this what we want?
+            var pos00 = [x, y];
+            var pos10 = [x + 1, y];
+            var pos01 = [x, y + 1];
+            var pos11 = [x + 1, y + 1];
+            // interpolate the 4 edges. Not all 4 are always used, so with effort, this could be optimized.
+            // also, the horizontal and vertical pos variables are very integery and this could be optimized.
+            // these could also be shifted left like the other variables.
+            vertList[0] = Lerp2(pos00, pos10, (threshold*1.0 - pix00) / (pix10*1.0 - pix00));
+            vertList[1] = Lerp2(pos10, pos11, (threshold*1.0 - pix10) / (pix11*1.0 - pix10));
+            vertList[2] = Lerp2(pos11, pos01, (threshold*1.0 - pix11) / (pix01*1.0 - pix11));
+            vertList[3] = Lerp2(pos01, pos00, (threshold*1.0 - pix01) / (pix00*1.0 - pix01));
+
+            var vertA = lineIndex1[squareIndex][0];
+            var vertB = lineIndex1[squareIndex][1];
+            var vert2A = lineIndex2[squareIndex][0];
+            var vert2B = lineIndex2[squareIndex][1];
+
+            // put final lines in the line list
+            if (vertA != -1)
+            {
+              v.push([vertList[vertA][0]+0.0, vertList[vertA][1]+0.0, vertList[vertB][0]+0.0, vertList[vertB][1]+0.0]);
+              // SetPixelG(myImageData, vertList[vertA][0] | 0, vertList[vertA][1] | 0, 255);
+            }
+            if (vert2A != -1)
+            {
+              v.push([vertList[vert2A][0]+0.0, vertList[vert2A][1]+0.0, vertList[vert2B][0]+0.0, vertList[vert2B][1]+0.0]);
+            }
+          }
+        }
+        return v;
+      }
+
+      function VectorizeF2(imageData) {
+        var threshold = 128 | 0;
+        //List<float4> v = new List<float4>();
+        var v = [];
+        //float2[] vertList = new float2[4];
+        var vertList = [[0,0],[0,0],[0,0],[0,0]];
+        for (var y = 0; y < heightF2 - 1; y++)
+        {
+          for (var x = 0; x < widthF2 - 1; x++)
+          {
+            var pixIndexR = (y*widthF2) + x;
+            var pix00 = bufferF2[pixIndexR];// GetPixelR(imageData, x, y);
+            var pix10 = bufferF2[pixIndexR + 1];// GetPixelR(imageData, x + 1, y);
+            var pix01 = bufferF2[pixIndexR + widthF2];// GetPixelR(imageData, x, y + 1);
+            var pix11 = bufferF2[pixIndexR + widthF2 + 1];// GetPixelR(imageData, x + 1, y + 1);
+
+            var squareIndex = 0 | 0;
+            if (pix00 < threshold) squareIndex |= 1;
+            if (pix10 < threshold) squareIndex |= 2;
+            if (pix11 < threshold) squareIndex |= 4;
+            if (pix01 < threshold) squareIndex |= 8;
+            if ((squareIndex == 0) || (squareIndex == 0xf)) continue;
+
+            // middle of the pixel is in upper left. is this what we want?
+            var pos00 = [x, y];
+            var pos10 = [x + 1, y];
+            var pos01 = [x, y + 1];
+            var pos11 = [x + 1, y + 1];
+            // interpolate the 4 edges. Not all 4 are always used, so with effort, this could be optimized.
+            // also, the horizontal and vertical pos variables are very integery and this could be optimized.
+            // these could also be shifted left like the other variables.
+            vertList[0] = Lerp2(pos00, pos10, (threshold*1.0 - pix00) / (pix10*1.0 - pix00));
+            vertList[1] = Lerp2(pos10, pos11, (threshold*1.0 - pix10) / (pix11*1.0 - pix10));
+            vertList[2] = Lerp2(pos11, pos01, (threshold*1.0 - pix11) / (pix01*1.0 - pix11));
+            vertList[3] = Lerp2(pos01, pos00, (threshold*1.0 - pix01) / (pix00*1.0 - pix01));
+
+            var vertA = lineIndex1[squareIndex][0];
+            var vertB = lineIndex1[squareIndex][1];
+            var vert2A = lineIndex2[squareIndex][0];
+            var vert2B = lineIndex2[squareIndex][1];
+
+            // put final lines in the line list
+            if (vertA != -1)
+            {
+              v.push([vertList[vertA][0]+0.0, vertList[vertA][1]+0.0, vertList[vertB][0]+0.0, vertList[vertB][1]+0.0]);
+              // SetPixelG(myImageData, vertList[vertA][0] | 0, vertList[vertA][1] | 0, 255);
+            }
+            if (vert2A != -1)
+            {
+              v.push([vertList[vert2A][0]+0.0, vertList[vert2A][1]+0.0, vertList[vert2B][0]+0.0, vertList[vert2B][1]+0.0]);
+            }
+          }
+        }
+        return v;
+      }
+
+      let currentCanvas = null;
+
+      function GenChar(fontFamily) {
+        if (currentCanvas && currentCanvas.parentNode) {
+          currentCanvas.parentNode.removeChild(currentCanvas);
+        }
+        currentCanvas = createTextCanvas('white', fontFamily);
+        document.getElementById('canvasHost').appendChild(currentCanvas);
+
+        currentCanvas.onclick = function(e) {
+          e = e || window.event
+          var rect = currentCanvas.getBoundingClientRect();
+          var mousex = (e.clientX - rect.left) | 0;
+          var mousey = (e.clientY - rect.top) | 0;
+          var pixR = GetPixelR(finalImage, mousex, mousey);
+          var pixG = GetPixelG(finalImage, mousex, mousey);
+          var pixB = GetPixelB(finalImage, mousex, mousey);
+          var pixA = GetPixelA(finalImage, mousex, mousey);
+          var pixF = GetPixelF(mousex, mousey);
+          console.log('[' + mousex + ',' + mousey + '] (' + pixR + ", " + pixG + ", " + pixB + ", " + pixA + ")   " + pixF);
+        }
+      }
+
+      function populateFontSelector() {
+        const select = document.getElementById('fontSelector');
+        FONT_OPTIONS.forEach(opt => {
+          const option = document.createElement('option');
+          option.value = opt.value;
+          option.textContent = opt.label;
+          select.appendChild(option);
+        });
+        select.value = FONT_OPTIONS[0].value;
+        select.addEventListener('change', () => {
+          GenChar(select.value);
+        });
+      }
+
+      function autorun()
+      {
+        populateFontSelector();
+        loadCustomFonts().finally(() => {
+          const select = document.getElementById('fontSelector');
+          GenChar(select.value);
+        });
+      }
+      if (document.addEventListener) document.addEventListener("DOMContentLoaded", autorun, false);
+      else if (document.attachEvent) document.attachEvent("onreadystatechange", autorun);
+      else window.onload = autorun;
+    </script>
+  </body>
+</html>
+
+
+is it possible to modify this utility to fill those spaces with the necessary data?
+
+what would you add, and where? assumign its not already doing somethign with variable width chars?
+A
+Modifying Your Font Texture Generator for Proportional Width Data
+Key Observations from Your Code
+Your glyphs are positioned at a fixed x offset for all non-symbol characters:
+
+javascript
+var xoff = sourceSize * 0.2656; // ~17px into a 64px cell
+var posx = xoff;
+This means in the shader, glyph position within the cell is already a known constant. You only need to store advance width per character — the shader already knows where the glyph starts.
+
+However there's a clipping risk: xoff + advanceWidth can exceed the cell for wide proportional characters. A bold 'W' in Quicksand at 50px could be ~45px, and 17 + 45 = 62... tight. An 'M' might clip.
+
+Generator Modifications
+Three changes, all minimal:
+
+1. Declare the metrics array (before the main loop)
+javascript
+var charMetrics = new Array(tileCount * tileCount).fill(0);
+2. Record advance width (right after mw = ctx.measureText(text).width)
+javascript
+charMetrics[x + y * tileCount] = mw / sourceSize;
+One line. mw is already measured with the correct font set for that character, so this captures the right value for symbols, ASCII, and extended characters alike.
+
+3. Write metrics into the empty cell (after the main double for-loop, before canvas resize)
+javascript
+// Write advance widths into cell 32 (grid position 0,2 — the space character)
+// Character index i → pixel (i % cellSize, floor(i / cellSize)) within the cell
+// Cell origin in finalImage: (0 * cellSize, 2 * cellSize) = (0, 128)
+var dataBaseY = 2 * cellSize;
+for (var i = 0; i < tileCount * tileCount; i++) {
+    var px = i % cellSize;
+    var py = dataBaseY + ((i / cellSize) | 0);
+    var widthByte = (Math.min(charMetrics[i], 1.0) * 255 + 0.5) | 0;
+    SetPixelR(finalImage, px, py, widthByte);
+    SetPixelG(finalImage, px, py, 0);
+    SetPixelB(finalImage, px, py, 0);
+    SetPixelA(finalImage, px, py, 255);
+}
+256 characters fit in 4 rows of the 64×64 cell. The remaining 60 rows are unused — if you later want left-bearing or kerning pairs, the space is there.
+
+4. Optional: reduce xoff for proportional fonts
+To prevent wide-character clipping, shrink the left margin for proportional fonts:
+
+javascript
+var isProportional = /* your detection logic, e.g. font name check */;
+var xoff = isProportional ? sourceSize * 0.03 : sourceSize * 0.2656;
+This gives wide characters nearly the full cell. The shader just needs to know which constant to use.
+
+Shader Side
+Width lookup
+glsl
+float getAdvanceWidth(int charIndex, sampler2D fontTex) {
+    // Data cell at grid (0,2), pixel origin (0, 128)
+    // Character i at pixel (i % 64, 128 + i / 64)
+    vec2 pixel = vec2(float(charIndex & 63) + 0.5,
+                      float(charIndex >> 6) + 128.5);
+    return texture(fontTex, pixel / 1024.0).r;
+}
+With nearest filtering or texelFetch this gives exact pixel reads.
+
+Proportional text rendering
+glsl
+const float GLYPH_XOFF = 0.03; // or 0.2656 for monospace fonts
+const float GRID = 16.0;
+
+vec4 renderPropText(vec2 fragPos, vec2 origin, float scale,
+                    int[MAX_LEN] chars, int len, sampler2D fontTex) {
+    vec2 local = (fragPos - origin) / scale;
+
+    // Y rejection — same as monospace
+    if (local.y < 0.0 || local.y >= 1.0) return vec4(0.0);
+
+    float cursor = 0.0;
+
+    for (int i = 0; i < MAX_LEN; i++) {
+        if (i >= len) break;
+
+        int code = chars[i];
+        float aw = getAdvanceWidth(code, fontTex);
+
+        // Early exit: fragment is left of remaining text
+        if (local.x < cursor) break;
+
+        float localX = local.x - cursor;
+        cursor += aw;
+
+        // Skip space — its cell holds our width data
+        if (code == 32) continue;
+
+        if (localX < aw) {
+            // Map to cell UV
+            // localX is 0..aw in cell-fraction units
+            // Glyph sits at GLYPH_XOFF within the cell
+            float cellU = GLYPH_XOFF + localX;
+            float cellV = local.y;
+
+            // Cell position in atlas
+            vec2 cellPos = vec2(float(code & 15), float(code >> 4));
+            vec2 uv = (cellPos + vec2(cellU, cellV)) / GRID;
+
+            // Sample your SDF (alpha channel)
+            float sdf = texture(fontTex, uv).a;
+            float d = sdf - 128.0 / 255.0;
+            // Your existing SDF rendering logic here
+            float alpha = smoothstep(0.01, -0.01, d);
+            if (alpha > 0.01) return vec4(vec3(1.0), alpha);
+        }
+    }
+    return vec4(0.0);
+}
+The key insight: since every glyph starts at the same GLYPH_XOFF within its cell, cellU = GLYPH_XOFF + localX maps directly to the right position. No per-character offset lookup needed.
+
+Summary of What Goes Where
+What	Where	Channel	Value
+Advance width	Cell 32 (grid 0,2), pixel (i%64, i/64)	R	mw / sourceSize * 255
+Available for future use	Same pixel	G, B	0
+Cells 127, 160, 173	Unused	—	Available for kerning, bearings, etc.
+Three other empty cells remain free if you later want left-bearing data, kerning pair lookups, or per-character y-offset adjustments.
+
+B
+Modifying Your Font Texture Generator
+Looking at your code, you're already measuring character widths with ctx.measureText(text).width but only using it for centering. The key changes are:
+
+Collect width data during the main rendering loop
+Write that data to the empty cells after all characters are rendered
+Skip the metadata cells during normal character rendering
+Here's the modification:
+javascript
+// Add near the top with other constants
+const METADATA_CELLS = {
+  32:  { tx: 0,  ty: 2  },  // Space - stores advance widths (chars 0-63)
+  127: { tx: 15, ty: 7  },  // DEL   - stores advance widths (chars 64-127)
+  160: { tx: 0,  ty: 10 },  // NBSP  - stores advance widths (chars 128-191)
+  173: { tx: 13, ty: 10 }   // SHY   - stores advance widths (chars 192-255)
+};
+
+// Storage for measured widths (normalized 0-1)
+let charAdvanceWidths = new Array(256).fill(0);
+Add this helper function before createTextCanvas:
+
+javascript
+function isMetadataCell(x, y, tileCount) {
+  const index = x + y * tileCount;
+  return METADATA_CELLS.hasOwnProperty(index);
+}
+
+function encodeWidthDataToCell(finalImage, charWidths, startCharIndex, cellTx, cellTy, cellSize) {
+  // Pack 64 character widths into a 64x64 cell
+  // Each character gets one row of 64 pixels (redundant for robustness)
+  // Or more simply: linear packing, one pixel per character
+  
+  for (let i = 0; i < 64; i++) {
+    const charIndex = startCharIndex + i;
+    if (charIndex >= 256) break;
+    
+    const normalizedWidth = charWidths[charIndex] || 0;
+    const encodedWidth = Math.round(Math.min(1.0, normalizedWidth) * 255);
+    
+    // Store in a horizontal line for easy shader access
+    // Each character gets one column, repeated vertically for filtering safety
+    for (let row = 0; row < cellSize; row++) {
+      const globalX = cellTx * cellSize + i;
+      const globalY = cellTy * cellSize + row;
+      
+      SetPixelR(finalImage, globalX, globalY, encodedWidth);
+      SetPixelG(finalImage, globalX, globalY, encodedWidth); // duplicate for safety
+      SetPixelB(finalImage, globalX, globalY, 0);
+      SetPixelA(finalImage, globalX, globalY, 255);
+    }
+  }
+}
+
+function writeAllMetadata(finalImage, charWidths, cellSize) {
+  // Cell at index 32 stores chars 0-63
+  encodeWidthDataToCell(finalImage, charWidths, 0, 0, 2, cellSize);
+  // Cell at index 127 stores chars 64-127  
+  encodeWidthDataToCell(finalImage, charWidths, 64, 15, 7, cellSize);
+  // Cell at index 160 stores chars 128-191
+  encodeWidthDataToCell(finalImage, charWidths, 128, 0, 10, cellSize);
+  // Cell at index 173 stores chars 192-255
+  encodeWidthDataToCell(finalImage, charWidths, 192, 13, 10, cellSize);
+}
+Now modify createTextCanvas. In the main double loop, add a skip for metadata cells and store the measured widths:
+
+javascript
+function createTextCanvas(color, font) {
+  var canvas = document.createElement('canvas');
+  var ctx = canvas.getContext('2d');
+  finalImage = ctx.createImageData(targetSize, targetSize);
+  var fontFamily = font || '"UbuntuMonoRegular"';
+  var fontStrA = 'bold ' + ((sourceSize * 0.9218) + 'px ') + fontFamily;
+  var fontStrB = 'bold ' + ((sourceSize * 0.78125) + 'px ') + fontFamily;
+  var fontStrC = '' + ((sourceSize - 14) + 'px ') + (font || 'Symbola');
+  var fontStrD = '' + ((sourceSize - 14) + 'px ') + (font || 'Apple Symbols');
+  canvas.width = sourceSize;
+  canvas.height = sourceSize;
+  
+  // Reset width storage
+  charAdvanceWidths = new Array(256).fill(0);
+  
+  // Create a separate context for measuring with the main font
+  var measureCanvas = document.createElement('canvas');
+  var measureCtx = measureCanvas.getContext('2d');
+  measureCtx.font = fontStrB;
+  
+  // Pre-measure all ASCII characters (for proportional font support)
+  for (let charCode = 32; charCode < 127; charCode++) {
+    const char = String.fromCharCode(charCode);
+    const width = measureCtx.measureText(char).width;
+    charAdvanceWidths[charCode] = width / sourceSize; // normalize to 0-1
+  }
+  
+  canvas.style.backgroundColor = 'rgba(100, 40, 60, 1.0)';
+  ctx.fillRect(0, 0, sourceSize, sourceSize);
+  
+  // ... grid drawing code stays the same ...
+  
+  ctx.fillStyle = color || 'white';
+  for (var y = 0; y < tileCount; y++) {
+    for (var x = 0; x < tileCount; x++) {
+      
+      // Skip metadata cells - we'll fill them at the end
+      if (isMetadataCell(x, y, tileCount)) {
+        console.log("Skipping metadata cell at x:" + x + " y:" + y);
+        // Fill with black for now
+        ctx.fillStyle="#000000";
+        ctx.fillRect(0, 0, sourceSize, sourceSize);
+        newImg = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        // Just copy a blank cell
+        for (var sy = 0; sy < sourceSize; sy++) {
+          for (var sx = 0; sx < sourceSize; sx++) {
+            SetPixelR(finalImage, sx + x * cellSize, sy + y * cellSize, 0);
+            SetPixelG(finalImage, sx + x * cellSize, sy + y * cellSize, 0);
+            SetPixelB(finalImage, sx + x * cellSize, sy + y * cellSize, 0);
+            SetPixelA(finalImage, sx + x * cellSize, sy + y * cellSize, 255);
+          }
+        }
+        ctx.fillStyle = color || 'white';
+        continue;
+      }
+      
+      console.log("x: " + x + " y: " + y);
+      ctx.font = fontStrB;
+      var charIndex = x + y * tileCount;
+      var text = String.fromCharCode(charIndex);
+      
+      // ... rest of your character selection logic stays the same ...
+      if (y <= 1) text = symbols[y][x];
+      if ((y==8) || (y==9)) text = symbols[y-6][x];
+      // ... etc ...
+      
+      // Measure width and store it
+      mw = ctx.measureText(text).width;
+      
+      // Store the measured width for this cell's character
+      // (This captures the actual rendered character, including symbols)
+      if (charIndex < 256) {
+        charAdvanceWidths[charIndex] = mw / sourceSize;
+      }
+      
+      // ... rest of your rendering code stays exactly the same ...
+At the end of createTextCanvas, just before returning the canvas, add:
+
+javascript
+    // ... after the main loop ends ...
+    
+    // Write metadata to the reserved cells
+    writeAllMetadata(finalImage, charAdvanceWidths, cellSize);
+    
+    canvas.width = targetSize;
+    canvas.height = targetSize;
+    ctx.putImageData(finalImage, 0, 0);
+
+    return canvas;
+  }
+Reading the data in GLSL
+glsl
+// Get advance width for a character
+float getCharAdvance(int charCode, sampler2D fontTex) {
+    // Determine which metadata cell and position within it
+    int cellIndex;
+    int localChar;
+    vec2 cellBase;
+    
+    if (charCode < 64) {
+        cellBase = vec2(0.0, 2.0) / 16.0;  // Cell at (0,2)
+        localChar = charCode;
+    } else if (charCode < 128) {
+        cellBase = vec2(15.0, 7.0) / 16.0; // Cell at (15,7)
+        localChar = charCode - 64;
+    } else if (charCode < 192) {
+        cellBase = vec2(0.0, 10.0) / 16.0; // Cell at (0,10)
+        localChar = charCode - 128;
+    } else {
+        cellBase = vec2(13.0, 10.0) / 16.0; // Cell at (13,10)
+        localChar = charCode - 192;
+    }
+    
+    // Sample from the middle row of the cell for filtering safety
+    vec2 uv = cellBase + vec2(
+        (float(localChar) + 0.5) / 1024.0,  // x position within cell
+        0.5 / 16.0                           // middle of cell vertically
+    );
+    
+    return texture(fontTex, uv).r; // normalized 0-1 advance width
+}
+Alternative: Simpler single-cell encoding
+If you want simpler shader code, use just one metadata cell and pack all 256 widths in a 16×16 grid within that 64×64 cell (4 pixels per character width for bilinear filtering safety):
+
+javascript
+function encodeAllWidthsToSingleCell(finalImage, charWidths, cellTx, cellTy, cellSize) {
+  // 256 chars in a 16x16 grid, each char gets a 4x4 pixel block
+  const blockSize = cellSize / 16; // = 4 pixels per character
+  
+  for (let charIdx = 0; charIdx < 256; charIdx++) {
+    const gridX = charIdx % 16;
+    const gridY = Math.floor(charIdx / 16);
+    const normalizedWidth = charWidths[charIdx] || 0;
+    const encoded = Math.round(Math.min(1.0, normalizedWidth) * 255);
+    
+    // Fill the 4x4 block with the same value
+    for (let py = 0; py < blockSize; py++) {
+      for (let px = 0; px < blockSize; px++) {
+        const globalX = cellTx * cellSize + gridX * blockSize + px;
+        const globalY = cellTy * cellSize + gridY * blockSize + py;
+        SetPixelR(finalImage, globalX, globalY, encoded);
+        SetPixelG(finalImage, globalX, globalY, encoded);
+        SetPixelB(finalImage, globalX, globalY, 0);
+        SetPixelA(finalImage, globalX, globalY, 255);
+      }
+    }
+  }
+}
+Then the shader lookup becomes:
+
+glsl
+float getCharAdvance(int charCode, sampler2D fontTex) {
+    vec2 metaCell = vec2(0.0, 2.0) / 16.0; // Using space cell
+    vec2 charPos = vec2(
+        float(charCode % 16) + 0.5,
+        float(charCode / 16) + 0.5
+    ) / 256.0; // 16 chars * 16 cells = 256
+    
+    return texture(fontTex, metaCell + charPos).r;
+}
+This approach gives you bilinear-filtering-safe lookups and keeps all width data in one place.
+

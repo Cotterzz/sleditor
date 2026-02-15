@@ -1,0 +1,1868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Sensor Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a0f;
+            color: #e0e0e0;
+            font-family: 'Courier New', monospace;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #00ff88;
+            font-size: 1.8em;
+            margin-bottom: 8px;
+            text-shadow: 0 0 20px #00ff8866;
+            letter-spacing: 3px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 0.8em;
+            margin-bottom: 30px;
+            letter-spacing: 1px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: #111118;
+            border: 1px solid #222233;
+            border-radius: 12px;
+            padding: 18px;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.3s;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00ff88, transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .card.active::before {
+            opacity: 1;
+        }
+
+        .card.active {
+            border-color: #00ff8844;
+        }
+
+        .card.error {
+            border-color: #ff444444;
+        }
+
+        .card.error::before {
+            background: linear-gradient(90deg, transparent, #ff4444, transparent);
+            opacity: 1;
+        }
+
+        .card.warning {
+            border-color: #ffaa0044;
+        }
+
+        .card.warning::before {
+            background: linear-gradient(90deg, transparent, #ffaa00, transparent);
+            opacity: 1;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+
+        .card-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-icon {
+            font-size: 1.4em;
+        }
+
+        .card-name {
+            font-size: 0.95em;
+            font-weight: bold;
+            color: #aaa;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #333;
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+
+        .status-dot.active {
+            background: #00ff88;
+            box-shadow: 0 0 8px #00ff88;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.error {
+            background: #ff4444;
+            box-shadow: 0 0 8px #ff4444;
+        }
+
+        .status-dot.warning {
+            background: #ffaa00;
+            box-shadow: 0 0 8px #ffaa00;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .data-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px;
+            background: #0a0a12;
+            border-radius: 6px;
+            border: 1px solid #1a1a2e;
+        }
+
+        .data-label {
+            color: #556;
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .data-value {
+            color: #00ff88;
+            font-size: 0.85em;
+            font-weight: bold;
+            text-align: right;
+            max-width: 60%;
+            word-break: break-all;
+        }
+
+        .data-value.na {
+            color: #333;
+        }
+
+        .data-value.error-val {
+            color: #ff4444;
+            font-size: 0.75em;
+        }
+
+        .status-text {
+            font-size: 0.75em;
+            margin-top: 10px;
+            padding: 6px 10px;
+            background: #0a0a12;
+            border-radius: 6px;
+            color: #556;
+            border: 1px solid #1a1a2e;
+            min-height: 28px;
+        }
+
+        /* Orientation visual */
+        .orientation-visual {
+            margin-top: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .device-box {
+            width: 50px;
+            height: 90px;
+            border: 2px solid #00ff8844;
+            border-radius: 8px;
+            background: #0a0a12;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.1s ease;
+        }
+
+        .device-dot {
+            width: 8px;
+            height: 8px;
+            background: #00ff88;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 6px #00ff88;
+        }
+
+        /* Bar chart for compass */
+        .compass-ring {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            border: 2px solid #222;
+            position: relative;
+            margin: 10px auto;
+        }
+
+        .compass-needle {
+            position: absolute;
+            width: 2px;
+            height: 36px;
+            background: linear-gradient(to bottom, #ff4444, transparent);
+            left: 50%;
+            bottom: 50%;
+            transform-origin: bottom center;
+            transform: translateX(-50%) rotate(0deg);
+            transition: transform 0.2s ease;
+        }
+
+        .compass-center {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #00ff88;
+            border-radius: 50%;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .compass-labels {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        .compass-n {
+            position: absolute;
+            top: 2px; left: 50%;
+            transform: translateX(-50%);
+            color: #ff4444;
+            font-size: 0.65em;
+            font-weight: bold;
+        }
+
+        .compass-s {
+            position: absolute;
+            bottom: 2px; left: 50%;
+            transform: translateX(-50%);
+            color: #556;
+            font-size: 0.65em;
+        }
+
+        .compass-e {
+            position: absolute;
+            right: 4px; top: 50%;
+            transform: translateY(-50%);
+            color: #556;
+            font-size: 0.65em;
+        }
+
+        .compass-w {
+            position: absolute;
+            left: 4px; top: 50%;
+            transform: translateY(-50%);
+            color: #556;
+            font-size: 0.65em;
+        }
+
+        /* Bar meter */
+        .bar-meter {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 4px;
+        }
+
+        .bar-bg {
+            flex: 1;
+            height: 6px;
+            background: #1a1a2e;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #00aaff);
+            border-radius: 3px;
+            transition: width 0.2s ease;
+            width: 0%;
+        }
+
+        .bar-fill.red {
+            background: linear-gradient(90deg, #ff4444, #ffaa00);
+        }
+
+        /* Permission button */
+        .perm-btn {
+            background: #00ff8822;
+            border: 1px solid #00ff8844;
+            color: #00ff88;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8em;
+            letter-spacing: 1px;
+            transition: all 0.2s;
+            margin-top: 10px;
+            width: 100%;
+            text-transform: uppercase;
+        }
+
+        .perm-btn:hover {
+            background: #00ff8844;
+            box-shadow: 0 0 12px #00ff8822;
+        }
+
+        /* Battery visual */
+        .battery-icon {
+            width: 50px;
+            height: 26px;
+            border: 2px solid #444;
+            border-radius: 4px;
+            position: relative;
+            margin: 10px auto;
+        }
+
+        .battery-icon::after {
+            content: '';
+            position: absolute;
+            right: -7px; top: 50%;
+            transform: translateY(-50%);
+            width: 5px; height: 10px;
+            background: #444;
+            border-radius: 0 2px 2px 0;
+        }
+
+        .battery-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff88, #00dd66);
+            border-radius: 2px;
+            transition: width 0.5s ease, background 0.5s;
+        }
+
+        .battery-fill.low {
+            background: linear-gradient(90deg, #ff4444, #ff6644);
+        }
+
+        .battery-fill.medium {
+            background: linear-gradient(90deg, #ffaa00, #ffcc00);
+        }
+
+        /* Network bars */
+        .net-bars {
+            display: flex;
+            gap: 3px;
+            align-items: flex-end;
+            margin: 10px auto;
+            width: fit-content;
+        }
+
+        .net-bar {
+            width: 8px;
+            background: #222;
+            border-radius: 2px 2px 0 0;
+            transition: background 0.3s;
+        }
+
+        .net-bar.lit {
+            background: #00ff88;
+        }
+
+        /* Log area */
+        .log-area {
+            font-size: 0.7em;
+            color: #445;
+            max-height: 80px;
+            overflow-y: auto;
+            margin-top: 8px;
+            padding: 6px;
+            background: #050508;
+            border-radius: 4px;
+            line-height: 1.6;
+        }
+
+        .log-area::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .log-area::-webkit-scrollbar-thumb {
+            background: #222;
+        }
+
+        .section-title {
+            text-align: center;
+            color: #334;
+            font-size: 0.7em;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            margin: 30px auto 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            max-width: 1400px;
+        }
+
+        .section-title::before,
+        .section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #1a1a2e;
+        }
+
+        .footer {
+            text-align: center;
+            color: #222;
+            font-size: 0.7em;
+            margin-top: 40px;
+            letter-spacing: 2px;
+        }
+
+        .support-tag {
+            display: inline-block;
+            font-size: 0.65em;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        .support-tag.yes {
+            background: #00ff8822;
+            color: #00ff88;
+            border: 1px solid #00ff8833;
+        }
+
+        .support-tag.no {
+            background: #ff444422;
+            color: #ff4444;
+            border: 1px solid #ff444433;
+        }
+
+        .support-tag.maybe {
+            background: #ffaa0022;
+            color: #ffaa00;
+            border: 1px solid #ffaa0033;
+        }
+    </style>
+</head>
+<body>
+
+<h1>⬡ SENSOR DASHBOARD</h1>
+<p class="subtitle">BROWSER SENSOR API MONITOR — REAL-TIME</p>
+
+<!-- MOTION & ORIENTATION -->
+<div class="section-title">Motion & Orientation</div>
+<div class="grid">
+
+    <!-- DeviceOrientation -->
+    <div class="card" id="card-orientation">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">📐</span>
+                <span class="card-name">Device Orientation</span>
+            </div>
+            <div class="status-dot" id="dot-orientation"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Alpha (Z-axis °)</span>
+                <span class="data-value na" id="val-alpha">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Beta (X-axis °)</span>
+                <span class="data-value na" id="val-beta">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Gamma (Y-axis °)</span>
+                <span class="data-value na" id="val-gamma">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Absolute</span>
+                <span class="data-value na" id="val-absolute">—</span>
+            </div>
+        </div>
+        <div class="orientation-visual">
+            <div class="device-box" id="device-visual">
+                <div class="device-dot"></div>
+            </div>
+            <div class="compass-ring">
+                <div class="compass-labels">
+                    <span class="compass-n">N</span>
+                    <span class="compass-s">S</span>
+                    <span class="compass-e">E</span>
+                    <span class="compass-w">W</span>
+                </div>
+                <div class="compass-needle" id="compass-needle"></div>
+                <div class="compass-center"></div>
+            </div>
+        </div>
+        <button class="perm-btn" id="btn-orientation" onclick="requestOrientationPermission()">REQUEST PERMISSION</button>
+        <div class="status-text" id="status-orientation">Waiting for permission or event...</div>
+    </div>
+
+    <!-- DeviceMotion / Accelerometer -->
+    <div class="card" id="card-motion">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">💠</span>
+                <span class="card-name">Accelerometer</span>
+            </div>
+            <div class="status-dot" id="dot-motion"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">X (m/s²)</span>
+                <span class="data-value na" id="val-acc-x">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Y (m/s²)</span>
+                <span class="data-value na" id="val-acc-y">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Z (m/s²)</span>
+                <span class="data-value na" id="val-acc-z">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">With gravity X</span>
+                <span class="data-value na" id="val-accg-x">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">With gravity Y</span>
+                <span class="data-value na" id="val-accg-y">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">With gravity Z</span>
+                <span class="data-value na" id="val-accg-z">—</span>
+            </div>
+        </div>
+        <div class="bar-meter">
+            <span style="font-size:0.7em;color:#556">MAGNITUDE</span>
+            <div class="bar-bg"><div class="bar-fill" id="bar-accel"></div></div>
+            <span class="data-value na" id="val-acc-mag" style="font-size:0.75em;min-width:50px">—</span>
+        </div>
+        <button class="perm-btn" id="btn-motion" onclick="requestMotionPermission()">REQUEST PERMISSION</button>
+        <div class="status-text" id="status-motion">Waiting for permission or event...</div>
+    </div>
+
+    <!-- Gyroscope -->
+    <div class="card" id="card-gyro">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">🌀</span>
+                <span class="card-name">Gyroscope</span>
+            </div>
+            <div class="status-dot" id="dot-gyro"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Alpha (°/s)</span>
+                <span class="data-value na" id="val-rot-alpha">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Beta (°/s)</span>
+                <span class="data-value na" id="val-rot-beta">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Gamma (°/s)</span>
+                <span class="data-value na" id="val-rot-gamma">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Interval (ms)</span>
+                <span class="data-value na" id="val-interval">—</span>
+            </div>
+        </div>
+        <div class="bar-meter">
+            <span style="font-size:0.7em;color:#556">SPIN RATE</span>
+            <div class="bar-bg"><div class="bar-fill" id="bar-gyro"></div></div>
+            <span class="data-value na" id="val-gyro-mag" style="font-size:0.75em;min-width:50px">—</span>
+        </div>
+        <div class="status-text" id="status-gyro">Via DeviceMotionEvent.rotationRate</div>
+    </div>
+
+</div>
+
+<!-- LOCATION & ENVIRONMENT -->
+<div class="section-title">Location & Environment</div>
+<div class="grid">
+
+    <!-- Geolocation -->
+    <div class="card" id="card-geo">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">📍</span>
+                <span class="card-name">Geolocation</span>
+            </div>
+            <div class="status-dot" id="dot-geo"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Latitude</span>
+                <span class="data-value na" id="val-lat">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Longitude</span>
+                <span class="data-value na" id="val-lon">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Altitude (m)</span>
+                <span class="data-value na" id="val-alt">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Accuracy (m)</span>
+                <span class="data-value na" id="val-geo-acc">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Heading (°)</span>
+                <span class="data-value na" id="val-heading">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Speed (m/s)</span>
+                <span class="data-value na" id="val-speed">—</span>
+            </div>
+        </div>
+        <button class="perm-btn" onclick="startGeo()">REQUEST LOCATION</button>
+        <div class="status-text" id="status-geo">Click to request geolocation...</div>
+    </div>
+
+    <!-- Ambient Light -->
+    <div class="card" id="card-light">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">💡</span>
+                <span class="card-name">Ambient Light</span>
+            </div>
+            <div class="status-dot" id="dot-light"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Illuminance (lux)</span>
+                <span class="data-value na" id="val-lux">—</span>
+            </div>
+        </div>
+        <div class="bar-meter">
+            <span style="font-size:0.7em;color:#556">BRIGHTNESS</span>
+            <div class="bar-bg"><div class="bar-fill" id="bar-light"></div></div>
+        </div>
+        <div class="status-text" id="status-light">Checking AmbientLightSensor API...</div>
+        <div class="log-area" id="log-light">Experimental API — Chrome with flag or Firefox (limited)</div>
+    </div>
+
+    <!-- Magnetometer -->
+    <div class="card" id="card-mag">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">🧲</span>
+                <span class="card-name">Magnetometer</span>
+            </div>
+            <div class="status-dot" id="dot-mag"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">X (μT)</span>
+                <span class="data-value na" id="val-mag-x">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Y (μT)</span>
+                <span class="data-value na" id="val-mag-y">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Z (μT)</span>
+                <span class="data-value na" id="val-mag-z">—</span>
+            </div>
+        </div>
+        <div class="bar-meter">
+            <span style="font-size:0.7em;color:#556">FIELD STRENGTH</span>
+            <div class="bar-bg"><div class="bar-fill" id="bar-mag"></div></div>
+            <span class="data-value na" id="val-mag-mag" style="font-size:0.75em;min-width:50px">—</span>
+        </div>
+        <div class="status-text" id="status-mag">Checking Magnetometer API...</div>
+        <div class="log-area" id="log-mag">Generic Sensor API — Chrome 67+ (HTTPS required)</div>
+    </div>
+
+    <!-- Absolute Orientation Sensor -->
+    <div class="card" id="card-absori">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">🧭</span>
+                <span class="card-name">Absolute Orientation</span>
+            </div>
+            <div class="status-dot" id="dot-absori"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Quaternion X</span>
+                <span class="data-value na" id="val-absori-x">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Quaternion Y</span>
+                <span class="data-value na" id="val-absori-y">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Quaternion Z</span>
+                <span class="data-value na" id="val-absori-z">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Quaternion W</span>
+                <span class="data-value na" id="val-absori-w">—</span>
+            </div>
+        </div>
+        <div class="status-text" id="status-absori">Checking AbsoluteOrientationSensor...</div>
+        <div class="log-area" id="log-absori">Fuses accel + gyro + mag (Generic Sensor API)</div>
+    </div>
+
+    <!-- Relative Orientation Sensor -->
+    <div class="card" id="card-relori">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">🔄</span>
+                <span class="card-name">Relative Orientation</span>
+            </div>
+            <div class="status-dot" id="dot-relori"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Quaternion X</span>
+                <span class="data-value na" id="val-relori-x">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Quaternion Y</span>
+                <span class="data-value na" id="val-relori-y">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Quaternion Z</span>
+                <span class="data-value na" id="val-relori-z">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Quaternion W</span>
+                <span class="data-value na" id="val-relori-w">—</span>
+            </div>
+        </div>
+        <div class="status-text" id="status-relori">Checking RelativeOrientationSensor...</div>
+        <div class="log-area" id="log-relori">Fuses accel + gyro (no magnetometer, no drift correction)</div>
+    </div>
+
+    <!-- Gravity Sensor -->
+    <div class="card" id="card-gravity">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">🌍</span>
+                <span class="card-name">Gravity Sensor</span>
+            </div>
+            <div class="status-dot" id="dot-gravity"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">X (m/s²)</span>
+                <span class="data-value na" id="val-grav-x">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Y (m/s²)</span>
+                <span class="data-value na" id="val-grav-y">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Z (m/s²)</span>
+                <span class="data-value na" id="val-grav-z">—</span>
+            </div>
+        </div>
+        <div class="status-text" id="status-gravity">Checking GravitySensor API...</div>
+        <div class="log-area" id="log-gravity">Isolated gravitational component (Generic Sensor API)</div>
+    </div>
+
+    <!-- Linear Acceleration -->
+    <div class="card" id="card-linear">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">➡️</span>
+                <span class="card-name">Linear Acceleration</span>
+            </div>
+            <div class="status-dot" id="dot-linear"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">X (m/s²)</span>
+                <span class="data-value na" id="val-lin-x">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Y (m/s²)</span>
+                <span class="data-value na" id="val-lin-y">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Z (m/s²)</span>
+                <span class="data-value na" id="val-lin-z">—</span>
+            </div>
+        </div>
+        <div class="status-text" id="status-linear">Checking LinearAccelerationSensor...</div>
+        <div class="log-area" id="log-linear">Acceleration minus gravity component</div>
+    </div>
+
+</div>
+
+<!-- DEVICE & SYSTEM -->
+<div class="section-title">Device & System</div>
+<div class="grid">
+
+    <!-- Battery -->
+    <div class="card" id="card-battery">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">🔋</span>
+                <span class="card-name">Battery</span>
+            </div>
+            <div class="status-dot" id="dot-battery"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Level</span>
+                <span class="data-value na" id="val-batt-level">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Charging</span>
+                <span class="data-value na" id="val-batt-charging">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Time to full (s)</span>
+                <span class="data-value na" id="val-batt-full">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Time to empty (s)</span>
+                <span class="data-value na" id="val-batt-empty">—</span>
+            </div>
+        </div>
+        <div class="battery-icon">
+            <div class="battery-fill" id="battery-fill" style="width:0%"></div>
+        </div>
+        <div class="status-text" id="status-battery">Checking Battery API...</div>
+    </div>
+
+    <!-- Network -->
+    <div class="card" id="card-network">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">📶</span>
+                <span class="card-name">Network Info</span>
+            </div>
+            <div class="status-dot" id="dot-network"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Type</span>
+                <span class="data-value na" id="val-net-type">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Effective Type</span>
+                <span class="data-value na" id="val-net-eff">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Downlink (Mbps)</span>
+                <span class="data-value na" id="val-net-down">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">RTT (ms)</span>
+                <span class="data-value na" id="val-net-rtt">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Save Data Mode</span>
+                <span class="data-value na" id="val-net-save">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Online</span>
+                <span class="data-value na" id="val-net-online">—</span>
+            </div>
+        </div>
+        <div class="net-bars" id="net-bars">
+            <div class="net-bar" style="height:8px"></div>
+            <div class="net-bar" style="height:16px"></div>
+            <div class="net-bar" style="height:24px"></div>
+            <div class="net-bar" style="height:32px"></div>
+        </div>
+        <div class="status-text" id="status-network">Reading Network Information API...</div>
+    </div>
+
+    <!-- Screen & Display -->
+    <div class="card" id="card-screen">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">🖥️</span>
+                <span class="card-name">Screen & Display</span>
+            </div>
+            <div class="status-dot active" id="dot-screen"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Resolution</span>
+                <span class="data-value" id="val-screen-res">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Available</span>
+                <span class="data-value" id="val-screen-avail">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Color Depth</span>
+                <span class="data-value" id="val-screen-color">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Pixel Ratio</span>
+                <span class="data-value" id="val-screen-pixel">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Orientation</span>
+                <span class="data-value" id="val-screen-orient">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Viewport</span>
+                <span class="data-value" id="val-viewport">—</span>
+            </div>
+        </div>
+        <div class="status-text" id="status-screen">Always available</div>
+    </div>
+
+    <!-- Visibility & Focus -->
+    <div class="card" id="card-visibility">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">👁️</span>
+                <span class="card-name">Page Visibility</span>
+            </div>
+            <div class="status-dot active" id="dot-visibility"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Visibility State</span>
+                <span class="data-value" id="val-vis-state">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Hidden</span>
+                <span class="data-value" id="val-vis-hidden">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Has Focus</span>
+                <span class="data-value" id="val-vis-focus">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Time Hidden (ms)</span>
+                <span class="data-value" id="val-vis-time">—</span>
+            </div>
+        </div>
+        <div class="log-area" id="log-visibility">Visibility change log...</div>
+        <div class="status-text">Tracks tab focus and visibility</div>
+    </div>
+
+    <!-- Performance / Memory -->
+    <div class="card" id="card-perf">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">⚡</span>
+                <span class="card-name">Performance & Memory</span>
+            </div>
+            <div class="status-dot active" id="dot-perf"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">JS Heap Used</span>
+                <span class="data-value na" id="val-heap-used">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">JS Heap Total</span>
+                <span class="data-value na" id="val-heap-total">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">JS Heap Limit</span>
+                <span class="data-value na" id="val-heap-limit">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Navigation Type</span>
+                <span class="data-value na" id="val-nav-type">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Page Load Time</span>
+                <span class="data-value na" id="val-load-time">—</span>
+            </div>
+        </div>
+        <div class="bar-meter">
+            <span style="font-size:0.7em;color:#556">HEAP USAGE</span>
+            <div class="bar-bg"><div class="bar-fill" id="bar-heap"></div></div>
+        </div>
+        <div class="status-text">Updates every 2s</div>
+    </div>
+
+    <!-- Hardware Info -->
+    <div class="card" id="card-hw">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">💻</span>
+                <span class="card-name">Hardware Info</span>
+            </div>
+            <div class="status-dot active" id="dot-hw"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">CPU Cores</span>
+                <span class="data-value" id="val-cpu">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Device Memory (GB)</span>
+                <span class="data-value na" id="val-mem">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Platform</span>
+                <span class="data-value" id="val-platform">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Language</span>
+                <span class="data-value" id="val-lang">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Max Touch Points</span>
+                <span class="data-value" id="val-touch-pts">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Cookies Enabled</span>
+                <span class="data-value" id="val-cookies">—</span>
+            </div>
+        </div>
+        <div class="status-text">From Navigator API</div>
+    </div>
+
+    <!-- Pointer / Mouse -->
+    <div class="card" id="card-pointer">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">🖱️</span>
+                <span class="card-name">Pointer / Mouse</span>
+            </div>
+            <div class="status-dot" id="dot-pointer"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">X (px)</span>
+                <span class="data-value na" id="val-ptr-x">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Y (px)</span>
+                <span class="data-value na" id="val-ptr-y">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Pointer Type</span>
+                <span class="data-value na" id="val-ptr-type">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Pressure</span>
+                <span class="data-value na" id="val-ptr-pressure">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Tilt X</span>
+                <span class="data-value na" id="val-ptr-tiltx">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Tilt Y</span>
+                <span class="data-value na" id="val-ptr-tilty">—</span>
+            </div>
+        </div>
+        <div class="status-text">Move pointer over page to read</div>
+    </div>
+
+    <!-- Keyboard -->
+    <div class="card" id="card-keyboard">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">⌨️</span>
+                <span class="card-name">Keyboard</span>
+            </div>
+            <div class="status-dot" id="dot-keyboard"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Last Key</span>
+                <span class="data-value na" id="val-key-key">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Code</span>
+                <span class="data-value na" id="val-key-code">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Ctrl / Alt / Shift</span>
+                <span class="data-value na" id="val-key-mods">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Repeat</span>
+                <span class="data-value na" id="val-key-repeat">—</span>
+            </div>
+        </div>
+        <div class="log-area" id="log-keyboard">Key events will appear here...</div>
+        <div class="status-text">Press any key on the page</div>
+    </div>
+
+    <!-- Scroll Position -->
+    <div class="card" id="card-scroll">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">📜</span>
+                <span class="card-name">Scroll Position</span>
+            </div>
+            <div class="status-dot active" id="dot-scroll"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Scroll X (px)</span>
+                <span class="data-value" id="val-scroll-x">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Scroll Y (px)</span>
+                <span class="data-value" id="val-scroll-y">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Scroll % (Y)</span>
+                <span class="data-value" id="val-scroll-pct">—</span>
+            </div>
+        </div>
+        <div class="bar-meter">
+            <span style="font-size:0.7em;color:#556">SCROLL</span>
+            <div class="bar-bg"><div class="bar-fill" id="bar-scroll"></div></div>
+        </div>
+        <div class="status-text">Scroll the page</div>
+    </div>
+
+    <!-- Idle Detection (experimental) -->
+    <div class="card" id="card-idle">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">😴</span>
+                <span class="card-name">Idle Detection</span>
+            </div>
+            <div class="status-dot" id="dot-idle"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">User State</span>
+                <span class="data-value na" id="val-idle-user">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Screen State</span>
+                <span class="data-value na" id="val-idle-screen">—</span>
+            </div>
+        </div>
+        <button class="perm-btn" onclick="startIdleDetection()">START IDLE DETECTION</button>
+        <div class="status-text" id="status-idle">Experimental — Chrome 94+</div>
+        <div class="log-area" id="log-idle">Idle Detection API logs...</div>
+    </div>
+
+    <!-- Gamepad -->
+    <div class="card" id="card-gamepad">
+        <div class="card-header">
+            <div class="card-title">
+                <span class="card-icon">🎮</span>
+                <span class="card-name">Gamepad</span>
+            </div>
+            <div class="status-dot" id="dot-gamepad"></div>
+        </div>
+        <div class="data-rows">
+            <div class="data-row">
+                <span class="data-label">Connected</span>
+                <span class="data-value na" id="val-gp-connected">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">ID</span>
+                <span class="data-value na" id="val-gp-id">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Axes (x, y, ...)</span>
+                <span class="data-value na" id="val-gp-axes">—</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Buttons Pressed</span>
+                <span class="data-value na" id="val-gp-buttons">—</span>
+            </div>
+        </div>
+        <div class="status-text" id="status-gamepad">Connect and press a button on a gamepad</div>
+    </div>
+
+</div>
+
+<!-- API SUPPORT -->
+<div class="section-title">API Support Matrix</div>
+<div class="grid" id="support-grid">
+</div>
+
+<div class="footer">
+    BROWSER SENSOR DASHBOARD — ALL DATA STAYS IN YOUR BROWSER — NO SERVER COMMUNICATION
+</div>
+
+<script>
+    // ── UTILITIES ────────────────────────────────────────────────────────
+    const $ = id => document.getElementById(id);
+    const fmt = (v, dec = 3) => v !== null && v !== undefined ? Number(v).toFixed(dec) : '—';
+    const fmtMB = b => b ? (b / 1048576).toFixed(1) + ' MB' : '—';
+
+    function setVal(id, value, isActive = true) {
+        const el = $(id);
+        if (!el) return;
+        el.textContent = value ?? '—';
+        if (value !== null && value !== undefined && value !== '—') {
+            el.classList.remove('na', 'error-val');
+            if (isActive) el.classList.add('');
+        } else {
+            el.classList.add('na');
+        }
+    }
+
+    function setStatus(id, text, type = 'normal') {
+        const el = $(id);
+        if (!el) return;
+        el.textContent = text;
+        el.style.color = type === 'error' ? '#ff4444' : type === 'success' ? '#00ff88' : type === 'warn' ? '#ffaa00' : '#556';
+    }
+
+    function setDot(id, state) {
+        const el = $(id);
+        if (!el) return;
+        el.className = 'status-dot ' + state;
+    }
+
+    function setCard(id, state) {
+        const el = $(id);
+        if (!el) return;
+        el.className = 'card ' + state;
+    }
+
+    function addLog(logId, text) {
+        const el = $(logId);
+        if (!el) return;
+        const line = document.createElement('div');
+        line.textContent = '[' + new Date().toTimeString().split(' ')[0] + '] ' + text;
+        el.insertBefore(line, el.firstChild);
+        while (el.children.length > 20) el.removeChild(el.lastChild);
+    }
+
+    function clamp(val, min, max) {
+        return Math.max(min, Math.min(max, val));
+    }
+
+    function setBar(id, pct) {
+        const el = $(id);
+        if (el) el.style.width = clamp(pct, 0, 100) + '%';
+    }
+
+    // ── SCREEN ──────────────────────────────────────────────────────────
+    function updateScreen() {
+        setVal('val-screen-res', screen.width + ' × ' + screen.height + ' px');
+        setVal('val-screen-avail', screen.availWidth + ' × ' + screen.availHeight + ' px');
+        setVal('val-screen-color', screen.colorDepth + ' bit');
+        setVal('val-screen-pixel', window.devicePixelRatio.toFixed(2) + 'x');
+        setVal('val-screen-orient', screen.orientation ? screen.orientation.type : 'N/A');
+        setVal('val-viewport', window.innerWidth + ' × ' + window.innerHeight + ' px');
+    }
+    updateScreen();
+    setCard('card-screen', 'active');
+    window.addEventListener('resize', updateScreen);
+    screen.orientation && screen.orientation.addEventListener('change', updateScreen);
+
+    // ── HARDWARE ─────────────────────────────────────────────────────────
+    setVal('val-cpu', navigator.hardwareConcurrency ?? '—');
+    setVal('val-mem', navigator.deviceMemory !== undefined ? navigator.deviceMemory + ' GB' : 'N/A');
+    setVal('val-platform', navigator.platform ?? '—');
+    setVal('val-lang', navigator.language ?? '—');
+    setVal('val-touch-pts', navigator.maxTouchPoints ?? '—');
+    setVal('val-cookies', navigator.cookieEnabled ? 'Yes' : 'No');
+    setCard('card-hw', 'active');
+    setDot('dot-hw', 'active');
+
+    // ── VISIBILITY ───────────────────────────────────────────────────────
+    let hiddenStart = null;
+    let totalHiddenMs = 0;
+
+    function updateVisibility() {
+        setVal('val-vis-state', document.visibilityState);
+        setVal('val-vis-hidden', document.hidden ? 'YES' : 'NO');
+        setVal('val-vis-focus', document.hasFocus() ? 'YES' : 'NO');
+    }
+    updateVisibility();
+    setCard('card-visibility', 'active');
+    setDot('dot-visibility', 'active');
+
+    document.addEventListener('visibilitychange', () => {
+        updateVisibility();
+        if (document.hidden) {
+            hiddenStart = Date.now();
+            addLog('log-visibility', 'Page hidden');
+        } else {
+            if (hiddenStart) totalHiddenMs += Date.now() - hiddenStart;
+            hiddenStart = null;
+            addLog('log-visibility', 'Page visible');
+        }
+    });
+
+    document.addEventListener('focus', () => { updateVisibility(); addLog('log-visibility', 'Window focused'); });
+    document.addEventListener('blur', () => { updateVisibility(); addLog('log-visibility', 'Window blurred'); });
+
+    setInterval(() => {
+        const current = hiddenStart ? totalHiddenMs + (Date.now() - hiddenStart) : totalHiddenMs;
+        setVal('val-vis-time', current.toFixed(0));
+        updateVisibility();
+    }, 500);
+
+    // ── SCROLL ───────────────────────────────────────────────────────────
+    function updateScroll() {
+        const docH = document.documentElement.scrollHeight - window.innerHeight;
+        const pct = docH > 0 ? (window.scrollY / docH) * 100 : 0;
+        setVal('val-scroll-x', window.scrollX.toFixed(0) + ' px');
+        setVal('val-scroll-y', window.scrollY.toFixed(0) + ' px');
+        setVal('val-scroll-pct', pct.toFixed(1) + ' %');
+        setBar('bar-scroll', pct);
+    }
+    window.addEventListener('scroll', () => { updateScroll(); setDot('dot-scroll', 'active'); });
+    updateScroll();
+
+    // ── POINTER ───────────────────────────────────────────────────────────
+    document.addEventListener('pointermove', e => {
+        setDot('dot-pointer', 'active');
+        setCard('card-pointer', 'active');
+        setVal('val-ptr-x', e.clientX.toFixed(0) + ' px');
+        setVal('val-ptr-y', e.clientY.toFixed(0) + ' px');
+        setVal('val-ptr-type', e.pointerType || '—');
+        setVal('val-ptr-pressure', e.pressure.toFixed(3));
+        setVal('val-ptr-tiltx', e.tiltX !== undefined ? e.tiltX + ' °' : 'N/A');
+        setVal('val-ptr-tilty', e.tiltY !== undefined ? e.tiltY + ' °' : 'N/A');
+    });
+
+    // ── KEYBOARD ───────────────────────────────────────────────────────────
+    document.addEventListener('keydown', e => {
+        setDot('dot-keyboard', 'active');
+        setCard('card-keyboard', 'active');
+        setVal('val-key-key', e.key);
+        setVal('val-key-code', e.code);
+        const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Meta']
+            .filter(Boolean).join(' + ') || 'None';
+        setVal('val-key-mods', mods);
+        setVal('val-key-repeat', e.repeat ? 'YES' : 'NO');
+        addLog('log-keyboard', e.code + ' ("' + (e.key.length === 1 ? e.key : e.key) + '") mods: ' + mods);
+    });
+
+    document.addEventListener('keyup', () => setDot('dot-keyboard', 'active'));
+
+    // ── ORIENTATION ───────────────────────────────────────────────────────
+    let orientationStarted = false;
+
+    function handleOrientation(e) {
+        if (!orientationStarted) {
+            orientationStarted = true;
+            setCard('card-orientation', 'active');
+            setDot('dot-orientation', 'active');
+            $('btn-orientation').style.display = 'none';
+            setStatus('status-orientation', 'Receiving orientation data', 'success');
+        }
+        const alpha = e.alpha, beta = e.beta, gamma = e.gamma;
+        setVal('val-alpha', alpha !== null ? fmt(alpha, 1) + ' °' : 'null');
+        setVal('val-beta', beta !== null ? fmt(beta, 1) + ' °' : 'null');
+        setVal('val-gamma', gamma !== null ? fmt(gamma, 1) + ' °' : 'null');
+        setVal('val-absolute', e.absolute ? 'YES' : 'NO');
+
+        // Compass needle (alpha = compass heading)
+        if (alpha !== null) {
+            $('compass-needle').style.transform = 'translateX(-50%) rotate(' + alpha + 'deg)';
+        }
+
+        // Device visual tilt (simple CSS approximation)
+        const bClamp = clamp(beta ?? 0, -90, 90);
+        const gClamp = clamp(gamma ?? 0, -45, 45);
+        $('device-visual').style.transform = `rotateX(${bClamp * 0.3}deg) rotateZ(${-gClamp}deg)`;
+    }
+
+    async function requestOrientationPermission() {
+        if (typeof DeviceOrientationEvent !== 'undefined' &&
+            typeof DeviceOrientationEvent.requestPermission === 'function') {
+            try {
+                const perm = await DeviceOrientationEvent.requestPermission();
+                if (perm === 'granted') {
+                    window.addEventListener('deviceorientation', handleOrientation);
+                } else {
+                    setStatus('status-orientation', 'Permission denied', 'error');
+                    setCard('card-orientation', 'error');
+                    setDot('dot-orientation', 'error');
+                }
+            } catch (err) {
+                setStatus('status-orientation', 'Error: ' + err.message, 'error');
+            }
+        } else {
+            window.addEventListener('deviceorientation', handleOrientation);
+            setStatus('status-orientation', 'Listening (no explicit permission needed)...', 'warn');
+        }
+    }
+
+    // Try auto-start for non-iOS
+    if (typeof DeviceOrientationEvent !== 'undefined') {
+        if (typeof DeviceOrientationEvent.requestPermission !== 'function') {
+            window.addEventListener('deviceorientation', handleOrientation);
+        }
+    } else {
+        setCard('card-orientation', 'error');
+        setDot('dot-orientation', 'error');
+        setStatus('status-orientation', 'DeviceOrientationEvent not supported', 'error');
+        $('btn-orientation').style.display = 'none';
+    }
+
+    // ── MOTION / ACCELEROMETER ─────────────────────────────────────────
+    let motionStarted = false;
+
+    function handleMotion(e) {
+        if (!motionStarted) {
+            motionStarted = true;
+            setCard('card-motion', 'active');
+            setDot('dot-motion', 'active');
+            setCard('card-gyro', 'active');
+            setDot('dot-gyro', 'active');
+            $('btn-motion').style.display = 'none';
+            setStatus('status-motion', 'Receiving motion data', 'success');
+            setStatus('status-gyro', 'Receiving rotation data', 'success');
+        }
+        const a = e.acceleration;
+        const ag = e.accelerationIncludingGravity;
+        const r = e.rotationRate;
+
+        if (a) {
+            setVal('val-acc-x', a.x !== null ? fmt(a.x) : '—');
+            setVal('val-acc-y', a.y !== null ? fmt(a.y) : '—');
+            setVal('val-acc-z', a.z !== null ? fmt(a.z) : '—');
+            if (a.x !== null && a.y !== null && a.z !== null) {
+                const mag = Math.sqrt(a.x ** 2 + a.y ** 2 + a.z ** 2);
+                setVal('val-acc-mag', fmt(mag) + ' m/s²');
+                setBar('bar-accel', clamp(mag * 5, 0, 100));
+            }
+        }
+        if (ag) {
+            setVal('val-accg-x', ag.x !== null ? fmt(ag.x) : '—');
+            setVal('val-accg-y', ag.y !== null ? fmt(ag.y) : '—');
+            setVal('val-accg-z', ag.z !== null ? fmt(ag.z) : '—');
+        }
+        if (r) {
+            setVal('val-rot-alpha', r.alpha !== null ? fmt(r.alpha, 1) + ' °/s' : '—');
+            setVal('val-rot-beta', r.beta !== null ? fmt(r.beta, 1) + ' °/s' : '—');
+            setVal('val-rot-gamma', r.gamma !== null ? fmt(r.gamma, 1) + ' °/s' : '—');
+            if (r.alpha !== null && r.beta !== null && r.gamma !== null) {
+                const mag = Math.sqrt(r.alpha ** 2 + r.beta ** 2 + r.gamma ** 2);
+                setVal('val-gyro-mag', fmt(mag, 1) + ' °/s');
+                setBar('bar-gyro', clamp(mag / 5, 0, 100));
+            }
+        }
+        setVal('val-interval', e.interval !== null ? e.interval.toFixed(1) + ' ms' : '—');
+    }
+
+    async function requestMotionPermission() {
+        if (typeof DeviceMotionEvent !== 'undefined' &&
+            typeof DeviceMotionEvent.requestPermission === 'function') {
+            try {
+                const perm = await DeviceMotionEvent.requestPermission();
+                if (perm === 'granted') {
+                    window.addEventListener('devicemotion', handleMotion);
+                } else {
+                    setStatus('status-motion', 'Permission denied', 'error');
+                    setCard('card-motion', 'error');
+                    setDot('dot-motion', 'error');
+                }
+            } catch (err) {
+                setStatus('status-motion', 'Error: ' + err.message, 'error');
+            }
+        } else {
+            window.addEventListener('devicemotion', handleMotion);
+        }
+    }
+
+    if (typeof DeviceMotionEvent !== 'undefined') {
+        if (typeof DeviceMotionEvent.requestPermission !== 'function') {
+            window.addEventListener('devicemotion', handleMotion);
+        }
+    } else {
+        setCard('card-motion', 'error');
+        setDot('dot-motion', 'error');
+        setStatus('status-motion', 'DeviceMotionEvent not supported', 'error');
+        $('btn-motion').style.display = 'none';
+    }
+
+    // ── GENERIC SENSOR API ──────────────────────────────────────────────
+    function startGenericSensor(SensorClass, name, onRead, cardId, dotId, statusId, logId) {
+        if (typeof SensorClass === 'undefined') {
+            setCard(cardId, 'error');
+            setDot(dotId, 'error');
+            setStatus(statusId, name + ' API not available in this browser', 'error');
+            if (logId) addLog(logId, name + ' not supported');
+            return;
+        }
+        try {
+            const sensor = new SensorClass({ frequency: 10 });
+            sensor.addEventListener('reading', () => {
+                setCard(cardId, 'active');
+                setDot(dotId, 'active');
+                onRead(sensor);
+            });
+            sensor.addEventListener('error', e => {
+                setCard(cardId, 'error');
+                setDot(dotId, 'error');
+                setStatus(statusId, 'Error: ' + e.error.message, 'error');
+                if (logId) addLog(logId, 'Error: ' + e.error.message);
+            });
+            sensor.start();
+            setStatus(statusId, 'Sensor started, waiting for reading...', 'warn');
+        } catch (e) {
+            setCard(cardId, 'error');
+            setDot(dotId, 'error');
+            setStatus(statusId, e.name + ': ' + e.message, 'error');
+            if (logId) addLog(logId, e.name + ': ' + e.message);
+        }
+    }
+
+    // Ambient Light
+    startGenericSensor(
+        window.AmbientLightSensor,
+        'AmbientLightSensor',
+        sensor => {
+            const lux = sensor.illuminance;
+            setVal('val-lux', lux !== null ? lux.toFixed(1) + ' lux' : '—');
+            setBar('bar-light', clamp(Math.log10(Math.max(lux, 1)) / 5 * 100, 0, 100));
+            setStatus('status-light', 'Reading: ' + (lux ? lux.toFixed(1) + ' lux' : '—'), 'success');
+        },
+        'card-light', 'dot-light', 'status-light', 'log-light'
+    );
+
+    // Magnetometer
+    startGenericSensor(
+        window.Magnetometer,
+        'Magnetometer',
+        sensor => {
+            const x = sensor.x, y = sensor.y, z = sensor.z;
+            setVal('val-mag-x', fmt(x) + ' μT');
+            setVal('val-mag-y', fmt(y) + ' μT');
+            setVal('val-mag-z', fmt(z) + ' μT');
+            if (x !== null && y !== null && z !== null) {
+                const mag = Math.sqrt(x ** 2 + y ** 2 + z ** 2);
+                setVal('val-mag-mag', fmt(mag, 1) + ' μT');
+                setBar('bar-mag', clamp(mag / 1, 0, 100));
+            }
+            setStatus('status-mag', 'Receiving magnetic field data', 'success');
+        },
+        'card-mag', 'dot-mag', 'status-mag', 'log-mag'
+    );
+
+    // Absolute Orientation
+    startGenericSensor(
+        window.AbsoluteOrientationSensor,
+        'AbsoluteOrientationSensor',
+        sensor => {
+            const q = sensor.quaternion;
+            if (q) {
+                setVal('val-absori-x', fmt(q[0]));
+                setVal('val-absori-y', fmt(q[1]));
+                setVal('val-absori-z', fmt(q[2]));
+                setVal('val-absori-w', fmt(q[3]));
+            }
+            setStatus('status-absori', 'Receiving quaternion data', 'success');
+        },
+        'card-absori', 'dot-absori', 'status-absori', 'log-absori'
+    );
+
+    // Relative Orientation
+    startGenericSensor(
+        window.RelativeOrientationSensor,
+        'RelativeOrientationSensor',
+        sensor => {
+            const q = sensor.quaternion;
+            if (q) {
+                setVal('val-relori-x', fmt(q[0]));
+                setVal('val-relori-y', fmt(q[1]));
+                setVal('val-relori-z', fmt(q[2]));
+                setVal('val-relori-w', fmt(q[3]));
+            }
+            setStatus('status-relori', 'Receiving quaternion data', 'success');
+        },
+        'card-relori', 'dot-relori', 'status-relori', 'log-relori'
+    );
+
+    // Gravity Sensor
+    startGenericSensor(
+        window.GravitySensor,
+        'GravitySensor',
+        sensor => {
+            setVal('val-grav-x', fmt(sensor.x) + ' m/s²');
+            setVal('val-grav-y', fmt(sensor.y) + ' m/s²');
+            setVal('val-grav-z', fmt(sensor.z) + ' m/s²');
+            setStatus('status-gravity', 'Reading gravity vector', 'success');
+        },
+        'card-gravity', 'dot-gravity', 'status-gravity', 'log-gravity'
+    );
+
+    // Linear Acceleration
+    startGenericSensor(
+        window.LinearAccelerationSensor,
+        'LinearAccelerationSensor',
+        sensor => {
+            setVal('val-lin-x', fmt(sensor.x) + ' m/s²');
+            setVal('val-lin-y', fmt(sensor.y) + ' m/s²');
+            setVal('val-lin-z', fmt(sensor.z) + ' m/s²');
+            setStatus('status-linear', 'Reading linear acceleration', 'success');
+        },
+        'card-linear', 'dot-linear', 'status-linear', 'log-linear'
+    );
+
+    // ── GEOLOCATION ─────────────────────────────────────────────────────
+    function startGeo() {
+        if (!navigator.geolocation) {
+            setCard('card-geo', 'error');
+            setDot('dot-geo', 'error');
+            setStatus('status-geo', 'Geolocation not supported', 'error');
+            return;
+        }
+        setStatus('status-geo', 'Requesting position...', 'warn');
+        navigator.geolocation.watchPosition(
+            pos => {
+                setCard('card-geo', 'active');
+                setDot('dot-geo', 'active');
+                setVal('val-lat', pos.coords.latitude.toFixed(6) + ' °');
+                setVal('val-lon', pos.coords.longitude.toFixed(6) + ' °');
+                setVal('val-alt', pos.coords.altitude !== null ? pos.coords.altitude.toFixed(1) + ' m' : 'N/A');
+                setVal('val-geo-acc', pos.coords.accuracy.toFixed(1) + ' m');
+                setVal('val-heading', pos.coords.heading !== null ? pos.coords.heading.toFixed(1) + ' °' : 'N/A');
+                setVal('val-speed', pos.coords.speed !== null ? pos.coords.speed.toFixed(2) + ' m/s' : 'N/A');
+                setStatus('status-geo', 'Live position tracking', 'success');
+            },
+            err => {
+                setCard('card-geo', 'error');
+                setDot('dot-geo', 'error');
+                setStatus('status-geo', err.message, 'error');
+            },
+            { enableHighAccuracy: true, maximumAge: 0 }
+        );
+    }
+
+    // ── BATTERY ──────────────────────────────────────────────────────────
+    if (navigator.getBattery) {
+        navigator.getBattery().then(bat => {
+            setCard('card-battery', 'active');
+            setDot('dot-battery', 'active');
+            setStatus('status-battery', 'Battery API available', 'success');
+
+            function updateBattery() {
+                const level = bat.level * 100;
+                setVal('val-batt-level', level.toFixed(0) + ' %');
+                setVal('val-batt-charging', bat.charging ? '⚡ YES' : 'NO');
+                setVal('val-batt-full', bat.chargingTime !== Infinity ? bat.chargingTime + ' s' : 'N/A');
+                setVal('val-batt-empty', bat.dischargingTime !== Infinity ? bat.dischargingTime + ' s' : 'N/A');
+
+                const fill = $('battery-fill');
+                fill.style.width = level + '%';
+                fill.className = 'battery-fill' + (level < 20 ? ' low' : level < 50 ? ' medium' : '');
+            }
+
+            updateBattery();
+            bat.addEventListener('chargingchange', updateBattery);
+            bat.addEventListener('levelchange', updateBattery);
+            bat.addEventListener('chargingtimechange', updateBattery);
+            bat.addEventListener('dischargingtimechange', updateBattery);
+        }).catch(() => {
+            setCard('card-battery', 'error');
+            setDot('dot-battery', 'error');
+            setStatus('status-battery', 'Battery API unavailable (Firefox/Safari disabled it)', 'error');
+        });
+    } else {
+        setCard('card-battery', 'error');
+        setDot('dot-battery', 'error');
+        setStatus('status-battery', 'Battery API not supported', 'error');
+    }
+
+    // ── NETWORK ───────────────────────────────────────────────────────────
+    function updateNetwork() {
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        setVal('val-net-online', navigator.onLine ? 'YES' : 'NO');
+        if (conn) {
+            setCard('card-network', 'active');
+            setDot('dot-network', 'active');
+            setVal('val-net-type', conn.type ?? 'N/A');
+            setVal('val-net-eff', conn.effectiveType ?? 'N/A');
+            setVal('val-net-down', conn.downlink !== undefined ? conn.downlink + ' Mbps' : 'N/A');
+            setVal('val-net-rtt', conn.rtt !== undefined ? conn.rtt + ' ms' : 'N/A');
+            setVal('val-net-save', conn.saveData ? 'YES' : 'NO');
+            setStatus('status-network', 'Network Information API active', 'success');
+
+            const eff = conn.effectiveType;
+            const bars = document.querySelectorAll('.net-bar');
+            const levels = { 'slow-2g': 1, '2g': 2, '3g': 3, '4g': 4 };
+            const lit = levels[eff] || 0;
+            bars.forEach((b, i) => b.classList.toggle('lit', i < lit));
+        } else {
+            setCard('card-network', 'warning');
+            setDot('dot-network', 'warning');
+            setStatus('status-network', 'Network Information API not supported', 'warn');
+        }
+    }
+    updateNetwork();
+    window.addEventListener('online', updateNetwork);
+    window.addEventListener('offline', updateNetwork);
+    if (navigator.connection) navigator.connection.addEventListener('change', updateNetwork);
+
+    // ── PERFORMANCE & MEMORY ─────────────────────────────────────────────
+    function updatePerf() {
+        if (performance.memory) {
+            setDot('dot-perf', 'active');
+            setVal('val-heap-used', fmtMB(performance.memory.usedJSHeapSize));
+            setVal('val-heap-total', fmtMB(performance.memory.totalJSHeapSize));
+            setVal('val-heap-limit', fmtMB(performance.memory.jsHeapSizeLimit));
+            const pct = (performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100;
+            setBar('bar-heap', pct);
+        } else {
+            setVal('val-heap-used', 'N/A');
+            setVal('val-heap-total', 'N/A');
+            setVal('val-heap-limit', 'N/A');
+        }
+
+        const nav = performance.getEntriesByType('navigation')[0];
+        if (nav) {
+            const types = { 0: 'navigate', 1: 'reload', 2: 'back_forward', 255: 'prerender' };
+            setVal('val-nav-type', nav.type ?? '—');
+            setVal('val-load-time', nav.loadEventEnd > 0 ? (nav.loadEventEnd - nav.startTime).toFixed(0) + ' ms' : '—');
+        }
+    }
+    updatePerf();
+    setInterval(updatePerf, 2000);
+
+    // ── GAMEPAD ───────────────────────────────────────────────────────────
+    function pollGamepad() {
+        const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+        const pad = Array.from(pads).find(p => p);
+        if (pad) {
+            setCard('card-gamepad', 'active');
+            setDot('dot-gamepad', 'active');
+            setVal('val-gp-connected', 'YES — Index ' + pad.index);
+            setVal('val-gp-id', pad.id.substring(0, 40) + (pad.id.length > 40 ? '…' : ''));
+            setVal('val-gp-axes', pad.axes.map(a => a.toFixed(2)).join(', '));
+            const pressed = pad.buttons
+                .map((b, i) => b.pressed ? i : null)
+                .filter(i => i !== null).join(', ') || 'None';
+            setVal('val-gp-buttons', pressed);
+            setStatus('status-gamepad', pad.mapping + ' mapping', 'success');
+        }
+        requestAnimationFrame(pollGamepad);
+    }
+    window.addEventListener('gamepadconnected', e => {
+        setStatus('status-gamepad', 'Connected: ' + e.gamepad.id.substring(0, 30), 'success');
+        pollGamepad();
+    });
+    window.addEventListener('gamepaddisconnected', () => {
+        setCard('card-gamepad', 'warning');
+        setDot('dot-gamepad', 'warning');
+        setStatus('status-gamepad', 'Gamepad disconnected', 'warn');
+        setVal('val-gp-connected', 'NO');
+    });
+
+    // ── IDLE DETECTION ────────────────────────────────────────────────────
+    async function startIdleDetection() {
+        if (!('IdleDetector' in window)) {
+            setCard('card-idle', 'error');
+            setDot('dot-idle', 'error');
+            setStatus('status-idle', 'IdleDetector API not supported', 'error');
+            addLog('log-idle', 'IdleDetector not available');
+            return;
+        }
+        try {
+            const perm = await IdleDetector.requestPermission();
+            if (perm !== 'granted') {
+                setStatus('status-idle', 'Permission denied', 'error');
+                return;
+            }
+            const detector = new IdleDetector();
+            detector.addEventListener('change', () => {
+                setCard('card-idle', 'active');
+                setDot('dot-idle', 'active');
+                setVal('val-idle-user', detector.userState);
+                setVal('val-idle-screen', detector.screenState);
+                addLog('log-idle', 'user: ' + detector.userState + ' | screen: ' + detector.screenState);
+            });
+            await detector.start({ threshold: 60000 });
+            setStatus('status-idle', 'Detecting idle state (1 min threshold)', 'success');
+        } catch (e) {
+            setCard('card-idle', 'error');
+            setDot('dot-idle', 'error');
+            setStatus('status-idle', e.name + ': ' + e.message, 'error');
+            addLog('log-idle', 'Error: ' + e.message);
+        }
+    }
+
+    // ── API SUPPORT MATRIX ────────────────────────────────────────────────
+    const apis = [
+        ['DeviceOrientationEvent', 'typeof DeviceOrientationEvent !== "undefined"'],
+        ['DeviceMotionEvent', 'typeof DeviceMotionEvent !== "undefined"'],
+        ['Geolocation', '"geolocation" in navigator'],
+        ['Accelerometer (Generic)', 'typeof Accelerometer !== "undefined"'],
+        ['Gyroscope (Generic)', 'typeof Gyroscope !== "undefined"'],
+        ['Magnetometer', 'typeof Magnetometer !== "undefined"'],
+        ['AmbientLightSensor', 'typeof AmbientLightSensor !== "undefined"'],
+        ['AbsoluteOrientationSensor', 'typeof AbsoluteOrientationSensor !== "undefined"'],
+        ['RelativeOrientationSensor', 'typeof RelativeOrientationSensor !== "undefined"'],
+        ['GravitySensor', 'typeof GravitySensor !== "undefined"'],
+        ['LinearAccelerationSensor', 'typeof LinearAccelerationSensor !== "undefined"'],
+        ['Battery API', '"getBattery" in navigator'],
+        ['Network Information', '"connection" in navigator || "mozConnection" in navigator'],
+        ['Gamepad API', '"getGamepads" in navigator'],
+        ['IdleDetector', '"IdleDetector" in window'],
+        ['Screen Orientation', '"orientation" in screen'],
+        ['performance.memory', '"memory" in performance'],
+        ['PointerEvent', 'typeof PointerEvent !== "undefined"'],
+        ['Web Bluetooth', '"bluetooth" in navigator'],
+        ['Web USB', '"usb" in navigator'],
+        ['Web Serial', '"serial" in navigator'],
+        ['Vibration API', '"vibrate" in navigator'],
+        ['Wake Lock', '"wakeLock" in navigator'],
+    ];
+
+    const grid = $('support-grid');
+    apis.forEach(([name, check]) => {
+        let supported = false;
+        try { supported = eval(check); } catch (e) {}
+        const card = document.createElement('div');
+        card.className = 'card ' + (supported ? 'active' : 'error');
+        card.innerHTML = `
+            <div class="card-header">
+                <div class="card-title">
+                    <span class="card-name">${name}</span>
+                </div>
+                <span class="support-tag ${supported ? 'yes' : 'no'}">${supported ? '✓ YES' : '✗ NO'}</span>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+
+</script>
+</body>
+</html>
