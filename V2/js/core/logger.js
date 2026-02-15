@@ -47,6 +47,7 @@ class Logger {
     #originalConsole = {};
     #maxMessages = 1000;
     #interceptingConsole = false;
+    #keyedMessages = new Map();  // key -> message ID for keyed updates
     
     constructor() {
         // Store original console methods before anything else
@@ -141,14 +142,14 @@ class Logger {
      */
     #addMessage(message) {
         // Check for duplicate (same origin, subOrigin, text within last 5 messages)
-        const recentIndex = this.#messages.slice(-5).findIndex(m => 
+        const recentIndex = this.#messages.slice(-10).findIndex(m => 
             m.origin === message.origin && 
             m.subOrigin === message.subOrigin && 
             m.text === message.text
         );
         
         if (recentIndex !== -1) {
-            const actualIndex = this.#messages.length - 5 + recentIndex;
+            const actualIndex = this.#messages.length - 10+ recentIndex;
             this.#messages[actualIndex].count++;
             this.#messages[actualIndex].timestamp = message.timestamp;
             this.#notifyListeners('update', this.#messages[actualIndex]);
@@ -245,6 +246,68 @@ class Logger {
     }
     
     /**
+     * Log a keyed message - if the key exists, updates the existing message
+     * instead of creating a new one. Useful for frequently updating values
+     * like "Seeked to Xs" or "Channel N created".
+     * 
+     * Usage:
+     *   logger.keyed('seek', 'debug', 'Render', 'Seek', `Seeked to ${time}s`);
+     *   logger.keyed('channel-0', 'debug', 'Render', 'Channel', `Channel 0 created (${w}×${h})`);
+     * 
+     * @param {string} key - Unique key for this message (same key = update)
+     * @param {string} type - Message type: 'info', 'warn', 'error', 'debug', 'success', 'system'
+     * @param {string} origin - Origin category
+     * @param {string} subOrigin - Sub-origin category
+     * @param {string} text - Message text
+     * @returns {string} Message ID
+     */
+    keyed(key, type, origin, subOrigin, text) {
+        const existingId = this.#keyedMessages.get(key);
+        
+        if (existingId) {
+            // Update existing message and move to bottom
+            const messageIndex = this.#messages.findIndex(m => m.id === existingId);
+            if (messageIndex !== -1) {
+                const message = this.#messages[messageIndex];
+                message.text = text;
+                message.timestamp = Date.now();
+                message.count++;
+                
+                // Move to bottom of array (most recent)
+                this.#messages.splice(messageIndex, 1);
+                this.#messages.push(message);
+                
+                this.#notifyListeners('update', message);
+                return existingId;
+            }
+            // Message was removed (e.g., by trimming), fall through to create new
+        }
+        
+        // Create new message
+        const logType = LOG_TYPE[type.toUpperCase()] || LOG_TYPE.INFO;
+        const message = new LogMessage(logType, origin, subOrigin, text);
+        this.#messages.push(message);
+        
+        // Trim if exceeds max
+        if (this.#messages.length > this.#maxMessages) {
+            const removed = this.#messages.shift();
+            // Clean up keyed reference if the removed message was keyed
+            for (const [k, id] of this.#keyedMessages.entries()) {
+                if (id === removed.id) {
+                    this.#keyedMessages.delete(k);
+                    break;
+                }
+            }
+        }
+        
+        // Store the key -> ID mapping
+        this.#keyedMessages.set(key, message.id);
+        
+        this.#notifyListeners('add', message);
+        return message.id;
+    }
+    
+    /**
      * Subscribe to message changes
      * @param {Function} listener - (action, message, allMessages) => void
      * @returns {Function} Unsubscribe function
@@ -280,6 +343,7 @@ class Logger {
      */
     clear() {
         this.#messages = [];
+        this.#keyedMessages.clear();
         this.#notifyListeners('clear', null);
     }
     

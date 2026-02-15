@@ -15,6 +15,8 @@
 import { logger } from '../../core/logger.js';
 import { events, EVENTS } from '../../core/events.js';
 import { state } from '../../core/state.js';
+import { actions } from '../../core/actions.js';
+import { CONFIG } from '../../core/config.js';
 
 // License types (matching current site - js/core.js)
 const LICENSE_TYPES = {
@@ -83,7 +85,7 @@ const PLACEHOLDER_SHADER = {
 export function registerShaderInfoPanel(SLUI) {
     SLUI.registerPanel({
         id: 'shader-info',
-        icon: '<img src="/ui-system/icons/info32.png" srcset="/ui-system/icons/info64.png 2x" width="24" height="24" alt="Info" onerror="this.outerHTML=\'ℹ️\'">',
+        icon: `<img src="${CONFIG.SLUI_ICONS}info32.png" srcset="${CONFIG.SLUI_ICONS}info64.png 2x" width="24" height="24" alt="Info" onerror="this.outerHTML='ℹ️'">`,
         title: 'Shader Info',
         showInToolbar: true,
         tabbed: true,
@@ -165,8 +167,7 @@ function createInfoTab() {
     likesEl.addEventListener('click', () => {
         shader.liked = !shader.liked;
         shader.likes += shader.liked ? 1 : -1;
-        state.shader.liked = shader.liked;
-        state.shader.likes = shader.likes;
+        actions.setShaderLikeState(shader.liked, shader.likes);
         likesEl.innerHTML = `<span style="font-size: 20px;">${shader.liked ? '❤️' : '🤍'}</span><span>${formatNumber(shader.likes)}</span>`;
     });
     statsRow.appendChild(likesEl);

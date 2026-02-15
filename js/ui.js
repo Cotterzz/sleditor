@@ -150,9 +150,11 @@ function ensureAudioStartOverlay() {
 }
 
 export function showAudioStartOverlay(message = 'Click to start audio & shader') {
-    // Check for media channels (audio/video inputs) OR audio output tabs (audio_glsl)
+    // Check for media channels (audio/video inputs) OR audio output tabs
     const hasMediaInput = channels.hasMediaChannels();
-    const hasAudioOutput = state.activeTabs?.includes('audio_glsl');
+    const hasAudioOutput = state.activeTabs?.includes('audio_glsl') ||
+                           state.activeTabs?.includes('audio_worklet') ||
+                           state.activeTabs?.includes('audio_gpu');
     
     // Audio INPUT always needs interaction for media access permission
     // Audio OUTPUT needs interaction if AudioContext is suspended

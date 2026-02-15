@@ -3,13 +3,16 @@
  * 
  * Organized into clear sections per V2-approach.md:
  * - shader: current shader data
+ * - project: project elements (code, media, inputs) - THE canonical list
  * - render: playback state
  * - editor: Monaco instances and code cache
  * - auth: user authentication
- * - ui: UI preferences
+ * - ui: UI preferences (including open tabs)
  * - input: mouse/keyboard state
  * - channels: input textures/buffers
  */
+
+
 
 export const state = {
     // Shader state
@@ -37,8 +40,26 @@ export const state = {
             BufferA: '',
             BufferB: '',
             BufferC: '',
-            BufferD: ''
+            BufferD: '',
+            BufferE: ''
         },
+    },
+    
+    // Project elements - THE canonical list of what exists
+    // Tabs are just views into these elements
+    project: {
+        // Code elements (always includes 'Image' which displays as 'Main')
+        code: [
+            { id: 'Image', type: 'main', label: 'Main', icon: '📄', locked: true, channel: 0 }
+        ],
+        // Media elements (textures, audio files, video, cubemaps, volumes)
+        media: [],
+        // Input elements (mouse is always present and locked)
+        inputs: [
+            { id: 'mouse', type: 'mouse', label: 'Mouse', icon: '🖱️', locked: true }
+        ],
+        // Channel allocation counter (for iChannel numbering)
+        nextChannelNumber: 1
     },
     
     // Render state
@@ -72,6 +93,16 @@ export const state = {
         isInitialized: false,
         currentPanel: null,
         isFullscreen: false,
+        // Open tabs in unified editor (element IDs)
+        openTabs: ['Image'],
+        activeTab: 'Image',
+        // Sidebar state
+        sidebarCollapsed: false,
+        sidebarSections: {
+            code: true,     // expanded
+            media: true,    // expanded
+            inputs: true    // expanded
+        }
     },
     
     // Input state
@@ -120,8 +151,57 @@ export function resetShaderState() {
         BufferA: '',
         BufferB: '',
         BufferC: '',
-        BufferD: ''
+        BufferD: '',
+        BufferE: ''
     };
+}
+
+/**
+ * Reset project state (for new shader)
+ */
+export function resetProjectState() {
+    state.project.code = [
+        { id: 'Image', type: 'main', label: 'Main', icon: '📄', locked: true, channel: 0 }
+    ];
+    state.project.media = [];
+    state.project.inputs = [
+        { id: 'mouse', type: 'mouse', label: 'Mouse', icon: '🖱️', locked: true }
+    ];
+    state.project.nextChannelNumber = 1;
+    
+    // Reset UI tabs
+    state.ui.openTabs = ['Image'];
+    state.ui.activeTab = 'Image';
+}
+
+/**
+ * Find a project element by ID (searches all categories)
+ */
+export function findProjectElement(elementId) {
+    // Check code
+    const codeEl = state.project.code.find(el => el.id === elementId);
+    if (codeEl) return { element: codeEl, category: 'code' };
+    
+    // Check media
+    const mediaEl = state.project.media.find(el => el.id === elementId);
+    if (mediaEl) return { element: mediaEl, category: 'media' };
+    
+    // Check inputs
+    const inputEl = state.project.inputs.find(el => el.id === elementId);
+    if (inputEl) return { element: inputEl, category: 'inputs' };
+    
+    return null;
+}
+
+/**
+ * Get all project elements as a flat array
+ */
+export function getAllProjectElements() {
+    return [
+        ...state.project.code,
+        ...state.project.media,
+        ...state.project.inputs
+    ];
 }
 
 /**

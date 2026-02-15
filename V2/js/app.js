@@ -8,7 +8,8 @@
 
 import { logger } from './core/logger.js';
 import { events, EVENTS } from './core/events.js';
-import { state } from './core/state.js';
+import { state, resetProjectState } from './core/state.js';
+import { actions } from './core/actions.js';
 import { CONFIG } from './core/config.js';
 import * as ui from './ui/index.js';
 import { shaderManager } from './managers/ShaderManager.js';
@@ -68,7 +69,68 @@ async function runInit() {
 step('Defaults', async () => {
     shaderManager.ensureDefaults();
     channelManager.init();
+    
+    // Sync project state with shader code
+    // This ensures the sidebar reflects what code tabs exist
+    syncProjectWithShaderState();
 });
+
+/**
+ * Sync project.code with state.shader.code
+ * Builds project element list from existing shader code
+ */
+function syncProjectWithShaderState() {
+    // Reset channel manager to start fresh
+    channelManager.reset();
+    
+    // Build code elements list
+    const codeElements = [
+        { id: 'Image', type: 'main', label: 'Main', icon: '📄', locked: true, channel: 0 }
+    ];
+    
+    // Add Common if it has content (Common doesn't get a channel - it's shared code)
+    if (state.shader.code?.Common?.trim()) {
+        codeElements.push({ id: 'Common', type: 'common', label: 'Common', icon: '📄', locked: false });
+    }
+    
+    // Add Buffers that have content - detect dynamically from state.shader.code keys
+    // Any key starting with 'Buffer' followed by a letter is a buffer
+    const bufferKeys = Object.keys(state.shader.code || {})
+        .filter(key => /^Buffer[A-Z]$/.test(key))
+        .sort(); // Sort alphabetically: BufferA, BufferB, etc.
+    
+    bufferKeys.forEach(bufferId => {
+        if (state.shader.code?.[bufferId]?.trim()) {
+            const letter = bufferId.replace('Buffer', '');
+            // Allocate channel via ChannelManager for proper tracking
+            const channel = channelManager.createBufferChannel(bufferId);
+            codeElements.push({
+                id: bufferId,
+                type: 'buffer',
+                label: `Buff ${letter}`,
+                icon: '📄',
+                locked: false,
+                channel
+            });
+        }
+    });
+    
+    // Set project code via actions
+    actions.setProjectCode(codeElements);
+    
+    // Ensure mouse input always exists
+    if (!state.project.inputs.find(i => i.id === 'mouse')) {
+        actions.setProjectInputs([
+            { id: 'mouse', type: 'mouse', label: 'Mouse', icon: '🖱️', locked: true }
+        ]);
+    }
+    
+    // Set initial open tabs
+    actions.setOpenTabs(['Image']);
+    actions.setActiveTab('Image');
+    
+    logger.debug('App', 'Project', `Synced project: ${state.project.code.length} code, ${state.project.media.length} media, ${state.project.inputs.length} inputs`);
+}
 
 // Step 2: UI System
 step('UI', async () => {

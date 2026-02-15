@@ -13,6 +13,8 @@ import { events, EVENTS } from '../../core/events.js';
 import { getRenderer, setGlassMode, isGlassModeEnabled } from './preview.js';
 import * as fullscreen from '../../features/fullscreen.js';
 import { getSLUI } from '../index.js';
+import { CONFIG } from '../../core/config.js';
+import { createUniformsSection, setSLUI as setUniformsSLUI } from './uniforms.js';
 
 // Singleton controls bar element
 let controlsBar = null;
@@ -30,9 +32,52 @@ let frameDisplay = null;
 let resDisplay = null;
 let fpsDisplay = null;
 let channelSelect = null;
+let timelineSlider = null;
+let backendLogo = null;
+let snapshotBtn = null;
+let recordBtn = null;
+let recordSettingsBtn = null;
+let uniformsSection = null;
+let uniformsExpanded = false;
+let uniformsToggleBtn = null;
+
+// Backend logo (WebGL only for now)
 
 // Colorspace state
 let isLinearColorspace = false;
+
+// Reference to uniforms content element for scrolling and height management
+let uniformsContent = null;
+
+/**
+ * Get the preview window container (SLUI window that contains the preview)
+ * Returns null if not found or not in the DOM
+ */
+function getPreviewWindowContainer() {
+    if (!controlsBar) return null;
+    // When docked, the controls bar is inside the preview container
+    // which is inside a .sl-window-content inside a .sl-window-container
+    const previewContainer = controlsBar.closest('.v2-preview');
+    if (!previewContainer) return null;
+    return previewContainer.closest('.sl-window-container');
+}
+
+/**
+ * Adjust the preview window height by a given delta
+ * Positive delta = make window taller, negative = shorter
+ */
+function adjustPreviewWindowHeight(deltaHeight) {
+    const windowContainer = getPreviewWindowContainer();
+    if (!windowContainer) return;
+    
+    // Get current height and adjust
+    const currentHeight = windowContainer.offsetHeight;
+    const newHeight = currentHeight + deltaHeight;
+    
+    // Apply new height (with minimum constraint)
+    const minHeight = parseInt(windowContainer.style.minHeight) || 150;
+    windowContainer.style.height = `${Math.max(newHeight, minHeight)}px`;
+}
 
 /**
  * Create the controls bar (called once)
@@ -46,7 +91,7 @@ function createControlsBar() {
     container.style.cssText = `
         display: flex;
         flex-direction: column;
-        background: var(--bg-tertiary, #21262d);
+        background: var(--bg-panel, #21262d);
         font-size: 12px;
         color: var(--text-primary, #c9d1d9);
         border-top: 1px solid var(--border, rgba(255,255,255,0.1));
@@ -63,39 +108,60 @@ function createControlsBar() {
         border-bottom: 1px solid var(--border, rgba(255,255,255,0.05));
     `;
     
+    // Get SLUI for button creation
+    const SLUI = getSLUI();
+    
     // Play/Pause button
-    playBtn = createButton('▶', 'Play/Pause (Space)', () => {
-        const renderer = getRenderer();
-        if (!renderer) return;
-        const state = renderer.getState();
-        if (state.isPlaying) {
-            renderer.pause();
-        } else {
-            renderer.play();
+    playBtn = SLUI.CtrlButton({
+        icon: '▶',
+        tooltip: 'Play/Pause (Space)',
+        onClick: () => {
+            const renderer = getRenderer();
+            if (!renderer) return;
+            const state = renderer.getState();
+            if (state.isPlaying) {
+                renderer.pause();
+            } else {
+                renderer.play();
+            }
         }
     });
     buttonsRow.appendChild(playBtn);
     
     // Restart button
-    const restartBtn = createButton('↻', 'Restart (R)', () => {
-        const renderer = getRenderer();
-        if (renderer) renderer.restart();
+    const restartBtn = SLUI.CtrlButton({
+        icon: '↻',
+        tooltip: 'Restart (R)',
+        onClick: () => {
+            const renderer = getRenderer();
+            if (renderer) {
+                renderer.restart();
+                // Render a frame to show the reset state immediately
+                renderer.requestFrame();
+            }
+            // Reset timeline to initial duration
+            if (timelineSlider && timelineSlider.reset) {
+                timelineSlider.reset();
+            }
+        }
     });
     buttonsRow.appendChild(restartBtn);
     
     buttonsRow.appendChild(createSeparator());
     
     // Glass mode toggle
-    glassBtn = createButton('◐', 'Glass mode - transparent background', () => {
-        setGlassMode(!isGlassModeEnabled());
+    glassBtn = SLUI.CtrlButton({
+        icon: '◐',
+        tooltip: 'Glass mode - transparent background',
+        onClick: () => setGlassMode(!isGlassModeEnabled())
     });
     buttonsRow.appendChild(glassBtn);
     
     // Colorspace toggle (sRGB / Linear)
-    colorspaceBtn = createIconButton(
-        createSrgbIcon(),
-        'Color space: sRGB (click for Linear)',
-        () => {
+    colorspaceBtn = SLUI.CtrlButton({
+        icon: createSrgbIcon(),
+        tooltip: 'Color space: sRGB (click for Linear)',
+        onClick: () => {
             isLinearColorspace = !isLinearColorspace;
             updateColorspaceButton();
             // Update renderer
@@ -105,8 +171,43 @@ function createControlsBar() {
             }
             events.emit(EVENTS.RENDER_COLORSPACE_CHANGED, { linear: isLinearColorspace });
         }
-    );
+    });
     buttonsRow.appendChild(colorspaceBtn);
+    
+    buttonsRow.appendChild(createSeparator());
+    
+    // Snapshot button (placeholder)
+    snapshotBtn = SLUI.CtrlButton({
+        icon: '📷',
+        tooltip: 'Take snapshot',
+        onClick: () => {
+            console.log('[Shader Controls] Snapshot - placeholder');
+            // TODO: Implement snapshot functionality
+        }
+    });
+    buttonsRow.appendChild(snapshotBtn);
+    
+    // Record button (placeholder)
+    recordBtn = SLUI.CtrlButton({
+        icon: '⏺',
+        tooltip: 'Record',
+        onClick: () => {
+            console.log('[Shader Controls] Record - placeholder');
+            // TODO: Implement record functionality
+        }
+    });
+    buttonsRow.appendChild(recordBtn);
+    
+    // Record settings button (placeholder)
+    recordSettingsBtn = SLUI.CtrlButton({
+        icon: '⚙',
+        tooltip: 'Recording settings',
+        onClick: () => {
+            console.log('[Shader Controls] Record settings - placeholder');
+            // TODO: Implement record settings dialog
+        }
+    });
+    buttonsRow.appendChild(recordSettingsBtn);
     
     // Spacer
     const buttonsSpacer = document.createElement('div');
@@ -114,41 +215,139 @@ function createControlsBar() {
     buttonsRow.appendChild(buttonsSpacer);
     
     // Fullscreen toggle
-    fullscreenBtn = createButton('⛶', 'Fullscreen (F)', () => {
-        fullscreen.toggle();
+    fullscreenBtn = SLUI.CtrlButton({
+        icon: '⛶',
+        tooltip: 'Fullscreen (F)',
+        onClick: () => fullscreen.toggle()
     });
     buttonsRow.appendChild(fullscreenBtn);
     
     // Dock/Undock toggle
-    dockBtn = createButton('↗', 'Float controls', () => {
-        if (isDocked) {
-            undockControls();
-            dockBtn.textContent = '↙';
-            dockBtn.title = 'Dock controls';
-        } else {
-            dockControls();
-            dockBtn.textContent = '↗';
-            dockBtn.title = 'Float controls';
+    dockBtn = SLUI.CtrlButton({
+        icon: '↗',
+        tooltip: 'Float controls',
+        onClick: () => {
+            if (isDocked) {
+                undockControls();
+                dockBtn.setIcon('↙');
+                dockBtn.setTooltip('Dock controls');
+            } else {
+                dockControls();
+                dockBtn.setIcon('↗');
+                dockBtn.setTooltip('Float controls');
+            }
         }
     });
     buttonsRow.appendChild(dockBtn);
     
     container.appendChild(buttonsRow);
     
-    // ========== Row 2: Info ==========
-    const infoRow = document.createElement('div');
-    infoRow.style.cssText = `
+    // ========== Row 2: Info + Timeline (combined) ==========
+    // Layout: T:1:54  F:5436  740x413  @60fps
+    //         0:00 --------o-------- 4:00
+    const infoTimelineRow = document.createElement('div');
+    infoTimelineRow.className = 'v2-shader-controls-info-timeline';
+    infoTimelineRow.style.cssText = `
         display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 4px 10px;
+        flex-direction: column;
+        gap: 2px;
+        padding: 4px 10px 6px;
     `;
     
-    // Channel viewer dropdown (monospace variant for channel numbers)
-    const SLUI = getSLUI();
+    // Top line: stats
+    const statsRow = document.createElement('div');
+    statsRow.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 10px;
+        color: var(--text-muted, #8b949e);
+    `;
+    
+    // Time display (T:0:00.00)
+    timeDisplay = document.createElement('span');
+    timeDisplay.textContent = 'T:0:00';
+    statsRow.appendChild(timeDisplay);
+    
+    // Frame display (F:0)
+    frameDisplay = document.createElement('span');
+    frameDisplay.textContent = 'F:0';
+    statsRow.appendChild(frameDisplay);
+    
+    // Resolution display
+    resDisplay = document.createElement('span');
+    resDisplay.textContent = '0×0';
+    statsRow.appendChild(resDisplay);
+    
+    // FPS display
+    fpsDisplay = document.createElement('span');
+    fpsDisplay.style.color = 'var(--console-success, #3fb950)';
+    fpsDisplay.textContent = '@0fps';
+    statsRow.appendChild(fpsDisplay);
+    
+    // Spacer
+    const statsSpacer = document.createElement('div');
+    statsSpacer.style.flex = '1';
+    statsRow.appendChild(statsSpacer);
+    
+    // Backend logo (WebGL/WebGPU) - clickable to cycle
+    backendLogo = document.createElement('img');
+    backendLogo.src = `${CONFIG.SLUI_ICONS}WebGL_Logo.svg`;
+    backendLogo.alt = 'WebGL';
+    backendLogo.title = 'Renderer: WebGL 2.0';
+    backendLogo.style.cssText = `
+        height: 12px;
+        width: auto;
+        opacity: 0.7;
+    `;
+    statsRow.appendChild(backendLogo);
+    
+    infoTimelineRow.appendChild(statsRow);
+    
+    // Bottom line: timeline slider
+    timelineSlider = SLUI.TimelineSlider({
+        duration: 60,
+        value: 0,
+        autoExtend: true,
+        compact: true,
+        onChange: (time) => {
+            // User is seeking - update renderer
+            const renderer = getRenderer();
+            if (renderer && typeof renderer.seek === 'function') {
+                renderer.seek(time);
+            }
+        }
+    });
+    infoTimelineRow.appendChild(timelineSlider);
+    
+    container.appendChild(infoTimelineRow);
+    
+    // ========== Row 3: Channel dropdown, Volume, Pixel Size ==========
+    const settingsRow = document.createElement('div');
+    settingsRow.className = 'v2-shader-controls-settings';
+    settingsRow.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 4px 10px 6px;
+        border-top: 1px solid var(--border, rgba(255,255,255,0.05));
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        font-size: 10px;
+        color: var(--text-muted, #8b949e);
+    `;
+    
+    // Channel dropdown
+    const channelGroup = document.createElement('div');
+    channelGroup.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+    
+    const channelLabel = document.createElement('span');
+    channelLabel.textContent = 'Ch:';
+    channelGroup.appendChild(channelLabel);
+    
     if (SLUI && SLUI.Select) {
         channelSelect = SLUI.Select({
-            items: [{ value: '0', label: 'Main' }], // Will be populated by refreshChannelDropdown
+            items: [{ value: '0', label: 'Main' }],
             value: '0',
             variant: 'monospace',
             onChange: (value) => {
@@ -159,7 +358,6 @@ function createControlsBar() {
             }
         });
     } else {
-        // Fallback if SLUI not available (shouldn't happen)
         channelSelect = document.createElement('select');
         channelSelect.className = 'sl-select sl-select-monospace';
         channelSelect.innerHTML = '<option value="0">Main</option>';
@@ -171,62 +369,200 @@ function createControlsBar() {
         });
     }
     channelSelect.title = 'Display channel';
-    infoRow.appendChild(channelSelect);
+    channelGroup.appendChild(channelSelect);
+    settingsRow.appendChild(channelGroup);
     
-    infoRow.appendChild(createSeparator());
+    // Volume slider with mute toggle
+    let isMuted = false;
+    let lastVolume = 100;
+    const volumeSlider = SLUI.IconSlider({
+        icon: '🔊',
+        min: 0,
+        max: 100,
+        value: 100,
+        step: 1,
+        isInt: true,
+        compact: true,
+        onChange: (val) => {
+            const renderer = getRenderer();
+            if (renderer) {
+                renderer.setVolume(val / 100);
+            }
+            // Update icon based on volume level
+            if (val > 0) {
+                lastVolume = val;
+                isMuted = false;
+            }
+            updateVolumeIcon();
+        }
+    });
+    volumeSlider.title = 'Audio volume (click icon to mute)';
+    volumeSlider.style.flex = '1';
     
-    // Time display
-    timeDisplay = document.createElement('span');
-    timeDisplay.textContent = '0:00.00';
-    timeDisplay.style.cssText = `
-        font-family: 'JetBrains Mono', 'Fira Code', monospace;
-        font-size: 11px;
-        min-width: 55px;
-        color: var(--text-muted, #8b949e);
+    // Make volume icon clickable to toggle mute
+    const volumeIcon = volumeSlider.querySelector('.sl-icon-slider-icon');
+    if (volumeIcon) {
+        volumeIcon.style.cursor = 'pointer';
+        volumeIcon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isMuted = !isMuted;
+            const renderer = getRenderer();
+            if (renderer) {
+                if (isMuted) {
+                    renderer.setVolume(0);
+                    volumeSlider.setValue(0);
+                } else {
+                    renderer.setVolume(lastVolume / 100);
+                    volumeSlider.setValue(lastVolume);
+                }
+            }
+            updateVolumeIcon();
+        });
+    }
+    
+    function updateVolumeIcon() {
+        if (!volumeIcon) return;
+        const val = isMuted ? 0 : volumeSlider.getValue();
+        if (val === 0) {
+            volumeIcon.textContent = '🔇';
+        } else if (val < 50) {
+            volumeIcon.textContent = '🔉';
+        } else {
+            volumeIcon.textContent = '🔊';
+        }
+    }
+    
+    settingsRow.appendChild(volumeSlider);
+    
+    // Pixel scale slider with sharp/smooth toggle
+    let isPixelated = true;
+    const pixelSlider = SLUI.IconSlider({
+        icon: '⊞',  // Grid = sharp/pixelated
+        min: 1,
+        max: 8,
+        value: 1,
+        step: 1,
+        isInt: true,
+        compact: true,
+        onChange: (val) => {
+            const renderer = getRenderer();
+            if (renderer) {
+                renderer.setPixelScale(val);
+            }
+        }
+    });
+    pixelSlider.title = 'Pixel scale (click icon to toggle sharp/smooth)';
+    pixelSlider.style.flex = '1';
+    
+    // Make pixel icon clickable to toggle sharp/smooth
+    const pixelIcon = pixelSlider.querySelector('.sl-icon-slider-icon');
+    if (pixelIcon) {
+        pixelIcon.style.cursor = 'pointer';
+        pixelIcon.addEventListener('click', (e) => {
+            e.stopPropagation();
+            isPixelated = !isPixelated;
+            const renderer = getRenderer();
+            if (renderer) {
+                renderer.setPixelated(isPixelated);
+            }
+            // ⊞ = grid/pixelated, ⊡ = empty grid/smooth
+            pixelIcon.textContent = isPixelated ? '⊞' : '⊡';
+            pixelSlider.title = isPixelated 
+                ? 'Pixel scale - Sharp pixels (click icon for smooth)' 
+                : 'Pixel scale - Smooth (click icon for sharp)';
+        });
+    }
+    
+    settingsRow.appendChild(pixelSlider);
+    
+    container.appendChild(settingsRow);
+    
+    // ========== Row 4: Uniforms expandable section ==========
+    const uniformsRow = document.createElement('div');
+    uniformsRow.className = 'v2-shader-controls-uniforms';
+    uniformsRow.style.cssText = `
+        border-top: 1px solid var(--border, rgba(255,255,255,0.05));
     `;
-    infoRow.appendChild(timeDisplay);
     
-    // Frame display
-    frameDisplay = document.createElement('span');
-    frameDisplay.textContent = 'F:0';
-    frameDisplay.style.cssText = `
-        font-family: 'JetBrains Mono', 'Fira Code', monospace;
-        font-size: 11px;
-        min-width: 50px;
-        color: var(--text-muted, #8b949e);
-    `;
-    infoRow.appendChild(frameDisplay);
-    
-    // Spacer
-    const infoSpacer = document.createElement('div');
-    infoSpacer.style.flex = '1';
-    infoRow.appendChild(infoSpacer);
-    
-    // Resolution display
-    resDisplay = document.createElement('span');
-    resDisplay.textContent = '0×0';
-    resDisplay.style.cssText = `
-        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    // Toggle header
+    const uniformsHeader = document.createElement('div');
+    uniformsHeader.className = 'v2-shader-controls-uniforms-header';
+    uniformsHeader.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 10px;
+        cursor: pointer;
         font-size: 10px;
-        color: var(--text-muted, #6e7681);
+        color: var(--text-muted, #8b949e);
+        user-select: none;
     `;
-    infoRow.appendChild(resDisplay);
-    
-    infoRow.appendChild(createSeparator());
-    
-    // FPS display
-    fpsDisplay = document.createElement('span');
-    fpsDisplay.textContent = '0 fps';
-    fpsDisplay.style.cssText = `
-        font-family: 'JetBrains Mono', 'Fira Code', monospace;
-        font-size: 11px;
-        min-width: 50px;
-        text-align: right;
-        color: var(--console-success, #3fb950);
+    uniformsHeader.innerHTML = `
+        <span style="display: flex; align-items: center; gap: 4px;">
+            <span class="v2-uniforms-toggle-icon">▶</span>
+            <span>Custom Uniforms</span>
+        </span>
     `;
-    infoRow.appendChild(fpsDisplay);
     
-    container.appendChild(infoRow);
+    const toggleIcon = uniformsHeader.querySelector('.v2-uniforms-toggle-icon');
+    
+    // Expandable content - scrollable with max height
+    uniformsContent = document.createElement('div');
+    uniformsContent.className = 'v2-shader-controls-uniforms-content';
+    uniformsContent.style.cssText = `
+        display: none;
+        background: var(--bg-panel, #161b22);
+        border-top: 1px solid var(--border, rgba(255,255,255,0.05));
+        max-height: 200px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    `;
+    
+    // Initialize uniforms section (SLUI already declared above)
+    if (SLUI) {
+        setUniformsSLUI(SLUI);
+        const section = createUniformsSection();
+        uniformsSection = section;
+        uniformsContent.appendChild(section.element);
+    }
+    
+    // Toggle handler - adjusts window height to preserve canvas size
+    uniformsHeader.addEventListener('click', () => {
+        const wasExpanded = uniformsExpanded;
+        uniformsExpanded = !uniformsExpanded;
+        
+        if (uniformsExpanded) {
+            // Expanding: show content first, then measure and adjust window
+            uniformsContent.style.display = 'block';
+            
+            // Refresh uniforms when expanding
+            if (uniformsSection) {
+                uniformsSection.refresh();
+            }
+            
+            // After content is rendered, adjust window height
+            requestAnimationFrame(() => {
+                const contentHeight = Math.min(uniformsContent.scrollHeight, 200);
+                if (isDocked) {
+                    adjustPreviewWindowHeight(contentHeight);
+                }
+            });
+        } else {
+            // Collapsing: measure height before hiding, then adjust window
+            const contentHeight = Math.min(uniformsContent.scrollHeight, 200);
+            uniformsContent.style.display = 'none';
+            
+            if (isDocked) {
+                adjustPreviewWindowHeight(-contentHeight);
+            }
+        }
+        
+        toggleIcon.textContent = uniformsExpanded ? '▼' : '▶';
+    });
+    
+    uniformsRow.appendChild(uniformsHeader);
+    uniformsRow.appendChild(uniformsContent);
+    container.appendChild(uniformsRow);
     
     return container;
 }
@@ -278,54 +614,35 @@ function createLinearIcon() {
 function updateColorspaceButton() {
     if (!colorspaceBtn) return;
     
-    // Clear current icon
-    colorspaceBtn.innerHTML = '';
-    
     if (isLinearColorspace) {
-        colorspaceBtn.appendChild(createLinearIcon());
-        colorspaceBtn.title = 'Color space: Linear (click for sRGB)';
+        colorspaceBtn.setIcon(createLinearIcon());
+        colorspaceBtn.setTooltip('Color space: Linear (click for sRGB)');
     } else {
-        colorspaceBtn.appendChild(createSrgbIcon());
-        colorspaceBtn.title = 'Color space: sRGB (click for Linear)';
+        colorspaceBtn.setIcon(createSrgbIcon());
+        colorspaceBtn.setTooltip('Color space: sRGB (click for Linear)');
     }
 }
 
-/**
- * Create a button with an SVG icon instead of text
- */
-function createIconButton(iconElement, title, onClick) {
-    const btn = document.createElement('button');
-    btn.title = title;
-    btn.style.cssText = `
-        width: 28px;
-        height: 24px;
-        border: 1px solid var(--border, rgba(255,255,255,0.2));
-        border-radius: 4px;
-        background: var(--bg-secondary, #30363d);
-        color: var(--text-primary, #c9d1d9);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: background 0.15s;
-    `;
-    btn.appendChild(iconElement);
-    btn.addEventListener('mouseenter', () => btn.style.background = 'var(--bg-tertiary, #484f58)');
-    btn.addEventListener('mouseleave', () => btn.style.background = 'var(--bg-secondary, #30363d)');
-    btn.addEventListener('click', onClick);
-    return btn;
-}
 
 /**
  * Setup reactive event listeners
  */
 function setupReactiveBindings() {
-    // Update play button based on render state
+    // Update all displays every frame
     events.on(EVENTS.RENDER_FRAME, (data) => {
-        if (timeDisplay) timeDisplay.textContent = formatTime(data.time);
+        // Time display (T:0:00)
+        if (timeDisplay) {
+            const mins = Math.floor(data.time / 60);
+            const secs = Math.floor(data.time % 60);
+            timeDisplay.textContent = `T:${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // Frame display (F:0)
         if (frameDisplay) frameDisplay.textContent = `F:${data.frame}`;
+        
+        // FPS display (@60fps)
         if (fpsDisplay) {
-            fpsDisplay.textContent = `${data.fps} fps`;
+            fpsDisplay.textContent = `@${data.fps}fps`;
             // Color based on performance
             if (data.fps >= 55) {
                 fpsDisplay.style.color = 'var(--console-success, #3fb950)';
@@ -336,39 +653,63 @@ function setupReactiveBindings() {
             }
         }
         
-        // Update play button icon
+        // Update timeline slider (auto-extends when reaching end)
+        if (timelineSlider && timelineSlider.setTime) {
+            timelineSlider.setTime(data.time);
+        }
+        
+        // Update play button icon based on actual renderer state
+        // (RENDER_FRAME can be emitted during seek while paused, so check isPlaying)
         if (playBtn) {
-            playBtn.textContent = '⏸';
-            playBtn.title = 'Pause';
+            const renderer = getRenderer();
+            const isPlaying = renderer?.getState()?.isPlaying;
+            if (isPlaying) {
+                playBtn.setIcon('⏸');
+                playBtn.setTooltip('Pause');
+            } else {
+                playBtn.setIcon('▶');
+                playBtn.setTooltip('Play');
+            }
         }
     });
     
     // Update play button when render stops
     events.on(EVENTS.RENDER_STOP, () => {
         if (playBtn) {
-            playBtn.textContent = '▶';
-            playBtn.title = 'Play';
+            playBtn.setIcon('▶');
+            playBtn.setTooltip('Play');
         }
     });
     
-    // Update resolution display
+    // Update resolution display (include pixel scale when > 1)
     events.on(EVENTS.RENDER_RESOLUTION, (data) => {
-        if (resDisplay) resDisplay.textContent = `${data.width}×${data.height}`;
+        if (resDisplay) {
+            const scaleText = data.pixelScale > 1 ? `×${data.pixelScale}` : '';
+            resDisplay.textContent = `${data.width}×${data.height}${scaleText}`;
+        }
     });
     
     // Update glass button based on glass mode state
     events.on(EVENTS.PREVIEW_GLASS_MODE, ({ enabled }) => {
         if (glassBtn) {
-            glassBtn.textContent = enabled ? '◑' : '◐';
+            glassBtn.setIcon(enabled ? '◑' : '◐');
         }
     });
     
     // Refresh channel dropdown when compilation succeeds
     events.on(EVENTS.COMPILE_SUCCESS, refreshChannelDropdown);
     
-    // Update channel dropdown selection when channel changes
-    events.on(EVENTS.RENDER_CHANNEL_CHANGED, ({ channel }) => {
-        if (channelSelect) channelSelect.value = channel;
+    // Refresh channel dropdown when channels change (added, cleared, etc.)
+    // This is emitted AFTER the renderer's internal state is updated
+    events.on(EVENTS.RENDER_CHANNEL_CHANGED, ({ cleared } = {}) => {
+        // Save current selection
+        const currentValue = channelSelect?.value;
+        // Refresh dropdown
+        refreshChannelDropdown();
+        // Try to restore previous selection if it's still valid and not the cleared channel
+        if (channelSelect && currentValue !== undefined && !cleared) {
+            channelSelect.value = currentValue;
+        }
     });
     
     // Fullscreen enter - save state, undock if needed
@@ -455,9 +796,13 @@ export function getControlsBar() {
 
 /**
  * Dock controls to preview window
+ * Adjusts window height to preserve canvas dimensions
  */
 export function dockControls() {
     if (!controlsBar) return;
+    
+    // Measure controls bar height before docking
+    const controlsHeight = controlsBar.offsetHeight;
     
     isDocked = true;
     
@@ -471,14 +816,27 @@ export function dockControls() {
     controlsBar.style.borderRadius = '0';
     
     events.emit(EVENTS.SHADER_CONTROLS_DOCKED, { docked: true });
+    
+    // After the controls are re-appended by preview.js, adjust window height
+    requestAnimationFrame(() => {
+        adjustPreviewWindowHeight(controlsHeight);
+    });
+    
     logger.debug('ShaderControls', 'Dock', 'Controls docked');
 }
 
 /**
  * Undock controls to floating bar
+ * Adjusts window height to preserve canvas dimensions
  */
 export function undockControls() {
     if (!controlsBar) return;
+    
+    // Measure controls bar height before undocking (while still in layout)
+    const controlsHeight = controlsBar.offsetHeight;
+    
+    // Get window container before undocking (while controls are still docked)
+    const windowContainer = getPreviewWindowContainer();
     
     isDocked = false;
     
@@ -495,6 +853,8 @@ export function undockControls() {
             border-radius: 8px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.4);
             overflow: hidden;
+            width: 380px;
+            max-width: 90vw;
         `;
         
         // Make draggable
@@ -507,7 +867,7 @@ export function undockControls() {
             const rect = floatingContainer.getBoundingClientRect();
             dragOffset.x = e.clientX - rect.left;
             dragOffset.y = e.clientY - rect.top;
-            floatingContainer.style.cursor = 'grabbing';
+            floatingContainer.style.cursor = 'move';
         });
         
         document.addEventListener('mousemove', (e) => {
@@ -520,7 +880,7 @@ export function undockControls() {
         
         document.addEventListener('mouseup', () => {
             isDragging = false;
-            if (floatingContainer) floatingContainer.style.cursor = 'grab';
+            if (floatingContainer) floatingContainer.style.cursor = 'move';
         });
     }
     
@@ -531,7 +891,14 @@ export function undockControls() {
     // Move bar to floating container
     floatingContainer.appendChild(controlsBar);
     document.body.appendChild(floatingContainer);
-    floatingContainer.style.cursor = 'grab';
+    floatingContainer.style.cursor = 'move';
+    
+    // Shrink window to preserve canvas size (controls are now outside)
+    if (windowContainer) {
+        const currentHeight = windowContainer.offsetHeight;
+        const minHeight = parseInt(windowContainer.style.minHeight) || 150;
+        windowContainer.style.height = `${Math.max(currentHeight - controlsHeight, minHeight)}px`;
+    }
     
     events.emit(EVENTS.SHADER_CONTROLS_DOCKED, { docked: false });
     logger.debug('ShaderControls', 'Undock', 'Controls floating');
@@ -545,30 +912,6 @@ export function isDockedState() {
 }
 
 // Helper functions
-function createButton(text, title, onClick) {
-    const btn = document.createElement('button');
-    btn.textContent = text;
-    btn.title = title;
-    btn.style.cssText = `
-        width: 28px;
-        height: 24px;
-        border: 1px solid var(--border, rgba(255,255,255,0.2));
-        border-radius: 4px;
-        background: var(--bg-secondary, #30363d);
-        color: var(--text-primary, #c9d1d9);
-        font-size: 12px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: background 0.15s;
-    `;
-    btn.addEventListener('mouseenter', () => btn.style.background = 'var(--bg-tertiary, #484f58)');
-    btn.addEventListener('mouseleave', () => btn.style.background = 'var(--bg-secondary, #30363d)');
-    btn.addEventListener('click', onClick);
-    return btn;
-}
-
 function createSeparator() {
     const sep = document.createElement('div');
     sep.style.cssText = `

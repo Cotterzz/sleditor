@@ -685,6 +685,12 @@ function registerLanguages() {
     `;
     document.head.appendChild(errorStyles);
     
+    // Apply current SLUI theme to Monaco now that Monaco is loaded
+    const currentTheme = window.SLUI?.getTheme?.();
+    if (currentTheme) {
+        applyMonacoThemeFromSLUI(currentTheme);
+    }
+    
     logger.debug('Editor', 'Monaco', 'Languages registered: GLSL, WGSL');
 }
 
@@ -693,13 +699,51 @@ function registerLanguages() {
 // ============================================================================
 
 /**
- * Set Monaco editor theme based on dark/light mode
+ * Set Monaco editor theme based on dark/light mode (legacy method)
  */
 export function setMonacoTheme(isDark) {
     if (!window.monaco) return;
     const theme = isDark ? 'sleditor-dark' : 'sleditor-light';
     window.monaco.editor.setTheme(theme);
     logger.debug('Editor', 'Theme', `Set Monaco theme to ${theme}`);
+}
+
+/**
+ * Apply Monaco theme from SLUI theme name
+ * This registers the theme from theme data if available, then applies it
+ * @param {string} themeName - SLUI theme name
+ */
+export function applyMonacoThemeFromSLUI(themeName) {
+    if (!window.monaco) return;
+    
+    // Try to get theme data from SLUI
+    const themeData = window.SLUI?.getThemeData?.(themeName);
+    const monacoThemeName = `sleditor-${themeName}`;
+    
+    if (themeData?.monaco?.base) {
+        // Register the theme from SLUI theme data
+        try {
+            window.monaco.editor.defineTheme(monacoThemeName, {
+                base: themeData.monaco.base,
+                inherit: true,
+                rules: themeData.monaco.rules || [],
+                colors: themeData.monaco.colors || {}
+            });
+            window.monaco.editor.setTheme(monacoThemeName);
+            logger.debug('Editor', 'Theme', `Applied Monaco theme: ${monacoThemeName}`);
+        } catch (e) {
+            logger.warn('Editor', 'Theme', `Failed to apply Monaco theme: ${e.message}`);
+            // Fall back to default
+            const isDark = themeData.type === 'dark';
+            window.monaco.editor.setTheme(isDark ? 'sleditor-dark' : 'sleditor-light');
+        }
+    } else {
+        // No SLUI theme data, use legacy dark/light detection
+        const isDark = themeName === 'hacker' || themeName === 'coder' || themeName === 'engineer';
+        const theme = isDark ? 'sleditor-dark' : 'sleditor-light';
+        window.monaco.editor.setTheme(theme);
+        logger.debug('Editor', 'Theme', `Applied fallback Monaco theme: ${theme}`);
+    }
 }
 
 /**
@@ -725,6 +769,119 @@ function isDarkTheme() {
 }
 
 // ============================================================================
+// Font Size Management
+// ============================================================================
+
+// Font size levels: 5 steps with default (13px) in the middle
+const FONT_SIZES = [10, 12, 13, 14, 16];
+let currentFontSizeIndex = 2; // Default = 13px (middle)
+
+// Editor preference state (persisted to localStorage)
+let editorWordWrap = 'on';  // 'on' or 'off'
+let editorMinimapEnabled = false;
+
+// Unicode/control character highlighting preferences
+let renderControlCharacters = false;  // Default: off
+let unicodeAmbiguous = true;          // Default: on
+let unicodeInvisible = true;          // Default: on
+let unicodeNonBasicASCII = true;      // Default: on
+
+// Load saved editor preferences
+function loadEditorPreferences() {
+    const savedWordWrap = localStorage.getItem('sl-editor-wordwrap');
+    if (savedWordWrap === 'on' || savedWordWrap === 'off') {
+        editorWordWrap = savedWordWrap;
+    }
+    
+    const savedMinimap = localStorage.getItem('sl-editor-minimap');
+    if (savedMinimap !== null) {
+        editorMinimapEnabled = savedMinimap === 'true';
+    }
+    
+    // Unicode/control character settings
+    const savedControlChars = localStorage.getItem('sl-editor-control-chars');
+    if (savedControlChars !== null) {
+        renderControlCharacters = savedControlChars === 'true';
+    }
+    
+    const savedAmbiguous = localStorage.getItem('sl-editor-unicode-ambiguous');
+    if (savedAmbiguous !== null) {
+        unicodeAmbiguous = savedAmbiguous === 'true';
+    }
+    
+    const savedInvisible = localStorage.getItem('sl-editor-unicode-invisible');
+    if (savedInvisible !== null) {
+        unicodeInvisible = savedInvisible === 'true';
+    }
+    
+    const savedNonBasicASCII = localStorage.getItem('sl-editor-unicode-nonbasic');
+    if (savedNonBasicASCII !== null) {
+        unicodeNonBasicASCII = savedNonBasicASCII === 'true';
+    }
+}
+
+// Initialize preferences on module load
+loadEditorPreferences();
+
+/**
+ * Get current editor font size
+ * @returns {number} Current font size in pixels
+ */
+export function getEditorFontSize() {
+    return FONT_SIZES[currentFontSizeIndex];
+}
+
+/**
+ * Set editor font size by index (0-4)
+ * @param {number} index - Font size index (0=smallest, 2=default, 4=largest)
+ */
+export function setEditorFontSizeIndex(index) {
+    currentFontSizeIndex = Math.max(0, Math.min(FONT_SIZES.length - 1, index));
+    const fontSize = FONT_SIZES[currentFontSizeIndex];
+    
+    // Update all Monaco editors
+    if (window.monaco) {
+        const models = window.monaco.editor.getModels();
+        const editors = window.monaco.editor.getEditors();
+        editors.forEach(editor => {
+            editor.updateOptions({ fontSize });
+        });
+    }
+    
+    // Save preference
+    localStorage.setItem('sl-editor-fontsize-index', String(currentFontSizeIndex));
+    
+    logger.debug('Editor', 'FontSize', `Set font size to ${fontSize}px (index ${currentFontSizeIndex})`);
+    return fontSize;
+}
+
+/**
+ * Get font size options for UI
+ * @returns {{ sizes: number[], current: number, currentIndex: number }}
+ */
+export function getFontSizeOptions() {
+    return {
+        sizes: FONT_SIZES,
+        current: FONT_SIZES[currentFontSizeIndex],
+        currentIndex: currentFontSizeIndex
+    };
+}
+
+/**
+ * Load saved font size preference
+ */
+export function loadFontSizePreference() {
+    const saved = localStorage.getItem('sl-editor-fontsize-index');
+    if (saved !== null) {
+        const index = parseInt(saved, 10);
+        if (!isNaN(index) && index >= 0 && index < FONT_SIZES.length) {
+            currentFontSizeIndex = index;
+        }
+    }
+    return FONT_SIZES[currentFontSizeIndex];
+}
+
+// ============================================================================
 // Editor Creation
 // ============================================================================
 
@@ -737,24 +894,35 @@ export function createMonacoEditor(container, options = {}) {
         return null;
     }
     
+    // Get current SLUI theme for Monaco - use dynamic theme name if available
+    const currentTheme = window.SLUI?.getTheme?.();
+    const monacoTheme = currentTheme ? `sleditor-${currentTheme}` : (isDarkTheme() ? 'sleditor-dark' : 'sleditor-light');
+    
     const defaultOptions = {
         language: 'glsl',
-        theme: isDarkTheme() ? 'sleditor-dark' : 'sleditor-light',
+        theme: monacoTheme,
         value: '',
         automaticLayout: true,
-        minimap: { enabled: false },
+        minimap: { enabled: editorMinimapEnabled },
         scrollBeyondLastLine: false,
-        fontSize: 13,
+        fontSize: loadFontSizePreference(),
         fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
         fontLigatures: true,
         lineNumbers: 'on',
         renderWhitespace: 'selection',
         tabSize: 4,
         insertSpaces: true,
-        wordWrap: 'on',
+        wordWrap: editorWordWrap,
         folding: true,
         bracketPairColorization: { enabled: true },
-        guides: { indentation: true }
+        guides: { indentation: true },
+        // Unicode/control character highlighting
+        renderControlCharacters: renderControlCharacters,
+        unicodeHighlight: {
+            ambiguousCharacters: unicodeAmbiguous,
+            invisibleCharacters: unicodeInvisible,
+            nonBasicASCII: unicodeNonBasicASCII
+        }
     };
     
     const editor = window.monaco.editor.create(container, {
@@ -762,7 +930,247 @@ export function createMonacoEditor(container, options = {}) {
         ...options
     });
     
+    // Add custom context menu actions
+    addCustomActions(editor);
+    
     return editor;
 }
 
-export default { loadMonaco, createMonacoEditor, setMonacoTheme };
+/**
+ * Add custom context menu actions to an editor instance
+ */
+function addCustomActions(editor) {
+    const monaco = window.monaco;
+    
+    // 1. Toggle Word Wrap (persisted globally)
+    editor.addAction({
+        id: 'sleditor.toggleWordWrap',
+        label: 'Toggle Word Wrap',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.5,
+        run: () => {
+            toggleWordWrap();
+        }
+    });
+    
+    // 2. Select All (useful on mobile)
+    editor.addAction({
+        id: 'sleditor.selectAll',
+        label: 'Select All',
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyA],
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.6,
+        run: (ed) => {
+            const model = ed.getModel();
+            if (model) {
+                const fullRange = model.getFullModelRange();
+                ed.setSelection(fullRange);
+            }
+        }
+    });
+    
+    // 3. Toggle Minimap (persisted globally)
+    editor.addAction({
+        id: 'sleditor.toggleMinimap',
+        label: 'Toggle Minimap',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1.7,
+        run: () => {
+            toggleMinimap();
+        }
+    });
+    
+    // 4. Toggle Control Characters (tabs, etc.)
+    editor.addAction({
+        id: 'sleditor.toggleControlChars',
+        label: 'Toggle Control Characters',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 2.0,
+        run: () => {
+            toggleControlCharacters();
+        }
+    });
+    
+    // 5. Toggle Ambiguous Unicode
+    editor.addAction({
+        id: 'sleditor.toggleAmbiguousUnicode',
+        label: 'Toggle Ambiguous Unicode Highlight',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 2.1,
+        run: () => {
+            toggleAmbiguousUnicode();
+        }
+    });
+    
+    // 6. Toggle Invisible Unicode
+    editor.addAction({
+        id: 'sleditor.toggleInvisibleUnicode',
+        label: 'Toggle Invisible Unicode Highlight',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 2.2,
+        run: () => {
+            toggleInvisibleUnicode();
+        }
+    });
+    
+    // 7. Toggle Non-Basic ASCII
+    editor.addAction({
+        id: 'sleditor.toggleNonBasicASCII',
+        label: 'Toggle Non-Basic ASCII Highlight',
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 2.3,
+        run: () => {
+            toggleNonBasicASCII();
+        }
+    });
+}
+
+/**
+ * Toggle word wrap for all editors (persisted)
+ */
+export function toggleWordWrap() {
+    editorWordWrap = editorWordWrap === 'on' ? 'off' : 'on';
+    localStorage.setItem('sl-editor-wordwrap', editorWordWrap);
+    
+    // Apply to all existing editors
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({ wordWrap: editorWordWrap });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Word wrap: ${editorWordWrap}`);
+    return editorWordWrap;
+}
+
+/**
+ * Toggle minimap for all editors (persisted)
+ */
+export function toggleMinimap() {
+    editorMinimapEnabled = !editorMinimapEnabled;
+    localStorage.setItem('sl-editor-minimap', String(editorMinimapEnabled));
+    
+    // Apply to all existing editors
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({ minimap: { enabled: editorMinimapEnabled } });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Minimap: ${editorMinimapEnabled ? 'on' : 'off'}`);
+    return editorMinimapEnabled;
+}
+
+/**
+ * Toggle control character rendering for all editors (persisted)
+ */
+export function toggleControlCharacters() {
+    renderControlCharacters = !renderControlCharacters;
+    localStorage.setItem('sl-editor-control-chars', String(renderControlCharacters));
+    
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({ renderControlCharacters });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Control characters: ${renderControlCharacters ? 'on' : 'off'}`);
+    return renderControlCharacters;
+}
+
+/**
+ * Toggle ambiguous unicode highlighting for all editors (persisted)
+ */
+export function toggleAmbiguousUnicode() {
+    unicodeAmbiguous = !unicodeAmbiguous;
+    localStorage.setItem('sl-editor-unicode-ambiguous', String(unicodeAmbiguous));
+    
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({
+                unicodeHighlight: {
+                    ambiguousCharacters: unicodeAmbiguous,
+                    invisibleCharacters: unicodeInvisible,
+                    nonBasicASCII: unicodeNonBasicASCII
+                }
+            });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Ambiguous unicode: ${unicodeAmbiguous ? 'on' : 'off'}`);
+    return unicodeAmbiguous;
+}
+
+/**
+ * Toggle invisible unicode highlighting for all editors (persisted)
+ */
+export function toggleInvisibleUnicode() {
+    unicodeInvisible = !unicodeInvisible;
+    localStorage.setItem('sl-editor-unicode-invisible', String(unicodeInvisible));
+    
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({
+                unicodeHighlight: {
+                    ambiguousCharacters: unicodeAmbiguous,
+                    invisibleCharacters: unicodeInvisible,
+                    nonBasicASCII: unicodeNonBasicASCII
+                }
+            });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Invisible unicode: ${unicodeInvisible ? 'on' : 'off'}`);
+    return unicodeInvisible;
+}
+
+/**
+ * Toggle non-basic ASCII highlighting for all editors (persisted)
+ */
+export function toggleNonBasicASCII() {
+    unicodeNonBasicASCII = !unicodeNonBasicASCII;
+    localStorage.setItem('sl-editor-unicode-nonbasic', String(unicodeNonBasicASCII));
+    
+    if (window.monaco) {
+        window.monaco.editor.getEditors().forEach(editor => {
+            editor.updateOptions({
+                unicodeHighlight: {
+                    ambiguousCharacters: unicodeAmbiguous,
+                    invisibleCharacters: unicodeInvisible,
+                    nonBasicASCII: unicodeNonBasicASCII
+                }
+            });
+        });
+    }
+    
+    logger.info('Editor', 'Options', `Non-basic ASCII: ${unicodeNonBasicASCII ? 'on' : 'off'}`);
+    return unicodeNonBasicASCII;
+}
+
+/**
+ * Get current editor preferences
+ */
+export function getEditorPreferences() {
+    return {
+        wordWrap: editorWordWrap,
+        minimapEnabled: editorMinimapEnabled,
+        fontSize: FONT_SIZES[currentFontSizeIndex],
+        renderControlCharacters,
+        unicodeAmbiguous,
+        unicodeInvisible,
+        unicodeNonBasicASCII
+    };
+}
+
+export default { 
+    loadMonaco, 
+    createMonacoEditor, 
+    setMonacoTheme, 
+    toggleWordWrap, 
+    toggleMinimap,
+    toggleControlCharacters,
+    toggleAmbiguousUnicode,
+    toggleInvisibleUnicode,
+    toggleNonBasicASCII,
+    getEditorPreferences 
+};

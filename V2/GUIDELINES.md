@@ -1,84 +1,56 @@
-# Sleditor V2 - Basic context
-
-Sleditor is a web-based shader editor application a bit like Shadertoy, and with an emphasis on shadertoy compatibility.
-
-It also has:
-WGSL compute support inc output to audio.
-Better GLSL audio ouptut
-AudioWorklet
-Sandboxed JS
-Basic AI assist via API and user provided keys
-And several other features not found in Shadertoy.
-
-It uses Supabase as a backend and V1 (in the parent folder sleditor) is live and working
-
-We also started building a new UI library - SLUI - for the site.
-
-V2 is Sleditor with the new UI system.
-We're also refactoring and using the transition as an opportunity to improve the architecture and fix a lot of technical debt.
-
-Both V2 and SLUI are still in development, SLUI is mostly done, but there are gaps we need to fill as we go. V2 still has a long way to go at time of writing. (Jan 8 2026)
-
-Here are some guidelines, (also a WIP - feel free to add more detail if needed)
-
 # Sleditor V2 - Development Guidelines
 
-This document defines the architecture, patterns, and conventions for Sleditor V2.
-**Any agent/model working on this project MUST follow these guidelines.**
+**This is the primary reference for any agent/model working on this project.**
+
+## Quick Overview
+
+Sleditor is a web-based shader editor (like Shadertoy) with additional features:
+- WGSL compute support with audio output
+- Enhanced GLSL audio output
+- AudioWorklet integration
+- Sandboxed JavaScript
+- AI assist via user-provided API keys
+- Supabase backend
+
+**V2** is a refactor using a new UI library (SLUI) and improved architecture.
+
+### Related Documents
+
+| Document | Purpose |
+|----------|---------|
+| `GUIDELINES.md` (this file) | Architecture, patterns, conventions |
+| `REFACTORING.md` | Technical debt, improvements needed |
+| `shader-format.md` | V2 DB schema, V1→V2 translation |
+| `ui-system/README.md` | SLUI component documentation |
+
+### Project Status
+
+- **SLUI**: Mostly complete, gaps filled as needed
+- **V2**: In active development
+- **V1** (`/js/`): Legacy codebase, still live
 
 ---
 
-## 0. Refactoring Strategy - READ THIS FIRST
+## 1. Legacy Code Integration
 
-V2 is a **refactor of an existing large codebase** (`/js/`), not a greenfield project.
+V2 refactors an existing codebase (`/js/`). When adding features:
 
-### Golden Rules
+1. **Check `/js/` first** - Many solutions already exist
+2. **Wrap clean logic** - Pure algorithms can be wrapped with V2 events
+3. **Rewrite UI-coupled code** - Anything with legacy UI needs clean rewrite
 
-1. **Check existing code first** - Before writing new functionality, check `/js/` for existing solutions
-2. **Don't carry over legacy mistakes** - New architecture is priority
-3. **Rewrite UI-coupled code** - Anything with legacy UI baked in needs clean rewrite
-4. **Wrap clean logic** - Pure algorithms/logic can be wrapped with event bus integration
+### Legacy Code Reference
 
-### Module Assessment
-
-| Category | Action | Examples |
-|----------|--------|----------|
-| **Pure Logic** | Wrap with events/managers | `uniforms.js`, `glsl-boilerplate.js`, input modules |
-| **State-Coupled** | Adapt with new state pattern | `backends/webgl.js`, `channels.js` |
-| **UI-Entangled** | Rewrite cleanly | `ui.js`, `tabs.js`, `shader-management.js` |
-| **Orchestration** | Rewrite with four pillars | `index.js`, `compiler.js` |
-
-### Existing Code Worth Reusing
-
-```
-js/
-├── backends/
-│   ├── webgl.js          ✓ ADAPT - WebGL2 multipass rendering
-│   └── webgpu.js         ✓ ADAPT - WebGPU rendering (future)
-├── glsl-boilerplate.js   ✓ IMPORT - Shadertoy/Regular/Golf boilerplate
-├── uniforms.js           ✓ IMPORT - UniformBuilder class
-├── media-loader.js       ✓ IMPORT - Texture/media loading
-├── audio-input.js        ✓ WRAP - Audio analysis (FFT, waveform)
-├── video-input.js        ✓ WRAP - Video texture input
-├── webcam-input.js       ✓ WRAP - Webcam capture
-├── cubemap-input.js      ✓ WRAP - Cubemap loading
-├── volume-input.js       ✓ WRAP - 3D texture loading
-├── sanitizer.js          ✓ IMPORT - Code sanitization
-│
-├── compiler.js           ⚠ ADAPT - Has UI calls, needs clean interface
-├── channels.js           ⚠ ADAPT - Good logic, uses global state
-├── render.js             ⚠ ADAPT - Render loop, needs event integration
-│
-├── ui.js                 ✗ IGNORE - Replaced by SLUI
-├── tabs.js               ✗ REWRITE - Deeply UI-coupled
-├── shader-management.js  ✗ REWRITE - Mixed concerns
-├── index.js              ✗ REWRITE - Old orchestration pattern
-├── editor.js             ⚠ PARTIAL - Monaco setup reusable, UI bits not
-│
-├── sanitizer.js          ✗ IGNORE - No longer needed
-├── performance-monitor.js ✗ IGNORE - Will rebuild if needed
-└── help-sections.js      ✗ IGNORE - Help panel will be rebuilt from scratch
-```
+| File | Action | Notes |
+|------|--------|-------|
+| `backends/webgl.js` | ✓ Adapted | WebGL2 multipass rendering |
+| `glsl-boilerplate.js` | ✓ Import | Shadertoy boilerplate |
+| `uniforms.js` | ✓ Import | UniformBuilder class |
+| `audio-input.js` | Wrap | FFT, waveform analysis |
+| `video-input.js` | Wrap | Video texture input |
+| `webcam-input.js` | Wrap | Webcam capture |
+| `cubemap-input.js` | Wrap | Cubemap loading |
+| `ui.js`, `tabs.js` | ✗ Ignore | Replaced by SLUI |
 
 ### How to Wrap Existing Code
 
@@ -108,7 +80,7 @@ export const channelManager = new ChannelManager();
 
 ---
 
-## 1. The Four Pillars
+## 2. The Four Pillars
 
 V2 is built on four architectural pillars. Every feature must align with these.
 
@@ -198,7 +170,100 @@ events.on(EVENTS.RENDER_FRAME, ({ fps, time }) => {
 
 ---
 
-## 2. File Structure
+## 3. State Management Patterns
+
+### Actions Pattern
+
+All UI state mutations should go through centralized action functions in `core/actions.js`:
+
+```javascript
+// ✅ GOOD - Use actions for mutations
+import { actions } from './core/actions.js';
+
+actions.addProjectElement('code', element);
+actions.setShaderCode('BufferA', code);
+actions.openTab('BufferA');
+```
+
+```javascript
+// ❌ BAD - Direct mutation from UI
+state.project.code.push(element);
+state.shader.code['BufferA'] = code;
+state.ui.openTabs.push('BufferA');
+```
+
+**Why Actions?**
+- Single place for all state changes
+- Automatic event emission (can't forget)
+- Enables undo/redo (future)
+- Easier debugging
+- Managers can still mutate directly (they're the authority for their domain)
+
+**Key Actions:**
+| Action | Purpose |
+|--------|---------|
+| `addProjectElement(category, element)` | Add to code/media/inputs |
+| `removeProjectElement(category, index)` | Remove and emit event |
+| `setShaderCode(tabId, code)` | Set code for a tab |
+| `openTab(tabId)` | Open a tab in editor |
+| `closeTab(tabId)` | Close a tab |
+| `setActiveTab(tabId)` | Switch active tab |
+
+### Selectors Pattern (Recommended)
+
+Derived state should be computed via selectors in `core/selectors.js` (future):
+
+```javascript
+// ✅ GOOD - Centralized selector
+import { selectors } from './core/selectors.js';
+
+const buffers = selectors.getBuffers();
+const nextLetter = selectors.getNextBufferLetter();
+const canPlay = selectors.canPlay();
+```
+
+```javascript
+// ❌ BAD - Duplicated logic everywhere
+const buffers = state.project.code.filter(c => c.type === 'buffer');
+```
+
+### Event Handler Cleanup Pattern
+
+When subscribing to events, store the unsubscribe function for cleanup:
+
+```javascript
+// ✅ GOOD - Store cleanup functions
+const cleanupFns = [];
+
+export function init() {
+    cleanupFns.push(events.on(EVENTS.RENDER_FRAME, handleFrame));
+    cleanupFns.push(events.on(EVENTS.COMPILE_SUCCESS, handleCompile));
+}
+
+export function destroy() {
+    cleanupFns.forEach(fn => fn());
+    cleanupFns.length = 0;
+}
+```
+
+```javascript
+// ❌ BAD - No cleanup (memory leak risk)
+events.on(EVENTS.RENDER_FRAME, handleFrame);
+// Handler stays registered forever
+```
+
+### When to Use What
+
+| Situation | Pattern |
+|-----------|---------|
+| UI changing state | Use `actions.*` |
+| Manager changing its own domain | Direct mutation is OK |
+| Reading derived/computed state | Use `selectors.*` |
+| Subscribing to events | Store unsubscribe for cleanup |
+
+---
+
+## 4. File Structure
 
 ```
 V2/
@@ -215,6 +280,8 @@ V2/
     │   ├── config.js          # Static configuration
     │   ├── state.js           # Namespaced state
     │   ├── events.js          # Event bus + EVENTS constant
+    │   ├── actions.js         # ✓ Centralized state mutations
+    │   ├── selectors.js       # Future: Derived state queries
     │   └── logger.js          # Console capture + messaging
     │
     ├── editor/                # Monaco editor integration
@@ -272,7 +339,7 @@ V2/
 
 ---
 
-## 3. SLUI Usage
+## 5. SLUI Usage
 
 SLUI is the **generic UI library** in `/ui-system/`.
 Sleditor **uses** SLUI but doesn't modify it (usually).
@@ -317,7 +384,7 @@ SLUI.emit(event, data)
 
 ---
 
-## 3.5. CSS & Styling Practices
+## 6. CSS & Styling Practices
 
 ### ❌ CRITICAL: Avoid Inline Styles
 
@@ -430,57 +497,37 @@ export function Button({ label, variant, onClick }) {
    // V2/js/ui/components/shader-editor.js
    ```
 
-### Mistakes That Need Rectifying
+### Technical Debt & Refactoring
 
-**Current Issues to Fix**:
+See **`REFACTORING.md`** for the full list of architectural improvements and fixes needed.
 
-1. **Inline Styles**: Many panels have inline `style.cssText` that should be CSS classes
-   - `V2/js/ui/panels/media.js` - Texture selector has extensive inline styles
-   - `V2/js/ui/panels/shader-controls.js` - Controls bar has inline styles
-   - **Action**: Extract to CSS classes in `V2/css/app.css`
-
-2. **Duplicate Select Components**: We created `SLUI.Select()` but some places might still have inline selects
-   - **Action**: Audit all `<select>` elements, replace with `SLUI.Select()`
-
-3. **Missing SLUI Components**: Some common patterns aren't in SLUI yet
-   - Dropdown menus (we have them inline in Add Tab buttons)
-   - Checkbox groups
-   - Radio button groups
-   - **Action**: Add these to SLUI as we encounter them
-
-4. **CSS File Organization**: V2-specific CSS is scattered
-   - Currently: `V2/css/fullscreen.css` (for fullscreen-specific)
-   - **Action**: Create `V2/css/app.css` for general V2-specific overrides
+Key items:
+- Centralize state mutations (Actions pattern)
+- Create selectors for derived state
+- Extract audio processing from webgl.js
+- Separate compiler from render code
+- CSS organization improvements
 
 ### CSS File Structure
 
 ```
+ui-system/
+├── ui.css              # Core SLUI components
+
 V2/css/
-├── app.css          # V2-specific overrides (create this)
-└── fullscreen.css   # Fullscreen-specific styles (existing)
+├── app.css             # V2-specific styles
+└── fullscreen.css      # Fullscreen-specific styles
 ```
 
 **Rules**:
 - Generic components → SLUI (`ui-system/ui.css`)
 - V2-specific overrides → `V2/css/app.css`
-- Feature-specific → `V2/css/[feature].css` (e.g., `fullscreen.css`)
-
-### Refactoring Checklist
-
-When working on UI code:
-
-- [ ] Check if SLUI has the component
-- [ ] If missing and generic, add to SLUI first
-- [ ] Use SLUI component everywhere applicable
-- [ ] Extract inline styles to CSS classes
-- [ ] Put V2-specific CSS in `V2/css/app.css`
-- [ ] Use CSS variables for theming
-- [ ] Avoid `!important` unless absolutely necessary
-- [ ] Document why if using inline styles
+- Use CSS classes, not inline styles
+- Use CSS variables for theming
 
 ---
 
-## 4. Icons
+## 7. Icons
 
 Icons are in `/ui-system/icons/`.
 
@@ -502,7 +549,7 @@ icon: '<img src="/ui-system/icons/console32.png" srcset="/ui-system/icons/consol
 
 ---
 
-## 5. Logging
+## 8. Logging
 
 All logging goes through the V2 logger (not `console.log` directly).
 
@@ -526,7 +573,7 @@ logger.update(id, 'Loading... 100% ✓');
 
 ---
 
-## 6. Initialization
+## 9. Initialization
 
 Init is orchestrated in `app.js` using steps.
 
@@ -546,7 +593,7 @@ step('StepName', async () => {
 
 ---
 
-## 7. Uniform System
+## 10. Uniform System
 
 **Auto-Detection**: Replaces V1's predefined custom uniform system. Uniforms are declared in shader code and automatically detected + UI generated.
 
@@ -612,7 +659,7 @@ uniformManager.resetToDefaults();
 - `UNIFORMS_DETECTED` - Emitted after parse, carries `{ uniforms: [...] }`
 - `UNIFORM_CHANGED` - Emitted on value change, carries `{ name, value, oldValue }`
 
-## 7.5 Shader Types & Simplified UI
+## 11. Shader Types & Simplified UI
 
 ### Shader Type Selection
 Users select between:
@@ -639,7 +686,7 @@ While V1 had explicit tabs for "Regular", "S-Toy", "Golf" modes, V2 auto-detects
 - AudioWorklet (JavaScript)
 - GLSL/WGSL audio generation
 
-## 7.6 Multipass Support & Channels
+## 12. Multipass Support & Channels
 
 ### Channel Model: Global Namespace (IMPORTANT)
 
@@ -760,135 +807,320 @@ export class ChannelManager {
 
 ---
 
-## 8. Editor Architecture
+## 13. Unified Editor Architecture
 
-The Monaco-based code editor uses a **multi-window, shared model** pattern with **simplified tab types**:
+The editor uses a **unified panel with project sidebar** pattern. All element types (code, media, inputs) are managed in one panel.
 
-### Shader Types
-- **GLSL**: Supports Buffer, Common, Audio tabs + main shader
-- **WGSL**: Supports Audio tab + main shader (compute shaders)
-- **AudioWorklet/JS**: Can be added to any shader type (only one audio type per shader)
-
-### Tab Structure
-**Code tabs only** in editor windows:
-- `Image` / `Main` - Primary shader output (always present)
-- `Common` - Shared code (GLSL only, prepended to all passes)
-- `BufferA/B/C/D` - Multipass intermediate buffers (GLSL only)
-- `Audio` - Audio generation code (optional, GLSL or WGSL)
-
-**Channel/Media tabs** are NOT in code windows - they appear in dedicated channel selection UI.
+### Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────┐
-│             MODELS (shared/global)              │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐           │
-│  │ Image   │ │ Common  │ │ BufferA │  ← undo   │
-│  │ Model   │ │ Model   │ │ Model   │    here   │
-│  └────┬────┘ └────┬────┘ └────┬────┘           │
-└───────┼───────────┼───────────┼─────────────────┘
-        ▼           ▼           ▼
-┌───────────────┐  ┌───────────────┐
-│   Window 1    │  │   Window 2    │  ← separate
-│  [Editor]     │  │  [Editor]     │     editors
-│  viewing:     │  │  viewing:     │
-│  Image model  │  │  Common model │
-└───────────────┘  └───────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│  Unified Editor Panel                                           │
+├────────────────┬────────────────────────────────────────────────┤
+│ ◀ PROJECT      │  [Image] [BufferA] [Audio In] ──tabs──────────▸│
+│                │  ┌────────────────────────────────────────────┐│
+│ ▼ Code    [+]  │  │                                            ││
+│   🖼️ Main iCh0  │  │   Tab Content (Monaco / Input Settings)   ││
+│   📦 Common    │  │                                            ││
+│   📋 Buff A  iCh1│  │                                           │
+│                │  └────────────────────────────────────────────┘│
+│ ▼ Media   [+]  │                                                │
+│   🖼️ Texture₁ iCh2 │                                            │
+│   🎵 Audio₁   iCh3│                                            │
+│                │                                                │
+│ ▼ Inputs  [+]  │                                                │
+│   🖱️ Mouse 🔒  │                                                │
+│   ⌨️ Keyboard iCh4│                                            │
+│                │                                                │
+│  [◀ Collapse]  │                                                │
+└────────────────┴────────────────────────────────────────────────┘
 ```
 
-### Key Principles
+### Core Concepts
 
-1. **Global Models (shared)**
-   - `Map<tabId, ITextModel>` stores Monaco models
-   - Undo/redo history lives in models, NOT editors
-   - Models survive window creation/destruction
+1. **Project Elements vs Tabs**
+   - `state.project` contains the canonical list of elements (code, media, inputs)
+   - `state.ui.openTabs` contains IDs of elements with open tabs
+   - **Closing a tab does NOT delete the element**
+   - **Deleting an element DOES close its tab**
 
-2. **Per-Window Editors**
-   - `Map<windowId, { editor, host, activeTabId }>` tracks editors
-   - Each window gets its own Monaco editor instance
-   - Supports drag-out to create side-by-side editing
+2. **Element Categories**
+   - **Code**: Image (locked), Common, BufferA-Z, Audio
+   - **Media**: Textures, Audio files, Videos, Cubemaps, Volumes
+   - **Inputs**: Mouse (locked), Keyboard, Webcam, Mic, Gamepad, MIDI
 
-3. **Window Lifecycle Hooks**
-   - `onWindowCreated(windowId)` - called when window opens
-   - `onWindowClosed(windowId)` - called when window closes
-   - Editor instances are disposed on window close (models preserved)
+3. **Sidebar Behavior**
+   - Collapsible with `◀/▶` button
+   - Three sections with expand/collapse
+   - Each section has `[+]` button with dropdown for adding new elements
+   - Double-click element → open/focus tab
+   - Right-click element → context menu (Delete, etc.)
+   - Channel numbers shown for media/inputs
 
-4. **Single Source of Truth**
-   - `state.shader.code` is canonical
-   - Model change listeners sync TO state
-   - Window ID detected from DOM context
+4. **Locked Elements**
+   - `Image` - always present, cannot be deleted
+   - `Mouse` - always present, cannot be deleted (but can be clicked to view settings)
 
-### Tab Switch Flow
+### State Structure
+
+```javascript
+// Project elements - THE canonical list
+// Note - some of these names/labels may be out of date.
+state.project = {
+    code: [
+        { id: 'Main', type: 'image', label: 'Main', icon: '🖼️', locked: true },
+        { id: 'Common', type: 'common', label: 'Common', icon: '📦', locked: false },
+        // ...
+    ],
+    media: [
+        { id: 'texture_1', type: 'texture', label: 'Texture 1', icon: '🖼️', channel: 1 },
+        // ...
+    ],
+    inputs: [
+        { id: 'mouse', type: 'mouse', label: 'Mouse', icon: '🖱️', locked: true },
+        { id: 'keyboard', type: 'keyboard', label: 'Keyboard', icon: '⌨️', channel: 2 },
+        // ...
+    ],
+    nextChannelNumber: 3
+};
+
+// Open tabs (element IDs)
+state.ui.openTabs = ['Main', 'texture_1', 'keyboard'];
+state.ui.activeTab = 'Main';
+state.ui.sidebarCollapsed = false;
+state.ui.sidebarSections = { code: true, media: true, inputs: true };
 ```
-User clicks tab → TabPane.renderContent() 
-→ createTabContent(tabId) → detect windowId from DOM
-→ createEditorForWindow(windowId) → reuse existing or create new
-→ showTabInWindow(windowId, tabId) → saves old, swaps model
-→ editor.setModel(model) → undo preserved ✓
+
+### Event Flow
+
+```javascript
+// Element lifecycle
+EVENTS.PROJECT_ELEMENT_CREATED  // { id, category, element }
+EVENTS.PROJECT_ELEMENT_DELETED  // { id, category }
+EVENTS.PROJECT_ELEMENT_UPDATED  // { id, category, changes }
+
+// Tab lifecycle (views, not data)
+EVENTS.PROJECT_TAB_OPENED       // { elementId }
+EVENTS.PROJECT_TAB_CLOSED       // { elementId }
+EVENTS.PROJECT_TAB_ACTIVATED    // { elementId }
+
+// Sidebar
+EVENTS.PROJECT_SIDEBAR_TOGGLED  // { collapsed }
 ```
 
-### Drag-Out Flow
-```
-User drags tab out → SLUI creates new window (tabwin-{timestamp})
-→ new window inherits onWindowClosed callback
-→ createTabContent(tabId) → detects NEW windowId
-→ createEditorForWindow(newWindowId) → creates NEW editor instance
-→ showTabInWindow(newWindowId, tabId) → same model, new editor
-→ two editors can now view different tabs side-by-side ✓
-```
+### Monaco Integration
 
-### Critical Implementation Notes
-- `saveModelToState(tabId)` before any model switch
-- Model listeners are set up ONCE per model (in `modelListeners` Map)
-- `requestAnimationFrame(() => editor.layout())` after DOM operations
-- `disposeEditorForWindow(windowId)` cleans up editor, NOT models
+- Monaco models are still shared globally (`Map<tabId, ITextModel>`)
+- Undo/redo history lives in models
+- Tab content dynamically creates Monaco editor when code element is active
+- Media/Input tabs show settings UI instead of Monaco
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `V2/js/ui/panels/unified-editor.js` | Main unified editor panel |
+| `V2/js/core/state.js` | Project state (`state.project`, `state.ui.openTabs`) |
+| `V2/js/core/events.js` | Project events (`PROJECT_*`) |
+| `V2/css/app.css` | Unified editor styles |
+
+### Legacy Files (deprecated)
+
+These files are kept for reference but no longer registered:
+- `V2/js/ui/panels/editor.js` - Old separate editor panel
+- `V2/js/ui/panels/media.js` - Old separate media panel
+- `V2/js/ui/panels/inputs.js` - Old separate inputs panel
 
 ---
 
-## 9. Events Reference
+## 14. State Architecture: shader vs project
+
+Understanding the relationship between `state.shader` and `state.project`:
+
+> **📄 See [shader-format.md](./shader-format.md) for the complete V2 DB schema.**
+
+### The Two State Objects
+
+| State | Purpose | Persisted? |
+|-------|---------|------------|
+| `state.shader` | Shader entity (saved to DB) | ✅ Yes |
+| `state.project` | Workspace structure (runtime) | ❌ No |
+
+### state.shader (Persisted Entity)
+
+Mirrors the DB schema. See [shader-format.md](./shader-format.md) for full details.
+
+Key fields:
+```javascript
+state.shader = {
+    // Identity
+    id, slug, user_id, title, description, creator_name,
+    
+    // Type & Languages
+    shader_type,  // 'webgl', 'webgpu-compute', 'webgpu-frag', null (legacy)
+    code_types,   // ['glsl'], ['wgsl'], ['glsl', 'js']
+    
+    // Code content
+    code: {
+        Image: '// main shader',
+        BufferA: '// buffer code',
+        Common: '// shared code'
+    },
+    
+    // Media, Inputs, Channels (V2)
+    media,           // Array of media elements
+    inputs,          // Array of input configs
+    channels,        // Channel assignments
+    channel_matrix,  // Per-receiver filter settings
+    
+    // Settings & Config
+    settings,        // Render settings
+    uniform_config,  // Slider ranges
+    timeline_config, // Keyframe animation
+    
+    // Runtime flags (not persisted)
+    isDirty
+};
+```
+
+### state.project (Runtime Workspace)
+
+Contains the working structure used by UI and managers:
+
+```javascript
+state.project = {
+    // Element lists with runtime info
+    code: [
+        { id: 'Image', type: 'main', label: 'Main', channel: 0, locked: true },
+        { id: 'BufferA', type: 'buffer', label: 'Buff A', channel: 1 }
+    ],
+    media: [
+        { id: 'texture_1', type: 'texture', label: 'Tex A', channel: 2 }
+    ],
+    inputs: [
+        { id: 'mouse', type: 'mouse', label: 'Mouse', locked: true }
+    ],
+    
+    // Allocation tracking
+    nextChannelNumber: 3
+};
+```
+
+### Key Distinctions
+
+| Concern | state.shader | state.project |
+|---------|--------------|---------------|
+| Code content | `code.Image = "..."` | References only |
+| Channel allocation | Not stored | `nextChannelNumber` |
+| Media references | URLs (future) | Loaded objects |
+| Element metadata | Minimal | Full (icons, labels) |
+| Source of truth for... | What to save | How to render UI |
+
+### Synchronization
+
+On load:
+1. `state.shader` is populated from saved data
+2. `syncProjectWithShaderState()` builds `state.project` from shader
+
+On save:
+1. `state.shader` contains all data needed
+2. `state.project` is not saved (rebuilt on load)
+
+### Future: Normalized Storage
+
+See `REFACTORING.md` for the proposed pattern of storing channel configuration in `state.shader.channels` for persistence, then hydrating to `state.project` (or `state.runtime`) for execution.
+
+---
+
+## 15. Events Reference
 
 ### Standard Events (in `core/events.js`)
+
 ```javascript
 EVENTS = {
     // Init
     INIT_START, INIT_PROGRESS, INIT_COMPLETE, INIT_ERROR,
     
-    // Shader
-    SHADER_CREATED, SHADER_LOADED, SHADER_SAVED, SHADER_DIRTY,
+    // Shader lifecycle
+    SHADER_CREATED, SHADER_LOADED, SHADER_SAVED, SHADER_FORKED,
+    SHADER_DIRTY, SHADER_CLOSED, SHADER_CODE_SET,
     
     // Compile
-    COMPILE_START, COMPILE_SUCCESS, COMPILE_ERROR,
+    COMPILE_START, COMPILE_SUCCESS, COMPILE_ERROR, COMPILE_WARNING, COMPILE_REQUEST,
     
     // Uniforms
     UNIFORMS_DETECTED, UNIFORM_CHANGED,
     
     // Render
-    RENDER_START, RENDER_STOP, RENDER_FRAME,
+    RENDERER_READY, RENDER_START, RENDER_STOP, RENDER_FRAME,
+    RENDER_FRAME_REQUESTED,  // Request single frame (even when paused)
+    RENDER_RESOLUTION, RENDER_ERROR, RENDER_CHANNEL_CHANGED, RENDER_COLORSPACE_CHANGED,
     
-    // UI
-    UI_READY, UI_PANEL_OPENED, UI_PANEL_CLOSED, UI_THEME_CHANGED,
+    // Shader controls
+    SHADER_CONTROLS_DOCKED, PREVIEW_GLASS_MODE,
+    
+    // Editor
+    EDITOR_CODE_CHANGED, EDITOR_CURSOR_CHANGED, EDITOR_FOCUS, EDITOR_BLUR,
+    
+    // Tabs (legacy)
+    TAB_SWITCHED, TAB_ADDED, TAB_REMOVED, TAB_RENAMED,
+    
+    // Project elements (unified editor)
+    PROJECT_ELEMENT_CREATED,   // { id, category, element }
+    PROJECT_ELEMENT_DELETED,   // { id, category }
+    PROJECT_ELEMENT_UPDATED,   // { id, category, changes }
+    PROJECT_TAB_OPENED,        // { elementId }
+    PROJECT_TAB_CLOSED,        // { elementId }
+    PROJECT_TAB_ACTIVATED,     // { elementId }
+    PROJECT_SIDEBAR_TOGGLED,   // { collapsed }
+    PROJECT_RESET,
+    
+    // Channels
+    CHANNEL_CREATED, CHANNEL_SET, CHANNEL_CLEARED, CHANNEL_ERROR,
+    
+    // Media
+    MEDIA_SELECTED, MEDIA_TAB_ADDED, MEDIA_TAB_REMOVED,
+    MEDIA_URL_IMPORT, MEDIA_OPTIONS_CHANGED,
+    VIDEO_SELECTED, VIDEO_URL_IMPORT, VIDEO_LOOP_CHANGED,
+    AUDIO_SELECTED, AUDIO_URL_IMPORT, AUDIO_MODE_CHANGED, AUDIO_LOOP_CHANGED,
+    
+    // Inputs
+    INPUT_WEBCAM_ENABLED, INPUT_WEBCAM_DISABLED,
+    INPUT_MIC_ENABLED, INPUT_MIC_DISABLED,
+    INPUT_KEYBOARD_ENABLED, INPUT_KEYBOARD_DISABLED,
+    
+    // Fullscreen
+    FULLSCREEN_ENTER, FULLSCREEN_EXIT, FULLSCREEN_CONTROLS_VISIBLE,
     
     // Auth
-    AUTH_CHANGED, AUTH_LOGIN, AUTH_LOGOUT,
+    AUTH_CHANGED, AUTH_LOGIN, AUTH_LOGOUT, AUTH_ERROR,
     
-    // ...
+    // UI
+    UI_READY, UI_PANEL_OPENED, UI_PANEL_CLOSED, UI_THEME_CHANGED, UI_LAYOUT_CHANGED,
+    
+    // Toast/Notifications
+    TOAST_SHOW, TOAST_HIDE
 }
 ```
 
 ### Adding New Events
 1. Add to `EVENTS` in `core/events.js`
-2. Document what data it carries
+2. Document what data it carries in a comment
 3. Emit it from the relevant manager/module
 
 ---
 
-## 10. Theming
+## 16. Theming
 
 Themes are defined in `/ui-system/themes/themes.json`.
 
 ### Current Themes
-- `hacker` - Green terminal aesthetic
-- `architect` - Blue professional (default)
-- `designer` - Light/minimal
+- `default` - Classic blue, hybrid light/dark
+- `designer` - Light, neumorphic
+- `architect` - Light, warm professional
+- `coder` - Dark, GitHub-style
+- `hacker` - Dark, green terminal
+- `engineer` - Dark, VS Code-style
 
 ### CSS Variables
 All colors use CSS variables:
@@ -906,7 +1138,7 @@ var(--console-error)
 
 ---
 
-## 11. Internationalization
+## 17. Internationalization
 
 Translations are in `/ui-system/lang/*.json`.
 
@@ -917,7 +1149,7 @@ Translations are in `/ui-system/lang/*.json`.
 
 ---
 
-## 12. Testing Checklist
+## 18. Testing Checklist
 
 Before submitting changes:
 
@@ -934,7 +1166,7 @@ Before submitting changes:
 
 ---
 
-## 13. Common Mistakes to Avoid
+## 19. Common Mistakes to Avoid
 
 ### ❌ DON'T
 ```javascript
@@ -987,7 +1219,7 @@ const select = SLUI.Select({ items, value, onChange });
 
 ---
 
-## 14. Quick Reference
+## 20. Quick Reference
 
 ### New Panel Checklist
 1. Create `ui/panels/mypanel.js`
@@ -1025,7 +1257,7 @@ const select = SLUI.Select({ items, value, onChange });
 
 ---
 
-## 15. Existing Solutions Reference
+## 21. Existing Solutions Reference
 
 Before writing new code, check if these problems are already solved in `/js/`:
 
@@ -1074,10 +1306,10 @@ So a few things will need to work differently in V2 - we wont have different GLS
 So, we'll start with shadertoy compatible glsl and add detected modes later (for different or no boilerplate)
 glsl or wgsl will be the base shader options and will determine what new code tabs will be available.
 (audioworklet and JS are able to be added to any shader, though only one type of audio per shader)
-finally, all non code tabs (mic, audio in, texture, vide, webcam...) will not be in the same window as the code tabs, so the selection will be code only, creation of media buffers/channels will take place in its own dedciated window with its own tabs.
+
 uniform autdetection will replace the old system of pre defined custom uniforms. as is is much user friendly.
 
 
 ---
 
-*Last updated: January 2026*
+*Last updated: February 7, 2026*

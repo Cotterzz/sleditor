@@ -6,6 +6,7 @@
  */
 
 import { logger } from '../../core/logger.js';
+import { CONFIG } from '../../core/config.js';
 
 /**
  * Register the theme editor panel with SLUI
@@ -13,7 +14,7 @@ import { logger } from '../../core/logger.js';
  */
 export function registerThemeEditorPanel(SLUI) {
     // Import the component dynamically to avoid circular deps
-    import('/ui-system/src/components/theme-editor.js').then(({ ThemeEditor }) => {
+    import(CONFIG.SLUI_PATH.replace('src/index.js', 'src/components/theme-editor.js')).then(({ ThemeEditor }) => {
         
         SLUI.registerPanel({
             id: 'theme-editor',

@@ -129,7 +129,7 @@ export function isGlassModeEnabled() {
 export function registerPreviewPanel(SLUI) {
     SLUI.registerPanel({
         id: 'preview',
-        icon: '<img src="/ui-system/icons/shader32.png" srcset="/ui-system/icons/shader64.png 2x" width="24" height="24" alt="Preview">',
+        icon: `<img src="${CONFIG.SLUI_ICONS}shader32.png" srcset="${CONFIG.SLUI_ICONS}shader64.png 2x" width="24" height="24" alt="Preview">`,
         title: 'Preview',
         showInToolbar: true,
         createContent: () => createPreviewContent(SLUI)
@@ -195,28 +195,62 @@ function createPreviewContent(SLUI) {
         container.appendChild(controlsBar);
     }
     
-    // Mouse handling
-    canvas.addEventListener('mousemove', (e) => {
-        if (renderer) {
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
-            renderer.setMouse(x, y, e.buttons === 1, false);
-        }
-    });
+    // Mouse handling - Shadertoy-compatible drag behavior
+    // iMouse only updates during drag (mousedown + move), not on simple mousemove
+    // This is also more mobile-friendly (translates to touch drag)
+    let isDragging = false;
     
     canvas.addEventListener('mousedown', (e) => {
         if (renderer) {
+            isDragging = true;
             const rect = canvas.getBoundingClientRect();
             const x = (e.clientX - rect.left) * (canvas.width / rect.width);
             const y = (e.clientY - rect.top) * (canvas.height / rect.height);
             renderer.setMouse(x, y, true, true);
+            
+            // If paused, request a frame render
+            if (!renderer.getState().isPlaying) {
+                events.emit(EVENTS.RENDER_FRAME_REQUESTED);
+            }
+        }
+    });
+    
+    canvas.addEventListener('mousemove', (e) => {
+        // Only update iMouse during drag (Shadertoy-compatible)
+        if (renderer && isDragging) {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+            renderer.setMouse(x, y, true, false);
+            
+            // If paused, request a frame render on each drag move
+            if (!renderer.getState().isPlaying) {
+                events.emit(EVENTS.RENDER_FRAME_REQUESTED);
+            }
         }
     });
     
     canvas.addEventListener('mouseup', () => {
-        if (renderer) {
-            renderer.setMouse(renderer.getState().mouse?.x || 0, renderer.getState().mouse?.y || 0, false, false);
+        if (renderer && isDragging) {
+            isDragging = false;
+            const state = renderer.getState();
+            renderer.setMouse(state.mouse?.x || 0, state.mouse?.y || 0, false, false);
+            
+            // If paused, request a frame render to show the released state
+            if (!state.isPlaying) {
+                events.emit(EVENTS.RENDER_FRAME_REQUESTED);
+            }
+        }
+    });
+    
+    // Handle mouse leaving canvas while dragging
+    canvas.addEventListener('mouseleave', () => {
+        if (isDragging) {
+            isDragging = false;
+            if (renderer) {
+                const state = renderer.getState();
+                renderer.setMouse(state.mouse?.x || 0, state.mouse?.y || 0, false, false);
+            }
         }
     });
     
@@ -246,12 +280,19 @@ function createPreviewContent(SLUI) {
             return;
         }
         
-        // Emit resolution updates
+        // Emit resolution updates and request frame if paused
         const emitResolution = () => {
+            const state = renderer ? renderer.getState() : null;
             events.emit(EVENTS.RENDER_RESOLUTION, { 
                 width: canvas.width, 
-                height: canvas.height 
+                height: canvas.height,
+                pixelScale: state?.pixelScale || 1
             });
+            
+            // If paused, request a frame render to show the resized canvas
+            if (renderer && !state?.isPlaying) {
+                events.emit(EVENTS.RENDER_FRAME_REQUESTED);
+            }
         };
         emitResolution();
         
@@ -269,6 +310,27 @@ function createPreviewContent(SLUI) {
                 renderer.play();
             }
         });
+        
+        // Initialize theme ID from current SLUI theme
+        updateThemeId();
+        
+        // Listen for theme changes to update iTheme uniform
+        if (window.SLUI?.on) {
+            window.SLUI.on('theme-change', updateThemeId);
+        }
+    }
+    
+    /**
+     * Update the renderer's theme ID from current SLUI theme
+     */
+    function updateThemeId(eventData) {
+        if (!renderer) return;
+        
+        const themeName = eventData?.theme || window.SLUI?.getTheme?.();
+        const themeData = window.SLUI?.getThemeData?.(themeName);
+        const themeId = themeData?.id ?? 0;
+        
+        renderer.setThemeId(themeId);
     }
     
     return container;
