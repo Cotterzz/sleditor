@@ -1235,7 +1235,7 @@
         el.textContent = value ?? '—';
         if (value !== null && value !== undefined && value !== '—') {
             el.classList.remove('na', 'error-val');
-            if (isActive) el.classList.add('');
+            if (isActive) el.classList.add(id);
         } else {
             el.classList.add('na');
         }
