@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finger Edit Mode - Monaco</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            background: #16213e;
+            border-bottom: 2px solid #0f3460;
+        }
+
+        #toolbar h2 {
+            font-size: 14px;
+            color: #e94560;
+            margin-right: 8px;
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 26px;
+            cursor: pointer;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            inset: 0;
+            background: #333;
+            border-radius: 13px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            left: 3px;
+            bottom: 3px;
+            background: #999;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background: #e94560;
+        }
+
+        .toggle-switch input:checked + .toggle-slider::before {
+            transform: translateX(22px);
+            background: white;
+        }
+
+        .mode-label {
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        .mode-label.active {
+            color: #e94560;
+            font-weight: 600;
+        }
+
+        #status {
+            margin-left: auto;
+            font-size: 12px;
+            color: #666;
+            padding: 4px 10px;
+            background: #111;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        #editor-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #editor {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Finger edit overlay - sits on top of Monaco */
+        #finger-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        #finger-overlay.active {
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+
+        /* Token highlight on hover */
+        .token-highlight {
+            position: absolute;
+            border-radius: 3px;
+            pointer-events: none;
+            transition: opacity 0.15s;
+            z-index: 11;
+        }
+
+        .token-highlight.number {
+            background: rgba(233, 69, 96, 0.15);
+            border: 1px solid rgba(233, 69, 96, 0.5);
+        }
+
+        .token-highlight.string {
+            background: rgba(80, 200, 120, 0.15);
+            border: 1px solid rgba(80, 200, 120, 0.5);
+        }
+
+        .token-highlight.function-call {
+            background: rgba(100, 149, 237, 0.15);
+            border: 1px solid rgba(100, 149, 237, 0.5);
+        }
+
+        .token-highlight.keyword {
+            background: rgba(255, 165, 0, 0.15);
+            border: 1px solid rgba(255, 165, 0, 0.5);
+        }
+
+        .token-highlight.boolean {
+            background: rgba(186, 85, 211, 0.15);
+            border: 1px solid rgba(186, 85, 211, 0.5);
+        }
+
+        /* Inline edit popup */
+        .finger-popup {
+            position: absolute;
+            z-index: 100;
+            background: #1e1e3a;
+            border: 2px solid #e94560;
+            border-radius: 10px;
+            padding: 12px 16px;
+            min-width: 240px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            animation: popIn 0.2s ease-out;
+            user-select: none;
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .finger-popup .popup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .finger-popup .token-type {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #e94560;
+            font-weight: 700;
+        }
+
+        .finger-popup .close-btn {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 4px;
+        }
+
+        .finger-popup .close-btn:hover {
+            color: #e94560;
+        }
+
+        .finger-popup .current-value {
+            font-family: 'Fira Code', monospace;
+            font-size: 22px;
+            color: #fff;
+            text-align: center;
+            padding: 6px 0;
+            min-height: 36px;
+        }
+
+        /* Number scrubber */
+        .scrubber-container {
+            margin-top: 8px;
+        }
+
+        .scrub-track {
+            width: 100%;
+            height: 36px;
+            background: #111;
+            border-radius: 18px;
+            position: relative;
+            cursor: ew-resize;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        .scrub-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: linear-gradient(90deg, #e94560, #ff6b8a);
+            border-radius: 18px;
+            transition: width 0.05s;
+        }
+
+        .scrub-thumb {
+            position: absolute;
+            top: 50%;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+            transition: left 0.05s;
+        }
+
+        .scrub-range {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #666;
+            margin-top: 4px;
+            font-family: monospace;
+        }
+
+        .precision-btns {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+            justify-content: center;
+        }
+
+        .precision-btn {
+            padding: 4px 10px;
+            border: 1px solid #333;
+            background: #222;
+            color: #aaa;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+
+        .precision-btn.active {
+            border-color: #e94560;
+            color: #e94560;
+            background: rgba(233, 69, 96, 0.1);
+        }
+
+        /* String editor */
+        .string-input {
+            width: 100%;
+            background: #111;
+            border: 1px solid #333;
+            color: #50c878;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            margin-top: 8px;
+            outline: none;
+        }
+
+        .string-input:focus {
+            border-color: #50c878;
+        }
+
+        /* Boolean toggle */
+        .bool-toggle {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .bool-option {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: monospace;
+            font-weight: 700;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+
+        .bool-option.true-opt {
+            background: rgba(80, 200, 120, 0.1);
+            border: 2px solid #333;
+            color: #50c878;
+        }
+
+        .bool-option.false-opt {
+            background: rgba(233, 69, 96, 0.1);
+            border: 2px solid #333;
+            color: #e94560;
+        }
+
+        .bool-option.selected {
+            border-color: currentColor;
+            transform: scale(1.05);
+        }
+
+        /* Function call editor */
+        .func-info {
+            margin-top: 8px;
+        }
+
+        .func-name {
+            font-family: monospace;
+            color: #6495ed;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .func-args {
+            margin-top: 8px;
+        }
+
+        .func-arg {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            padding: 6px 8px;
+            background: #111;
+            border-radius: 4px;
+        }
+
+        .func-arg .arg-index {
+            font-size: 10px;
+            color: #666;
+            width: 20px;
+        }
+
+        .func-arg .arg-value {
+            flex: 1;
+            font-family: monospace;
+            font-size: 13px;
+            color: #ddd;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .func-arg .arg-value:hover {
+            background: #222;
+        }
+
+        .func-arg .arg-type {
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+
+        .func-arg .arg-type.num { background: rgba(233,69,96,0.2); color: #e94560; }
+        .func-arg .arg-type.str { background: rgba(80,200,120,0.2); color: #50c878; }
+        .func-arg .arg-type.other { background: rgba(150,150,150,0.2); color: #999; }
+
+        /* Context menu for newlines / general */
+        .context-menu {
+            position: absolute;
+            z-index: 100;
+            background: #1e1e3a;
+            border: 2px solid #444;
+            border-radius: 8px;
+            min-width: 180px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            animation: popIn 0.15s ease-out;
+            overflow: hidden;
+        }
+
+        .context-menu .menu-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            transition: 0.15s;
+        }
+
+        .context-menu .menu-item:hover {
+            background: rgba(233, 69, 96, 0.15);
+        }
+
+        .context-menu .menu-item .icon {
+            font-size: 16px;
+            width: 24px;
+            text-align: center;
+        }
+
+        .context-menu .menu-divider {
+            height: 1px;
+            background: #333;
+            margin: 2px 0;
+        }
+
+        /* Decorations injected into Monaco */
+        .finger-number-decoration {
+            background: rgba(233, 69, 96, 0.08);
+            border-bottom: 2px dotted rgba(233, 69, 96, 0.4);
+            cursor: pointer !important;
+        }
+
+        .finger-string-decoration {
+            background: rgba(80, 200, 120, 0.08);
+            border-bottom: 2px dotted rgba(80, 200, 120, 0.4);
+            cursor: pointer !important;
+        }
+
+        .finger-function-decoration {
+            background: rgba(100, 149, 237, 0.08);
+            border-bottom: 2px dotted rgba(100, 149, 237, 0.4);
+            cursor: pointer !important;
+        }
+
+        .finger-bool-decoration {
+            background: rgba(186, 85, 211, 0.08);
+            border-bottom: 2px dotted rgba(186, 85, 211, 0.4);
+            cursor: pointer !important;
+        }
+
+        .finger-placeholder-decoration {
+            background: rgba(255, 165, 0, 0.15);
+            border: 1px dashed rgba(255, 165, 0, 0.5);
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div id="toolbar">
+        <h2>✋ Finger Edit</h2>
+        <div class="toggle-container">
+            <label class="toggle-switch">
+                <input type="checkbox" id="finger-toggle">
+                <span class="toggle-slider"></span>
+            </label>
+            <span class="mode-label" id="mode-label">OFF</span>
+        </div>
+        <div id="status">Ready</div>
+    </div>
+    <div id="editor-container">
+        <div id="editor"></div>
+        <div id="finger-overlay"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+    <script>
+    // =========================================================================
+    // FINGER EDIT MODE FOR MONACO
+    // =========================================================================
+
+    const SAMPLE_CODE = `// Try Finger Edit mode on this code!
+const CANVAS_WIDTH = 800;
+const CANVAS_HEIGHT = 600;
+const PARTICLE_COUNT = 150;
+const GRAVITY = 9.81;
+const FRICTION = 0.95;
+const MAX_SPEED = 250;
+const IS_PAUSED = false;
+const SHOW_GRID = true;
+
+function createParticle(x, y, radius, speed) {
+    return {
+        x: x,
+        y: y,
+        radius: radius,
+        speed: speed,
+        color: "rgba(255, 100, 50, 0.8)",
+        label: "particle"
+    };
+}
+
+function updatePhysics(dt, gravity, damping) {
+    const force = gravity * dt;
+    const velocity = force * damping;
+    return Math.min(velocity, MAX_SPEED);
+}
+
+function drawCircle(ctx, x, y, radius) {
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = "hsl(200, 80%, 60%)";
+    ctx.fill();
+}
+
+const offsetX = 32.5;
+const offsetY = -14.75;
+const scale = 1.0;
+const rotation = 0;
+const opacity = 0.85;
+const title = "My Animation";
+const debug = false;
+
+console.log("Starting with", PARTICLE_COUNT, "particles");
+requestAnimationFrame(render);
+`;
+
+    require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' } });
+
+    require(['vs/editor/editor.main'], function () {
+        const editor = monaco.editor.create(document.getElementById('editor'), {
+            value: SAMPLE_CODE,
+            language: 'javascript',
+            theme: 'vs-dark',
+            fontSize: 15,
+            fontFamily: "'Fira Code', Consolas, monospace",
+            minimap: { enabled: false },
+            lineNumbers: 'on',
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            padding: { top: 10 },
+            readOnly: false,
+        });
+
+        const fingerEdit = new FingerEditMode(editor);
+
+        document.getElementById('finger-toggle').addEventListener('change', (e) => {
+            fingerEdit.setEnabled(e.target.checked);
+        });
+    });
+
+    // =========================================================================
+    // TOKEN PARSER - Extracts editable tokens from Monaco model
+    // =========================================================================
+    class TokenParser {
+
+        /**
+         * Given a position in the editor, figure out what editable
+         * token lives there and return a descriptor.
+         */
+        static getTokenAt(editor, position) {
+            const model = editor.getModel();
+            const line = model.getLineContent(position.lineNumber);
+
+            // Try each recogniser in priority order
+            return (
+                this._tryNumber(line, position) ||
+                this._tryString(line, position) ||
+                this._tryBoolean(line, position) ||
+                this._tryFunctionCall(line, position) ||
+                this._tryNewline(line, position)
+            );
+        }
+
+        /** Scan entire model and return every editable token (for decorations) */
+        static getAllTokens(editor) {
+            const model = editor.getModel();
+            const tokens = [];
+
+            for (let ln = 1; ln <= model.getLineCount(); ln++) {
+                const line = model.getLineContent(ln);
+                this._collectNumbers(line, ln, tokens);
+                this._collectStrings(line, ln, tokens);
+                this._collectBooleans(line, ln, tokens);
+                this._collectFunctionCalls(line, ln, tokens);
+            }
+
+            return tokens;
+        }
+
+        // --- Number literals ---------------------------------------------------
+        static _numberRe = /(?<!\w)(-?\d+\.?\d*(?:e[+-]?\d+)?)/gi;
+
+        static _tryNumber(line, pos) {
+            for (const m of line.matchAll(this._numberRe)) {
+                const start = m.index + 1;
+                const end = start + m[0].length;
+                if (pos.column >= start && pos.column <= end) {
+                    return {
+                        type: 'number',
+                        value: parseFloat(m[0]),
+                        text: m[0],
+                        range: {
+                            startLineNumber: pos.lineNumber,
+                            startColumn: start,
+                            endLineNumber: pos.lineNumber,
+                            endColumn: end,
+                        }
+                    };
+                }
+            }
+            return null;
+        }
+
+        static _collectNumbers(line, ln, out) {
+            for (const m of line.matchAll(this._numberRe)) {
+                out.push({
+                    type: 'number',
+                    value: parseFloat(m[0]),
+                    text: m[0],
+                    range: {
+                        startLineNumber: ln, startColumn: m.index + 1,
+                        endLineNumber: ln, endColumn: m.index + 1 + m[0].length,
+                    }
+                });
+            }
+        }
+
+        // --- String literals ---------------------------------------------------
+        static _stringRe = /(["'`])(?:(?=(\\?))\2.)*?\1/g;
+
+        static _tryString(line, pos) {
+            for (const m of line.matchAll(this._stringRe)) {
+                const start = m.index + 1;
+                const end = start + m[0].length;
+                if (pos.column >= start && pos.column <= end) {
+                    const quote = m[0][0];
+                    const inner = m[0].slice(1, -1);
+                    return {
+                        type: 'string',
+                        value: inner,
+                        quote,
+                        text: m[0],
+                        range: {
+                            startLineNumber: pos.lineNumber,
+                            startColumn: start,
+                            endLineNumber: pos.lineNumber,
+                            endColumn: end,
+                        }
+                    };
+                }
+            }
+            return null;
+        }
+
+        static _collectStrings(line, ln, out) {
+            for (const m of line.matchAll(this._stringRe)) {
+                out.push({
+                    type: 'string',
+                    value: m[0].slice(1, -1),
+                    quote: m[0][0],
+                    text: m[0],
+                    range: {
+                        startLineNumber: ln, startColumn: m.index + 1,
+                        endLineNumber: ln, endColumn: m.index + 1 + m[0].length,
+                    }
+                });
+            }
+        }
+
+        // --- Booleans ----------------------------------------------------------
+        static _boolRe = /\b(true|false)\b/g;
+
+        static _tryBoolean(line, pos) {
+            for (const m of line.matchAll(this._boolRe)) {
+                const start = m.index + 1;
+                const end = start + m[0].length;
+                if (pos.column >= start && pos.column <= end) {
+                    return {
+                        type: 'boolean',
+                        value: m[0] === 'true',
+                        text: m[0],
+                        range: {
+                            startLineNumber: pos.lineNumber,
+                            startColumn: start,
+                            endLineNumber: pos.lineNumber,
+                            endColumn: end,
+                        }
+                    };
+                }
+            }
+            return null;
+        }
+
+        static _collectBooleans(line, ln, out) {
+            for (const m of line.matchAll(this._boolRe)) {
+                out.push({
+                    type: 'boolean',
+                    value: m[0] === 'true',
+                    text: m[0],
+                    range: {
+                        startLineNumber: ln, startColumn: m.index + 1,
+                        endLineNumber: ln, endColumn: m.index + 1 + m[0].length,
+                    }
+                });
+            }
+        }
+
+        // --- Function calls ----------------------------------------------------
+        static _funcRe = /\b([a-zA-Z_$][\w$]*)\s*\(/g;
+
+        static _tryFunctionCall(line, pos) {
+            for (const m of line.matchAll(this._funcRe)) {
+                const nameStart = m.index + 1;
+                const nameEnd = nameStart + m[1].length;
+
+                // Find matching close paren
+                const parenOpen = m.index + m[0].length - 1;
+                const parenClose = this._findMatchingParen(line, parenOpen);
+                if (parenClose === -1) continue;
+
+                const fullEnd = parenClose + 2; // 1-indexed + past close
+
+                if (pos.column >= nameStart && pos.column <= fullEnd) {
+                    const argsStr = line.slice(parenOpen + 1, parenClose);
+                    const args = this._splitArgs(argsStr);
+                    return {
+                        type: 'function-call',
+                        name: m[1],
+                        args,
+                        text: line.slice(m.index, parenClose + 1),
+                        range: {
+                            startLineNumber: pos.lineNumber,
+                            startColumn: nameStart,
+                            endLineNumber: pos.lineNumber,
+                            endColumn: fullEnd,
+                        },
+                        nameRange: {
+                            startLineNumber: pos.lineNumber,
+                            startColumn: nameStart,
+                            endLineNumber: pos.lineNumber,
+                            endColumn: nameEnd,
+                        }
+                    };
+                }
+            }
+            return null;
+        }
+
+        static _collectFunctionCalls(line, ln, out) {
+            for (const m of line.matchAll(this._funcRe)) {
+                const nameStart = m.index + 1;
+                const nameEnd = nameStart + m[1].length;
+                const keywords = new Set(['if','else','for','while','switch','return','const','let','var','function','class','new','typeof','instanceof']);
+                if (keywords.has(m[1])) continue;
+
+                out.push({
+                    type: 'function-call',
+                    name: m[1],
+                    text: m[1],
+                    range: {
+                        startLineNumber: ln, startColumn: nameStart,
+                        endLineNumber: ln, endColumn: nameEnd,
+                    }
+                });
+            }
+        }
+
+        static _findMatchingParen(line, openIdx) {
+            let depth = 1;
+            for (let i = openIdx + 1; i < line.length; i++) {
+                if (line[i] === '(') depth++;
+                if (line[i] === ')') depth--;
+                if (depth === 0) return i;
+            }
+            return -1;
+        }
+
+        static _splitArgs(argsStr) {
+            const args = [];
+            let depth = 0;
+            let current = '';
+            for (const ch of argsStr) {
+                if (ch === '(' || ch === '[' || ch === '{') depth++;
+                if (ch === ')' || ch === ']' || ch === '}') depth--;
+                if (ch === ',' && depth === 0) {
+                    args.push(current.trim());
+                    current = '';
+                } else {
+                    current += ch;
+                }
+            }
+            if (current.trim()) args.push(current.trim());
+            return args;
+        }
+
+        // --- Empty line / newline context --------------------------------------
+        static _tryNewline(line, pos) {
+            if (line.trim() === '') {
+                return {
+                    type: 'newline',
+                    range: {
+                        startLineNumber: pos.lineNumber,
+                        startColumn: 1,
+                        endLineNumber: pos.lineNumber,
+                        endColumn: line.length + 1,
+                    }
+                };
+            }
+            return null;
+        }
+    }
+
+    // =========================================================================
+    // FINGER EDIT MODE - Main controller
+    // =========================================================================
+    class FingerEditMode {
+
+        constructor(editor) {
+            this.editor = editor;
+            this.enabled = false;
+            this.overlay = document.getElementById('finger-overlay');
+            this.statusEl = document.getElementById('status');
+            this.modeLabel = document.getElementById('mode-label');
+
+            this.activePopup = null;
+            this.decorations = [];
+            this.hoverDecoration = [];
+
+            this._onMouseDown = this._onMouseDown.bind(this);
+            this._onMouseMove = this._onMouseMove.bind(this);
+            this._onKeyDown = this._onKeyDown.bind(this);
+
+            // Close popups on outside click
+            document.addEventListener('mousedown', (e) => {
+                if (this.activePopup && !this.activePopup.contains(e.target) &&
+                    !this.overlay.contains(e.target)) {
+                    this._closePopup();
+                }
+            });
+        }
+
+        setEnabled(on) {
+            this.enabled = on;
+            this.overlay.classList.toggle('active', on);
+            this.modeLabel.textContent = on ? 'ON' : 'OFF';
+            this.modeLabel.classList.toggle('active', on);
+            this.editor.updateOptions({ readOnly: on });
+
+            if (on) {
+                this.overlay.addEventListener('mousedown', this._onMouseDown);
+                this.overlay.addEventListener('mousemove', this._onMouseMove);
+                document.addEventListener('keydown', this._onKeyDown);
+                this._updateDecorations();
+                this._setStatus('Finger mode active — tap any highlighted token');
+            } else {
+                this.overlay.removeEventListener('mousedown', this._onMouseDown);
+                this.overlay.removeEventListener('mousemove', this._onMouseMove);
+                document.removeEventListener('keydown', this._onKeyDown);
+                this._clearDecorations();
+                this._closePopup();
+                this._setStatus('Ready');
+            }
+        }
+
+        // --- Decorations (underline editable tokens) --------------------------
+        _updateDecorations() {
+            const tokens = TokenParser.getAllTokens(this.editor);
+            const decos = tokens.map(t => ({
+                range: new monaco.Range(
+                    t.range.startLineNumber, t.range.startColumn,
+                    t.range.endLineNumber, t.range.endColumn
+                ),
+                options: {
+                    inlineClassName: `finger-${t.type === 'function-call' ? 'function' : t.type}-decoration`,
+                    hoverMessage: { value: `**${t.type}** — tap to edit` }
+                }
+            }));
+            this.decorations = this.editor.deltaDecorations(this.decorations, decos);
+        }
+
+        _clearDecorations() {
+            this.decorations = this.editor.deltaDecorations(this.decorations, []);
+            this.hoverDecoration = this.editor.deltaDecorations(this.hoverDecoration, []);
+        }
+
+        // --- Mouse handling ----------------------------------------------------
+        _getPositionFromEvent(e) {
+            const editorDom = this.editor.getDomNode();
+            const rect = editorDom.getBoundingClientRect();
+            const target = this.editor.getTargetAtClientPoint(e.clientX, e.clientY);
+            return target?.position || null;
+        }
+
+        _onMouseMove(e) {
+            const pos = this._getPositionFromEvent(e);
+            if (!pos) {
+                this.hoverDecoration = this.editor.deltaDecorations(this.hoverDecoration, []);
+                return;
+            }
+
+            const token = TokenParser.getTokenAt(this.editor, pos);
+            if (token) {
+                this.hoverDecoration = this.editor.deltaDecorations(this.hoverDecoration, [{
+                    range: new monaco.Range(
+                        token.range.startLineNumber, token.range.startColumn,
+                        token.range.endLineNumber, token.range.endColumn
+                    ),
+                    options: {
+                        className: `token-highlight ${token.type}`,
+                    }
+                }]);
+                this._setStatus(`${token.type}: ${token.text || token.name || '(empty line)'}`);
+            } else {
+                this.hoverDecoration = this.editor.deltaDecorations(this.hoverDecoration, []);
+                this._setStatus('Finger mode active');
+            }
+        }
+
+        _onMouseDown(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const pos = this._getPositionFromEvent(e);
+            if (!pos) return;
+
+            const token = TokenParser.getTokenAt(this.editor, pos);
+            if (!token) return;
+
+            this._closePopup();
+
+            // Get pixel position for the popup
+            const coords = this.editor.getScrolledVisiblePosition(pos);
+            const editorDom = this.editor.getDomNode();
+            const rect = editorDom.getBoundingClientRect();
+            const pixelX = rect.left + coords.left;
+            const pixelY = rect.top + coords.top + coords.height + 4;
+
+            switch (token.type) {
+                case 'number':
+                    this._showNumberEditor(token, pixelX, pixelY);
+                    break;
+                case 'string':
+                    this._showStringEditor(token, pixelX, pixelY);
+                    break;
+                case 'boolean':
+                    this._showBooleanEditor(token, pixelX, pixelY);
+                    break;
+                case 'function-call':
+                    this._showFunctionEditor(token, pixelX, pixelY);
+                    break;
+                case 'newline':
+                    this._showInsertMenu(token, pixelX, pixelY);
+                    break;
+            }
+        }
+
+        _onKeyDown(e) {
+            if (e.key === 'Escape') {
+                this._closePopup();
+            }
+        }
+
+        // --- Apply edit to Monaco model ----------------------------------------
+        _applyEdit(range, newText) {
+            const editRange = new monaco.Range(
+                range.startLineNumber, range.startColumn,
+                range.endLineNumber, range.endColumn
+            );
+            this.editor.getModel().pushEditOperations([], [{
+                range: editRange,
+                text: newText,
+            }], () => null);
+
+            // Refresh decorations after edit
+            setTimeout(() => this._updateDecorations(), 50);
+        }
+
+        // --- Number Editor (scrubber / drag) -----------------------------------
+        _showNumberEditor(token, x, y) {
+            const popup = this._createPopup(x, y);
+            const original = token.value;
+            let currentValue = original;
+            let step = this._guessStep(original);
+            let minVal = original - Math.abs(original || 100) * 2;
+            let maxVal = original + Math.abs(original || 100) * 2;
+
+            popup.innerHTML = `
+                <div class="popup-header">
+                    <span class="token-type">Number</span>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="current-value">${this._formatNumber(currentValue, step)}</div>
+                <div class="scrubber-container">
+                    <div class="scrub-track">
+                        <div class="scrub-fill"></div>
+                        <div class="scrub-thumb"></div>
+                    </div>
+                    <div class="scrub-range">
+                        <span class="range-min">${this._formatNumber(minVal, step)}</span>
+                        <span class="range-max">${this._formatNumber(maxVal, step)}</span>
+                    </div>
+                </div>
+                <div class="precision-btns">
+                    <button class="precision-btn" data-step="10">±10</button>
+                    <button class="precision-btn" data-step="1">±1</button>
+                    <button class="precision-btn" data-step="0.1">±0.1</button>
+                    <button class="precision-btn" data-step="0.01">±0.01</button>
+                </div>
+            `;
+
+            const display = popup.querySelector('.current-value');
+            const track = popup.querySelector('.scrub-track');
+            const fill = popup.querySelector('.scrub-fill');
+            const thumb = popup.querySelector('.scrub-thumb');
+            const rangeMinEl = popup.querySelector('.range-min');
+            const rangeMaxEl = popup.querySelector('.range-max');
+            const precBtns = popup.querySelectorAll('.precision-btn');
+            const closeBtn = popup.querySelector('.close-btn');
+
+            closeBtn.onclick = () => this._closePopup();
+
+            const updateVisual = () => {
+                const pct = Math.max(0, Math.min(1, (currentValue - minVal) / (maxVal - minVal)));
+                fill.style.width = `${pct * 100}%`;
+                thumb.style.left = `${pct * 100}%`;
+                display.textContent = this._formatNumber(currentValue, step);
+            };
+
+            const updateRange = () => {
+                rangeMinEl.textContent = this._formatNumber(minVal, step);
+                rangeMaxEl.textContent = this._formatNumber(maxVal, step);
+            };
+
+            // Set active precision button
+            const setActivePrec = () => {
+                precBtns.forEach(b => {
+                    b.classList.toggle('active', parseFloat(b.dataset.step) === step);
+                });
+            };
+
+            precBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    step = parseFloat(btn.dataset.step);
+                    const range = Math.max(Math.abs(currentValue || 10) * 2, step * 100);
+                    minVal = currentValue - range;
+                    maxVal = currentValue + range;
+                    setActivePrec();
+                    updateRange();
+                    updateVisual();
+                });
+            });
+
+            // Scrub interaction
+            let scrubbing = false;
+
+            const scrub = (clientX) => {
+                const rect = track.getBoundingClientRect();
+                let pct = (clientX - rect.left) / rect.width;
+                pct = Math.max(0, Math.min(1, pct));
+                let raw = minVal + pct * (maxVal - minVal);
+                currentValue = Math.round(raw / step) * step;
+                // Fix floating point
+                currentValue = parseFloat(currentValue.toFixed(10));
+                updateVisual();
+                this._applyEdit(token.range, this._formatNumber(currentValue, step));
+                // Update range for next edit
+                token.range.endColumn = token.range.startColumn + this._formatNumber(currentValue, step).length;
+            };
+
+            track.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                scrubbing = true;
+                scrub(e.clientX);
+            });
+
+            document.addEventListener('mousemove', this._scrubMove = (e) => {
+                if (scrubbing) scrub(e.clientX);
+            });
+
+            document.addEventListener('mouseup', this._scrubUp = () => {
+                scrubbing = false;
+            });
+
+            setActivePrec();
+            updateVisual();
+
+            this.activePopup = popup;
+            this.activePopup._cleanup = () => {
+                document.removeEventListener('mousemove', this._scrubMove);
+                document.removeEventListener('mouseup', this._scrubUp);
+            };
+        }
+
+        // --- String Editor ------------------------------------------------------
+        _showStringEditor(token, x, y) {
+            const popup = this._createPopup(x, y);
+
+            popup.innerHTML = `
+                <div class="popup-header">
+                    <span class="token-type">String</span>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="current-value" style="color: #50c878; font-size: 14px;">${token.quote}${token.value}${token.quote}</div>
+                <input class="string-input" type="text" value="${token.value.replace(/"/g, '&quot;')}">
+            `;
+
+            const input = popup.querySelector('.string-input');
+            const display = popup.querySelector('.current-value');
+            const closeBtn = popup.querySelector('.close-btn');
+            closeBtn.onclick = () => this._closePopup();
+
+            // Allow typing in finger mode
+            input.addEventListener('input', () => {
+                const newVal = input.value;
+                display.textContent = `${token.quote}${newVal}${token.quote}`;
+                const newText = `${token.quote}${newVal}${token.quote}`;
+                this._applyEdit(token.range, newText);
+                token.range.endColumn = token.range.startColumn + newText.length;
+                token.value = newVal;
+            });
+
+            // Keep focus
+            setTimeout(() => input.focus(), 50);
+
+            // Intercept keys so they go to input, not Monaco
+            input.addEventListener('keydown', (e) => {
+                e.stopPropagation();
+                if (e.key === 'Enter') this._closePopup();
+            });
+
+            this.activePopup = popup;
+        }
+
+        // --- Boolean Editor -----------------------------------------------------
+        _showBooleanEditor(token, x, y) {
+            const popup = this._createPopup(x, y);
+
+            popup.innerHTML = `
+                <div class="popup-header">
+                    <span class="token-type">Boolean</span>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="bool-toggle">
+                    <div class="bool-option true-opt ${token.value ? 'selected' : ''}">true</div>
+                    <div class="bool-option false-opt ${!token.value ? 'selected' : ''}">false</div>
+                </div>
+            `;
+
+            const trueOpt = popup.querySelector('.true-opt');
+            const falseOpt = popup.querySelector('.false-opt');
+            const closeBtn = popup.querySelector('.close-btn');
+            closeBtn.onclick = () => this._closePopup();
+
+            const set = (val) => {
+                trueOpt.classList.toggle('selected', val);
+                falseOpt.classList.toggle('selected', !val);
+                const text = val ? 'true' : 'false';
+                this._applyEdit(token.range, text);
+                token.range.endColumn = token.range.startColumn + text.length;
+                token.value = val;
+            };
+
+            trueOpt.onclick = () => set(true);
+            falseOpt.onclick = () => set(false);
+
+            this.activePopup = popup;
+        }
+
+        // --- Function Call Editor -----------------------------------------------
+        _showFunctionEditor(token, x, y) {
+            const popup = this._createPopup(x, y);
+
+            let argsHTML = '';
+            if (token.args && token.args.length > 0) {
+                argsHTML = token.args.map((arg, i) => {
+                    const t = this._guessArgType(arg);
+                    return `
+                        <div class="func-arg">
+                            <span class="arg-index">${i}</span>
+                            <span class="arg-value" data-index="${i}">${arg}</span>
+                            <span class="arg-type ${t}">${t}</span>
+                        </div>`;
+                }).join('');
+            } else {
+                argsHTML = '<div style="color:#666; font-size:12px; padding:4px;">No arguments</div>';
+            }
+
+            popup.innerHTML = `
+                <div class="popup-header">
+                    <span class="token-type">Function Call</span>
+                    <button class="close-btn">&times;</button>
+                </div>
+                <div class="func-info">
+                    <div class="func-name">${token.name}()</div>
+                    <div class="func-args">${argsHTML}</div>
+                </div>
+            `;
+
+            const closeBtn = popup.querySelector('.close-btn');
+            closeBtn.onclick = () => this._closePopup();
+
+            // Make individual args tappable — each one opens its own sub-editor
+            popup.querySelectorAll('.arg-value').forEach(el => {
+                el.addEventListener('click', () => {
+                    this._closePopup();
+                    // Navigate to that arg in the source and trigger editing
+                    const argIdx = parseInt(el.dataset.index);
+                    const argText = token.args[argIdx];
+                    const fullText = token.text;
+                    const argsStart = fullText.indexOf('(') + 1;
+
+                    // Find position of this arg within the full call
+                    let offset = argsStart;
+                    for (let i = 0; i < argIdx; i++) {
+                        offset = fullText.indexOf(token.args[i], offset) + token.args[i].length;
+                        offset = fullText.indexOf(',', offset) + 1;
+                        while (fullText[offset] === ' ') offset++;
+                    }
+                    const argStart = fullText.indexOf(argText, offset);
+
+                    const col = token.range.startColumn + argStart;
+                    const pos = {
+                        lineNumber: token.range.startLineNumber,
+                        column: col,
+                    };
+
+                    // Try to open editor for this arg
+                    const subToken = TokenParser.getTokenAt(this.editor, pos);
+                    if (subToken) {
+                        const coords = this.editor.getScrolledVisiblePosition(pos);
+                        const editorDom = this.editor.getDomNode();
+                        const rect = editorDom.getBoundingClientRect();
+                        const px = rect.left + coords.left;
+                        const py = rect.top + coords.top + coords.height + 4;
+
+                        switch (subToken.type) {
+                            case 'number': this._showNumberEditor(subToken, px, py); break;
+                            case 'string': this._showStringEditor(subToken, px, py); break;
+                            case 'boolean': this._showBooleanEditor(subToken, px, py); break;
+                        }
+                    }
+                });
+            });
+
+            this.activePopup = popup;
+        }
+
+        // --- Insert Menu (empty lines) -----------------------------------------
+        _showInsertMenu(token, x, y) {
+            const menu = document.createElement('div');
+            menu.className = 'context-menu';
+            menu.style.left = `${x}px`;
+            menu.style.top = `${y}px`;
+
+            const items = [
+                { icon: '📝', label: 'Insert variable', snippet: 'const name = 0;' },
+                { icon: '🔧', label: 'Insert function call', snippet: 'functionName()' },
+                { icon: '🔀', label: 'Insert if block', snippet: 'if (condition) {\n    \n}' },
+                { icon: '🔁', label: 'Insert for loop', snippet: 'for (let i = 0; i < 10; i++) {\n    \n}' },
+                { icon: '💬', label: 'Insert comment', snippet: '// ' },
+            ];
+
+            menu.innerHTML = items.map(item => `
+                <div class="menu-item" data-snippet="${encodeURIComponent(item.snippet)}">
+                    <span class="icon">${item.icon}</span>
+                    <span>${item.label}</span>
+                </div>
+            `).join('<div class="menu-divider"></div>');
+
+            menu.querySelectorAll('.menu-item').forEach(el => {
+                el.addEventListener('click', () => {
+                    const snippet = decodeURIComponent(el.dataset.snippet);
+                    // Get indentation of nearby lines
+                    const model = this.editor.getModel();
+                    const lineNum = token.range.startLineNumber;
+                    let indent = '';
+                    for (let l = lineNum - 1; l >= 1; l--) {
+                        const prevLine = model.getLineContent(l);
+                        if (prevLine.trim()) {
+                            indent = prevLine.match(/^(\s*)/)[1];
+                            break;
+                        }
+                    }
+                    const indented = snippet.split('\n').map(l => indent + l).join('\n');
+                    this._applyEdit(token.range, indented);
+                    this._closePopup();
+                });
+            });
+
+            document.body.appendChild(menu);
+
+            // Keep in viewport
+            const rect = menu.getBoundingClientRect();
+            if (rect.right > window.innerWidth) {
+                menu.style.left = `${window.innerWidth - rect.width - 10}px`;
+            }
+            if (rect.bottom > window.innerHeight) {
+                menu.style.top = `${y - rect.height - 10}px`;
+            }
+
+            this.activePopup = menu;
+        }
+
+        // --- Helpers ------------------------------------------------------------
+        _createPopup(x, y) {
+            const popup = document.createElement('div');
+            popup.className = 'finger-popup';
+            popup.style.left = `${x}px`;
+            popup.style.top = `${y}px`;
+            document.body.appendChild(popup);
+
+            // Reposition if off-screen
+            requestAnimationFrame(() => {
+                const rect = popup.getBoundingClientRect();
+                if (rect.right > window.innerWidth) {
+                    popup.style.left = `${window.innerWidth - rect.width - 10}px`;
+                }
+                if (rect.bottom > window.innerHeight) {
+                    popup.style.top = `${y - rect.height - 30}px`;
+                }
+            });
+
+            return popup;
+        }
+
+        _closePopup() {
+            if (this.activePopup) {
+                if (this.activePopup._cleanup) this.activePopup._cleanup();
+                this.activePopup.remove();
+                this.activePopup = null;
+            }
+        }
+
+        _setStatus(msg) {
+            this.statusEl.textContent = msg;
+        }
+
+        _guessStep(value) {
+            const str = String(value);
+            if (str.includes('.')) {
+                const decimals = str.split('.')[1].length;
+                return Math.pow(10, -decimals);
+            }
+            if (Math.abs(value) >= 100) return 10;
+            if (Math.abs(value) >= 10) return 1;
+            return 1;
+        }
+
+        _formatNumber(value, step) {
+            if (step >= 1) return String(Math.round(value));
+            const decimals = Math.max(0, -Math.floor(Math.log10(step)));
+            return value.toFixed(decimals);
+        }
+
+        _guessArgType(arg) {
+            if (/^-?\d+\.?\d*$/.test(arg)) return 'num';
+            if (/^["'`]/.test(arg)) return 'str';
+            return 'other';
+        }
+    }
+    </script>
+</body>
+</html>

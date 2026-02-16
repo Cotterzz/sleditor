@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #1e1e1e; font-family: sans-serif; }
+  #container { width: 100vw; height: 100vh; }
+  
+  /* Finger edit overlay - sits above monaco */
+  #finger-edit-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  .token-hit-area {
+    position: absolute;
+    pointer-events: all;
+    cursor: ew-resize;
+    border-radius: 3px;
+    transition: background 0.15s;
+  }
+  
+  .token-hit-area[data-type="number"] {
+    background: rgba(78, 201, 176, 0.15);
+    border-bottom: 2px solid rgba(78, 201, 176, 0.6);
+  }
+  
+  .token-hit-area[data-type="number"]:hover,
+  .token-hit-area[data-type="number"].active {
+    background: rgba(78, 201, 176, 0.3);
+  }
+
+  .token-hit-area[data-type="string"] {
+    background: rgba(206, 145, 120, 0.15);
+    border-bottom: 2px dashed rgba(206, 145, 120, 0.6);
+    cursor: text;
+  }
+
+  .token-hit-area[data-type="function"] {
+    background: rgba(220, 220, 170, 0.1);
+    border-bottom: 2px dotted rgba(220, 220, 170, 0.5);
+    cursor: pointer;
+  }
+
+  /* Drag value bubble */
+  #drag-bubble {
+    position: fixed;
+    display: none;
+    background: #2d2d2d;
+    border: 1px solid #4ec9b0;
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #4ec9b0;
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 200;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    transform: translate(-50%, -120%);
+    min-width: 60px;
+    text-align: center;
+  }
+
+  #drag-bubble .drag-hint {
+    display: block;
+    font-size: 10px;
+    color: #888;
+    font-weight: normal;
+    margin-bottom: 2px;
+    font-family: sans-serif;
+  }
+
+  #drag-bubble .drag-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  #drag-bubble .drag-arrow {
+    color: #555;
+    font-size: 14px;
+  }
+
+  /* Context menu for non-drag tokens */
+  #context-menu {
+    position: fixed;
+    display: none;
+    background: #252526;
+    border: 1px solid #404040;
+    border-radius: 8px;
+    overflow: hidden;
+    z-index: 200;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    min-width: 180px;
+  }
+
+  #context-menu .menu-header {
+    padding: 8px 12px;
+    background: #2d2d2d;
+    color: #888;
+    font-size: 11px;
+    border-bottom: 1px solid #404040;
+    font-family: monospace;
+  }
+
+  #context-menu .menu-item {
+    padding: 10px 14px;
+    color: #d4d4d4;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    border-bottom: 1px solid #333;
+    pointer-events: all;
+  }
+
+  #context-menu .menu-item:hover {
+    background: #094771;
+  }
+
+  #context-menu .menu-item .icon {
+    width: 20px;
+    text-align: center;
+    font-size: 16px;
+  }
+
+  /* Mode toggle */
+  #mode-toggle {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #252526;
+    border: 1px solid #404040;
+    padding: 8px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    color: #d4d4d4;
+    font-size: 13px;
+    user-select: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+  }
+
+  #mode-toggle.active {
+    border-color: #4ec9b0;
+    color: #4ec9b0;
+    background: rgba(78, 201, 176, 0.1);
+  }
+
+  .toggle-dot {
+    width: 28px;
+    height: 16px;
+    background: #555;
+    border-radius: 8px;
+    position: relative;
+    transition: background 0.2s;
+  }
+
+  .toggle-dot::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: white;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s;
+  }
+
+  #mode-toggle.active .toggle-dot {
+    background: #4ec9b0;
+  }
+
+  #mode-toggle.active .toggle-dot::after {
+    transform: translateX(12px);
+  }
+
+  /* Step size indicator */
+  #step-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #252526;
+    border: 1px solid #404040;
+    border-radius: 8px;
+    padding: 8px;
+    z-index: 200;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    color: #888;
+  }
+
+  #step-indicator.visible { display: flex; }
+
+  .step-btn {
+    padding: 4px 10px;
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #d4d4d4;
+    cursor: pointer;
+    font-size: 12px;
+    text-align: center;
+    pointer-events: all;
+  }
+
+  .step-btn.selected {
+    background: #094771;
+    border-color: #4ec9b0;
+    color: #4ec9b0;
+  }
+
+  /* Placeholder decoration style (injected via monaco) */
+</style>
+</head>
+<body>
+
+<div id="mode-toggle">
+  <div class="toggle-dot"></div>
+  👆 Finger Edit
+</div>
+
+<div id="container"></div>
+<div id="finger-edit-overlay"></div>
+
+<div id="drag-bubble">
+  <span class="drag-hint">← drag →</span>
+  <div class="drag-bar">
+    <span class="drag-arrow">◀</span>
+    <span id="bubble-value">0</span>
+    <span class="drag-arrow">▶</span>
+  </div>
+</div>
+
+<div id="context-menu"></div>
+
+<div id="step-indicator">
+  <div style="color:#4ec9b0; margin-bottom:4px">Step size</div>
+  <div class="step-btn" data-step="0.1">0.1</div>
+  <div class="step-btn" data-step="1" class="selected">1</div>
+  <div class="step-btn" data-step="10">10</div>
+  <div class="step-btn" data-step="100">100</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<script>
+
+// ─── Monaco bootstrap ────────────────────────────────────────────────────────
+require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
+require(['vs/editor/editor.main'], function() {
+
+  const INITIAL_CODE = `// Finger Edit Mode Demo
+// Enable the toggle, then drag numbers or tap other tokens
+
+function animate(element) {
+  const duration = 1200;
+  const startX = 50;
+  const startY = 100;
+  const endX = 800;
+  const speed = 2.5;
+  const opacity = 0.75;
+  
+  element.style.transitionDuration = duration + "ms";
+  
+  for (let i = 0; i < 10; i++) {
+    const delay = i * 150;
+    setTimeout(() => {
+      element.style.opacity = opacity;
+      element.style.transform = \`translateX(\${startX}px)\`;
+    }, delay);
+  }
+}
+
+const config = {
+  width: 1920,
+  height: 1080,
+  fps: 60,
+  scale: 1.5,
+  padding: 24
+};
+`;
+
+  const editor = monaco.editor.create(document.getElementById('container'), {
+    value: INITIAL_CODE,
+    language: 'javascript',
+    theme: 'vs-dark',
+    fontSize: 15,
+    lineHeight: 24,
+    fontFamily: "'Courier New', monospace",
+    minimap: { enabled: false },
+    scrollBeyondLastLine: false,
+    padding: { top: 20 }
+  });
+
+  // ─── State ──────────────────────────────────────────────────────────────────
+  const state = {
+    fingerEditActive: false,
+    hitAreas: [],          // { el, token } 
+    dragging: null,        // { token, startX, startValue, isFloat }
+    dragStep: 1,
+    menuOpen: false
+  };
+
+  // ─── Token scanner ──────────────────────────────────────────────────────────
+  // We walk all visible lines and extract tokens using Monaco's tokenization
+  // then map them to pixel rectangles via the editor's layout info.
+
+  function getEditorPixelRect(lineNumber, startCol, endCol) {
+    // Use Monaco's internal position-to-pixel mapping
+    const scrollTop = editor.getScrollTop();
+    const scrollLeft = editor.getScrollLeft();
+    const layoutInfo = editor.getLayoutInfo();
+    
+    // getScrolledVisiblePosition returns position relative to editor DOM
+    const startPos = editor.getScrolledVisiblePosition({ lineNumber, column: startCol });
+    const endPos   = editor.getScrolledVisiblePosition({ lineNumber, column: endCol });
+    
+    if (!startPos || !endPos) return null;
+    
+    const editorRect = document.getElementById('container').getBoundingClientRect();
+    
+    return {
+      left:   editorRect.left + startPos.left,
+      top:    editorRect.top  + startPos.top,
+      width:  endPos.left - startPos.left,
+      height: startPos.height
+    };
+  }
+
+  function scanTokens() {
+    // Monaco's tokenization (sync, cheap)
+    const model = editor.getModel();
+    const lineCount = model.getLineCount();
+    const tokens = [];
+
+    for (let line = 1; line <= lineCount; line++) {
+      const lineContent = model.getLineContent(line);
+      
+      // Use Monaco's line tokens
+      const lineTokens = model.getLineTokens(line);
+      
+      for (let i = 0; i < lineTokens.getCount(); i++) {
+        const startOffset = lineTokens.getStartOffset(i);
+        const endOffset   = i + 1 < lineTokens.getCount() 
+          ? lineTokens.getStartOffset(i + 1) 
+          : lineContent.length;
+        
+        const tokenType = lineTokens.getStandardTokenType(i);
+        const text      = lineContent.slice(startOffset, endOffset).trim();
+        
+        if (!text) continue;
+
+        // Classify
+        let type = null;
+
+        // Numbers
+        if (/^-?\d+(\.\d+)?$/.test(text)) {
+          type = 'number';
+        }
+        // Strings (quoted)
+        else if (/^["'`].*["'`]$/.test(text) || tokenType === 2 /* string */) {
+          type = 'string';
+        }
+        // Function calls - word followed by ( on same line
+        else if (/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(text)) {
+          const afterToken = lineContent.slice(endOffset).trimStart();
+          if (afterToken.startsWith('(')) {
+            type = 'function';
+          }
+        }
+
+        if (type) {
+          tokens.push({
+            type,
+            text,
+            line,
+            startCol: startOffset + 1,  // Monaco is 1-based
+            endCol:   endOffset + 1,
+            isFloat:  text.includes('.')
+          });
+        }
+      }
+    }
+    return tokens;
+  }
+
+  // ─── Overlay rendering ──────────────────────────────────────────────────────
+  const overlay = document.getElementById('finger-edit-overlay');
+
+  function clearHitAreas() {
+    state.hitAreas.forEach(({ el }) => el.remove());
+    state.hitAreas = [];
+  }
+
+  function renderHitAreas() {
+    clearHitAreas();
+    if (!state.fingerEditActive) return;
+
+    const tokens = scanTokens();
+
+    tokens.forEach(token => {
+      const rect = getEditorPixelRect(token.line, token.startCol, token.endCol);
+      if (!rect || rect.width < 2) return;
+
+      const el = document.createElement('div');
+      el.className = 'token-hit-area';
+      el.dataset.type = token.type;
+      
+      // Pad hit area a bit for finger friendliness
+      const PAD = token.type === 'number' ? 4 : 2;
+      el.style.left   = (rect.left - PAD) + 'px';
+      el.style.top    = (rect.top + 2) + 'px';
+      el.style.width  = (rect.width + PAD * 2) + 'px';
+      el.style.height = (rect.height - 4) + 'px';
+
+      attachTokenBehaviour(el, token);
+      overlay.appendChild(el);
+      state.hitAreas.push({ el, token });
+    });
+  }
+
+  // ─── Token interaction ──────────────────────────────────────────────────────
+  const bubble    = document.getElementById('drag-bubble');
+  const bubbleVal = document.getElementById('bubble-value');
+  const ctxMenu   = document.getElementById('context-menu');
+  const stepPanel = document.getElementById('step-indicator');
+
+  function attachTokenBehaviour(el, token) {
+    if (token.type === 'number') {
+      attachNumberDrag(el, token);
+    } else {
+      attachContextMenu(el, token);
+    }
+  }
+
+  // Number drag ----------------------------------------------------------------
+  function attachNumberDrag(el, token) {
+    let startX, startValue, currentValue, rafId;
+
+    const onMove = (clientX) => {
+      const delta   = clientX - startX;
+      const change  = (delta / 4) * state.dragStep;  // 4px per step
+      
+      if (token.isFloat) {
+        currentValue = Math.round((startValue + change) * 1000) / 1000;
+      } else {
+        currentValue = Math.round(startValue + change);
+      }
+
+      // Update bubble
+      bubbleVal.textContent = currentValue;
+      bubble.style.left = clientX + 'px';
+      bubble.style.top  = (el.getBoundingClientRect().top) + 'px';
+
+      // Live-update editor
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => writeTokenValue(token, String(currentValue)));
+    };
+
+    // Pointer events (works for mouse & touch)
+    el.addEventListener('pointerdown', e => {
+      if (!state.fingerEditActive) return;
+      e.preventDefault();
+      e.stopPropagation();
+      
+      startX       = e.clientX;
+      startValue   = token.isFloat ? parseFloat(token.text) : parseInt(token.text);
+      currentValue = startValue;
+
+      el.classList.add('active');
+      el.setPointerCapture(e.pointerId);
+
+      bubble.style.display = 'block';
+      bubbleVal.textContent = currentValue;
+      bubble.style.left = e.clientX + 'px';
+      bubble.style.top  = el.getBoundingClientRect().top + 'px';
+
+      stepPanel.classList.add('visible');
+
+      state.dragging = { token, el };
+      editor.updateOptions({ readOnly: true });
+    });
+
+    el.addEventListener('pointermove', e => {
+      if (!state.dragging || state.dragging.el !== el) return;
+      onMove(e.clientX);
+    });
+
+    el.addEventListener('pointerup', e => {
+      if (!state.dragging || state.dragging.el !== el) return;
+      
+      el.classList.remove('active');
+      bubble.style.display = 'none';
+      stepPanel.classList.remove('visible');
+      state.dragging = null;
+      editor.updateOptions({ readOnly: false });
+      
+      // Refresh hit areas since text changed (length may differ)
+      setTimeout(renderHitAreas, 50);
+    });
+  }
+
+  // Write edited value back to Monaco -------------------------------------------
+  function writeTokenValue(token, newText) {
+    const model = editor.getModel();
+    
+    // Re-find the token by scanning (position may have drifted if length changed)
+    // Simple approach: find exact text match near original position
+    const range = new monaco.Range(
+      token.line, token.startCol,
+      token.line, token.endCol
+    );
+
+    model.pushEditOperations([], [{
+      range,
+      text: newText
+    }], () => null);
+    
+    // Update token text so next delta is relative to new value
+    token.text    = newText;
+    token.endCol  = token.startCol + newText.length;
+    token.isFloat = newText.includes('.');
+  }
+
+  // Context menu for strings, functions ----------------------------------------
+  function attachContextMenu(el, token) {
+    el.addEventListener('pointerdown', e => {
+      if (!state.fingerEditActive) return;
+      e.preventDefault();
+      e.stopPropagation();
+      showContextMenu(e.clientX, e.clientY, token);
+    });
+  }
+
+  function showContextMenu(x, y, token) {
+    ctxMenu.innerHTML = '';
+    ctxMenu.style.display = 'block';
+
+    const header = document.createElement('div');
+    header.className = 'menu-header';
+    header.textContent = `${token.type}: ${token.text.slice(0, 24)}`;
+    ctxMenu.appendChild(header);
+
+    const actions = getActionsForToken(token);
+    actions.forEach(action => {
+      const item = document.createElement('div');
+      item.className = 'menu-item';
+      item.innerHTML = `<span class="icon">${action.icon}</span>${action.label}`;
+      item.addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        ctxMenu.style.display = 'none';
+        action.handler(token);
+      });
+      ctxMenu.appendChild(item);
+    });
+
+    // Position (keep on screen)
+    const vw = window.innerWidth, vh = window.innerHeight;
+    ctxMenu.style.left = Math.min(x, vw - 200) + 'px';
+    ctxMenu.style.top  = Math.min(y + 10, vh - 200) + 'px';
+
+    // Close on outside tap
+    setTimeout(() => {
+      document.addEventListener('pointerdown', () => {
+        ctxMenu.style.display = 'none';
+      }, { once: true });
+    }, 10);
+  }
+
+  function getActionsForToken(token) {
+    if (token.type === 'string') {
+      return [
+        { icon: '✏️', label: 'Edit string', handler: t => inlineEditString(t) },
+        { icon: '📋', label: 'Copy value',  handler: t => navigator.clipboard?.writeText(t.text) },
+        { icon: '🗑️', label: 'Clear string', handler: t => writeTokenValue(t, '""') }
+      ];
+    }
+    if (token.type === 'function') {
+      return [
+        { icon: '👁️', label: 'Peek definition', handler: t => editor.trigger('', 'editor.action.peekDefinition') },
+        { icon: '📌', label: 'Add TODO comment', handler: t => addComment(t) },
+        { icon: '🔀', label: 'Wrap in try/catch', handler: t => wrapInTryCatch(t) }
+      ];
+    }
+    return [];
+  }
+
+  function inlineEditString(token) {
+    // Could show a full keyboard / input overlay
+    // For now use prompt as placeholder
+    const raw     = token.text.replace(/^["'`]|["'`]$/g, '');
+    const newVal  = prompt('Edit string:', raw);
+    if (newVal !== null) {
+      const quote = token.text[0];
+      writeTokenValue(token, `${quote}${newVal}${quote}`);
+      setTimeout(renderHitAreas, 50);
+    }
+  }
+
+  function addComment(token) {
+    const model = editor.getModel();
+    const lineContent = model.getLineContent(token.line);
+    const newLine = lineContent + '  // TODO';
+    model.pushEditOperations([], [{
+      range: new monaco.Range(token.line, 1, token.line, lineContent.length + 1),
+      text: newLine
+    }], () => null);
+    setTimeout(renderHitAreas, 50);
+  }
+
+  function wrapInTryCatch(token) {
+    // Placeholder - real impl would use AST to find the statement
+    alert(`Would wrap ${token.text}(...) in try/catch.\n(Full impl needs statement range from AST)`);
+  }
+
+  // ─── Step size controls ─────────────────────────────────────────────────────
+  document.querySelectorAll('.step-btn').forEach(btn => {
+    btn.addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      state.dragStep = parseFloat(btn.dataset.step);
+      document.querySelectorAll('.step-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    });
+  });
+
+  // Default selected
+  document.querySelector('[data-step="1"]').classList.add('selected');
+
+  // ─── Mode toggle ────────────────────────────────────────────────────────────
+  const modeToggle = document.getElementById('mode-toggle');
+  modeToggle.addEventListener('click', () => {
+    state.fingerEditActive = !state.fingerEditActive;
+    modeToggle.classList.toggle('active', state.fingerEditActive);
+    
+    if (state.fingerEditActive) {
+      renderHitAreas();
+      editor.updateOptions({ cursorStyle: 'line', readOnly: false });
+    } else {
+      clearHitAreas();
+      ctxMenu.style.display = 'none';
+      bubble.style.display  = 'none';
+    }
+  });
+
+  // ─── Re-render on scroll / layout change ───────────────────────────────────
+  // Debounced so we don't thrash during scroll
+  let renderTimer;
+  function scheduleRender() {
+    if (!state.fingerEditActive) return;
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(renderHitAreas, 80);
+  }
+
+  editor.onDidScrollChange(scheduleRender);
+  editor.onDidLayoutChange(scheduleRender);
+  editor.onDidChangeModelContent(e => {
+    if (!state.dragging) scheduleRender();  // dragging does its own refresh
+  });
+
+  window.addEventListener('resize', scheduleRender);
+
+}); // end require
+</script>
+</body>
+</html>
