@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finger Edit Mode - Monaco</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            background: #16213e;
+            border-bottom: 2px solid #0f3460;
+            z-index: 200;
+        }
+
+        #toolbar h2 { font-size: 14px; color: #e94560; margin-right: 8px; }
+
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 26px;
+            cursor: pointer;
+        }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider {
+            position: absolute;
+            inset: 0;
+            background: #333;
+            border-radius: 13px;
+            transition: 0.3s;
+        }
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 20px; height: 20px;
+            left: 3px; bottom: 3px;
+            background: #999;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+        .toggle-switch input:checked + .toggle-slider { background: #e94560; }
+        .toggle-switch input:checked + .toggle-slider::before {
+            transform: translateX(22px);
+            background: white;
+        }
+
+        .mode-label { font-size: 13px; color: #aaa; }
+        .mode-label.active { color: #e94560; font-weight: 600; }
+
+        #status {
+            margin-left: auto;
+            font-size: 12px;
+            color: #aaa;
+            padding: 4px 10px;
+            background: #111;
+            border-radius: 4px;
+            font-family: monospace;
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        #editor-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #editor { width: 100%; height: 100%; }
+
+        /* --- Popups --------------------------------------------------------- */
+        .finger-popup {
+            position: fixed;
+            z-index: 9999;
+            background: #1e1e3a;
+            border: 2px solid #e94560;
+            border-radius: 10px;
+            padding: 12px 16px;
+            min-width: 260px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+            animation: popIn 0.15s ease-out;
+            user-select: none;
+        }
+        @keyframes popIn {
+            from { transform: scale(0.85); opacity: 0; }
+            to   { transform: scale(1);    opacity: 1; }
+        }
+
+        .popup-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .token-type {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #e94560;
+            font-weight: 700;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+            padding: 0 2px;
+        }
+        .close-btn:hover { color: #e94560; }
+
+        .current-value {
+            font-family: 'Fira Code', monospace;
+            font-size: 24px;
+            color: #fff;
+            text-align: center;
+            padding: 4px 0 8px;
+        }
+
+        /* Number scrubber */
+        .scrub-track {
+            width: 100%;
+            height: 40px;
+            background: #111;
+            border-radius: 20px;
+            position: relative;
+            cursor: ew-resize;
+            overflow: visible;
+            touch-action: none;
+        }
+        .scrub-fill {
+            position: absolute;
+            left: 0; top: 0;
+            height: 100%;
+            background: linear-gradient(90deg, #e94560, #ff6b8a);
+            border-radius: 20px;
+            pointer-events: none;
+        }
+        .scrub-thumb {
+            position: absolute;
+            top: 50%;
+            width: 28px; height: 28px;
+            background: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+
+        .precision-btns {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+            justify-content: center;
+        }
+        .precision-btn {
+            padding: 5px 12px;
+            border: 1px solid #333;
+            background: #222;
+            color: #aaa;
+            border-radius: 5px;
+            font-size: 12px;
+            cursor: pointer;
+            font-family: monospace;
+            touch-action: manipulation;
+        }
+        .precision-btn.active { border-color: #e94560; color: #e94560; background: rgba(233,69,96,0.1); }
+
+        /* String editor */
+        .string-input {
+            width: 100%;
+            background: #111;
+            border: 1px solid #333;
+            color: #50c878;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: 'Fira Code', monospace;
+            font-size: 14px;
+            margin-top: 8px;
+            outline: none;
+        }
+        .string-input:focus { border-color: #50c878; }
+
+        /* Boolean */
+        .bool-toggle { display: flex; gap: 8px; margin-top: 8px; }
+        .bool-option {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: monospace;
+            font-weight: 700;
+            font-size: 16px;
+            transition: 0.2s;
+            touch-action: manipulation;
+        }
+        .bool-option.true-opt  { background: rgba(80,200,120,0.1); border: 2px solid #333; color: #50c878; }
+        .bool-option.false-opt { background: rgba(233,69,96,0.1);  border: 2px solid #333; color: #e94560; }
+        .bool-option.selected  { border-color: currentColor; transform: scale(1.04); }
+
+        /* Function popup */
+        .func-name { font-family: monospace; color: #6495ed; font-size: 16px; font-weight: 700; }
+        .func-args { margin-top: 8px; }
+        .func-arg {
+            display: flex; align-items: center; gap: 8px;
+            margin-bottom: 6px; padding: 6px 10px;
+            background: #111; border-radius: 5px;
+            cursor: pointer;
+        }
+        .func-arg:hover { background: #1a1a3a; }
+        .func-arg .arg-index { font-size: 10px; color: #555; width: 16px; flex-shrink: 0; }
+        .func-arg .arg-value { flex: 1; font-family: monospace; font-size: 13px; color: #ddd; }
+        .func-arg .arg-badge {
+            font-size: 9px; padding: 2px 6px; border-radius: 3px;
+            text-transform: uppercase; flex-shrink: 0;
+        }
+        .arg-badge.num  { background: rgba(233,69,96,0.2);  color: #e94560; }
+        .arg-badge.str  { background: rgba(80,200,120,0.2); color: #50c878; }
+        .arg-badge.bool { background: rgba(186,85,211,0.2); color: #ba55d3; }
+        .arg-badge.expr { background: rgba(150,150,150,0.2); color: #999; }
+
+        /* Context menu */
+        .context-menu {
+            position: fixed;
+            z-index: 9999;
+            background: #1e1e3a;
+            border: 2px solid #444;
+            border-radius: 8px;
+            min-width: 190px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+            animation: popIn 0.12s ease-out;
+            overflow: hidden;
+        }
+        .menu-item {
+            padding: 11px 16px;
+            cursor: pointer;
+            display: flex; align-items: center; gap: 10px;
+            font-size: 13px;
+            touch-action: manipulation;
+        }
+        .menu-item:hover { background: rgba(233,69,96,0.15); }
+        .menu-divider { height: 1px; background: #2a2a4a; }
+
+        /* Monaco decoration classes */
+        .fe-number   { border-bottom: 2px solid rgba(233,69,96,0.6)  !important; cursor: pointer !important; }
+        .fe-string   { border-bottom: 2px solid rgba(80,200,120,0.6) !important; cursor: pointer !important; }
+        .fe-boolean  { border-bottom: 2px solid rgba(186,85,211,0.6) !important; cursor: pointer !important; }
+        .fe-function { border-bottom: 2px solid rgba(100,149,237,0.6)!important; cursor: pointer !important; }
+    </style>
+</head>
+<body>
+
+<div id="toolbar">
+    <h2>✋ Finger Edit</h2>
+    <label class="toggle-switch">
+        <input type="checkbox" id="finger-toggle">
+        <span class="toggle-slider"></span>
+    </label>
+    <span class="mode-label" id="mode-label">OFF</span>
+    <div id="status">Load the editor and toggle Finger Edit mode</div>
+</div>
+
+<div id="editor-container">
+    <div id="editor"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+<script>
+// =============================================================================
+// SAMPLE CODE
+// =============================================================================
+const SAMPLE_CODE = `// Finger Edit Demo — enable the toggle then tap anything highlighted
+const CANVAS_WIDTH  = 800;
+const CANVAS_HEIGHT = 600;
+const PARTICLE_COUNT = 150;
+const GRAVITY   = 9.81;
+const FRICTION  = 0.95;
+const MAX_SPEED = 250;
+const IS_PAUSED = false;
+const SHOW_GRID = true;
+
+function createParticle(x, y, radius, speed) {
+    return {
+        x: x,
+        y: y,
+        radius: radius,
+        speed: speed,
+        color: "rgba(255, 100, 50, 0.8)",
+        label: "particle"
+    };
+}
+
+function updatePhysics(dt, gravity, damping) {
+    const force    = gravity * dt;
+    const velocity = force * damping;
+    return Math.min(velocity, MAX_SPEED);
+}
+
+const offsetX  = 32.5;
+const offsetY  = -14.75;
+const scale    = 1.0;
+const rotation = 0;
+const opacity  = 0.85;
+const title    = "My Animation";
+const debug    = false;
+
+console.log("Particles:", PARTICLE_COUNT);
+`;
+
+// =============================================================================
+// BOOT
+// =============================================================================
+require.config({
+    paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' }
+});
+
+require(['vs/editor/editor.main'], () => {
+    const editor = monaco.editor.create(document.getElementById('editor'), {
+        value: SAMPLE_CODE,
+        language: 'javascript',
+        theme: 'vs-dark',
+        fontSize: 15,
+        fontFamily: "'Fira Code', Consolas, monospace",
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        automaticLayout: true,
+        padding: { top: 10 },
+    });
+
+    const fem = new FingerEditMode(editor);
+
+    document.getElementById('finger-toggle').addEventListener('change', e => {
+        fem.setEnabled(e.target.checked);
+    });
+});
+
+// =============================================================================
+// TOKEN PARSER
+// =============================================================================
+class TokenParser {
+
+    // Number: integer or float, not preceded by a letter/$ (avoids matching
+    // things like rgba's digits mid-string — handled by string detector first)
+    static NUMBER_RE  = /(?<![.\w$])(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)/g;
+    static STRING_RE  = /(["'`])(?:(?!\1)[^\\]|\\.)*?\1/g;
+    static BOOL_RE    = /(?<!\w)(true|false)(?!\w)/g;
+    // Named function calls, excluding JS keywords
+    static FUNC_RE    = /\b([a-zA-Z_$][\w$]*)\s*\(/g;
+    static KEYWORDS   = new Set([
+        'if','else','for','while','do','switch','case','return','break',
+        'continue','new','delete','typeof','instanceof','void','throw',
+        'try','catch','finally','class','extends','super','import',
+        'export','default','from','of','in','const','let','var','function',
+        'async','await','yield','static','get','set','debugger','with'
+    ]);
+
+    /** Return ONE token at a given {lineNumber, column} editor position */
+    static getTokenAt(editor, position) {
+        const line = editor.getModel().getLineContent(position.lineNumber);
+        const col  = position.column; // 1-based
+
+        // Order matters: strings before numbers (strings can contain digits)
+        return (
+            this._matchAt(line, position.lineNumber, col, this.STRING_RE,  this._makeString.bind(this)) ||
+            this._matchAt(line, position.lineNumber, col, this.BOOL_RE,    this._makeBool.bind(this))   ||
+            this._matchAt(line, position.lineNumber, col, this.NUMBER_RE,  this._makeNumber.bind(this)) ||
+            this._funcAt(line, position.lineNumber, col)
+        );
+    }
+
+    /** Return all editable tokens for every line (for decorations) */
+    static getAllTokens(editor) {
+        const model  = editor.getModel();
+        const result = [];
+        for (let ln = 1; ln <= model.getLineCount(); ln++) {
+            const line = model.getLineContent(ln);
+            this._collect(line, ln, this.STRING_RE,  this._makeString.bind(this), result);
+            this._collect(line, ln, this.BOOL_RE,    this._makeBool.bind(this),   result);
+            this._collect(line, ln, this.NUMBER_RE,  this._makeNumber.bind(this), result);
+            this._collectFuncs(line, ln, result);
+        }
+        return result;
+    }
+
+    // ---- internals ----------------------------------------------------------
+
+    static _matchAt(line, ln, col, re, factory) {
+        re.lastIndex = 0;
+        for (const m of line.matchAll(re)) {
+            const start = m.index + 1;           // 1-based
+            const end   = start + m[0].length;   // exclusive
+            if (col >= start && col < end) return factory(m, ln, start, end);
+        }
+        return null;
+    }
+
+    static _collect(line, ln, re, factory, out) {
+        re.lastIndex = 0;
+        for (const m of line.matchAll(re)) {
+            const start = m.index + 1;
+            const end   = start + m[0].length;
+            out.push(factory(m, ln, start, end));
+        }
+    }
+
+    static _makeNumber(m, ln, start, end) {
+        return {
+            type: 'number',
+            value: parseFloat(m[0]),
+            text: m[0],
+            range: { startLineNumber: ln, startColumn: start, endLineNumber: ln, endColumn: end }
+        };
+    }
+
+    static _makeString(m, ln, start, end) {
+        return {
+            type: 'string',
+            quote: m[1],
+            value: m[0].slice(1, -1),
+            text: m[0],
+            range: { startLineNumber: ln, startColumn: start, endLineNumber: ln, endColumn: end }
+        };
+    }
+
+    static _makeBool(m, ln, start, end) {
+        return {
+            type: 'boolean',
+            value: m[0] === 'true',
+            text: m[0],
+            range: { startLineNumber: ln, startColumn: start, endLineNumber: ln, endColumn: end }
+        };
+    }
+
+    static _funcAt(line, ln, col) {
+        this.FUNC_RE.lastIndex = 0;
+        for (const m of line.matchAll(this.FUNC_RE)) {
+            if (this.KEYWORDS.has(m[1])) continue;
+            const nameStart = m.index + 1;
+            const nameEnd   = nameStart + m[1].length;
+            // Open paren position inside the full line
+            const parenOpen = m.index + m[0].length - 1;
+            const parenClose = this._matchParen(line, parenOpen);
+            if (parenClose === -1) continue;
+            const fullEnd = parenClose + 2; // 1-based past close paren
+            if (col >= nameStart && col < fullEnd) {
+                const argsStr = line.slice(parenOpen + 1, parenClose);
+                return {
+                    type: 'function-call',
+                    name: m[1],
+                    args: this._splitArgs(argsStr),
+                    text: line.slice(m.index, parenClose + 1),
+                    range: { startLineNumber: ln, startColumn: nameStart, endLineNumber: ln, endColumn: fullEnd }
+                };
+            }
+        }
+        return null;
+    }
+
+    static _collectFuncs(line, ln, out) {
+        this.FUNC_RE.lastIndex = 0;
+        for (const m of line.matchAll(this.FUNC_RE)) {
+            if (this.KEYWORDS.has(m[1])) continue;
+            const nameStart = m.index + 1;
+            const nameEnd   = nameStart + m[1].length;
+            out.push({
+                type: 'function-call',
+                name: m[1],
+                text: m[1],
+                range: { startLineNumber: ln, startColumn: nameStart, endLineNumber: ln, endColumn: nameEnd }
+            });
+        }
+    }
+
+    static _matchParen(line, openIdx) {
+        let depth = 1;
+        for (let i = openIdx + 1; i < line.length; i++) {
+            if (line[i] === '(') depth++;
+            if (line[i] === ')') { if (--depth === 0) return i; }
+        }
+        return -1;
+    }
+
+    static _splitArgs(str) {
+        const args = []; let depth = 0; let cur = '';
+        for (const ch of str) {
+            if ('([{'.includes(ch)) depth++;
+            if (')]}'.includes(ch)) depth--;
+            if (ch === ',' && depth === 0) { args.push(cur.trim()); cur = ''; }
+            else cur += ch;
+        }
+        if (cur.trim()) args.push(cur.trim());
+        return args;
+    }
+}
+
+// =============================================================================
+// FINGER EDIT MODE
+// =============================================================================
+class FingerEditMode {
+    constructor(editor) {
+        this.editor      = editor;
+        this.enabled     = false;
+        this.activePopup = null;
+        this.decorationIds = [];
+
+        // Bind handlers once so we can remove them cleanly
+        this._boundClick  = this._onClick.bind(this);
+        this._boundMove   = this._onMouseMove.bind(this);
+        this._boundKeyDown = this._onKeyDown.bind(this);
+
+        // Close popup on outside click
+        document.addEventListener('mousedown', e => {
+            if (this.activePopup && !this.activePopup.contains(e.target)) {
+                this._closePopup();
+            }
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    setEnabled(on) {
+        this.enabled = on;
+        const label = document.getElementById('mode-label');
+        label.textContent = on ? 'ON' : 'OFF';
+        label.classList.toggle('active', on);
+
+        // We do NOT make the editor readOnly — that breaks getTargetAtClientPoint.
+        // Instead we intercept clicks at the Monaco DOM level.
+        const domNode = this.editor.getDomNode();
+
+        if (on) {
+            // Capture phase so we fire BEFORE Monaco's own handlers
+            domNode.addEventListener('mousedown', this._boundClick,  true);
+            domNode.addEventListener('mousemove', this._boundMove,   true);
+            document.addEventListener('keydown',  this._boundKeyDown);
+            this._rebuildDecorations();
+            this._setStatus('Finger mode ON — tap a highlighted token');
+        } else {
+            domNode.removeEventListener('mousedown', this._boundClick,  true);
+            domNode.removeEventListener('mousemove', this._boundMove,   true);
+            document.removeEventListener('keydown',  this._boundKeyDown);
+            this._clearDecorations();
+            this._closePopup();
+            this._setStatus('Normal edit mode');
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Decorations
+    // -------------------------------------------------------------------------
+    _rebuildDecorations() {
+        const tokens = TokenParser.getAllTokens(this.editor);
+        const classMap = { number: 'fe-number', string: 'fe-string',
+                           boolean: 'fe-boolean', 'function-call': 'fe-function' };
+
+        const newDecos = tokens.map(t => ({
+            range: new monaco.Range(
+                t.range.startLineNumber, t.range.startColumn,
+                t.range.endLineNumber,   t.range.endColumn
+            ),
+            options: { inlineClassName: classMap[t.type] || '' }
+        }));
+
+        this.decorationIds = this.editor.deltaDecorations(this.decorationIds, newDecos);
+    }
+
+    _clearDecorations() {
+        this.decorationIds = this.editor.deltaDecorations(this.decorationIds, []);
+    }
+
+    // -------------------------------------------------------------------------
+    // Event handlers on the Monaco DOM node
+    // -------------------------------------------------------------------------
+    _onClick(e) {
+        if (!this.enabled) return;
+
+        // Resolve Monaco position from real pixel coords
+        const pos = this.editor.getTargetAtClientPoint(e.clientX, e.clientY)?.position;
+        if (!pos) return;
+
+        const token = TokenParser.getTokenAt(this.editor, pos);
+        if (!token) return;
+
+        // Prevent Monaco from moving the cursor / starting a selection
+        e.preventDefault();
+        e.stopPropagation();
+
+        this._closePopup();
+        this._openPopupForToken(token, e.clientX, e.clientY);
+    }
+
+    _onMouseMove(e) {
+        if (!this.enabled) return;
+        const pos = this.editor.getTargetAtClientPoint(e.clientX, e.clientY)?.position;
+        if (!pos) { this._setStatus('Finger mode ON'); return; }
+        const token = TokenParser.getTokenAt(this.editor, pos);
+        if (token) {
+            this._setStatus(`${token.type}: ${String(token.text).slice(0,60)}`);
+        } else {
+            this._setStatus('Finger mode ON');
+        }
+    }
+
+    _onKeyDown(e) {
+        if (e.key === 'Escape') this._closePopup();
+    }
+
+    // -------------------------------------------------------------------------
+    // Popup router
+    // -------------------------------------------------------------------------
+    _openPopupForToken(token, clientX, clientY) {
+        switch (token.type) {
+            case 'number':        this._popupNumber(token, clientX, clientY);   break;
+            case 'string':        this._popupString(token, clientX, clientY);   break;
+            case 'boolean':       this._popupBool(token, clientX, clientY);     break;
+            case 'function-call': this._popupFunction(token, clientX, clientY); break;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Number popup — scrubber
+    // -------------------------------------------------------------------------
+    _popupNumber(token, cx, cy) {
+        const step0  = this._guessStep(token.value);
+        let step     = step0;
+        let current  = token.value;
+
+        // Dynamic range: widen around current value
+        const makeRange = (v, s) => {
+            const span = Math.max(Math.abs(v) * 4, s * 200, 10);
+            return { min: v - span, max: v + span };
+        };
+        let { min: minV, max: maxV } = makeRange(current, step);
+
+        const popup = this._makePopup(cx, cy);
+        popup.innerHTML = `
+            <div class="popup-header">
+                <span class="token-type">⬡ Number</span>
+                <button class="close-btn">×</button>
+            </div>
+            <div class="current-value">${this._fmt(current, step)}</div>
+            <div class="scrub-track">
+                <div class="scrub-fill"></div>
+                <div class="scrub-thumb"></div>
+            </div>
+            <div class="precision-btns">
+                <button class="precision-btn" data-s="100">±100</button>
+                <button class="precision-btn" data-s="10">±10</button>
+                <button class="precision-btn" data-s="1">±1</button>
+                <button class="precision-btn" data-s="0.1">±0.1</button>
+                <button class="precision-btn" data-s="0.01">±0.01</button>
+            </div>
+        `;
+
+        const display  = popup.querySelector('.current-value');
+        const track    = popup.querySelector('.scrub-track');
+        const fill     = popup.querySelector('.scrub-fill');
+        const thumb    = popup.querySelector('.scrub-thumb');
+
+        popup.querySelector('.close-btn').onclick = () => this._closePopup();
+
+        const redraw = () => {
+            const pct = Math.max(0, Math.min(1, (current - minV) / (maxV - minV)));
+            fill.style.width  = `${pct * 100}%`;
+            thumb.style.left  = `${pct * 100}%`;
+            display.textContent = this._fmt(current, step);
+        };
+
+        // Precision buttons
+        popup.querySelectorAll('.precision-btn').forEach(btn => {
+            const s = parseFloat(btn.dataset.s);
+            if (Math.abs(s - step) < 1e-10) btn.classList.add('active');
+            btn.addEventListener('click', () => {
+                step = s;
+                const r = makeRange(current, step);
+                minV = r.min; maxV = r.max;
+                popup.querySelectorAll('.precision-btn')
+                     .forEach(b => b.classList.toggle('active', Math.abs(parseFloat(b.dataset.s) - step) < 1e-10));
+                redraw();
+            });
+        });
+
+        // Scrub
+        let dragging = false;
+
+        const doScrub = (clientX) => {
+            const rect = track.getBoundingClientRect();
+            const pct  = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+            const raw  = minV + pct * (maxV - minV);
+            current    = parseFloat((Math.round(raw / step) * step).toFixed(10));
+            redraw();
+            // Write back — recalculate end column from current text length
+            const newText = this._fmt(current, step);
+            this._applyEdit(token.range, newText);
+            token.range = {
+                ...token.range,
+                endColumn: token.range.startColumn + newText.length
+            };
+        };
+
+        track.addEventListener('mousedown', e => {
+            e.preventDefault(); e.stopPropagation();
+            dragging = true;
+            doScrub(e.clientX);
+        });
+
+        // Use document-level listeners so drag works outside the popup
+        const onMove = e => { if (dragging) doScrub(e.clientX); };
+        const onUp   = () => { dragging = false; };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup',   onUp);
+        popup._cleanup = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup',   onUp);
+        };
+
+        redraw();
+        this.activePopup = popup;
+    }
+
+    // -------------------------------------------------------------------------
+    // String popup
+    // -------------------------------------------------------------------------
+    _popupString(token, cx, cy) {
+        const popup = this._makePopup(cx, cy);
+        popup.innerHTML = `
+            <div class="popup-header">
+                <span class="token-type">⬡ String</span>
+                <button class="close-btn">×</button>
+            </div>
+            <div class="current-value" style="color:#50c878;font-size:15px;word-break:break-all;">
+                ${token.quote}${this._esc(token.value)}${token.quote}
+            </div>
+            <input class="string-input" type="text">
+        `;
+
+        const input   = popup.querySelector('.string-input');
+        const display = popup.querySelector('.current-value');
+        input.value   = token.value;
+
+        popup.querySelector('.close-btn').onclick = () => this._closePopup();
+
+        input.addEventListener('input', () => {
+            const v      = input.value;
+            const newTxt = `${token.quote}${v}${token.quote}`;
+            display.textContent = newTxt;
+            this._applyEdit(token.range, newTxt);
+            token.range = { ...token.range, endColumn: token.range.startColumn + newTxt.length };
+            token.value = v;
+        });
+
+        input.addEventListener('keydown', e => {
+            e.stopPropagation();
+            if (e.key === 'Enter') this._closePopup();
+        });
+
+        // Clicks inside the input must NOT close the popup
+        input.addEventListener('mousedown', e => e.stopPropagation());
+
+        this.activePopup = popup;
+        setTimeout(() => input.focus(), 60);
+    }
+
+    // -------------------------------------------------------------------------
+    // Boolean popup
+    // -------------------------------------------------------------------------
+    _popupBool(token, cx, cy) {
+        const popup = this._makePopup(cx, cy);
+        popup.innerHTML = `
+            <div class="popup-header">
+                <span class="token-type">⬡ Boolean</span>
+                <button class="close-btn">×</button>
+            </div>
+            <div class="bool-toggle">
+                <div class="bool-option true-opt  ${token.value  ? 'selected' : ''}">true</div>
+                <div class="bool-option false-opt ${!token.value ? 'selected' : ''}">false</div>
+            </div>
+        `;
+
+        popup.querySelector('.close-btn').onclick = () => this._closePopup();
+
+        const set = val => {
+            const text = val ? 'true' : 'false';
+            this._applyEdit(token.range, text);
+            token.range = { ...token.range, endColumn: token.range.startColumn + text.length };
+            token.value = val;
+            popup.querySelector('.true-opt') .classList.toggle('selected',  val);
+            popup.querySelector('.false-opt').classList.toggle('selected', !val);
+        };
+
+        popup.querySelector('.true-opt') .addEventListener('click', () => set(true));
+        popup.querySelector('.false-opt').addEventListener('click', () => set(false));
+
+        this.activePopup = popup;
+    }
+
+    // -------------------------------------------------------------------------
+    // Function popup
+    // -------------------------------------------------------------------------
+    _popupFunction(token, cx, cy) {
+        const popup = this._makePopup(cx, cy);
+
+        const argsHTML = (token.args && token.args.length)
+            ? token.args.map((a, i) => {
+                const t = /^-?\d/.test(a) ? 'num' : /^["'`]/.test(a) ? 'str' : /^true|false$/.test(a) ? 'bool' : 'expr';
+                return `<div class="func-arg" data-i="${i}">
+                    <span class="arg-index">${i}</span>
+                    <span class="arg-value">${this._esc(a)}</span>
+                    <span class="arg-badge ${t}">${t}</span>
+                </div>`;
+              }).join('')
+            : '<div style="color:#555;font-size:12px;padding:4px;">No arguments</div>';
+
+        popup.innerHTML = `
+            <div class="popup-header">
+                <span class="token-type">⬡ Function</span>
+                <button class="close-btn">×</button>
+            </div>
+            <div class="func-name">${token.name}( )</div>
+            <div class="func-args">${argsHTML}</div>
+        `;
+
+        popup.querySelector('.close-btn').onclick = () => this._closePopup();
+
+        // Tap an arg row to drill into that literal
+        popup.querySelectorAll('.func-arg').forEach(row => {
+            row.addEventListener('click', () => {
+                const argStr = token.args[+row.dataset.i];
+                // Find this arg's column in the original line
+                const fullLine = this.editor.getModel()
+                    .getLineContent(token.range.startLineNumber);
+                const argIdx   = fullLine.indexOf(argStr, token.range.startColumn - 1);
+                if (argIdx === -1) return;
+                const pos = { lineNumber: token.range.startLineNumber, column: argIdx + 1 };
+                const sub = TokenParser.getTokenAt(this.editor, pos);
+                if (!sub || sub.type === 'function-call') return;
+                this._closePopup();
+                const rect = row.getBoundingClientRect();
+                this._openPopupForToken(sub, rect.left, rect.bottom + 4);
+            });
+        });
+
+        this.activePopup = popup;
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+    _makePopup(cx, cy) {
+        const el = document.createElement('div');
+        el.className = 'finger-popup';
+        // Start at click position; clamp after render
+        el.style.left = `${cx + 4}px`;
+        el.style.top  = `${cy + 4}px`;
+        document.body.appendChild(el);
+
+        // Mousedown inside popup must NOT bubble to Monaco
+        el.addEventListener('mousedown', e => e.stopPropagation());
+
+        requestAnimationFrame(() => {
+            const r  = el.getBoundingClientRect();
+            const vw = window.innerWidth, vh = window.innerHeight;
+            if (r.right  > vw - 8) el.style.left = `${vw - r.width  - 8}px`;
+            if (r.bottom > vh - 8) el.style.top  = `${cy - r.height - 8}px`;
+        });
+
+        return el;
+    }
+
+    _closePopup() {
+        if (!this.activePopup) return;
+        if (this.activePopup._cleanup) this.activePopup._cleanup();
+        this.activePopup.remove();
+        this.activePopup = null;
+    }
+
+    _applyEdit(range, newText) {
+        this.editor.getModel().pushEditOperations(
+            [],
+            [{ range: new monaco.Range(
+                range.startLineNumber, range.startColumn,
+                range.endLineNumber,   range.endColumn), text: newText }],
+            () => null
+        );
+        // Refresh decorations after a short delay
+        clearTimeout(this._decoTimer);
+        this._decoTimer = setTimeout(() => this._rebuildDecorations(), 120);
+    }
+
+    _guessStep(v) {
+        const s = String(v);
+        if (s.includes('.')) return Math.pow(10, -(s.split('.')[1].length));
+        if (Math.abs(v) >= 1000) return 100;
+        if (Math.abs(v) >= 100)  return 10;
+        return 1;
+    }
+
+    _fmt(v, step) {
+        if (step >= 1) return String(Math.round(v));
+        const dp = Math.max(0, Math.ceil(-Math.log10(step)));
+        return v.toFixed(dp);
+    }
+
+    _esc(s) {
+        return String(s)
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;');
+    }
+
+    _setStatus(msg) {
+        document.getElementById('status').textContent = msg;
+    }
+}
+</script>
+</body>
+</html>
