@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="97.506676mm"
+   height="84.095078mm"
+   viewBox="0 0 97.506676 84.095078"
+   version="1.1"
+   id="svg1"
+   xml:space="preserve"
+   inkscape:export-filename="glsl.svg"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"><sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm" /><defs
+     id="defs1"><style
+       id="style1">
+      .cls-1, .cls-2, .cls-3, .cls-4, .cls-5 {
+        fill-rule: evenodd;
+        stroke-linejoin: round;
+      }
+
+      .cls-6 {
+        fill-rule: evenodd;
+      }
+
+      .cls-1 {
+        fill: #005a9c;
+        stroke: #005a9c;
+      }
+
+      .cls-2 {
+        fill: #0066b0;
+        stroke: #0066b0;
+      }
+
+      .cls-3 {
+        fill: #0076cc;
+        stroke: #0076cc;
+      }
+
+      .cls-4 {
+        fill: #0086e8;
+        stroke: #0086e8;
+      }
+
+      .cls-5 {
+        fill: #0093ff;
+        stroke: #0093ff;
+      }
+    </style></defs><g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-232.092,-206.58593)"><rect
+       style="fill:#ffffff;fill-opacity:1;fill-rule:evenodd;stroke-width:0.247;stroke-dasharray:none"
+       id="rect1-0"
+       width="70.759125"
+       height="84.095085"
+       x="232.09201"
+       y="206.58592"
+       ry="7.6877975"
+       rx="5.3343902"
+       inkscape:export-filename="js.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" /><g
+       id="g2"
+       transform="matrix(0.08627226,0,0,0.08726841,239.70063,227.51862)"><rect
+         width="635.14374"
+         height="452.02383"
+         fill="#f7df1e"
+         id="rect1-4"
+         x="-5.1437478"
+         y="177.97615" /><path
+         d="m 423.2,492.19 c 12.69,20.72 29.2,35.95 58.4,35.95 24.53,0 40.2,-12.26 40.2,-29.2 0,-20.3 -16.1,-27.49 -43.1,-39.3 l -14.8,-6.35 c -42.72,-18.2 -71.1,-41 -71.1,-89.2 0,-44.4 33.83,-78.2 86.7,-78.2 37.64,0 64.7,13.1 84.2,47.4 l -46.1,29.6 c -10.15,-18.2 -21.1,-25.37 -38.1,-25.37 -17.34,0 -28.33,11 -28.33,25.37 0,17.76 11,24.95 36.4,35.95 l 14.8,6.34 c 50.3,21.57 78.7,43.56 78.7,93 0,53.3 -41.87,82.5 -98.1,82.5 -54.98,0 -90.5,-26.2 -107.88,-60.54 z m -209.13,5.13 c 9.3,16.5 17.76,30.45 38.1,30.45 19.45,0 31.72,-7.61 31.72,-37.2 v -201.3 h 59.2 v 202.1 c 0,61.3 -35.94,89.2 -88.4,89.2 -47.4,0 -74.85,-24.53 -88.81,-54.075 z"
+         id="path1" /></g><g
+       id="g4"
+       transform="matrix(3.3072917,0,0,3.3072917,906.13511,201.99273)">
+		<path
+   fill="#394240"
+   d="m -175.80342,12.999311 h -2.96084 c -0.8184,0 -1.4806,0.615053 -1.4806,1.375188 0,0.760135 0.6622,1.375187 1.4806,1.375187 h 2.96084 c 0.81839,0 1.4806,-0.615052 1.4806,-1.375187 0,-0.760135 -0.66221,-1.375188 -1.4806,-1.375188 z"
+   id="path1-3"
+   style="fill:#00ccff;stroke-width:0.35673" />
+		<path
+   fill="#394240"
+   d="m -179.61154,10.065005 2.56478,-1.3751877 c 0.70846,-0.379896 0.95129,-1.220823 0.54079,-1.87885 -0.40791,-0.658027 -1.31293,-0.883558 -2.02102,-0.503663 l -2.56515,1.375188 c -0.70846,0.379896 -0.95128,1.220823 -0.54079,1.8785058 0.40791,0.6583709 1.31293,0.8839019 2.02139,0.5040069 z"
+   id="path2"
+   style="fill:#00ccff;stroke-width:0.35673" />
+		<path
+   fill="#394240"
+   d="m -177.04676,20.058837 -2.56478,-1.374844 c -0.70846,-0.379896 -1.612,-0.154365 -2.02139,0.503318 -0.40901,0.658028 -0.16767,1.498611 0.54079,1.87885 l 2.56515,1.375188 c 0.70809,0.379896 1.61311,0.154365 2.0225,-0.503662 0.40938,-0.658028 0.16619,-1.498611 -0.54227,-1.87885 z"
+   id="path3"
+   style="fill:#00ccff;stroke-width:0.35673" />
+		
+	</g></g></svg>
