@@ -1,548 +1,175 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>EDITOR</title>
-    <link rel="stylesheet" href="css/app.css">
-    <link rel="stylesheet" href="css/fullscreen.css">
-    <link rel="icon" type="image/png" href="/favicon/favicon-96x96.png" sizes="96x96" />
-    <link rel="shortcut icon" href="/favicon/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
-    <link rel="manifest" href="/favicon/site.webmanifest" />
-    
-    <!-- Supabase Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleditor has moved to Sledit.xyz</title>
+    <style>
+        :root {
+            --bg: #f5f5f5;
+            --surface: #ffffff;
+            --text: #1a1a1a;
+            --muted: #555555;
+            --accent: #2a5caa;
+            --border: #e0e0e0;
+            --callout-bg: #eef3fb;
+            --pro-bg: #f0f4ff;
+            --pro-border: #2a5caa;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.75;
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            max-width: 860px;
+            margin: 0 auto;
+            background: var(--surface);
+            padding: 3rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        header {
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .site-link {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .site-link:hover { text-decoration: underline; }
+
+        h1 {
+            font-size: 2rem;
+            margin: 0.4rem 0 0.25rem;
+        }
+
+        .meta { color: var(--muted); font-size: 0.9rem; }
+
+        h2 {
+            font-size: 1.25rem;
+            margin: 2.5rem 0 0.75rem;
+            padding-bottom: 0.35rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        p { margin-bottom: 0.9rem; }
+
+        a { color: var(--accent); }
+        a:hover { text-decoration: underline; }
+
+        .tiers {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .tier {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+        }
+
+        .tier-pro {
+            background: var(--pro-bg);
+            border-color: var(--pro-border);
+            border-width: 2px;
+        }
+
+        .tier h3 {
+            font-size: 1.2rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .tier .price {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 1rem;
+        }
+
+        .tier .price span {
+            font-size: 0.9rem;
+            font-weight: 400;
+            color: var(--muted);
+        }
+
+        .tier ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .tier li {
+            padding: 0.3rem 0 0.3rem 1.6rem;
+            position: relative;
+            font-size: 0.95rem;
+        }
+
+        .tier li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+            color: #3a8a3a;
+        }
+
+        .callout {
+            background: var(--callout-bg);
+            border-left: 4px solid var(--accent);
+            padding: 1rem 1.25rem;
+            margin: 1rem 0 1.25rem;
+            border-radius: 0 4px 4px 0;
+        }
+
+        .callout p:last-child { margin-bottom: 0; }
+
+        footer {
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            font-size: 0.875rem;
+            color: var(--muted);
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 640px) {
+            .container { padding: 1.5rem; }
+            h1 { font-size: 1.6rem; }
+            .tiers { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
-    <!-- Help Panel (Hidden by default) -->
-    <div id="helpPanel" style="position: fixed; top: 0; left: 0; right: 0; 
-                                 height: 33.33vh;
-                                 background: var(--bg-primary); 
-                                 border-bottom: 1px solid var(--border-color); 
-                                 transform: translateY(-100%); 
-                                 overflow: hidden;
-                                 box-sizing: border-box;
-                                 z-index: 5;
-                                 display: flex;">
-        <!-- Logo (Left) -->
-        <div id="helpLogo" style="width: 20%; 
-                                   background: var(--bg-secondary); 
-                                   border-right: 1px solid var(--border-color);
-                                   display: flex;
-                                   align-items: center;
-                                   justify-content: center;
-                                   padding: 20px;">
-            <img src="favicon/biglogotp.png" alt="SL Editor Logo" style="max-width: 90%; max-height: 90%; object-fit: contain;" />
-        </div>
-        
-        <!-- Table of Contents (Middle) -->
-        <div id="helpTOC" style="width: 20%; 
-                                  background: var(--bg-secondary); 
-                                  border-right: 1px solid var(--border-color);
-                                  overflow-y: auto;
-                                  padding: 10px;">
-            <h3 style="margin: 0 0 8px 0; color: var(--text-primary); font-size: 12px;">Contents</h3>
-            <div id="helpTOCLinks" style="font-size: 11px;"></div>
-        </div>
-        
-        <!-- Content Area (Right) -->
-        <div id="helpContent" style="width: 60%; 
-                                      overflow-y: auto; 
-                                      padding: 12px 15px;
-                                      color: var(--text-primary);
-                                      line-height: 1.5;
-                                      columns: 2;
-                                      column-gap: 20px;">
-            <!-- Content will be populated by JavaScript -->
-        </div>
-    </div>
-    
-    <!-- Main Content Wrapper (includes top bar + container) -->
-    <div id="mainWrapper" style="position: fixed; 
-                                 top: 0; 
-                                 left: 0; 
-                                 right: 0; 
-                                 bottom: 0;
-                                 z-index: 10;">
-        <!-- Top Bar -->
-        <div id="topBar" class="flex-row gap-xl" style="background: var(--bg-secondary); border-bottom: 1px solid var(--border-color); 
-                             height: 30px;">
-            <!-- Logo + Title (Left) -->
-        <div class="flex-row gap-xs pl-1">
-            <img src="favicon/topbar.png" alt="SL" style="height: 20px; opacity: 0.9;padding-top: 1px;" />
-            <span class="font-semibold text-md" style="color: var(--text-primary); letter-spacing: 0.5px;">EDITOR</span>
-        </div>
-        
-        <!-- Action Buttons (Over Dev Section) -->
-        <div class="flex-row gap-md flex-0" style="margin-left: 15px;">
-            <button id="addPassBtn" class="topbar-btn">
-                + Add Pass
-            </button>
-            <button id="optionsBtn" class="topbar-btn">
-                ⚙ Options
-            </button>
-        </div>
-        
-        <!-- Help Button (Between Stats and Social) -->
-        <button id="helpToggleBtn" class="topbar-btn" title="Toggle Help Panel">
-            Help ▼
-        </button>
-        
-        <!-- Shadertoy Browser Button -->
-        <button id="shadertoyBrowserBtn" class="topbar-btn" title="Shadertoy Browser">
-            <img src="favicon/st.png" alt="ST" style="height: 14px; vertical-align: middle; margin-right: 4px;">ST
-        </button>
-        
-        <!-- AI Assist Button -->
-        <button id="aiAssistBtn" class="topbar-btn" title="AI Assist Settings">
-            AI ⚡
-        </button>
-        
-        <!-- Social Links (Center) -->
-        <div class="flex-1 flex-center gap-lg">
-            <a href="https://discord.gg/embXuftRKx" target="_blank" rel="noopener noreferrer" 
-               class="topbar-social-link topbar-discord">
-                <svg width="14" height="14" viewBox="0 0 71 55" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M60.1045 4.8978C55.5792 2.8214 50.7265 1.2916 45.6527 0.41542C45.5603 0.39851 45.468 0.440769 45.4204 0.525289C44.7963 1.6353 44.105 3.0834 43.6209 4.2216C38.1637 3.4046 32.7345 3.4046 27.3892 4.2216C26.905 3.0581 26.1886 1.6353 25.5617 0.525289C25.5141 0.443589 25.4218 0.40133 25.3294 0.41542C20.2584 1.2888 15.4057 2.8186 10.8776 4.8978C10.8384 4.9147 10.8048 4.9429 10.7825 4.9795C1.57795 18.7309 -0.943561 32.1443 0.293408 45.3914C0.299005 45.4562 0.335386 45.5182 0.385761 45.5576C6.45866 50.0174 12.3413 52.7249 18.1147 54.5195C18.2071 54.5477 18.305 54.5139 18.3638 54.4378C19.7295 52.5728 20.9469 50.6063 21.9907 48.5383C22.0523 48.4172 21.9935 48.2735 21.8676 48.2256C19.9366 47.4931 18.0979 46.6 16.3292 45.5858C16.1893 45.5041 16.1781 45.304 16.3068 45.2082C16.679 44.9293 17.0513 44.6391 17.4067 44.3461C17.471 44.2926 17.5606 44.2813 17.6362 44.3151C29.2558 49.6202 41.8354 49.6202 53.3179 44.3151C53.3935 44.2785 53.4831 44.2898 53.5502 44.3433C53.9057 44.6363 54.2779 44.9293 54.6529 45.2082C54.7816 45.304 54.7732 45.5041 54.6333 45.5858C52.8646 46.6197 51.0259 47.4931 49.0921 48.2228C48.9662 48.2707 48.9102 48.4172 48.9718 48.5383C50.038 50.6034 51.2554 52.5699 52.5959 54.435C52.6519 54.5139 52.7526 54.5477 52.845 54.5195C58.6464 52.7249 64.529 50.0174 70.6019 45.5576C70.6551 45.5182 70.6887 45.459 70.6943 45.3942C72.1747 30.0791 68.2147 16.7757 60.1968 4.9823C60.1772 4.9429 60.1437 4.9147 60.1045 4.8978ZM23.7259 37.3253C20.2276 37.3253 17.3451 34.1136 17.3451 30.1693C17.3451 26.225 20.1717 23.0133 23.7259 23.0133C27.308 23.0133 30.1626 26.2532 30.1066 30.1693C30.1066 34.1136 27.28 37.3253 23.7259 37.3253ZM47.3178 37.3253C43.8196 37.3253 40.9371 34.1136 40.9371 30.1693C40.9371 26.225 43.7636 23.0133 47.3178 23.0133C50.9 23.0133 53.7545 26.2532 53.6986 30.1693C53.6986 34.1136 50.9 37.3253 47.3178 37.3253Z" fill="currentColor"/>
-                </svg>
-                <span>Discord</span>
-            </a>
-            
-            <a href="https://bsky.app/profile/cotterzz.bsky.social" target="_blank" rel="noopener noreferrer" 
-               class="topbar-social-link topbar-bluesky">
-                <svg width="14" height="14" viewBox="0 0 600 530" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M135.72 44.03c66.496 49.921 138.02 151.14 164.28 205.46 26.262-54.316 97.782-155.54 164.28-205.46C524.6 6.209 563.64 4.825 583.47 7.43c42.088 5.53 57.532 24.345 60.687 54.076 0.77 8.568 1.05 17.537 1.05 27.273 0 77.554-40.13 241.24-160.52 321.98-97.522 65.395-172.72-5.682-189.02-38.314-0.03-0.07-0.05-0.12-0.08-0.19-0.03 0.07-0.05 0.12-0.08 0.19-16.303 32.632-91.502 103.71-189.02 38.314C26.09 330.33-14.04 166.65-14.04 89.093c0-9.736 0.28-18.705 1.05-27.273C-9.838 32.089 5.605 13.274 47.694 7.744c19.83-2.605 58.87-1.221 88.026 36.286z" fill="currentColor"/>
-                </svg>
-                <span>Bluesky</span>
-            </a>
-            
-            <a href="https://github.com/Cotterzz/sleditor" target="_blank" rel="noopener noreferrer" 
-               class="topbar-social-link topbar-github">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-                </svg>
-                <span>GitHub</span>
-            </a>
-            
-            <a href="mailto:support@sleditor.com" 
-               class="topbar-social-link topbar-email">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
-                    <text x="12" y="16" text-anchor="middle" font-size="12" font-weight="bold" fill="currentColor">@</text>
-                </svg>
-                <span>Email</span>
-            </a>
-        </div>
-        
-        <!-- Auth Section (Right) -->
-        <div id="authSection" class="flex-row pr-1">
-            <!-- Logged in (hidden by default) -->
-            <div id="userMenu" class="flex-row gap-xs" style="display: none;">
-                <div id="userProfileBtn" class="flex-row gap-xs" style="cursor: pointer; padding: 2px 6px; border-radius: 4px; transition: background 0.2s;" title="Edit profile">
-                    <span id="username" class="text-sm" style="color: var(--text-primary);"></span>
-                    <span id="notificationBadge" style="display: none; background: #e53935; color: white; font-size: 10px; font-weight: bold; padding: 1px 5px; border-radius: 10px; margin-left: 2px;"></span>
-                    <img id="userAvatar" style="width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border-color);" alt="User" />
-                </div>
-                <button id="signOutBtn" class="uiBtn text-sm" style="padding: 4px 10px; height: 24px; border-radius: 3px">Sign Out</button>
-            </div>
-            
-            <!-- Sign in button (default) -->
-            <button id="signInBtn" class="uiBtn text-sm flex-row" style="padding: 0px 4px; height: 24px; gap: 0px; border-radius: 3px">
-                <span>Sign In</span>
-                <span style="font-size: 16px;">👤</span>
-            </button>
-        </div>
-    </div> <!-- End topBar -->
-    
-    <!-- Main Container (Content below top bar) -->
-    <div id="container" style="height: calc(100% - 30px);">
-        <div id="devPanel">
-<div id="editorTabs" class="flex-row gap-sm" style="margin-bottom: 0px;">
-    <!-- Tabs will be dynamically added here -->
-</div>
-<div id="boilerplateContainer" class="editor-panel" style="display: none;">
-</div>
-<div id="graphicsContainer" class="editor-panel">
-    <div id="loadingMessage">Loading Monaco Editor...</div>
-</div>
-<div id="commonContainer" class="editor-panel" style="display: none;">
-</div>
-<div id="audioContainer" class="editor-panel" style="display: none;">
-    <div id="audioEditorWrapper" style="flex: 1; min-height: 0;"></div>
-    <div id="audioWaveformContainer"></div>
-</div>
-<div id="jsEditorContainer" class="editor-panel" style="display: none;">
-</div>
-<div id="helpContainer" class="editor-panel" style="display: none;">
-</div>
-            <div class="flex-row gap-xs">
-                <div class="flex-1">
-                    <div id="errorDisplay" class="info"></div>
-                </div>
-                <button id="reloadBtn" class="uiBtn" title="Compile Shader">Compile ⌬</button>
-                <button id="saveShaderBtn" class="uiBtn" title="Save current shader">💾</button>
-                <button id="forkShaderBtn" class="uiBtn" title="Fork shader (create a copy)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="vertical-align: middle;"><circle cx="6" cy="6" r="2" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="6" r="2" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="18" r="2" stroke="currentColor" stroke-width="2"/><path d="M6 8v3c0 2 1 3 3 3h7M18 8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
-                <button id="newShaderBtn" class="uiBtn" title="Create new shader">📄 ▾</button>
-            </div>
-            
-            <!-- Vim status bar (inside dev panel) -->
-            <div id="vim-status"></div>
-        </div>
-        
-        <!-- Divider between Dev and Display -->
-        <div class="panel-divider" id="divider1" data-divider="dev-display">
-            <div class="divider-handle">⋮</div>
-        </div>
-        
-        <div id="displayPanel">
-            <div id="canvasContainer">
-            <canvas id="canvasWebGPU" tabindex="0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: block; outline: none;"></canvas>
-            <canvas id="canvasWebGL" tabindex="0" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; outline: none;"></canvas>
-            
-            <!-- Fullscreen overlay controls (hidden by default, shown when fullscreen) -->
-            <div id="fullscreenControls" style="display: none;">
-                <button id="fsExitBtn" title="Exit fullscreen (Esc)">✕</button>
-                <button id="fsPlayPauseBtn" class="playing">⏸</button>
-                <button id="fsRestartBtn" title="Restart">⟳</button>
-                <button id="fsUniformsBtn" title="Uniform Controls">🎚️</button>
-                <div class="fs-slider-group">
-                    <span>🔊</span>
-                    <input type="range" id="fsVolumeSlider" min="0" max="100" value="50">
-                </div>
-                <div class="fs-slider-group">
-                    <span title="Pixel Scale">▦</span>
-                    <input type="range" id="fsPixelScaleSlider" min="0" max="5" value="0" step="1">
-                </div>
-                <div class="fs-stats">
-                    <span id="fsResolution">512×512×1</span>
-                    <span>FPS: <span id="fsFps">0</span></span>
-                    <span>Frame: <span id="fsFrame">0</span></span>
-                    <span>Time: <span id="fsTime">0.00s</span></span>
-                    <span>Compile: <span id="fsCompileTime">0.0ms</span></span>
-                </div>
-            </div>
-            </div>
-            
-            <!-- Horizontal divider for vertical canvas resizing -->
-            <div class="horizontal-divider" id="canvasResizeDivider">
-                <div class="divider-handle horizontal">⋯</div>
-            </div>
-            
-            <div id="controls">
-                <!-- Timeline Slider -->
-                <div id="timelineContainer" style="width: 100%; padding: 4px 8px 8px 8px; box-sizing: border-box;">
-                    <input type="range" id="timelineSlider" min="0" max="60" step="0.1" value="0" 
-                           style="width: 100%; height: 8px; cursor: pointer; accent-color: var(--accent-color);">
-                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-secondary); margin-top: 2px;">
-                        <span id="timelineCurrent">0:00</span>
-                        <span id="timelineDuration">1:00</span>
-                    </div>
-                </div>
-                <!-- 2x2 Control Button Grid -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
-                    <button id="playPauseBtn" class="playing" title="Play/Pause (Space)">⏸</button>
-                    <button id="restartBtn" title="Restart from beginning">⟳</button>
-                    <button id="fullscreenBtn" title="Enter fullscreen (F)">⛶</button>
-                    <button id="uniformControlsBtn" class="uiBtn" title="Uniform Controls">🎚️</button>
-                </div>
-                <div class="sliderContainer">
-                    <input type="range" id="volumeSlider" class="verticalSlider" min="0" max="100" value="50" orient="vertical">
-                    <div style="font-size: 16px;">🔊</div>
-                </div>
-                <div class="sliderContainer">
-                    <input type="range" id="pixelScaleSlider" class="verticalSlider" min="0" max="5" value="0" step="1" orient="vertical">
-                    <div id="renderModeIcon" style="font-size: 16px; cursor: pointer; user-select: none;" title="Click to cycle render modes">▦</div>
-                </div>
-                <div id="colorspaceIcon" style="font-size: 12px; cursor: pointer; user-select: none; padding: 4px;" title="Color space: sRGB (Shadertoy) - click to toggle linear (compute.toys)">sRGB</div>
-                <div class="channel-viewer-select">
-                    <select id="channelViewerSelect"></select>
-                    <div class="recording-controls">
-                        <select id="recordingMethod">
-                            <option value="none">Recording: None</option>
-                            <option value="ffmpeg">Recording: FFmpeg (WASM)</option>
-                            <option value="muxer">Recording: mp4-muxer</option>
-                            <option value="mp4box">Recording: MP4Box.js</option>
-                        </select>
-                        <select id="muxerProfileSelect" style="display: none;">
-                            <option value="540p">H.264 Baseline 60fps (540p)</option>
-                            <option value="1080p">H.264 High 30fps (1080p)</option>
-                            <option value="vp9_30">VP9 30fps</option>
-                            <option value="vp9_60">VP9 60fps</option>
-                            <option value="av1_30">AV1 30fps</option>
-                            <option value="av1_60">AV1 60fps</option>
-                        </select>
-                        <div id="recordingStatus">Recording disabled</div>
-                        <button id="recordingButton" disabled>Start Recording</button>
-                    </div>
-                </div>
-                <div class="flex-col gap-sm text-sm" style="color: var(--text-secondary);">
-                    <div id="resolutionDisplay">512 × 512 × 1</div>
-                    <div>FPS: <span id="fpsCounter">0</span></div>
-                    <div>Frame: <span id="frameCounter">0</span></div>
-                    <div>Time: <span id="timeCounter">0.00s</span></div>
-                    <div>Compile: <span id="compileTimeDisplay">0.0ms</span></div>
-                </div>
-                <!-- Spacer to push views/likes to the right -->
-                <div class="flex-1"></div>
-                <!-- Views and Likes -->
-                <div class="flex-col gap-md text-sm pr-1" style="align-items: flex-end; color: var(--text-secondary);">
-                    <div class="flex-row gap-sm">
-                        <span class="text-md">👁️</span>
-                        <span id="viewCount">0</span>
-                    </div>
-                    <button id="likeButton" class="flex-row gap-sm text-sm" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px 6px; border-radius: 4px; transition: all 0.2s;" title="Like this shader">
-                        <span id="likeIcon" class="text-md">🤍</span>
-                        <span id="likeText">Like</span>
-                        <span id="likeCount">0</span>
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Shader Info -->
-            <div id="shaderInfo">
-                <div class="shader-title-header">
-                    <!-- Title (can be text or input) -->
-                    <div id="shaderTitleDisplay" class="shader-title-display">GLSL Hello World</div>
-                    <input type="text" id="shaderTitleInput" class="shader-title-input" placeholder="Shader Title" maxlength="50" autocomplete="off">
-                    <div id="shaderCreator" class="shader-creator">by Community</div>
-                    <!-- License display (view mode) -->
-                    <span id="shaderLicenseDisplay" class="shader-license-display" title="All rights reserved, but forking on-site with attribution is allowed.">License: <span class="license-name">Default</span></span>
-                    <!-- License dropdown (edit mode) -->
-                    <select id="shaderLicenseSelect" class="shader-license-select"></select>
-                    <!-- Edit button (only shown when not in edit mode) -->
-                    <button id="editShaderButton" class="shader-edit-btn" title="Edit shader details">✏️</button>
-                </div>
-            
-                <!-- Visibility Controls (only shown in edit/fork mode) -->
-                <div id="visibilityControls">
-                    <div class="visibility-heading">Visibility:</div>
-                    <label class="visibility-label">
-                        <input type="radio" name="visibility" value="private" id="visibilityPrivate" checked>
-                        <span class="visibility-label-text">Private</span>
-                        <span class="visibility-label-desc"> - Only you can see this.</span>
-                    </label>
-                    <label class="visibility-label">
-                        <input type="radio" name="visibility" value="published" id="visibilityPublished">
-                        <span class="visibility-label-text">Published</span>
-                        <span class="visibility-label-desc"> - Visible to logged in members in the gallery, also to the public if they have the url.</span>
-                    </label>
-                </div>
-        
-                <!-- Description (can be text or textarea) -->
-                <div id="shaderDescriptionDisplay" class="shader-description-display">Your first GLSL fragment shader - a simple colorful gradient</div>
-                <textarea id="shaderDescriptionInput" class="shader-description-input" placeholder="Description (optional) - Markdown supported" maxlength="2000"></textarea>
-            </div>
-        </div>
-        
-        <!-- Divider between Display and Gallery/Comments Panel -->
-        <div class="panel-divider" id="divider2" data-divider="display-gallery">
-            <div class="divider-handle">⋮</div>
-        </div>
-        
-        <!-- Right Panel Container (acts as galleryPanel for divider) -->
-        <div id="galleryPanel" class="flex-col" style="overflow: hidden;">
-            <!-- Top-level tabs: Comments / Gallery -->
-            <div class="top-level-tabs-container">
-                <button id="topTabComments" class="top-level-tab" data-panel="comments">
-                    Comments
-                </button>
-                <button id="topTabGallery" class="top-level-tab active" data-panel="gallery">
-                    Gallery
-                </button>
-            </div>
-            
-            <!-- Comments Panel (hidden by default) -->
-            <div id="commentsPanel" class="flex-col flex-1" style="display: none; overflow: hidden;">
-                <!-- Comments will be populated here by comments.js -->
-            </div>
-            
-            <!-- Gallery Section (visible by default) -->
-            <div id="gallerySection" class="flex-col flex-1" style="overflow: hidden;">
-                <div id="galleryTabs" class="gallery-tabs-container">
-                    <button class="gallery-tab active" data-tab="genuary">
-                        <span id="genuaryTabTitle">Genuary</span>
-                        <span id="genuaryTabRefresh" class="gallery-refresh-btn" title="Refresh gallery">⟳</span>
-                    </button>
-                    <button class="gallery-tab" data-tab="sotw">
-                        <span id="sotwTabTitle">Shader of the Week</span>
-                        <span id="sotwTabRefresh" class="gallery-refresh-btn" title="Refresh gallery">⟳</span>
-                    </button>
-                    <button class="gallery-tab" data-tab="my">
-                        <span id="myTabTitle">My Shaders</span>
-                        <span id="myTabRefresh" class="gallery-refresh-btn" title="Refresh gallery">⟳</span>
-                    </button>
-                    <button class="gallery-tab" data-tab="community">
-                        <span id="communityTabTitle">Community</span>
-                        <span id="communityTabRefresh" class="gallery-refresh-btn" title="Refresh gallery">⟳</span>
-                    </button>
-                    <button class="gallery-tab" data-tab="examples">
-                        <span id="examplesTabTitle">Examples</span>
-                        <span id="examplesTabRefresh" class="gallery-refresh-btn" title="Refresh gallery">⟳</span>
-                    </button>
-                </div>
-                <div id="galleryContent" class="flex-1" style="overflow-y: auto;">
-                <!-- Gallery items will be populated here -->
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="container">
 
-    <!-- Profile Edit Modal -->
-    <div id="profileModal" class="flex-center" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-                                 background: rgba(0,0,0,0.7); z-index: 10000;">
-        <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; 
-                    padding: 30px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto;">
-            
-            <!-- Tabs: Notifications / Profile -->
-            <div style="display: flex; gap: 0; margin-bottom: 20px; border-bottom: 1px solid var(--border-color);">
-                <button id="profileTabNotifications" class="profile-tab active" style="flex: 1; padding: 10px; background: none; border: none; border-bottom: 2px solid var(--accent-color); color: var(--text-primary); cursor: pointer; font-size: 14px; font-weight: 500;">
-                    🔔 Notifications
-                </button>
-                <button id="profileTabSettings" class="profile-tab" style="flex: 1; padding: 10px; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); cursor: pointer; font-size: 14px;">
-                    ⚙️ Profile Settings
-                </button>
-            </div>
-            
-            <!-- Notifications Tab Content -->
-            <div id="notificationsContent" style="display: block;">
-                <div id="notificationsList" style="max-height: 400px; overflow-y: auto;">
-                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
-                        Loading notifications...
-                    </div>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                    <button id="clearNotificationsBtn" class="uiBtn" style="flex: 1; padding: 8px; font-size: 12px;">
-                        Clear All
-                    </button>
-                    <button id="closeNotificationsBtn" class="uiBtn" style="flex: 1; padding: 8px; font-size: 12px;">
-                        Close
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Profile Settings Tab Content -->
-            <div id="profileSettingsContent" style="display: none;">
-                <!-- Avatar Section -->
-                <div style="display: flex; flex-direction: column; align-items: center; margin-bottom: 20px;">
-                    <img id="profileAvatarPreview" style="width: 128px; height: 128px; border-radius: 50%; border: 2px solid var(--border-color); object-fit: cover; margin-bottom: 10px;" alt="Avatar" />
-                    <label style="cursor: pointer; padding: 8px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; color: var(--text-primary);">
-                        📷 Change Avatar
-                        <input type="file" id="profileAvatarInput" accept="image/*" style="display: none;" />
-                    </label>
-                    <span style="font-size: 11px; color: var(--text-secondary); margin-top: 6px;">Max 256×256, auto-resized</span>
-                </div>
-                
-                <!-- Display Name -->
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;">Display Name</label>
-                    <input type="text" id="profileDisplayName" placeholder="Your display name" maxlength="32" autocomplete="off"
-                           style="width: 100%; padding: 10px; border-radius: 4px; 
-                                  border: 1px solid var(--border-color); background: var(--bg-secondary); 
-                                  color: var(--text-primary); box-sizing: border-box;">
-                    <span style="font-size: 11px; color: var(--text-secondary);">2-32 characters</span>
-                </div>
-                
-                <!-- Status Message -->
-                <div id="profileMessage" style="display: none; padding: 10px; margin-bottom: 15px; border-radius: 4px; font-size: 13px;"></div>
-                
-                <!-- Buttons -->
-                <div style="display: flex; gap: 10px;">
-                    <button id="profileSaveBtn" class="uiBtn" style="flex: 1; padding: 10px; background: var(--accent-color); color: white;">
-                        Save Profile
-                    </button>
-                    <button id="profileCancelBtn" class="uiBtn" style="flex: 1; padding: 10px;">
-                        Cancel
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <header>
+        <h1>Sleditor V1 is retired</h1>
+    </header>
 
-    <!-- Sign In Modal -->
-    <div id="signInModal" class="flex-center" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
-                                 background: rgba(0,0,0,0.7); z-index: 10000;">
-        <div style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; 
-                    padding: 30px; max-width: 400px; width: 90%;">
-            <h2 style="margin: 0 0 20px 0; color: var(--text-primary);">Sign In</h2>
-            
-            <!-- Message Area (for success/error messages) -->
-            <div id="authMessage" style="display: none; padding: 12px; margin-bottom: 15px; border-radius: 4px; 
-                                         font-size: 14px; line-height: 1.4;">
-                <span id="authMessageText"></span>
-            </div>
-            
-            <!-- OAuth Buttons -->
-            <div class="flex-col gap-xl" style="margin-bottom: 20px;">
-                <button id="signInGitHub" class="uiBtn" style="padding: 10px; font-size: 14px;">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle; margin-right: 8px;">
-                        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-                    </svg>
-                    Sign in with GitHub
-                </button>
-                
-                <!-- Hidden until OAuth is configured -->
-                <button id="signInGoogle" class="uiBtn" style="padding: 10px; font-size: 14px; display: none;">
-                    🔍 Sign in with Google
-                </button>
-                
-                <button id="signInFacebook" class="uiBtn" style="padding: 10px; font-size: 14px; display: none;">
-                    📘 Sign in with Facebook
-                </button>
-            </div>
-            
-            <div style="text-align: center; color: var(--text-secondary); margin: 15px 0;">or</div>
-            
-            <!-- Email/Password Form -->
-            <div id="emailForm">
-                <input type="email" id="emailInput" placeholder="Email" 
-                       style="width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; 
-                              border: 1px solid var(--border-color); background: var(--bg-secondary); 
-                              color: var(--text-primary);">
-                <input type="password" id="passwordInput" placeholder="Password" 
-                       style="width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; 
-                              border: 1px solid var(--border-color); background: var(--bg-secondary); 
-                              color: var(--text-primary);">
-                
-                <!-- Display name field (optional for sign-in, required for sign-up) -->
-                <input type="text" id="displayNameInput" placeholder="Display Name (required for sign-up)" 
-                       style="width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; 
-                              border: 1px solid var(--border-color); background: var(--bg-secondary); 
-                              color: var(--text-primary);">
-                
-                <button id="emailSignIn" class="uiBtn" style="width: 100%; padding: 10px; margin-bottom: 5px;">
-                    Sign In
-                </button>
-                <button id="emailSignUp" class="uiBtn" style="width: 100%; padding: 10px;">
-                    Sign Up
-                </button>
-            </div>
-            
-            <button id="closeSignInModal" style="margin-top: 20px; background: none; border: none; 
-                                                   color: var(--text-secondary); cursor: pointer; width: 100%;">
-                Cancel
-            </button>
-        </div>
-    </div>
+    <section>
+        <h2>Please use V2:</h2>
 
-    <!-- Load Monaco from CDN -->
-    <!-- Marked.js for Markdown rendering in comments -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
-    
-    <!-- Configure Monaco loader -->
-    <script>
-    require.config({ 
-        paths: { 
-            'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' 
-        }
-    });
-    </script>
-    
-    <!-- Main Application (ES6 Modules) -->
-    <script type="module" src="js/index.js"></script>
-    </div> <!-- End mainWrapper -->
+        <p>
+            <a href="https://sledit.xyz/">Sledit.xyz</a>
+        </p>
+    </section>
+
+</div>
 </body>
 </html>
-
